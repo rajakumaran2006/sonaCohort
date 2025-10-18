@@ -1,0 +1,159 @@
+'use client'
+
+import { createContext, useContext, useEffect, useState } from 'react'
+import { User, Session } from '@supabase/supabase-js'
+import { createClient } from '@/utils/supabase/client'
+
+type UserMode = 'admin' | 'faculty' | 'peer' | 'student'
+
+interface AuthContextType {
+  user: User | null
+  session: Session | null
+  loading: boolean
+  signInWithMicrosoft: (mode?: UserMode) => Promise<void>
+  signOut: () => Promise<void>
+  userMode: UserMode
+  setUserMode: (mode: UserMode) => void
+  // Keep backward compatibility
+  isFacultyMode: boolean
+  setIsFacultyMode: (mode: boolean) => void
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [userMode, setUserMode] = useState<UserMode>('admin')
+
+  // Backward compatibility
+  const isFacultyMode = userMode === 'faculty'
+  const setIsFacultyMode = (mode: boolean) => setUserMode(mode ? 'faculty' : 'admin')
+
+  useEffect(() => {
+    const supabase = createClient()
+    
+    // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        console.log('AuthContext: Initial session:', session)
+        console.log('AuthContext: Session error:', error)
+        console.log('AuthContext: Session user:', session?.user)
+        console.log('AuthContext: Setting loading to false')
+        
+        if (session?.user) {
+          console.log('Setting user and session from initial session')
+          setSession(session)
+          setUser(session.user)
+        } else {
+          console.log('No initial session found')
+          setSession(null)
+          setUser(null)
+        }
+      } catch (error) {
+        console.error('Error getting initial session:', error)
+        setSession(null)
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    getInitialSession()
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('Auth state change:', _event, session)
+      
+      if (session?.user) {
+        console.log('User authenticated:', session.user)
+        setUser(session.user)
+        setSession(session)
+        console.log('User state updated, setting loading to false')
+      } else {
+        console.log('User signed out')
+        setUser(null)
+        setSession(null)
+        console.log('User state cleared, setting loading to false')
+      }
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const signInWithMicrosoft = async (mode: UserMode = 'admin') => {
+    try {
+      const supabase = createClient()
+      let redirectPath = '/admin/dashboard'
+      
+      switch (mode) {
+        case 'faculty':
+          redirectPath = '/faculty/dashboard'
+          break
+        case 'peer':
+          redirectPath = '/peer/dashboard'
+          break
+        case 'student':
+          redirectPath = '/student/dashboard'
+          break
+        default:
+          redirectPath = '/admin/dashboard'
+      }
+      
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'azure',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${redirectPath}`,
+          scopes: 'email openid Profile User.Read User.ReadBasic.All',
+          queryParams: {
+            prompt: 'select_account'
+          }
+        }
+      })
+      if (error) throw error
+    } catch (error) {
+      console.error('Error signing in with Microsoft:', error)
+    }
+  }
+
+  const signOut = async () => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
+
+  const value = {
+    user,
+    session,
+    loading,
+    signInWithMicrosoft,
+    signOut,
+    userMode,
+    setUserMode,
+    isFacultyMode,
+    setIsFacultyMode
+  }
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
+}
