@@ -1,8 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
 import { AdditionalClassService, AdditionalClassWithAttendance, AdditionalClassAttendanceRecord } from '@/lib/services/additionalClassService'
+import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import * as XLSX from 'xlsx'
 
 interface AdditionalClassesTabProps {
   peerTutorInfo: any
@@ -22,6 +24,11 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
   const [saving, setSaving] = useState(false)
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([])
   const [loadingSubjects, setLoadingSubjects] = useState(false)
+  const [deleteMode, setDeleteMode] = useState(false)
+  const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set())
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (peerTutorInfo) {
@@ -146,6 +153,204 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
         student.student_id === studentId ? { ...student, status } : student
       )
     }))
+  }
+
+  const toggleDeleteMode = () => {
+    if (deleteMode) {
+      setSelectedClasses(new Set())
+    }
+    setDeleteMode(!deleteMode)
+  }
+
+  const toggleClassSelection = (classId: string) => {
+    const newSelected = new Set(selectedClasses)
+    if (newSelected.has(classId)) {
+      newSelected.delete(classId)
+    } else {
+      newSelected.add(classId)
+    }
+    setSelectedClasses(newSelected)
+  }
+
+  const toggleRowExpand = (classId: string) => {
+    const newExpanded = new Set(expandedRows)
+    if (newExpanded.has(classId)) {
+      newExpanded.delete(classId)
+    } else {
+      newExpanded.add(classId)
+    }
+    setExpandedRows(newExpanded)
+  }
+
+  const handleDeleteClick = () => {
+    if (selectedClasses.size === 0) {
+      alert('Please select at least one class to delete')
+      return
+    }
+    setShowDeleteModal(true)
+  }
+
+  const confirmDelete = async () => {
+    if (selectedClasses.size === 0) return
+
+    setDeleting(true)
+    try {
+      const deletePromises = Array.from(selectedClasses).map(classId =>
+        AdditionalClassService.deleteAdditionalClass(classId)
+      )
+      
+      await Promise.all(deletePromises)
+      
+      // Reload classes after deletion
+      await loadAdditionalClasses()
+      
+      // Reset delete mode and selections
+      setDeleteMode(false)
+      setSelectedClasses(new Set())
+      setShowDeleteModal(false)
+      
+      alert('Selected classes deleted successfully!')
+    } catch (error) {
+      console.error('Error deleting classes:', error)
+      alert('Error deleting classes. Please try again.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleExportToExcel = () => {
+    if (additionalClasses.length === 0) {
+      alert('No classes to export')
+      return
+    }
+
+    try {
+      // Group classes by subject
+      const groupedBySubject = additionalClasses.reduce((acc, classItem) => {
+        if (!acc[classItem.subject_name]) {
+          acc[classItem.subject_name] = []
+        }
+        acc[classItem.subject_name].push(classItem)
+        return acc
+      }, {} as Record<string, AdditionalClassWithAttendance[]>)
+
+      // Prepare data for export
+      const exportData: any[][] = []
+      let totalClassesOverall = 0
+      let totalPresentCountOverall = 0
+      let totalStudentCountOverall = 0
+
+      // Add header
+      exportData.push(['Peer Tutor Name', peerTutorInfo?.name || 'N/A'])
+      exportData.push([]) // Empty row
+
+      // Process each subject
+      Object.keys(groupedBySubject).forEach((subject) => {
+        const classes = groupedBySubject[subject]
+        
+        // Subject header
+        exportData.push(['Subject', subject])
+        exportData.push(['Date', 'Topic', 'Students Present', 'Students Absent', 'Total Students'])
+        
+        let subjectTotalClasses = 0
+        let subjectTotalPresent = 0
+        let subjectTotalStudents = 0
+
+        // Add class details
+        classes.forEach((classItem) => {
+          const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
+          const absentCount = classItem.attendance_records.filter(r => r.status === 'absent').length
+          const totalCount = classItem.attendance_records.length
+
+          exportData.push([
+            new Date(classItem.class_date).toLocaleDateString('en-GB'),
+            classItem.topic,
+            presentCount,
+            absentCount,
+            totalCount
+          ])
+
+          subjectTotalClasses++
+          subjectTotalPresent += presentCount
+          subjectTotalStudents += totalCount
+        })
+
+        // Subject summary
+        exportData.push([]) // Empty row
+        exportData.push(['Total Classes Taken', subjectTotalClasses])
+        exportData.push(['Total Students Present', subjectTotalPresent])
+        exportData.push([]) // Empty row after each subject
+
+        totalClassesOverall += subjectTotalClasses
+        totalPresentCountOverall += subjectTotalPresent
+        totalStudentCountOverall += subjectTotalStudents
+      })
+
+      // Overall summary
+      exportData.push([]) // Empty row
+      exportData.push(['OVERALL SUMMARY'])
+      exportData.push(['Total Classes Taken (All Subjects)', totalClassesOverall])
+      exportData.push(['Total Students Present Count', totalPresentCountOverall])
+      
+      // Calculate attendance percentage
+      const attendancePercentage = totalStudentCountOverall > 0 
+        ? ((totalPresentCountOverall / totalStudentCountOverall) * 100).toFixed(2)
+        : '0.00'
+      exportData.push(['Student Attendance Percentage', `${attendancePercentage}%`])
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new()
+      const worksheet = XLSX.utils.aoa_to_sheet(exportData)
+
+      // Apply formatting
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
+      
+      // Make headers bold
+      for (let row = 0; row <= range.e.r; row++) {
+        for (let col = 0; col <= range.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
+          if (worksheet[cellAddress]) {
+            const cell = worksheet[cellAddress]
+            
+            // Bold headers and subject names
+            if (row === 2 || (worksheet[cellAddress]?.v && typeof worksheet[cellAddress].v === 'string' && worksheet[cellAddress].v.includes('Subject'))) {
+              if (!cell.s) cell.s = {}
+              if (!cell.s.font) cell.s.font = {}
+              cell.s.font.bold = true
+            }
+            
+            // Bold overall summary
+            if (cell.v && typeof cell.v === 'string' && cell.v.includes('OVERALL SUMMARY')) {
+              if (!cell.s) cell.s = {}
+              if (!cell.s.font) cell.s.font = {}
+              cell.s.font.bold = true
+              cell.s.font.size = 12
+            }
+          }
+        }
+      }
+
+      // Set column widths
+      worksheet['!cols'] = [
+        { wch: 25 }, // Date column
+        { wch: 30 }, // Topic column
+        { wch: 18 }, // Present column
+        { wch: 18 }, // Absent column
+        { wch: 15 }  // Total column
+      ]
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Additional Classes Report')
+
+      // Generate filename
+      const fileName = `Additional_Classes_${peerTutorInfo?.name?.replace(/\s+/g, '_') || 'Report'}_${new Date().toISOString().split('T')[0]}.xlsx`
+
+      // Save file
+      XLSX.writeFile(workbook, fileName)
+    } catch (error) {
+      console.error('Error exporting to Excel:', error)
+      alert('Error exporting to Excel. Please try again.')
+    }
   }
 
   if (loading) {
@@ -307,8 +512,45 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
 
       {/* Additional Classes List */}
       <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Additional Classes ({additionalClasses.length})</h3>
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h3 className="text-lg font-medium text-gray-900">Additional Classes (<span className="text-black">{additionalClasses.length}</span>)</h3>
+          <div className="flex items-center space-x-3">
+            {!deleteMode && (
+              <button
+                onClick={handleExportToExcel}
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Export Excel</span>
+              </button>
+            )}
+            <button
+              onClick={toggleDeleteMode}
+              className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 transition-colors ${
+                deleteMode
+                  ? 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-500'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>{deleteMode ? 'Cancel' : 'Delete'}</span>
+            </button>
+            {deleteMode && selectedClasses.size > 0 && (
+              <button
+                onClick={handleDeleteClick}
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>Delete Selected ({selectedClasses.size})</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {additionalClasses.length > 0 ? (
@@ -316,6 +558,24 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  {deleteMode && (
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedClasses.size === additionalClasses.length && additionalClasses.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedClasses(new Set(additionalClasses.map(c => c.id)))
+                          } else {
+                            setSelectedClasses(new Set())
+                          }
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
+                  )}
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Subject
                   </th>
@@ -341,40 +601,127 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
                   const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
                   const absentCount = classItem.attendance_records.filter(r => r.status === 'absent').length
                   const totalCount = classItem.attendance_records.length
+                  const isExpanded = expandedRows.has(classItem.id)
+                  const isSelected = selectedClasses.has(classItem.id)
 
                   return (
-                    <tr key={classItem.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{classItem.subject_name}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{classItem.topic}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {new Date(classItem.class_date).toLocaleDateString('en-GB', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric'
-                          })}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          {presentCount}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          {absentCount}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {totalCount}
-                        </span>
-                      </td>
-                    </tr>
+                    <React.Fragment key={classItem.id}>
+                      <tr className={`hover:bg-gray-50 ${isSelected && deleteMode ? 'bg-red-50' : ''}`}>
+                        {deleteMode && (
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleClassSelection(classItem.id)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                          </td>
+                        )}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => toggleRowExpand(classItem.id)}
+                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                          >
+                            <svg
+                              className={`w-5 h-5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{classItem.subject_name}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{classItem.topic}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {new Date(classItem.class_date).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            {presentCount}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            {absentCount}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {totalCount}
+                          </span>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={deleteMode ? 8 : 7} className="px-6 py-4 bg-gray-50">
+                            <div className="space-y-4">
+                              <div>
+                                <h4 className="text-sm font-semibold text-gray-900 mb-2">Topics Covered</h4>
+                                <p className="text-sm text-gray-700">{classItem.topic}</p>
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-semibold text-gray-900 mb-3">Students Attendance</h4>
+                                {classItem.attendance_records.length > 0 ? (
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200 border border-gray-300 rounded-lg">
+                                      <thead className="bg-gray-100">
+                                        <tr>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                            Student Name
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                            Email
+                                          </th>
+                                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                            Status
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {classItem.attendance_records.map((record) => (
+                                          <tr key={record.id} className="hover:bg-gray-50">
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                              {record.student_name}
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                              {record.student_email || 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-center">
+                                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                record.status === 'present'
+                                                  ? 'bg-green-100 text-green-800'
+                                                  : 'bg-red-100 text-red-800'
+                                              }`}>
+                                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-500">No attendance records available</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
@@ -392,6 +739,25 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false)
+        }}
+        onConfirm={confirmDelete}
+        title="Confirm Delete Additional Classes"
+        itemsToDelete={Array.from(selectedClasses).map(classId => {
+          const classItem = additionalClasses.find(c => c.id === classId)
+          return {
+            name: `${classItem?.subject_name || 'Unknown'} - ${classItem?.topic || 'Unknown'}`,
+            email: new Date(classItem?.class_date || '').toLocaleDateString(),
+            additionalInfo: `Date: ${new Date(classItem?.class_date || '').toLocaleDateString()}`
+          }
+        })}
+        type="all"
+      />
     </div>
   )
 }

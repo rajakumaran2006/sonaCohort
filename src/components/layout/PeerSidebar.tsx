@@ -1,9 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
 import { Button } from '@/components/ui'
+import { useQuery } from '@tanstack/react-query'
+import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+import { ExamService } from '@/lib/services/examService'
+import { LayoutDashboard, GraduationCap, ClipboardList, FileText, FileBarChart, LogOut, User } from 'lucide-react'
 
 interface PeerSidebarProps {
   isOpen: boolean
@@ -11,18 +15,50 @@ interface PeerSidebarProps {
 }
 
 export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  const navigation = [
-    { name: 'Dashboard', href: '/peer/dashboard', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z' },
-    { name: 'Classes', href: '/peer/classes', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
-    { name: 'Attendance', href: '/peer/attendance', icon: 'M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
-    { name: 'Exams', href: '/peer/exams', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-    { name: 'Reports', href: '/peer/reports', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+  // Fetch peer tutor info with caching
+  const { data: peerTutor } = useQuery({
+    queryKey: ['peer-tutor-info', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return null
+      return await PeerTutorAuthService.getPeerTutorByEmail(user.email)
+    },
+    enabled: !!user?.email,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+  })
+
+  // Check if peer tutor has access to exams (check once and cache)
+  const { data: hasExamAccess } = useQuery({
+    queryKey: ['peer-exam-access', peerTutor?.year],
+    queryFn: async () => {
+      if (!peerTutor?.year) return false
+      const exams = await ExamService.getExamsByYear(peerTutor.year)
+      return exams.length > 0
+    },
+    enabled: !!peerTutor?.year,
+    staleTime: 10 * 60 * 1000, // 10 minutes - cache for a long time
+    refetchOnWindowFocus: false,
+    refetchOnMount: false, // Don't refetch on mount if data exists
+  })
+
+  const baseNavigation = [
+    { name: 'Dashboard', href: '/peer/dashboard', Icon: LayoutDashboard },
+    { name: 'Classes', href: '/peer/classes', Icon: GraduationCap },
+    { name: 'Attendance', href: '/peer/attendance', Icon: ClipboardList },
+    { name: 'Reports', href: '/peer/reports', Icon: FileBarChart },
   ]
+
+  const examNavItem = { name: 'Exams', href: '/peer/exams', Icon: FileText }
+
+  // Memoize navigation to prevent recreation on every render
+  const navigation = useMemo(() => {
+    return hasExamAccess ? [...baseNavigation, examNavItem] : baseNavigation
+  }, [hasExamAccess])
 
   const handleNavigation = (href: string) => {
     router.push(href)
@@ -53,7 +89,7 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:flex lg:flex-col
+        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:flex lg:flex-col
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo */}
@@ -66,6 +102,7 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
           <div className="space-y-2">
             {navigation.map((item) => {
               const isActive = pathname === item.href
+              const Icon = item.Icon
               return (
                 <button
                   key={item.name}
@@ -78,9 +115,7 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
                     }
                   `}
                 >
-                  <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                  </svg>
+                  <Icon className="w-5 h-5 mr-3" />
                   {item.name}
                 </button>
               )
@@ -97,11 +132,7 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
             className="w-full justify-center"
             loading={isLoggingOut}
           >
-            {!isLoggingOut && (
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            )}
+            {!isLoggingOut && <LogOut className="w-5 h-5 mr-2" />}
             {isLoggingOut ? 'Signing Out...' : 'Sign Out'}
           </Button>
         </div>

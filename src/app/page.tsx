@@ -71,18 +71,11 @@ export default function Home() {
   }
 
   if (user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Redirecting to dashboard...</p>
-        </div>
-      </div>
-    )
+    return null // Redirect immediately without showing loading screen
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white relative">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-sm z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -288,21 +281,6 @@ export default function Home() {
                     <p className="text-xs text-blue-600 mt-1">Information Technology</p>
                   </div>
 
-                  {/* Mentor 2 */}
-                  <div className="bg-white border border-gray-200 rounded-lg p-4 text-center hover:shadow-md transition-shadow">
-                    <div className="w-12 h-12 rounded-full overflow-hidden mx-auto mb-3 border-2 border-gray-200">
-                      <Image
-                        src="/mentor1.png"
-                        alt="Dr. J. Jeba Emilyn"
-                        width={48}
-                        height={48}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <h4 className="font-semibold text-gray-900 text-sm">Dr. J. Jeba Emilyn</h4>
-                    <p className="text-xs text-gray-600">Associate Professor</p>
-                    <p className="text-xs text-blue-600 mt-1">Information Technology</p>
-                  </div>
                 </div>
               </div>
 

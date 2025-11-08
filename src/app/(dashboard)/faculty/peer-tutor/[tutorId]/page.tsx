@@ -8,8 +8,8 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
-import { ExamMarksService } from '@/lib/services/examMarksService'
 import { RenumerationService, PeerTutorRenumeration } from '@/lib/services/renumerationService'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 
 export default function PeerTutorProfilePage() {
   return (
@@ -26,16 +26,7 @@ interface PeerTutorStats {
   assignedStudents: number
 }
 
-interface ExamMark {
-  id: string
-  exam_type: string
-  subject: string
-  marks: number
-  max_marks: number
-  student_name: string
-  student_email: string
-  created_at: string
-}
+
 
 function PeerTutorProfileContent() {
   const { user } = useAuth()
@@ -44,10 +35,12 @@ function PeerTutorProfileContent() {
   const tutorId = params.tutorId as string
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  
+  // Use custom hook for sidebar collapsed state (reads from localStorage synchronously)
+  const [isSidebarCollapsed] = useSidebarCollapsed()
   const [peerTutor, setPeerTutor] = useState<PeerTutor | null>(null)
   const [assignedStudents, setAssignedStudents] = useState<Student[]>([])
   const [scheduledClasses, setScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
-  const [examMarks, setExamMarks] = useState<ExamMark[]>([])
   const [renumerations, setRenumerations] = useState<PeerTutorRenumeration[]>([])
   const [stats, setStats] = useState<PeerTutorStats>({
     totalClasses: 0,
@@ -85,9 +78,6 @@ function PeerTutorProfileContent() {
         )
         setScheduledClasses(classes)
 
-        // Get exam marks for assigned students
-        const marks = await ExamMarksService.getExamMarksByPeerTutor(tutorId)
-        setExamMarks(marks)
 
         // Get renumeration data for this peer tutor
         const renumerationData = await RenumerationService.getPeerTutorRenumeration(tutorId)
@@ -116,34 +106,52 @@ function PeerTutorProfileContent() {
     router.back()
   }
 
+  // Render loading state with sidebar
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading peer tutor data...</p>
+      <div className="min-h-screen bg-gray-50 flex">
+        {/* Sidebar */}
+        <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+        
+        {/* Main Content */}
+        <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading peer tutor data...</p>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
+  // Render error state with sidebar
   if (!peerTutor) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
+      <div className="min-h-screen bg-gray-50 flex">
+        {/* Sidebar */}
+        <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+        
+        {/* Main Content */}
+        <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Peer tutor not found</h3>
+              <p className="text-gray-500 mb-4">The requested peer tutor could not be found.</p>
+              <button
+                onClick={handleBack}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Go Back
+              </button>
+            </div>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Peer tutor not found</h3>
-          <p className="text-gray-500 mb-4">The requested peer tutor could not be found.</p>
-          <button
-            onClick={handleBack}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Go Back
-          </button>
         </div>
       </div>
     )
@@ -155,10 +163,10 @@ function PeerTutorProfileContent() {
       <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-64 overflow-y-auto">
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
         {/* Header */}
-        <header className="bg-white shadow flex-shrink-0">
-          <div className="px-4 sm:px-6 lg:px-8">
+        <header className="bg-white shadow flex-shrink-0 w-full">
+          <div className={`w-full ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-0' : 'px-4 sm:px-6 lg:px-8'}`}>
             <div className="py-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
@@ -177,7 +185,7 @@ function PeerTutorProfileContent() {
                         onClick={() => router.push('/faculty/peer-tutor')}
                         className="hover:text-gray-700 transition-colors"
                       >
-                        Peer Tutors
+                        Peer Tutor Reports
                       </button>
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -195,12 +203,6 @@ function PeerTutorProfileContent() {
                 </div>
                 <div className="flex space-x-3">
                   <button
-                    onClick={() => router.push(`/faculty/peer-tutor/${tutorId}/exam-marks`)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    View Exam Marks Table
-                  </button>
-                  <button
                     onClick={handleBack}
                     className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
                   >
@@ -213,7 +215,7 @@ function PeerTutorProfileContent() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6">
+        <main className={`flex-1 py-6 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-0' : 'px-4 sm:px-6 lg:px-8'}`}>
           {/* Peer Tutor Information Card */}
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-8">
             <div className="px-6 py-4 border-b border-gray-200">
@@ -335,7 +337,7 @@ function PeerTutorProfileContent() {
                               renumeration.status === 'approved' ? 'bg-green-100 text-green-800' :
                               'bg-red-100 text-red-800'
                             }`}>
-                              {renumeration.status.charAt(0).toUpperCase() + renumeration.status.slice(1)}
+                              {renumeration.status ? (renumeration.status.charAt(0).toUpperCase() + renumeration.status.slice(1)) : 'Unknown'}
                             </span>
                             <span className="text-xs text-gray-500">
                               Created: {new Date(renumeration.created_at).toLocaleDateString()}
@@ -442,79 +444,6 @@ function PeerTutorProfileContent() {
                     </div>
                     <h3 className="text-md font-medium text-gray-900 mb-2">No students assigned</h3>
                     <p className="text-gray-500">This peer tutor has no students assigned yet.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Exam Marks */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Student Exam Marks (CIE)</h3>
-                <p className="text-sm text-gray-600">
-                  {examMarks.length} exam record(s) found
-                </p>
-              </div>
-              <div className="p-6">
-                {examMarks.length > 0 ? (
-                  <div className="space-y-4">
-                    {/* Group marks by exam type */}
-                    {Object.entries(
-                      examMarks.reduce((acc, mark) => {
-                        if (!acc[mark.exam_type]) {
-                          acc[mark.exam_type] = []
-                        }
-                        acc[mark.exam_type].push(mark)
-                        return acc
-                      }, {} as Record<string, ExamMark[]>)
-                    ).map(([examType, marks]) => (
-                      <div key={examType} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-semibold text-gray-900 capitalize">
-                            {examType.replace('-', ' ').toUpperCase()}
-                          </h4>
-                          <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                            {marks.length} record(s)
-                          </span>
-                        </div>
-                        <div className="space-y-2">
-                          {marks.map((mark) => (
-                            <div key={mark.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-900 text-sm">{mark.student_name}</div>
-                                <div className="text-xs text-gray-500">{mark.subject}</div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-semibold text-gray-900">
-                                  {mark.marks}/{mark.max_marks}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {Math.round((mark.marks / mark.max_marks) * 100)}%
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-md font-medium text-gray-900 mb-2">No CIE marks found</h3>
-                    <p className="text-gray-500">No Continuous Internal Evaluation (CIE) marks have been recorded for assigned students yet.</p>
-                    <div className="mt-4 text-xs text-gray-400">
-                      <p>CIE marks are typically recorded for:</p>
-                      <ul className="list-disc list-inside mt-1 space-y-1">
-                        <li>CIE-1 (First Internal Assessment)</li>
-                        <li>CIE-2 (Second Internal Assessment)</li>
-                        <li>CIE-3 (Third Internal Assessment)</li>
-                      </ul>
-                    </div>
                   </div>
                 )}
               </div>

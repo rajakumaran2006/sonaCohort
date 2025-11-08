@@ -25,7 +25,6 @@ export interface CreateScheduledClassData {
   year: string
   section: string
   faculty_id: string
-  peer_tutor_id: string
   topics?: string
 }
 
@@ -48,50 +47,176 @@ export interface ScheduledClassWithDetails extends ScheduledClass {
 export class ScheduledClassService {
   /**
    * Create a new scheduled class
+   * Creates a scheduled class for the specific section
    */
   static async createScheduledClass(data: CreateScheduledClassData): Promise<boolean> {
     try {
       const supabase = createClient()
       
-      // Get all peer tutors for the specified dept/year/section
+      // Validate required fields with detailed logging
+      console.log('createScheduledClass called with data:', data)
+      
+      if (!data.class_id) {
+        console.error('class_id is required')
+        return false
+      }
+      if (!data.faculty_id) {
+        console.error('faculty_id is required')
+        return false
+      }
+      if (!data.scheduled_date) {
+        console.error('scheduled_date is required')
+        return false
+      }
+      if (!data.dept || !data.year || !data.section) {
+        console.error('dept, year, and section are required', { dept: data.dept, year: data.year, section: data.section })
+        return false
+      }
+      
+      // Get the class to verify it exists and get section information
+      const { data: classData, error: classError } = await supabase
+        .from('classes')
+        .select('subject_name, year, dept, section')
+        .eq('id', data.class_id)
+        .single()
+
+      if (classError || !classData) {
+        console.error('Error getting class data:', classError)
+        return false
+      }
+
+      // Normalize year format
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(data.year)
+      const normalizedDept = data.dept.trim()
+      const normalizedSection = data.section.trim()
+
+      // Verify the class section matches the provided section
+      if (classData.section !== normalizedSection) {
+        console.warn(`Class section (${classData.section}) does not match provided section (${normalizedSection}). Using class section.`)
+      }
+
+      // Check if the scheduled date is from tomorrow onwards (not today or past)
+      let scheduledDate: Date
+      try {
+        scheduledDate = new Date(data.scheduled_date)
+        if (isNaN(scheduledDate.getTime())) {
+          console.error('Invalid scheduled_date format:', data.scheduled_date)
+          return false
+        }
+        scheduledDate.setHours(0, 0, 0, 0)
+      } catch (error) {
+        console.error('Error parsing scheduled_date:', data.scheduled_date, error)
+        return false
+      }
+      
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(today.getDate() + 1)
+      
+      if (scheduledDate < tomorrow) {
+        console.log('Scheduled date is today or in the past. Not creating scheduled classes.')
+        return true
+      }
+
+      // Always create scheduled classes for ALL peer tutors in this section
+      console.log('Fetching peer tutors for:', { dept: normalizedDept, year: normalizedYear, section: normalizedSection })
+      
       const { data: peerTutors, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('id')
-        .eq('dept', data.dept)
-        .eq('year', data.year)
-        .eq('section', data.section)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
 
       if (tutorsError) {
-        console.error('Error getting peer tutors:', tutorsError)
+        console.error('Error fetching peer tutors:', tutorsError)
         return false
       }
+
+      console.log('Found peer tutors:', peerTutors?.length || 0)
 
       if (!peerTutors || peerTutors.length === 0) {
-        console.error('No peer tutors found for the specified criteria')
+        console.warn('No peer tutors found for this section. Cannot create scheduled classes.')
         return false
       }
 
-      // Create scheduled class records for each peer tutor
-      const scheduledClassData = peerTutors.map(tutor => ({
-        ...data,
-        peer_tutor_id: tutor.id
+      // Check which peer tutors already have this scheduled class
+      const peerTutorIds = peerTutors.map(t => t.id).filter(id => id) // Remove any undefined/null IDs
+      console.log('Checking existing scheduled classes for peer tutor IDs:', peerTutorIds.length)
+      
+      if (peerTutorIds.length === 0) {
+        console.error('No valid peer tutor IDs found')
+        return false
+      }
+      
+      const { data: existing, error: existErr } = await supabase
+        .from('scheduled_classes')
+        .select('peer_tutor_id')
+        .eq('class_id', data.class_id)
+        .eq('scheduled_date', data.scheduled_date)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
+        .in('peer_tutor_id', peerTutorIds)
+
+      let existingTutorIds = new Set<string>()
+      
+      if (existErr) {
+        console.error('Error checking existing scheduled classes:', existErr)
+        // Don't return false here - continue to create if the check fails
+        // This handles cases where the query might fail but we can still create
+        console.warn('Continuing despite error checking existing classes - will create for all peer tutors')
+      } else {
+        // Only use existing data if there was no error
+        existingTutorIds = new Set((existing || []).map(e => e.peer_tutor_id))
+      }
+
+      const tutorsToCreate = peerTutors.filter(t => !existingTutorIds.has(t.id))
+
+      if (tutorsToCreate.length === 0) {
+        console.log('All peer tutors already have this scheduled class')
+        return true
+      }
+
+      console.log(`Creating scheduled classes for ${tutorsToCreate.length} peer tutor(s)`)
+
+      // Create scheduled classes for all peer tutors that don't have it
+      const recordsToInsert = tutorsToCreate.map(tutor => ({
+        class_id: data.class_id,
+        scheduled_date: data.scheduled_date,
+        dept: normalizedDept,
+        year: normalizedYear,
+        section: normalizedSection,
+        faculty_id: data.faculty_id,
+        peer_tutor_id: tutor.id,
+        topics: data.topics
       }))
 
-      const { error } = await supabase
+      const { error: insertError } = await supabase
         .from('scheduled_classes')
-        .insert(scheduledClassData)
+        .insert(recordsToInsert)
 
-      if (error) {
-        console.error('Error creating scheduled classes:', error)
+      if (insertError) {
+        console.error('Error creating scheduled classes for peer tutors:', insertError)
         return false
       }
 
+      console.log(`✓ Created scheduled classes for ${tutorsToCreate.length} peer tutor(s) in section:`, normalizedSection)
       return true
     } catch (error) {
       console.error('Error in createScheduledClass:', error)
       return false
     }
   }
+
 
   /**
    * Get scheduled classes for a specific dept/year/section
@@ -104,6 +229,18 @@ export class ScheduledClassService {
   ): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
+      
+      // Normalize year, department, and section
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(year)
+      const normalizedDept = dept.trim()
+      const normalizedSection = section.trim()
       
       let query = supabase
         .from('scheduled_classes')
@@ -120,9 +257,9 @@ export class ScheduledClassService {
             email
           )
         `)
-        .eq('dept', dept)
-        .eq('year', year)
-        .eq('section', section)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
         .order('scheduled_date', { ascending: true })
 
       // Filter by peer tutor if provided
@@ -151,6 +288,18 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
       
+      // Normalize year, department, and section
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(year)
+      const normalizedDept = dept.trim()
+      const normalizedSection = section.trim()
+      
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select(`
@@ -161,9 +310,9 @@ export class ScheduledClassService {
             created_at
           )
         `)
-        .eq('dept', dept)
-        .eq('year', year)
-        .eq('section', section)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
         .order('scheduled_date', { ascending: true })
 
       if (error) {
@@ -185,12 +334,24 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
       
+      // Normalize year, department, and section
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(year)
+      const normalizedDept = dept.trim()
+      const normalizedSection = section.trim()
+      
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select('scheduled_date')
-        .eq('dept', dept)
-        .eq('year', year)
-        .eq('section', section)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
 
       if (error) {
         console.error('Error getting occupied dates:', error)
@@ -211,13 +372,25 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
       
+      // Normalize year, department, and section
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(year)
+      const normalizedDept = dept.trim()
+      const normalizedSection = section.trim()
+      
       let query = supabase
         .from('scheduled_classes')
         .select('id')
         .eq('scheduled_date', scheduledDate)
-        .eq('dept', dept)
-        .eq('year', year)
-        .eq('section', section)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
 
       if (excludeScheduledClassId) {
         query = query.neq('id', excludeScheduledClassId)
@@ -244,6 +417,18 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
       
+      // Normalize year, department, and section
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(year)
+      const normalizedDept = dept.trim()
+      const normalizedSection = section.trim()
+      
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select(`
@@ -251,9 +436,9 @@ export class ScheduledClassService {
             subject_name
           )
         `)
-        .eq('dept', dept)
-        .eq('year', year)
-        .eq('section', section)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
 
       if (error) {
         console.error('Error getting unique subjects with schedules:', error)
@@ -504,6 +689,18 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
       
+      // Normalize year, department, and section
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(year)
+      const normalizedDept = dept.trim()
+      const normalizedSection = section.trim()
+      
       // Get all scheduled classes for the specified filters
       let query = supabase
         .from('scheduled_classes')
@@ -523,9 +720,9 @@ export class ScheduledClassService {
             email
           )
         `)
-        .eq('dept', dept)
-        .eq('year', year)
-        .eq('section', section)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
         .order('scheduled_date', { ascending: true })
 
       // Add subject filter if provided
@@ -619,6 +816,18 @@ export class ScheduledClassService {
         dateString: dateString
       })
       
+      // Normalize year, department, and section
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(year)
+      const normalizedDept = dept.trim()
+      const normalizedSection = section.trim()
+      
       // Get all scheduled classes for the specified filters
       let query = supabase
         .from('scheduled_classes')
@@ -638,9 +847,9 @@ export class ScheduledClassService {
             email
           )
         `)
-        .eq('dept', dept)
-        .eq('year', year)
-        .eq('section', section)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
         .eq('scheduled_date', dateString)
         .order('scheduled_date', { ascending: true })
 
@@ -842,21 +1051,33 @@ export class ScheduledClassService {
       
       console.log('Getting all classes for department:', dept)
       
+      // Validate department parameter
+      if (!dept || typeof dept !== 'string' || dept.trim() === '') {
+        console.error('Invalid department parameter:', dept)
+        return { completed: [], pending: [] }
+      }
+      
       // First, get all scheduled classes for the department
       const { data: scheduledClasses, error: scheduledError } = await supabase
         .from('scheduled_classes')
         .select('*')
-        .eq('dept', dept)
+        .eq('dept', dept.trim())
         .order('scheduled_date', { ascending: false })
 
       if (scheduledError) {
         console.error('Error getting scheduled classes for department:', scheduledError)
         console.error('Error details:', {
-          message: scheduledError.message,
-          details: scheduledError.details,
-          hint: scheduledError.hint,
-          code: scheduledError.code
+          message: scheduledError.message || 'Unknown error',
+          details: scheduledError.details || 'No details available',
+          hint: scheduledError.hint || 'No hint available',
+          code: scheduledError.code || 'No code available'
         })
+        
+        // Check if it's a table not found error
+        if (scheduledError.code === '42P01' || scheduledError.message?.includes('relation') || scheduledError.message?.includes('does not exist')) {
+          console.error('Table "scheduled_classes" may not exist or be accessible')
+        }
+        
         return { completed: [], pending: [] }
       }
 
@@ -951,12 +1172,16 @@ export class ScheduledClassService {
       return { completed, pending }
     } catch (error) {
       console.error('Error in getAllClassesForDepartment:', error)
+      console.error('Error type:', typeof error)
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+      console.error('Department parameter:', dept)
       return { completed: [], pending: [] }
     }
   }
 
   /**
    * Get class statistics for a specific peer tutor
+   * Only counts classes from the day after the peer tutor was created
    */
   static async getPeerTutorClassStats(peerTutorId: string): Promise<{
     totalClasses: number
@@ -966,11 +1191,30 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
       
+      // First, get the peer tutor's creation date
+      const { data: peerTutor, error: tutorError } = await supabase
+        .from('peer_tutors')
+        .select('created_at')
+        .eq('id', peerTutorId)
+        .single()
+
+      if (tutorError || !peerTutor) {
+        console.error('Error getting peer tutor:', tutorError)
+        return { totalClasses: 0, completedClasses: 0, pendingClasses: 0 }
+      }
+
+      // Calculate the minimum date for classes (day after peer tutor was created)
+      const createdDate = new Date(peerTutor.created_at)
+      createdDate.setHours(0, 0, 0, 0)
+      const minimumClassDate = new Date(createdDate)
+      minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
+
       // Get all scheduled classes for this peer tutor
       const { data: scheduledClasses, error } = await supabase
         .from('scheduled_classes')
         .select('*')
         .eq('peer_tutor_id', peerTutorId)
+        .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0]) // Only classes from day after creation
 
       if (error) {
         console.error('Error getting peer tutor class stats:', error)
@@ -981,18 +1225,22 @@ export class ScheduledClassService {
         return { totalClasses: 0, completedClasses: 0, pendingClasses: 0 }
       }
 
-      // Filter classes based on date (today and previous days)
+      // Total classes allocated should include ALL scheduled classes (past, present, and future)
+      // from the day after the peer tutor was created
+      const totalClasses = scheduledClasses.length
+
+      // For completed/pending counts, we only consider classes that have occurred (today and past)
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       
       const relevantClasses = scheduledClasses.filter(cls => {
         const classDate = new Date(cls.scheduled_date)
         classDate.setHours(0, 0, 0, 0)
-        // Include today and past classes
-        return classDate <= today
+        // Include today and past classes, but only those from day after peer tutor was created
+        return classDate <= today && classDate >= minimumClassDate
       })
 
-      // Count completed and pending classes
+      // Count completed and pending classes (only for classes that have occurred)
       const completedClasses = relevantClasses.filter(cls => {
         return cls.completion_status === 'completed' || 
                (cls.attendance_completed && cls.topics_completed) ||
@@ -1006,13 +1254,96 @@ export class ScheduledClassService {
       }).length
 
       return {
-        totalClasses: relevantClasses.length,
+        totalClasses, // Include all classes (past, present, future)
         completedClasses,
         pendingClasses
       }
     } catch (error) {
       console.error('Error in getPeerTutorClassStats:', error)
       return { totalClasses: 0, completedClasses: 0, pendingClasses: 0 }
+    }
+  }
+
+  /**
+   * Get scheduled class count for a specific class
+   */
+  static async getScheduledClassCount(classId: string): Promise<number> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('scheduled_classes')
+        .select('id')
+        .eq('class_id', classId)
+
+      if (error) {
+        console.error('Error getting scheduled class count:', error)
+        return 0
+      }
+
+      return data?.length || 0
+    } catch (error) {
+      console.error('Error in getScheduledClassCount:', error)
+      return 0
+    }
+  }
+
+  /**
+   * Get all peer tutors allocated to a specific scheduled class
+   */
+  static async getPeerTutorsForScheduledClass(classId: string, dept: string, year: string, section: string): Promise<{
+    id: string
+    name: string
+    email: string
+  }[]> {
+    try {
+      const supabase = createClient()
+      
+      // Normalize year, department, and section
+      const normalizeYear = (year: string): string => {
+        const yearMap: { [key: string]: string } = {
+          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '2': '2', '3': '3', '4': '4'
+        }
+        return yearMap[year] || year
+      }
+      const normalizedYear = normalizeYear(year)
+      const normalizedDept = dept.trim()
+      const normalizedSection = section.trim()
+      
+      // Get all scheduled classes for this class_id, dept, year, section
+      const { data: scheduledClasses, error } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          peer_tutor_id,
+          peer_tutor:peer_tutors!inner(
+            id,
+            name,
+            email
+          )
+        `)
+        .eq('class_id', classId)
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+        .eq('section', normalizedSection)
+
+      if (error) {
+        console.error('Error getting peer tutors for scheduled class:', error)
+        return []
+      }
+
+      // Extract unique peer tutors
+      const peerTutors = (scheduledClasses || []).map((sc: any) => sc.peer_tutor).filter(Boolean)
+      
+      // Remove duplicates based on ID
+      const uniquePeerTutors = peerTutors.filter((tutor: any, index: number, self: any[]) => 
+        index === self.findIndex((t: any) => t.id === tutor.id)
+      )
+
+      return uniquePeerTutors
+    } catch (error) {
+      console.error('Error in getPeerTutorsForScheduledClass:', error)
+      return []
     }
   }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import * as XLSX from 'xlsx'
 import { FeedbackForm, FeedbackResponseWithDetails } from '@/lib/services/feedbackService'
 
 interface FeedbackResponsesModalProps {
@@ -19,6 +20,70 @@ export default function FeedbackResponsesModal({
   loading
 }: FeedbackResponsesModalProps) {
   const [selectedResponse, setSelectedResponse] = useState<FeedbackResponseWithDetails | null>(null)
+
+  const handleExportToExcel = () => {
+    if (!feedbackForm || responses.length === 0) return
+
+    // Prepare data for export
+    const exportData = responses.map(response => {
+      const baseData: Record<string, any> = {
+        'Student Name': response.student.name,
+        'Student Email': response.student.email,
+        'Year': response.student.year,
+        'Section': response.student.section,
+        'Peer Tutor': response.student.assigned_peer_tutor?.name || 'Not Assigned',
+        'Peer Tutor Email': response.student.assigned_peer_tutor?.email || '',
+        'Submitted At': new Date(response.submitted_at).toLocaleString()
+      }
+
+      // Add individual responses
+      response.responses.forEach((answer, index) => {
+        const questionText = answer.question?.question_text || `Question ${index + 1}`
+        const answerValue = answer.question?.question_type === 'multiple_choice' 
+          ? answer.selected_option 
+          : answer.question?.question_type === 'star_rating'
+          ? answer.star_rating
+          : answer.answer_text
+        
+        baseData[`Q${index + 1}: ${questionText}`] = answerValue || ''
+      })
+
+      return baseData
+    })
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    
+    // Set column widths
+    const colWidths = [
+      { wch: 20 }, // Student Name
+      { wch: 30 }, // Student Email
+      { wch: 10 }, // Year
+      { wch: 15 }, // Section
+      { wch: 20 }, // Peer Tutor
+      { wch: 30 }, // Peer Tutor Email
+      { wch: 20 }, // Submitted At
+    ]
+    
+    // Add widths for question columns
+    if (responses.length > 0 && responses[0].responses.length > 0) {
+      responses[0].responses.forEach(() => {
+        colWidths.push({ wch: 30 })
+      })
+    }
+    
+    ws['!cols'] = colWidths
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Feedback Responses')
+    
+    // Generate filename
+    const timestamp = new Date().toISOString().split('T')[0]
+    const filename = `${feedbackForm.name.replace(/[^a-zA-Z0-9]/g, '_')}_responses_${timestamp}.xlsx`
+    
+    // Save file
+    XLSX.writeFile(wb, filename)
+  }
 
   if (!isOpen || !feedbackForm) return null
 
@@ -43,14 +108,27 @@ export default function FeedbackResponsesModal({
                 {responses.length} response{responses.length !== 1 ? 's' : ''} received
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center space-x-3">
+              {responses.length > 0 && (
+                <button
+                  onClick={handleExportToExcel}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export to Excel
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {loading ? (
@@ -90,6 +168,9 @@ export default function FeedbackResponsesModal({
                             </div>
                             <div className="text-sm text-gray-500">
                               {response.student.email} • {response.student.year} - {response.student.section}
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              Peer Tutor: {response.student.assigned_peer_tutor?.name || 'Not Assigned'}
                             </div>
                           </div>
                         </div>
@@ -151,6 +232,12 @@ export default function FeedbackResponsesModal({
                           </div>
                           <div className="text-sm text-gray-500">
                             {selectedResponse.student.year} - {selectedResponse.student.section}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Peer Tutor: {selectedResponse.student.assigned_peer_tutor?.name || 'Not Assigned'}
+                            {selectedResponse.student.assigned_peer_tutor?.email && (
+                              <span className="ml-2">({selectedResponse.student.assigned_peer_tutor.email})</span>
+                            )}
                           </div>
                         </div>
                       </div>

@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ReportService, ClassAttendanceReport } from '@/lib/services/reportService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { Eye } from 'lucide-react'
 
 export default function SubjectReportsPage() {
   return (
@@ -25,6 +27,57 @@ function SubjectReportsContent() {
   const [showClassModal, setShowClassModal] = useState(false)
   const [peerTutorInfo, setPeerTutorInfo] = useState<any>(null)
   const [subjectName, setSubjectName] = useState<string>('')
+  
+  // Check if sidebar is collapsed - read from localStorage first (source of truth)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebar-collapsed')
+      if (saved !== null) {
+        return JSON.parse(saved)
+      }
+    }
+    return false
+  })
+
+  // Listen for sidebar collapse state changes
+  useEffect(() => {
+    const checkSidebarState = () => {
+      if (typeof window !== 'undefined') {
+        // Read from localStorage first (sidebar's source of truth)
+        const saved = localStorage.getItem('sidebar-collapsed')
+        if (saved !== null) {
+          const collapsed = JSON.parse(saved)
+          setIsSidebarCollapsed(collapsed)
+        } else {
+          // Fallback to DOM check if localStorage doesn't have value
+          const sidebar = document.querySelector('[data-sidebar-collapsed]')
+          if (sidebar) {
+            const collapsed = sidebar.getAttribute('data-sidebar-collapsed') === 'true'
+            setIsSidebarCollapsed(collapsed)
+          }
+        }
+      }
+    }
+
+    // Check initially with a small delay to ensure sidebar has rendered
+    const timer = setTimeout(checkSidebarState, 0)
+
+    // Listen for custom events
+    const handleSidebarToggle = () => {
+      // Use a small delay to ensure localStorage is updated
+      setTimeout(checkSidebarState, 0)
+    }
+    window.addEventListener('sidebar-toggle', handleSidebarToggle)
+
+    // Also listen for storage changes (in case sidebar state changes in another tab/window)
+    window.addEventListener('storage', checkSidebarState)
+
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('sidebar-toggle', handleSidebarToggle)
+      window.removeEventListener('storage', checkSidebarState)
+    }
+  }, [])
 
   const tutorId = params.tutorId as string
   const subjectId = params.subjectId as string
@@ -109,10 +162,10 @@ function SubjectReportsContent() {
       <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-64 overflow-y-auto">
+      <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
         {/* Top Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <header className="bg-white shadow-sm border-b border-gray-200 w-full">
+          <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8 w-full">
             <div className="flex items-center">
               <button
                 onClick={() => setIsSidebarOpen(true)}
@@ -145,7 +198,7 @@ function SubjectReportsContent() {
 
         {/* Main Content */}
         <main className="py-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className={`max-w-7xl mx-auto ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-0' : 'px-4 sm:px-6 lg:px-8'}`}>
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -245,48 +298,75 @@ function SubjectReportsContent() {
                         <p className="text-gray-500">No classes have been scheduled for this subject yet.</p>
                       </div>
                     ) : (
-                      <div className="space-y-2 p-6">
-                        {scheduledClasses.map((scheduledClass) => {
-                          const completionStatus = getCompletionStatus(scheduledClass)
-                          return (
-                            <div
-                              key={scheduledClass.id}
-                              onClick={() => handleClassClick(scheduledClass)}
-                              className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-3">
-                                    <h4 className="text-lg font-semibold text-gray-900">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Subject
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Assigned Date
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Attendance
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {scheduledClasses.map((scheduledClass) => {
+                              const completionStatus = getCompletionStatus(scheduledClass)
+                              const isPresent = scheduledClass.completion_status === 'completed' || 
+                                               (scheduledClass.attendance_completed && scheduledClass.topics_completed)
+                              return (
+                                <tr key={scheduledClass.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {scheduledClass.class?.subject_name || subjectName || 'Unknown Subject'}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm text-gray-900">
                                       {new Date(scheduledClass.scheduled_date).toLocaleDateString()}
-                                    </h4>
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${completionStatus.color}`}>
-                                      {completionStatus.status.charAt(0).toUpperCase() + completionStatus.status.slice(1)}
-                                    </span>
-                                  </div>
-                                  
-                                  {scheduledClass.topics && (
-                                    <p className="text-sm text-gray-600 mt-1">
-                                      <strong>Topics:</strong> {scheduledClass.topics}
-                                    </p>
-                                  )}
-                                  
-                                  <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                                    <span>Class ID: {scheduledClass.class_id}</span>
-                                    <span>Peer Tutor: {scheduledClass.peer_tutor.name}</span>
-                                  </div>
-                                </div>
-                                
-                                <div className="flex items-center space-x-2 ml-4">
-                                  <span className="text-sm text-blue-600 font-medium">View Details</span>
-                                  <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                                    {isPresent ? (
+                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        Present
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        Absent
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                    <button
+                                      onClick={() => {
+                                        if (isPresent) {
+                                          handleClassClick(scheduledClass)
+                                        }
+                                      }}
+                                      disabled={!isPresent}
+                                      className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                        isPresent
+                                          ? 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer'
+                                          : 'text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed opacity-50'
+                                      }`}
+                                    >
+                                      <Eye className={`h-4 w-4 mr-1.5 ${isPresent ? 'text-gray-600' : 'text-gray-400'}`} />
+                                      View
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>

@@ -21,15 +21,15 @@ interface ImportPreview {
     peerTutorName: string
     studentEmail: string
     studentName: string
-  }>
-  invalidStudents: Array<{
-    studentEmail: string
-    studentName: string
+    status: 'valid'
     reason: string
   }>
-  invalidPeerTutors: Array<{
+  invalidAssignments: Array<{
     peerTutorEmail: string
     peerTutorName: string
+    studentEmail: string
+    studentName: string
+    status: 'invalid'
     reason: string
   }>
 }
@@ -51,39 +51,6 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleExportTemplate = async () => {
-    try {
-      setIsExporting(true)
-      
-      // Create template with headers
-      const templateData = [
-        ['Peer Tutor Email', 'Peer Tutor Name', 'Student Email', 'Student Name']
-      ]
-      
-      // Create workbook and worksheet
-      const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.aoa_to_sheet(templateData)
-      
-      // Set column widths
-      ws['!cols'] = [
-        { wch: 25 }, // Peer Tutor Email
-        { wch: 25 }, // Peer Tutor Name
-        { wch: 25 }, // Student Email
-        { wch: 25 }  // Student Name
-      ]
-      
-      XLSX.utils.book_append_sheet(wb, ws, 'Import Template')
-      
-      // Export as Excel file
-      XLSX.writeFile(wb, `peer_tutor_assignment_template_${dept}_${year}_${section}.xlsx`)
-      
-    } catch (error) {
-      console.error('Error exporting template:', error)
-      alert('Error exporting template. Please try again.')
-    } finally {
-      setIsExporting(false)
-    }
-  }
 
   const handleExportData = async () => {
     try {
@@ -96,9 +63,9 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
       const students = await StudentService.getStudentsBySection(dept, year, section)
       
-      // Create data array
+      // Create data array - only emails as requested
       const exportData = [
-        ['Peer Tutor Email', 'Peer Tutor Name', 'Student Email', 'Student Name']
+        ['Peer Tutor Email', 'Student Email']
       ]
       
       // Add existing assignments
@@ -109,9 +76,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
         if (peerTutor && student) {
           exportData.push([
             peerTutor.email,
-            peerTutor.name,
-            student.email,
-            student.name
+            student.email
           ])
         }
       })
@@ -122,10 +87,8 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
       // Set column widths
       ws['!cols'] = [
-        { wch: 25 }, // Peer Tutor Email
-        { wch: 25 }, // Peer Tutor Name
-        { wch: 25 }, // Student Email
-        { wch: 25 }  // Student Name
+        { wch: 30 }, // Peer Tutor Email
+        { wch: 30 }  // Student Email
       ]
       
       XLSX.utils.book_append_sheet(wb, ws, 'Current Assignments')
@@ -181,12 +144,11 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
 
   const validateImportData = async (rows: string[][]): Promise<ImportPreview> => {
     const validAssignments: ImportPreview['validAssignments'] = []
-    const invalidStudents: ImportPreview['invalidStudents'] = []
-    const invalidPeerTutors: ImportPreview['invalidPeerTutors'] = []
+    const invalidAssignments: ImportPreview['invalidAssignments'] = []
     
     if (!user?.id) {
       console.error('No user ID available for validation')
-      return { validAssignments, invalidStudents, invalidPeerTutors }
+      return { validAssignments, invalidAssignments }
     }
     
     // Get existing peer tutors and students
@@ -194,9 +156,9 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
     const existingStudents = await StudentService.getStudentsBySection(dept, year, section)
     
     for (const row of rows) {
-      if (row.length < 4) continue
+      if (row.length < 2) continue
       
-      const [peerTutorEmail, peerTutorName, studentEmail, studentName] = row
+      const [peerTutorEmail, studentEmail] = row
       
       if (!peerTutorEmail || !studentEmail) continue
       
@@ -239,9 +201,12 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
       // Check if peer tutor was found or created
       if (!peerTutor) {
-        invalidPeerTutors.push({
+        invalidAssignments.push({
           peerTutorEmail,
-          peerTutorName: peerTutorName || 'Unknown',
+          peerTutorName: 'Unknown',
+          studentEmail,
+          studentName: 'Unknown',
+          status: 'invalid',
           reason: 'Peer tutor not found in Microsoft Graph or this section'
         })
         continue
@@ -249,10 +214,41 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
       // Check if student was found or created
       if (!student) {
-        invalidStudents.push({
+        invalidAssignments.push({
+          peerTutorEmail,
+          peerTutorName: peerTutor.name,
           studentEmail,
-          studentName: studentName || 'Unknown',
+          studentName: 'Unknown',
+          status: 'invalid',
           reason: 'Student not found in Microsoft Graph or this section'
+        })
+        continue
+      }
+      
+      // Check if peer tutor is also a student (conflict)
+      const isPeerTutorAlsoStudent = await StudentService.isStudent(peerTutorEmail)
+      if (isPeerTutorAlsoStudent) {
+        invalidAssignments.push({
+          peerTutorEmail,
+          peerTutorName: peerTutor.name,
+          studentEmail,
+          studentName: student.name,
+          status: 'invalid',
+          reason: 'Peer tutor is also a student in another class - cannot be assigned as peer tutor'
+        })
+        continue
+      }
+      
+      // Check if student is also a peer tutor (conflict)
+      const isStudentAlsoPeerTutor = await PeerTutorService.isAlreadyPeerTutor(studentEmail)
+      if (isStudentAlsoPeerTutor) {
+        invalidAssignments.push({
+          peerTutorEmail,
+          peerTutorName: peerTutor.name,
+          studentEmail,
+          studentName: student.name,
+          status: 'invalid',
+          reason: 'Student is already a peer tutor - cannot be assigned as student'
         })
         continue
       }
@@ -260,9 +256,12 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       // Check if already assigned
       const existingAssignment = await AssignmentService.getAssignmentByStudentAndTutor(student.id, peerTutor.id)
       if (existingAssignment) {
-        invalidStudents.push({
+        invalidAssignments.push({
+          peerTutorEmail,
+          peerTutorName: peerTutor.name,
           studentEmail,
-          studentName: studentName || 'Unknown',
+          studentName: student.name,
+          status: 'invalid',
           reason: 'Student already assigned to a peer tutor'
         })
         continue
@@ -270,16 +269,17 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
       validAssignments.push({
         peerTutorEmail,
-        peerTutorName: peerTutorName || peerTutor.name,
+        peerTutorName: peerTutor.name,
         studentEmail,
-        studentName: studentName || student.name
+        studentName: student.name,
+        status: 'valid',
+        reason: ''
       })
     }
     
     return {
       validAssignments,
-      invalidStudents,
-      invalidPeerTutors
+      invalidAssignments
     }
   }
 
@@ -331,8 +331,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
       // Add skipped items
       results.skipped = [
-        ...importPreview.invalidStudents.map(s => `${s.studentEmail} - ${s.reason}`),
-        ...importPreview.invalidPeerTutors.map(pt => `${pt.peerTutorEmail} - ${pt.reason}`)
+        ...importPreview.invalidAssignments.map(a => `${a.studentEmail} - ${a.reason}`)
       ]
       
       setImportResult(results)
@@ -372,29 +371,9 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
           
           <div className="space-y-3">
             <button
-              onClick={handleExportTemplate}
-              disabled={isExporting}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-            >
-              {isExporting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Exporting...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>Export Template</span>
-                </>
-              )}
-            </button>
-            
-            <button
               onClick={handleExportData}
               disabled={isExporting}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
             >
               {isExporting ? (
                 <>
@@ -428,7 +407,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isImporting}
-              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
+              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
             >
               {isImporting ? (
                 <>
@@ -455,29 +434,33 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
           The Excel file should have the following columns:
         </p>
         <div className="text-xs text-gray-600 font-mono bg-white p-2 rounded border">
-          Peer Tutor Email | Peer Tutor Name | Student Email | Student Name
+          Peer Tutor Email | Student Email
         </div>
-        <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-          <p className="text-xs text-blue-800 font-medium mb-1">Auto-Import Feature</p>
-          <p className="text-xs text-blue-700">
+        <div className="mt-3 p-3 bg-white rounded border border-gray-200">
+          <p className="text-xs text-gray-900 font-medium mb-1">Auto-Import Feature</p>
+          <p className="text-xs text-gray-700">
             The system will automatically check Microsoft Graph and add users if they exist there. 
             You don't need to manually add peer tutors and students before importing assignments!
           </p>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Note: The system will validate all emails, auto-create users from Microsoft Graph, and show a preview before importing.
-        </p>
       </div>
 
       {/* Import Preview Modal */}
       {showImportPreview && importPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-96 overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Import Preview</h3>
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">Import Preview</h3>
+              </div>
               <button
                 onClick={closeImportPreview}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-2 hover:bg-gray-100 rounded-lg"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -485,90 +468,120 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
               </button>
             </div>
 
-            <div className="space-y-4">
-              {/* Summary */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{importPreview.validAssignments.length}</div>
-                  <div className="text-sm text-green-700">Valid Assignments</div>
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="text-center p-6 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-center mb-3">
+                    <div className="p-3 bg-blue-600 rounded-full">
+                      <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-blue-700 mb-1">{importPreview.validAssignments.length}</div>
+                  <div className="text-sm font-medium text-gray-700">Valid Assignments</div>
+                  <div className="text-xs text-gray-600 mt-1">Ready to import</div>
                 </div>
-                <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <div className="text-2xl font-bold text-red-600">{importPreview.invalidStudents.length}</div>
-                  <div className="text-sm text-red-700">Invalid Students</div>
-                </div>
-                <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                  <div className="text-2xl font-bold text-yellow-600">{importPreview.invalidPeerTutors.length}</div>
-                  <div className="text-sm text-yellow-700">Invalid Peer Tutors</div>
+                <div className="text-center p-6 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-center mb-3">
+                    <div className="p-3 bg-gray-500 rounded-full">
+                      <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-gray-800 mb-1">{importPreview.invalidAssignments.length}</div>
+                  <div className="text-sm font-medium text-gray-700">Invalid Assignments</div>
+                  <div className="text-xs text-gray-600 mt-1">Will be skipped</div>
                 </div>
               </div>
 
-              {/* Valid Assignments Preview */}
-              {importPreview.validAssignments.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Valid Assignments (will be imported)</h4>
-                  <div className="max-h-32 overflow-y-auto border rounded">
-                    <table className="min-w-full text-xs">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-2 py-1 text-left">Peer Tutor</th>
-                          <th className="px-2 py-1 text-left">Student</th>
+              {/* Combined Preview Table */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                  <h4 className="text-lg font-semibold text-gray-900">Assignment Preview</h4>
+                  <p className="text-sm text-gray-600 mt-1">Review all assignments before importing</p>
+                </div>
+                
+                <div className="max-h-96 overflow-y-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Peer Tutor Email</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Email</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {/* Valid Assignments First */}
+                      {importPreview.validAssignments.map((assignment, index) => (
+                        <tr key={`valid-${index}`} className="hover:bg-gray-50 transition-colors duration-150">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                              Valid
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {assignment.peerTutorEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {assignment.studentEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            Ready to import
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {importPreview.validAssignments.map((assignment, index) => (
-                          <tr key={index} className="border-t">
-                            <td className="px-2 py-1">{assignment.peerTutorName} ({assignment.peerTutorEmail})</td>
-                            <td className="px-2 py-1">{assignment.studentName} ({assignment.studentEmail})</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                      
+                      {/* Invalid Assignments */}
+                      {importPreview.invalidAssignments.map((assignment, index) => (
+                        <tr key={`invalid-${index}`} className="hover:bg-gray-50 transition-colors duration-150">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-800">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                              Invalid
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {assignment.peerTutorEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {assignment.studentEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {assignment.reason}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-
-              {/* Invalid Students */}
-              {importPreview.invalidStudents.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Students that cannot be added</h4>
-                  <div className="max-h-32 overflow-y-auto">
-                    {importPreview.invalidStudents.map((student, index) => (
-                      <div key={index} className="text-sm text-red-700 bg-red-50 p-2 rounded mb-1">
-                        <strong>{student.studentName}</strong> ({student.studentEmail}) - {student.reason}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Invalid Peer Tutors */}
-              {importPreview.invalidPeerTutors.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Invalid Peer Tutors</h4>
-                  <div className="max-h-32 overflow-y-auto">
-                    {importPreview.invalidPeerTutors.map((peerTutor, index) => (
-                      <div key={index} className="text-sm text-yellow-700 bg-yellow-50 p-2 rounded mb-1">
-                        <strong>{peerTutor.peerTutorName}</strong> ({peerTutor.peerTutorEmail}) - {peerTutor.reason}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
-            <div className="mt-6 flex justify-end space-x-3">
+            <div className="mt-8 flex justify-end space-x-4">
               <button
                 onClick={closeImportPreview}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmImport}
                 disabled={importPreview.validAssignments.length === 0}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors duration-200 flex items-center space-x-2"
               >
-                Confirm Import ({importPreview.validAssignments.length} assignments)
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Confirm Import ({importPreview.validAssignments.length} assignments)</span>
               </button>
             </div>
           </div>

@@ -127,6 +127,30 @@ export class RenumerationService {
   }
 
   /**
+   * Update a renumeration template's active status (open/closed)
+   */
+  static async updateTemplateStatus(templateId: string, isActive: boolean): Promise<boolean> {
+    try {
+      const supabase = createClient()
+
+      const { error } = await supabase
+        .from('renumeration_templates')
+        .update({ is_active: isActive })
+        .eq('id', templateId)
+
+      if (error) {
+        console.error('Error updating template status:', error)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error in updateTemplateStatus:', error)
+      return false
+    }
+  }
+
+  /**
    * Send renumeration to all peer tutors
    */
   static async sendRenumerationToAllPeerTutors(templateId: string): Promise<boolean> {
@@ -283,7 +307,7 @@ export class RenumerationService {
           try {
             const { data: tutor } = await supabase
               .from('peer_tutors')
-              .select('id, name, email')
+              .select('id, name, email, dept, year, section')
               .eq('id', submission.peer_tutor_id)
               .single()
             peerTutor = tutor
@@ -551,7 +575,7 @@ export class RenumerationService {
           try {
             const { data: tutor } = await supabase
               .from('peer_tutors')
-              .select('id, name, email')
+              .select('id, name, email, dept, year, section')
               .eq('id', submission.peer_tutor_id)
               .single()
             peerTutor = tutor

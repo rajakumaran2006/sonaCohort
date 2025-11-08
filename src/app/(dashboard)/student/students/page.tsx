@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import StudentProtectedRoute from '@/components/auth/StudentProtectedRoute'
 import StudentSidebar from '@/components/layout/PeerSidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -17,6 +18,7 @@ export default function StudentStudentsPage() {
 
 function StudentStudentsContent() {
   const { user, signOut } = useAuth()
+  const router = useRouter()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [studentInfo, setStudentInfo] = useState<any>(null)
   const [assignedStudents, setAssignedStudents] = useState<any[]>([])
@@ -49,6 +51,15 @@ function StudentStudentsContent() {
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
       </div>
     )
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      router.push('/login')
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
   }
 
   return (
@@ -86,7 +97,7 @@ function StudentStudentsContent() {
                 </svg>
               </div>
               <button
-                onClick={() => signOut()}
+                onClick={handleSignOut}
                 className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200"
               >
                 Sign Out

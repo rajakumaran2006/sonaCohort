@@ -1,4 +1,6 @@
 import { MicrosoftUser } from '@/lib/types'
+import { createClient } from '@/utils/supabase/client'
+import { NotificationService } from '@/lib/utils/notificationService'
 
 export class MicrosoftGraphService {
   private static async getAccessToken(): Promise<string | null> {
@@ -11,11 +13,60 @@ export class MicrosoftGraphService {
       } else {
         const errorData = await response.json()
         console.warn('Failed to get Microsoft token:', errorData.error)
+        
+        // If token is missing or expired, try to refresh
+        if (errorData.error === 'No Microsoft token available') {
+          console.log('Attempting to refresh Microsoft token...')
+          const refreshResponse = await fetch('/api/microsoft/refresh-token', {
+            method: 'POST'
+          })
+          
+          if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json()
+            return refreshData.accessToken
+          } else {
+            // If refresh fails, sign out the user and redirect to login
+            console.warn('Token refresh failed, signing out user for re-authentication')
+            await this.handleTokenExpiration()
+            return null
+          }
+        }
+        
         return null
       }
     } catch (error) {
       console.error('Error getting Microsoft Graph access token:', error)
+      // If there's a network error or other issue, sign out the user
+      await this.handleTokenExpiration()
       return null
+    }
+  }
+
+  /**
+   * Handle token expiration by signing out the user and redirecting to login
+   */
+  private static async handleTokenExpiration(): Promise<void> {
+    try {
+      const supabase = createClient()
+      
+      // Show user-friendly notification
+      NotificationService.showSessionExpired()
+      
+      // Sign out the user
+      await supabase.auth.signOut()
+      
+      // Redirect to login page after a short delay to show notification
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000) // 2 second delay to show notification
+      }
+    } catch (error) {
+      console.error('Error handling token expiration:', error)
+      // Force redirect even if sign out fails
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login'
+      }
     }
   }
 
@@ -23,7 +74,8 @@ export class MicrosoftGraphService {
     try {
       const accessToken = await this.getAccessToken()
       if (!accessToken) {
-        console.error('No access token available for Microsoft Graph')
+        // Token handling is already done in getAccessToken()
+        // User will be automatically signed out and redirected
         return []
       }
 
@@ -41,6 +93,13 @@ export class MicrosoftGraphService {
       if (!response.ok) {
         const errorText = await response.text()
         console.error(`Graph API error ${response.status}:`, errorText)
+        
+        // If it's an authentication error, handle token expiration
+        if (response.status === 401 || response.status === 403) {
+          console.warn('Graph API authentication failed, handling token expiration')
+          await this.handleTokenExpiration()
+        }
+        
         return []
       }
 

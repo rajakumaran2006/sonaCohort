@@ -96,7 +96,8 @@ export default function PeerRenumerationModal({
 
   const renderField = (field: RenumerationField) => {
     const value = formData[field.field_name] || ''
-    const isReadOnly = renumeration.status === 'approved' || renumeration.status === 'rejected'
+    const isFormClosed = !renumeration.template?.is_active
+    const isReadOnly = isFormClosed || renumeration.status === 'approved' || renumeration.status === 'rejected'
 
     switch (field.field_type) {
       case 'text':
@@ -209,6 +210,20 @@ export default function PeerRenumerationModal({
             </button>
           </div>
 
+          {/* Form Closed Warning */}
+          {!renumeration.template?.is_active && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center">
+                <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p className="text-sm font-medium text-yellow-800">
+                  This form is currently closed. You cannot submit or edit until it is reopened.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Status Display */}
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between">
@@ -220,7 +235,9 @@ export default function PeerRenumerationModal({
                   renumeration.status === 'approved' ? 'bg-green-100 text-green-800' :
                   'bg-red-100 text-red-800'
                 }`}>
-                  {renumeration.status.charAt(0).toUpperCase() + renumeration.status.slice(1)}
+                  {renumeration.status === 'submitted' 
+                    ? 'Completed' 
+                    : (renumeration.status || 'pending').charAt(0).toUpperCase() + (renumeration.status || 'pending').slice(1)}
                 </span>
               </div>
               <div className="text-sm text-gray-500">
@@ -267,7 +284,7 @@ export default function PeerRenumerationModal({
           {/* Actions */}
           <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
             <div>
-              {renumeration.status === 'submitted' && (
+              {renumeration.status === 'submitted' && renumeration.template?.is_active && (
                 <button
                   onClick={handleDelete}
                   disabled={loading}
@@ -283,9 +300,9 @@ export default function PeerRenumerationModal({
                 className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
                 disabled={loading}
               >
-                Cancel
+                {renumeration.template?.is_active ? 'Cancel' : 'Close'}
               </button>
-              {(renumeration.status === 'pending' || renumeration.status === 'submitted') && (
+              {(renumeration.status === 'pending' || renumeration.status === 'submitted') && renumeration.template?.is_active && (
                 <button
                   onClick={handleSubmit}
                   disabled={loading || renumeration.status === 'approved' || renumeration.status === 'rejected'}

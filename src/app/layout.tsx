@@ -37,6 +37,20 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem('sidebar-collapsed');
+                  if (saved === 'true') {
+                    document.documentElement.setAttribute('data-sidebar-collapsed', 'true');
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
         <style dangerouslySetInnerHTML={{
           __html: `
             @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:ital,wght@0,100..900;1,100..900&display=swap');

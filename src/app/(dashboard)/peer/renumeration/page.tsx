@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
+import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { RenumerationService, PeerTutorRenumeration } from '@/lib/services/renumerationService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 
@@ -23,6 +25,11 @@ function PeerRenumerationContent() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState<string | null>(null)
   const [fieldResponses, setFieldResponses] = useState<Record<string, Record<string, any>>>({})
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Use custom hook for sidebar collapsed state
+  const [isSidebarCollapsed] = useSidebarCollapsed()
 
   useEffect(() => {
     if (user) {
@@ -40,9 +47,10 @@ function PeerRenumerationContent() {
       if (tutorInfo) {
         setPeerTutorInfo(tutorInfo)
         
-        // Get renumeration data
+        // Get renumeration data and filter out rejected items
         const renumerationData = await RenumerationService.getPeerTutorRenumeration(tutorInfo.id)
-        setRenumerations(renumerationData)
+        const filteredData = renumerationData.filter(r => r.status !== 'rejected')
+        setRenumerations(filteredData)
         
         // Initialize field responses
         const responses: Record<string, Record<string, any>> = {}
@@ -55,6 +63,16 @@ function PeerRenumerationContent() {
       console.error('Error loading peer tutor data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await loadPeerTutorData()
+      setLastRefresh(new Date())
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500)
     }
   }
 
@@ -88,22 +106,6 @@ function PeerRenumerationContent() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending: { color: 'bg-yellow-100 text-yellow-800', label: 'Pending' },
-      submitted: { color: 'bg-blue-100 text-blue-800', label: 'Submitted' },
-      approved: { color: 'bg-green-100 text-green-800', label: 'Approved' },
-      rejected: { color: 'bg-red-100 text-red-800', label: 'Rejected' }
-    }
-
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
-        {config.label}
-      </span>
-    )
-  }
-
   const renderField = (renumeration: PeerTutorRenumeration, field: any) => {
     const fieldId = `${renumeration.id}_${field.field_name}`
     const value = fieldResponses[renumeration.id]?.[field.field_name] || ''
@@ -117,7 +119,7 @@ function PeerRenumerationContent() {
             onChange={(e) => handleFieldChange(renumeration.id, field.field_name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder={`Enter ${field.field_name}`}
-            disabled={renumeration.status !== 'pending'}
+            disabled={renumeration.status !== 'pending' || !renumeration.template?.is_active}
           />
         )
       case 'number':
@@ -128,7 +130,7 @@ function PeerRenumerationContent() {
             onChange={(e) => handleFieldChange(renumeration.id, field.field_name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder={`Enter ${field.field_name}`}
-            disabled={renumeration.status !== 'pending'}
+            disabled={renumeration.status !== 'pending' || !renumeration.template?.is_active}
           />
         )
       case 'email':
@@ -139,7 +141,7 @@ function PeerRenumerationContent() {
             onChange={(e) => handleFieldChange(renumeration.id, field.field_name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder={`Enter ${field.field_name}`}
-            disabled={renumeration.status !== 'pending'}
+            disabled={renumeration.status !== 'pending' || !renumeration.template?.is_active}
           />
         )
       case 'phone':
@@ -150,7 +152,7 @@ function PeerRenumerationContent() {
             onChange={(e) => handleFieldChange(renumeration.id, field.field_name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder={`Enter ${field.field_name}`}
-            disabled={renumeration.status !== 'pending'}
+            disabled={renumeration.status !== 'pending' || !renumeration.template?.is_active}
           />
         )
       case 'date':
@@ -160,7 +162,7 @@ function PeerRenumerationContent() {
             value={value}
             onChange={(e) => handleFieldChange(renumeration.id, field.field_name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={renumeration.status !== 'pending'}
+            disabled={renumeration.status !== 'pending' || !renumeration.template?.is_active}
           />
         )
       case 'dropdown':
@@ -169,7 +171,7 @@ function PeerRenumerationContent() {
             value={value}
             onChange={(e) => handleFieldChange(renumeration.id, field.field_name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={renumeration.status !== 'pending'}
+            disabled={renumeration.status !== 'pending' || !renumeration.template?.is_active}
           >
             <option value="">Select {field.field_name}</option>
             {field.options?.map((option: string, index: number) => (
@@ -191,47 +193,41 @@ function PeerRenumerationContent() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading renumeration data...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
       <PeerSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-64 overflow-y-auto">
-        <main className="p-6">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Renumeration</h1>
-                <p className="text-gray-600 mt-2">View and submit your renumeration requests</p>
+      <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+        {/* Top Header */}
+        <PageHeader
+          title="RENUMERATION"
+          subtitle="View and submit your renumeration requests"
+          lastRefresh={lastRefresh}
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
+          onToggleSidebar={() => setIsSidebarOpen(true)}
+          isSidebarCollapsed={isSidebarCollapsed}
+        />
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className={`max-w-7xl mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-0' : 'px-4 sm:px-6 lg:px-8'}`}>
+          {loading ? (
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading renumeration data...</p>
               </div>
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
             </div>
-          </div>
+          ) : (
+            <>
 
           {/* Renumeration List */}
           <div className="space-y-6">
             {renumerations.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-12">
+              <div className="bg-white shadow rounded-lg p-12">
                 <div className="text-center">
                   <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -244,13 +240,13 @@ function PeerRenumerationContent() {
               </div>
             ) : (
               renumerations.map((renumeration) => (
-                <div key={renumeration.id} className="bg-white rounded-xl shadow-lg border border-gray-200">
+                <div key={renumeration.id} className="bg-white shadow rounded-lg">
                   <div className="px-6 py-4 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-lg font-semibold text-gray-900">
+                        <h3 className="text-lg font-medium text-gray-900">
                           {renumeration.template?.name || 'Renumeration Request'}
-                        </h2>
+                        </h3>
                         {renumeration.template?.description && (
                           <p className="text-sm text-gray-600 mt-1">
                             {renumeration.template.description}
@@ -258,7 +254,6 @@ function PeerRenumerationContent() {
                         )}
                       </div>
                       <div className="flex items-center space-x-3">
-                        {getStatusBadge(renumeration.status)}
                         <span className="text-sm text-gray-500">
                           Created {new Date(renumeration.created_at).toLocaleDateString()}
                         </span>
@@ -267,6 +262,11 @@ function PeerRenumerationContent() {
                   </div>
                   
                   <div className="p-6">
+                    {!renumeration.template?.is_active && (
+                      <div className="mb-4 rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                        This form is currently closed. You cannot submit or edit until it is reopened.
+                      </div>
+                    )}
                     {renumeration.template?.fields && renumeration.template.fields.length > 0 ? (
                       <div className="space-y-4">
                         {renumeration.template.fields.map((field) => (
@@ -279,7 +279,7 @@ function PeerRenumerationContent() {
                           </div>
                         ))}
                         
-                        {renumeration.status === 'pending' && (
+                        {renumeration.status === 'pending' && renumeration.template?.is_active && (
                           <div className="pt-4 border-t border-gray-200">
                             <button
                               onClick={() => handleSubmit(renumeration.id)}
@@ -298,6 +298,9 @@ function PeerRenumerationContent() {
                 </div>
               ))
             )}
+          </div>
+            </>
+          )}
           </div>
         </main>
       </div>

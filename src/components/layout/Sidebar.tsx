@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
 import { Button } from '@/components/ui'
+import { LayoutDashboard, BarChart3, User, LogOut } from 'lucide-react'
 
 interface SidebarProps {
   isOpen: boolean
@@ -17,8 +18,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const navigation = [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z M8 5a2 2 0 012-2h4a2 2 0 012 2v0M8 5a2 2 0 012-2h4a2 2 0 012 2v0M8 5a2 2 0 012-2h4a2 2 0 012 2v0' },
-    { name: 'Analytics', href: '/admin/analytics', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+    { name: 'Dashboard', href: '/admin/dashboard', Icon: LayoutDashboard },
+    { name: 'Analytics', href: '/admin/analytics', Icon: BarChart3 },
   ]
 
   const handleNavigation = (href: string) => {
@@ -63,6 +64,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="space-y-2">
             {navigation.map((item) => {
               const isActive = pathname === item.href
+              const Icon = item.Icon
               return (
                 <button
                   key={item.name}
@@ -75,9 +77,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     }
                   `}
                 >
-                  <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                  </svg>
+                  <Icon className="w-5 h-5 mr-3" />
                   {item.name}
                 </button>
               )
@@ -90,9 +90,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="flex items-center space-x-3">
             <div className="flex-shrink-0">
               <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+                <User className="h-5 w-5 text-blue-600" />
               </div>
             </div>
             <div className="flex-1 min-w-0">
@@ -115,11 +113,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             className="w-full justify-center"
             loading={isLoggingOut}
           >
-            {!isLoggingOut && (
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            )}
+            {!isLoggingOut && <LogOut className="w-5 h-5 mr-2" />}
             {isLoggingOut ? 'Signing Out...' : 'Sign Out'}
           </Button>
         </div>

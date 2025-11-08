@@ -85,7 +85,7 @@ export default function AdminProtectedRoute({ children }: AdminProtectedRoutePro
 
           {/* Main Content - Loading State */}
           <main className="flex-1 overflow-auto">
-            <div className="h-full flex items-center justify-center">
+            <div className="h-full w-full flex items-center justify-center">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-gray-600">Verifying admin access...</p>

@@ -109,9 +109,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         provider: 'azure',
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=${redirectPath}`,
-          scopes: 'email openid Profile User.Read User.ReadBasic.All',
+          scopes: 'email openid profile User.Read User.ReadBasic.All offline_access',
           queryParams: {
-            prompt: 'select_account'
+            prompt: 'select_account',
+            access_type: 'offline'
           }
         }
       })
@@ -126,8 +127,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const supabase = createClient()
       const { error } = await supabase.auth.signOut()
       if (error) throw error
+      
+      // Clear user state
+      setUser(null)
+      setSession(null)
     } catch (error) {
       console.error('Error signing out:', error)
+      throw error
     }
   }
 

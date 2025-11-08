@@ -26,6 +26,75 @@ export interface AssignmentStats {
 
 export class AssignmentService {
   /**
+   * Get assignment statistics for a year across all sections
+   */
+  static async getAssignmentStatsByYear(dept: string, year: string): Promise<AssignmentStats> {
+    try {
+      const supabase = createClient()
+      
+      // Get all students in the year (all sections)
+      const { data: students, error: studentsError } = await supabase
+        .from('peer_students')
+        .select('id, assigned_peer_tutor_id')
+        .eq('dept', dept)
+        .eq('year', year)
+        .eq('peer_tutor', false) // Only regular students, not peer tutors
+
+      if (studentsError) {
+        console.error('Error getting students by year:', studentsError)
+        return {
+          totalStudents: 0,
+          totalPeerTutors: 0,
+          assignedStudents: 0,
+          unassignedStudents: 0,
+          averageStudentsPerTutor: 0
+        }
+      }
+
+      // Get all peer tutors in the year (all sections)
+      const { data: peerTutors, error: tutorsError } = await supabase
+        .from('peer_tutors')
+        .select('id')
+        .eq('dept', dept)
+        .eq('year', year)
+
+      if (tutorsError) {
+        console.error('Error getting peer tutors by year:', tutorsError)
+        return {
+          totalStudents: 0,
+          totalPeerTutors: 0,
+          assignedStudents: 0,
+          unassignedStudents: 0,
+          averageStudentsPerTutor: 0
+        }
+      }
+
+      const totalStudents = students?.length || 0
+      const totalPeerTutors = peerTutors?.length || 0
+      const assignedStudents = students?.filter(s => s.assigned_peer_tutor_id).length || 0
+      const unassignedStudents = totalStudents - assignedStudents
+      const averageStudentsPerTutor = totalPeerTutors > 0 ? Math.round(totalStudents / totalPeerTutors) : 0
+
+      return {
+        totalStudents,
+        totalPeerTutors,
+        assignedStudents,
+        unassignedStudents,
+        averageStudentsPerTutor
+      }
+    } catch (error) {
+      console.error('Error getting assignment stats by year:', error)
+      return {
+        totalStudents: 0,
+        totalPeerTutors: 0,
+        assignedStudents: 0,
+        unassignedStudents: 0,
+        averageStudentsPerTutor: 0
+      }
+    }
+  }
+
+  /**
    * Get assignment statistics for a section
    */
   static async getAssignmentStats(dept: string, year: string, section: string): Promise<AssignmentStats> {
@@ -141,8 +210,8 @@ export class AssignmentService {
         peer_tutor_id: data.assigned_peer_tutor_id,
         student_name: data.name,
         student_email: data.email,
-        peer_tutor_name: data.peer_tutors.name,
-        peer_tutor_email: data.peer_tutors.email,
+        peer_tutor_name: data.peer_tutors?.[0]?.name || '',
+        peer_tutor_email: data.peer_tutors?.[0]?.email || '',
         dept: data.dept,
         year: data.year,
         section: data.section,
@@ -222,8 +291,8 @@ export class AssignmentService {
         peer_tutor_id: item.assigned_peer_tutor_id,
         student_name: item.name,
         student_email: item.email,
-        peer_tutor_name: item.peer_tutors.name,
-        peer_tutor_email: item.peer_tutors.email,
+        peer_tutor_name: item.peer_tutors?.[0]?.name || '',
+        peer_tutor_email: item.peer_tutors?.[0]?.email || '',
         dept,
         year,
         section,
@@ -458,8 +527,8 @@ export class AssignmentService {
         peer_tutor_id: item.assigned_peer_tutor_id,
         student_name: item.name,
         student_email: item.email,
-        peer_tutor_name: item.peer_tutors.name,
-        peer_tutor_email: item.peer_tutors.email,
+        peer_tutor_name: item.peer_tutors?.[0]?.name || '',
+        peer_tutor_email: item.peer_tutors?.[0]?.email || '',
         dept: item.dept,
         year: item.year,
         section: item.section,
@@ -537,10 +606,13 @@ export class AssignmentService {
 
           if (studentsError) {
             console.error(`Error getting students for tutor ${tutor.id}:`, studentsError)
-            return { peerTutor: tutor, students: [] }
+            return { peerTutor: tutor as PeerTutor, students: [] as Student[] }
           }
 
-          return { peerTutor: tutor, students: students || [] }
+          return { 
+            peerTutor: tutor as PeerTutor, 
+            students: (students || []) as Student[] 
+          }
         })
       )
 
@@ -672,7 +744,7 @@ static async importAssignmentsFromCSV(
         
         added++
       } catch (rowError) {
-        errors.push(`Row ${i + 1}: ${rowError.message}`)
+        errors.push(`Row ${i + 1}: ${(rowError as Error).message}`)
       }
     }
     
@@ -688,7 +760,8 @@ static async importAssignmentsFromCSV(
       success: false,
       added: 0,
       skipped: [],
-      errors: [error.message]
+      errors: [(error as Error).message]
     }
   }
+}
 }

@@ -18,6 +18,7 @@ export interface AdditionalClassAttendanceRecord {
   peer_tutor_id: string
   status: 'present' | 'absent'
   student_name: string
+  student_email?: string
   created_at: string
   updated_at: string
 }
@@ -209,6 +210,7 @@ export class AdditionalClassService {
         peer_tutor_id: record.peer_tutor_id,
         status: record.status,
         student_name: record.student.name,
+        student_email: record.student.email,
         created_at: record.created_at,
         updated_at: record.updated_at
       }))

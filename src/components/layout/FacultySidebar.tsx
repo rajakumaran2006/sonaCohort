@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
 import { Button } from '@/components/ui'
+import { LayoutDashboard, Users, GraduationCap, ClipboardList, FileText, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface FacultySidebarProps {
   isOpen: boolean
@@ -34,22 +35,28 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
   }, [isCollapsed])
 
   const handleToggleCollapse = () => {
-    setIsCollapsed(!isCollapsed)
+    const nextCollapsed = !isCollapsed
+    // Update state first
+    setIsCollapsed(nextCollapsed)
+    // Persist immediately so listeners read the latest value
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sidebar-collapsed', JSON.stringify(nextCollapsed))
+      } catch {}
+      // Emit custom event with detail so listeners can sync instantly
+      window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: { isCollapsed: nextCollapsed } }))
+    }
     if (onToggleCollapse) {
       onToggleCollapse()
-    }
-    // Emit custom event for other components to listen
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('sidebar-toggle'))
     }
   }
 
   const navigation = [
-    { name: 'Dashboard', href: '/faculty/dashboard', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z' },
-    { name: 'Students', href: '/faculty/peer-tutor', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z' },
-    { name: 'Classes', href: '/faculty/classes', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
-    { name: 'Attendance', href: '/faculty/attendance', icon: 'M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
-    { name: 'Exam Marks', href: '/faculty/exam', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    { name: 'Dashboard', href: '/faculty/dashboard', Icon: LayoutDashboard },
+    { name: 'Students', href: '/faculty/peer-tutor', Icon: Users },
+    { name: 'Classes', href: '/faculty/classes', Icon: GraduationCap },
+    { name: 'Attendance', href: '/faculty/attendance', Icon: ClipboardList },
+    { name: 'Exams', href: '/faculty/exams', Icon: FileText },
   ]
 
   const handleNavigation = (href: string) => {
@@ -88,26 +95,19 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
         `}
         data-sidebar-collapsed={isCollapsed}
       >
-        {/* Logo and Collapse Button */}
-        <div className="flex items-center justify-between h-16 bg-blue-600 flex-shrink-0 px-4">
+        {/* Logo Header */}
+        <div className="flex items-center justify-center h-16 bg-blue-600 flex-shrink-0 px-4">
           <h1 className={`font-bold text-white transition-all duration-300 ${isCollapsed ? 'text-lg' : 'text-2xl'}`}>
             {isCollapsed ? 'PP' : 'PEER PORTAL'}
           </h1>
-          <button
-            onClick={handleToggleCollapse}
-            className="p-1 rounded-md text-white hover:bg-blue-700 transition-colors duration-200 lg:flex hidden"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isCollapsed ? "M13 5l7 7-7 7M5 5l7 7-7 7" : "M11 19l-7-7 7-7m8 14l-7-7 7-7"} />
-            </svg>
-          </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 mt-8 px-4">
+        <nav className="flex-1 px-4 pt-2">
           <div className="space-y-2">
             {navigation.map((item) => {
               const isActive = pathname === item.href
+              const Icon = item.Icon
               return (
                 <button
                   key={item.name}
@@ -122,24 +122,31 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
                   `}
                   title={isCollapsed ? item.name : undefined}
                 >
-                  <svg className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                  </svg>
+                  <Icon className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'}`} />
                   {!isCollapsed && item.name}
                 </button>
               )
             })}
           </div>
+                  {/* Toggle Button - Bottom Right */}
+        <div className="flex justify-end px-4 pb-2 relative">
+          <button
+            onClick={handleToggleCollapse}
+            className="p-2 rounded-md -mr-12 -mt-4 text-gray-600 border-2 border-gray-300 bg-white hover:bg-gray-100 transition-colors duration-200 lg:flex hidden"
+          >
+            {isCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+          </button>
+        </div>
         </nav>
+
+
 
         {/* Profile Section */}
         <div className={`border-t border-gray-200 flex-shrink-0 ${isCollapsed ? 'px-2 py-4' : 'px-4 py-4'}`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="flex-shrink-0">
               <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+                <User className="h-5 w-5 text-blue-600" />
               </div>
             </div>
             {!isCollapsed && (
@@ -165,11 +172,7 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
             loading={isLoggingOut}
             title={isCollapsed ? 'Sign Out' : undefined}
           >
-            {!isLoggingOut && (
-              <svg className={`w-5 h-5 ${isCollapsed ? '' : 'mr-2'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            )}
+            {!isLoggingOut && <LogOut className={`w-5 h-5 ${isCollapsed ? '' : 'mr-2'}`} />}
             {!isCollapsed && (isLoggingOut ? 'Signing Out...' : 'Sign Out')}
           </Button>
         </div>

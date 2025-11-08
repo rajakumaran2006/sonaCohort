@@ -97,11 +97,14 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
         return acc
       }, {} as Record<string, typeof additionalClasses>)
 
+      // Track totals across all subjects
+      let totalAllocatedClassesTaken = 0
+      let totalAllocatedClassesScheduled = 0
+      let totalAdditionalClassesTaken = 0
+      let totalClassesTaken = 0
+
       // Process each subject
       for (const subject of reportData.subjects) {
-        // Add subject header
-        data.push([`SUBJECT: ${subject.subject_name}`, '', '', '', ''])
-        
         // Get scheduled classes for this subject
         const scheduledClasses = await ReportService.getSubjectScheduledClasses(peerTutorInfo.id, subject.subject_name)
         
@@ -119,14 +122,16 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
         let topicSerialNumber = 1
         let totalPresentCount = 0
         let totalClassesCount = 0
+        const subjectClassRows: any[][] = [] // Collect classes for this subject
 
-        // Add each class (scheduled or additional)
+        // Process each class (scheduled or additional) - ONLY if attendance was taken
         for (const classItem of allClasses) {
           if (classItem.type === 'scheduled') {
-            // Handle scheduled class
+            // Handle scheduled class - only include if attendance was taken
             const classReport = await ReportService.getClassAttendanceReport(classItem.id)
             
-            if (classReport) {
+            // Only include classes that have attendance records (classes that were actually taken)
+            if (classReport && classReport.attendance_records && classReport.attendance_records.length > 0) {
               const topic = classReport.topics || 'No topic recorded'
               const date = new Date(classItem.scheduled_date).toLocaleDateString()
               const presentStudents = classReport.attendance_records
@@ -136,61 +141,89 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
               const presentCount = presentStudents.length
               totalPresentCount += presentCount
               totalClassesCount += 1
+              totalAllocatedClassesTaken += 1 // Track allocated classes taken
               
-              data.push([
+              subjectClassRows.push([
                 '', // Empty for subject column
                 `${topicSerialNumber}. ${topic}`, // Serial number + topic
                 date,
                 presentStudents.join(', ') || 'No students present',
                 `Present: ${presentCount}` // Present count in notes column
               ])
-            } else {
-              // If no report available, show basic info
-              const date = new Date(classItem.scheduled_date).toLocaleDateString()
-              data.push([
-                '', // Empty for subject column
-                `${topicSerialNumber}. No topic recorded`, // Serial number
-                date,
-                'No attendance data',
-                'Present: 0' // Present count in notes column
-              ])
-              totalClassesCount += 1
+              
+              topicSerialNumber++
             }
+            // Skip scheduled classes without attendance records
           } else {
-            // Handle additional class - fetch attendance from separate table
+            // Handle additional class - only include if attendance was taken
             const additionalClassAttendance = await AdditionalClassService.getAttendanceForAdditionalClass(classItem.id)
-            const presentStudents = additionalClassAttendance
-              .filter(record => record.status === 'present')
-              .map(record => record.student_name)
             
-            const presentCount = presentStudents.length
-            totalPresentCount += presentCount
-            totalClassesCount += 1
-            
-            data.push([
-              '', // Empty for subject column
-              `${topicSerialNumber}. ${classItem.topic}`, // Serial number + topic
-              new Date(classItem.class_date).toLocaleDateString(),
-              presentStudents.join(', ') || 'No students present',
-              `Present: ${presentCount}` // Present count in notes column
-            ])
+            // Only include additional classes that have attendance records
+            if (additionalClassAttendance && additionalClassAttendance.length > 0) {
+              const presentStudents = additionalClassAttendance
+                .filter(record => record.status === 'present')
+                .map(record => record.student_name)
+              
+              const presentCount = presentStudents.length
+              totalPresentCount += presentCount
+              totalClassesCount += 1
+              totalAdditionalClassesTaken += 1 // Track additional classes taken
+              
+              subjectClassRows.push([
+                '', // Empty for subject column
+                `${topicSerialNumber}. ${classItem.topic} (Additional Class)`, // Serial number + topic + label
+                new Date(classItem.class_date).toLocaleDateString(),
+                presentStudents.join(', ') || 'No students present',
+                `Present: ${presentCount}` // Present count in notes column
+              ])
+              
+              topicSerialNumber++
+            }
+            // Skip additional classes without attendance records
           }
-          
-          topicSerialNumber++
         }
 
-        // Add subject summary row
-        const attendancePercentage = totalClassesCount > 0 ? Math.round((totalPresentCount / totalClassesCount) * 100) : 0
+        // Only add subject header, classes, and summary if classes were actually taken
+        if (totalClassesCount > 0) {
+          // Track scheduled classes for this subject
+          totalAllocatedClassesScheduled += subject.total_classes
+          totalClassesTaken += totalClassesCount
+          
+          // Add subject header
+          data.push([`SUBJECT: ${subject.subject_name}`, '', '', '', ''])
+          
+          // Add all classes for this subject
+          data.push(...subjectClassRows)
+
+          // Add subject summary row
+          const attendancePercentage = totalClassesCount > 0 ? Math.round((totalPresentCount / totalClassesCount) * 100) : 0
+          data.push([
+            '', // Empty for subject column
+            `TOTAL FOR ${subject.subject_name.toUpperCase()}`,
+            '',
+            '',
+            `Total Present: ${totalPresentCount} | Percentage: ${attendancePercentage}%`
+          ])
+
+          // Add empty row between subjects
+          data.push(new Array(5).fill(''))
+        }
+        // Skip subjects with no classes taken (don't add anything)
+      }
+
+      // Add final summary row after all subjects
+      if (totalClassesTaken > 0) {
+        // Add empty row before final summary
+        data.push(new Array(5).fill(''))
+        
+        // Add final summary row
         data.push([
           '', // Empty for subject column
-          `TOTAL FOR ${subject.subject_name.toUpperCase()}`,
+          'GRAND TOTAL',
           '',
           '',
-          `Total Present: ${totalPresentCount} | Percentage: ${attendancePercentage}%`
+          `Total Classes Taken: ${totalClassesTaken} | Allocated Classes: ${totalAllocatedClassesTaken}/${totalAllocatedClassesScheduled} | Additional Classes: ${totalAdditionalClassesTaken}`
         ])
-
-        // Add empty row between subjects
-        data.push(new Array(5).fill(''))
       }
 
       // Create worksheet
@@ -266,6 +299,13 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
                 worksheet[cellAddress].v.includes('TOTAL FOR')) {
               worksheet[cellAddress].s.font = { name: 'Times New Roman', sz: 11, bold: true }
               worksheet[cellAddress].s.fill = { fgColor: { rgb: 'FFFF99' } } // Light yellow background
+            }
+            
+            // Format grand total row (rows containing "GRAND TOTAL")
+            if (worksheet[cellAddress].v && typeof worksheet[cellAddress].v === 'string' && 
+                worksheet[cellAddress].v.includes('GRAND TOTAL')) {
+              worksheet[cellAddress].s.font = { name: 'Times New Roman', sz: 11, bold: true }
+              worksheet[cellAddress].s.fill = { fgColor: { rgb: 'CCE5FF' } } // Light blue background
             }
           }
         }

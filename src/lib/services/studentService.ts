@@ -151,6 +151,32 @@ export class StudentService {
   }
 
   /**
+   * Check if an email belongs to a student (anywhere in the system)
+   */
+  static async isStudent(email: string): Promise<boolean> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('peer_students')
+        .select('id')
+        .eq('email', email)
+        .eq('peer_tutor', false)
+        .single()
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error checking if email is student:', error)
+        return false
+      }
+
+      return !!data
+    } catch (error) {
+      console.error('Error in isStudent:', error)
+      return false
+    }
+  }
+
+  /**
    * Add a new student
    */
   static async addStudent(student: StudentAssignment): Promise<boolean> {

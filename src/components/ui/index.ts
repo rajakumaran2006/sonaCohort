@@ -8,6 +8,9 @@ export { default as EmptyState } from './EmptyState'
 export { default as LoadingSpinner, LoadingOverlay } from './LoadingSpinner'
 export { default as StatCard } from './StatCard'
 export { default as Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from './Table'
+export { default as Chart } from './Chart'
+export { default as Heatmap } from './Heatmap'
+export { default as StudentPerformanceChart } from './StudentPerformanceChart'
 
 // Re-export types
 export type { ButtonProps } from './Button'

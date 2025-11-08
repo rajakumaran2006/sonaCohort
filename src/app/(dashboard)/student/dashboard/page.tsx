@@ -1,19 +1,53 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { StudentService, StudentWithPeerTutor } from '@/lib/services/studentService'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
 import FeedbackSubmissionModal from '@/components/forms/FeedbackSubmissionModal'
-import { Card, CardHeader, CardTitle, CardContent, Button, LoadingOverlay, EmptyState } from '@/components/ui'
+import StudentSidebar from '@/components/layout/StudentSidebar'
+import { Card, CardHeader, CardTitle, CardContent, Button, LoadingOverlay, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, StatusBadge } from '@/components/ui'
+
+interface FeedbackFormWithStatus extends FeedbackForm {
+  isSubmitted: boolean
+}
 
 export default function StudentDashboard() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
+  const router = useRouter()
   const [student, setStudent] = useState<StudentWithPeerTutor | null>(null)
-  const [feedbackForms, setFeedbackForms] = useState<FeedbackForm[]>([])
+  const [feedbackForms, setFeedbackForms] = useState<FeedbackFormWithStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [selectedFeedbackForm, setSelectedFeedbackForm] = useState<FeedbackForm | null>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const sidebar = document.querySelector('[data-sidebar-collapsed]')
+      return sidebar?.getAttribute('data-sidebar-collapsed') === 'true'
+    }
+    return false
+  })
+
+  // Listen for sidebar collapse state changes
+  useEffect(() => {
+    const checkSidebarState = () => {
+      if (typeof window !== 'undefined') {
+        const sidebar = document.querySelector('[data-sidebar-collapsed]')
+        const collapsed = sidebar?.getAttribute('data-sidebar-collapsed') === 'true'
+        setIsSidebarCollapsed(collapsed)
+      }
+    }
+
+    checkSidebarState()
+    const handleSidebarToggle = () => checkSidebarState()
+    window.addEventListener('sidebar-toggle', handleSidebarToggle)
+
+    return () => {
+      window.removeEventListener('sidebar-toggle', handleSidebarToggle)
+    }
+  }, [])
 
   useEffect(() => {
     const loadStudentData = async () => {
@@ -29,7 +63,22 @@ export default function StudentDashboard() {
           
           // Load active feedback forms
           const forms = await FeedbackService.getActiveFeedbackForms()
-          setFeedbackForms(forms)
+          
+          // Check submission status for each form
+          const formsWithStatus = await Promise.all(
+            forms.map(async (form) => {
+              const isSubmitted = await FeedbackService.hasStudentSubmittedFeedback(
+                form.id,
+                currentStudent.id
+              )
+              return {
+                ...form,
+                isSubmitted
+              }
+            })
+          )
+          
+          setFeedbackForms(formsWithStatus)
         }
       } catch (error) {
         console.error('Error loading student data:', error)
@@ -41,147 +90,198 @@ export default function StudentDashboard() {
     loadStudentData()
   }, [user?.email])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingOverlay size="xl" />
-      </div>
-    )
+
+  const handleSubmitFeedback = (form: FeedbackFormWithStatus) => {
+    if (!form.isSubmitted) {
+      setSelectedFeedbackForm(form)
+      setShowFeedbackModal(true)
+    }
   }
 
-  if (!student) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
-          <p className="text-gray-600 mb-6">You are not registered as a student in the system.</p>
-          <Button onClick={() => signOut()}>
-            Sign Out
-          </Button>
-        </div>
-      </div>
+  const handleFeedbackSubmitted = async () => {
+    // Reload feedback forms to update submission status
+    const forms = await FeedbackService.getActiveFeedbackForms()
+    const formsWithStatus = await Promise.all(
+      forms.map(async (form) => {
+        const isSubmitted = await FeedbackService.hasStudentSubmittedFeedback(
+          form.id,
+          student.id
+        )
+        return {
+          ...form,
+          isSubmitted
+        }
+      })
     )
+    setFeedbackForms(formsWithStatus)
+    setShowFeedbackModal(false)
+    setSelectedFeedbackForm(null)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Student Dashboard</h1>
-              <p className="text-sm text-gray-600">Welcome, {student.name}</p>
-            </div>
-            <Button variant="danger" size="sm" onClick={() => signOut()}>
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar */}
+      <StudentSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
-          {/* Student Info Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Your Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Name</label>
-                <p className="mt-1 text-sm text-gray-900">{student.name}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
-                <p className="mt-1 text-sm text-gray-900">{student.email}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Department</label>
-                <p className="mt-1 text-sm text-gray-900">{student.dept}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Year & Section</label>
-                <p className="mt-1 text-sm text-gray-900">{student.year} - {student.section}</p>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden flex-1`}>
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
+          <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center">
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <div className="ml-2 lg:ml-0">
+                  <h1 className="text-2xl font-semibold text-gray-900">Student Dashboard</h1>
+                  <p className="text-sm text-gray-600">{loading ? 'Loading...' : student ? `Welcome, ${student.name}` : 'Student'}</p>
+                </div>
               </div>
             </div>
-            </CardContent>
-          </Card>
+          </div>
+        </header>
 
-          {/* Assigned Peer Tutor Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Your Assigned Peer Tutor</CardTitle>
-            </CardHeader>
-            <CardContent>
-            {student.assigned_peer_tutor ? (
-              <div className="flex items-center space-x-4">
-                <div className="flex-shrink-0 h-12 w-12">
-                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                    <span className="text-blue-600 font-medium">
-                      {student.assigned_peer_tutor.name.split(' ').map(n => n[0]).join('')}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">{student.assigned_peer_tutor.name}</h3>
-                  <p className="text-sm text-gray-600">{student.assigned_peer_tutor.email}</p>
-                </div>
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="h-full w-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading dashboard...</p>
               </div>
-            ) : (
-              <EmptyState
-                title="No Peer Tutor Assigned"
-                description="You don't have an assigned peer tutor yet. Please contact your faculty."
-              />
-            )}
-            </CardContent>
-          </Card>
-
-          {/* Feedback Forms Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Feedback Forms</CardTitle>
-            </CardHeader>
-            <CardContent>
-            {feedbackForms.length === 0 ? (
-              <EmptyState
-                title="No Feedback Forms Available"
-                description="There are no active feedback forms at the moment."
-              />
-            ) : (
-              <div className="space-y-4">
-                {feedbackForms.map((form) => (
-                  <div key={form.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900">{form.name}</h3>
-                        {form.description && (
-                          <p className="text-sm text-gray-600 mt-1">{form.description}</p>
-                        )}
-                        <p className="text-sm text-gray-500 mt-2">
-                          {form.questions.length} question{form.questions.length !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSelectedFeedbackForm(form)
-                          setShowFeedbackModal(true)
-                        }}
-                      >
-                        Submit Feedback
-                      </Button>
+            </div>
+          ) : !student ? (
+            <div className="h-full w-full flex items-center justify-center">
+              <div className="text-center">
+                <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+                <p className="text-gray-600 mb-6">You are not registered as a student in the system.</p>
+                <Button onClick={() => router.push('/login')}>
+                  Sign Out
+                </Button>
+              </div>
+            </div>
+          ) : (
+          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <div className="space-y-8">
+              {/* Student Info Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Your Information</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Name</label>
+                      <p className="mt-1 text-sm text-gray-900">{student.name}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Email</label>
+                      <p className="mt-1 text-sm text-gray-900">{student.email}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Department</label>
+                      <p className="mt-1 text-sm text-gray-900">{student.dept}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Year & Section</label>
+                      <p className="mt-1 text-sm text-gray-900">{student.year} - {student.section}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Assigned Peer Tutor</label>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {student.assigned_peer_tutor ? student.assigned_peer_tutor.name : 'None assigned'}
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+                </CardContent>
+              </Card>
+
+              {/* Feedback Forms Table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Feedback Forms</CardTitle>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Submit feedback for available forms. Once submitted, you cannot resubmit.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  {feedbackForms.length === 0 ? (
+                    <EmptyState
+                      title="No Feedback Forms Available"
+                      description="There are no pending responses at the moment."
+                    />
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Form Name</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Questions</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {feedbackForms.map((form) => (
+                            <TableRow key={form.id}>
+                              <TableCell>
+                                <div className="text-sm font-medium text-gray-900">{form.name}</div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm text-gray-500">
+                                  {form.description || 'No description'}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm text-gray-900">
+                                  {form.questions.length} {form.questions.length === 1 ? 'question' : 'questions'}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {form.isSubmitted ? (
+                                  <StatusBadge status="submitted">Submitted</StatusBadge>
+                                ) : (
+                                  <StatusBadge status="pending">Pending</StatusBadge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {form.isSubmitted ? (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled
+                                  >
+                                    Already Submitted
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleSubmitFeedback(form)}
+                                  >
+                                    Submit Feedback
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+          )}
+        </main>
+      </div>
 
       {/* Feedback Submission Modal */}
       {selectedFeedbackForm && student && (
@@ -191,14 +291,7 @@ export default function StudentDashboard() {
             setShowFeedbackModal(false)
             setSelectedFeedbackForm(null)
           }}
-          onSuccess={() => {
-            // Reload feedback forms to update submission status
-            const loadFeedbackForms = async () => {
-              const forms = await FeedbackService.getActiveFeedbackForms()
-              setFeedbackForms(forms)
-            }
-            loadFeedbackForms()
-          }}
+          onSuccess={handleFeedbackSubmitted}
           feedbackForm={selectedFeedbackForm}
           studentId={student.id}
         />

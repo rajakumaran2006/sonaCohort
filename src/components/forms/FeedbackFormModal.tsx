@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { FeedbackService, FeedbackForm, FeedbackQuestion } from '@/lib/services/feedbackService'
+import { FormEditStrategy } from '@/lib/services/feedbackVersioningService'
 import StarRating from '@/components/ui/StarRating'
 
 interface FeedbackFormModalProps {
@@ -31,32 +32,75 @@ export default function FeedbackFormModal({
   const [questions, setQuestions] = useState<QuestionForm[]>([])
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
+  const [editStrategy, setEditStrategy] = useState<FormEditStrategy | null>(null)
+  const [showStrategyModal, setShowStrategyModal] = useState(false)
+  const [strategyConfirmed, setStrategyConfirmed] = useState(false)
+  const [allStarRatingMode, setAllStarRatingMode] = useState(false)
+  const isManualToggleRef = useRef(false)
 
   // Initialize form data when editing
   useEffect(() => {
     if (editingForm) {
       setFormName(editingForm.name)
       setFormDescription(editingForm.description || '')
-      setQuestions(
-        editingForm.questions.map(q => ({
-          question_text: q.question_text,
-          question_type: q.question_type,
-          is_required: q.is_required,
-          options: q.options || []
-        }))
-      )
+      const mappedQuestions = editingForm.questions.map(q => ({
+        question_text: q.question_text,
+        question_type: q.question_type,
+        is_required: q.is_required,
+        options: q.options || []
+      }))
+      setQuestions(mappedQuestions)
+      // Auto-enable toggle if all questions are star_rating
+      const allStarRating = mappedQuestions.length > 0 && mappedQuestions.every(q => q.question_type === 'star_rating')
+      setAllStarRatingMode(allStarRating)
     } else {
       setFormName('')
       setFormDescription('')
       setQuestions([])
+      setAllStarRatingMode(false)
     }
     setErrors({})
+    setEditStrategy(null)
+    setShowStrategyModal(false)
+    setStrategyConfirmed(false)
   }, [editingForm, isOpen])
+
+  // Auto-enable toggle when all questions are star_rating (only if not manually toggled)
+  useEffect(() => {
+    if (isManualToggleRef.current) {
+      isManualToggleRef.current = false
+      return
+    }
+    
+    if (questions.length > 0) {
+      const allStarRating = questions.every(q => q.question_type === 'star_rating')
+      if (allStarRating !== allStarRatingMode) {
+        setAllStarRatingMode(allStarRating)
+      }
+    } else if (allStarRatingMode) {
+      // If no questions, turn off toggle
+      setAllStarRatingMode(false)
+    }
+  }, [questions, allStarRatingMode])
+
+  // When toggle is ON, force all questions to be star_rating
+  useEffect(() => {
+    if (allStarRatingMode && questions.length > 0) {
+      const hasNonStarRating = questions.some(q => q.question_type !== 'star_rating')
+      if (hasNonStarRating) {
+        setQuestions(questions.map(q => ({
+          ...q,
+          question_type: 'star_rating' as const,
+          options: [] // Clear options for star rating questions
+        })))
+      }
+    }
+  }, [allStarRatingMode])
 
   const addQuestion = () => {
     setQuestions([...questions, {
       question_text: '',
-      question_type: 'text',
+      question_type: allStarRatingMode ? 'star_rating' : 'text',
       is_required: false,
       options: []
     }])
@@ -126,6 +170,12 @@ export default function FeedbackFormModal({
       return
     }
 
+    // If editing and strategy not confirmed, check strategy first
+    if (editingForm && !strategyConfirmed) {
+      await checkEditStrategy()
+      return
+    }
+
     setLoading(true)
     try {
       const questionsToSubmit = questions.map((q, index) => ({
@@ -137,15 +187,25 @@ export default function FeedbackFormModal({
       }))
 
       if (editingForm) {
-        // Update existing form
-        const success = await FeedbackService.updateFeedbackForm(editingForm.id, {
-          name: formName,
-          description: formDescription,
-          is_active: editingForm.is_active
-        })
+        // Update existing form with versioning support
+        const result = await FeedbackService.updateFeedbackForm(
+          editingForm.id,
+          {
+            name: formName,
+            description: formDescription,
+            is_active: editingForm.is_active
+          },
+          questionsToSubmit
+        )
         
-        if (success) {
+        if (result.success) {
           onSuccess()
+        } else {
+          // Show error based on strategy
+          if (result.strategy.type === 'require_confirmation') {
+            setEditStrategy(result.strategy)
+            setShowStrategyModal(true)
+          }
         }
       } else {
         // Create new form
@@ -165,6 +225,46 @@ export default function FeedbackFormModal({
     } finally {
       setLoading(false)
     }
+  }
+
+  const checkEditStrategy = async () => {
+    if (!editingForm) return
+
+    const questionsToSubmit = questions.map((q, index) => ({
+      question_text: q.question_text,
+      question_type: q.question_type,
+      is_required: q.is_required,
+      order_index: index + 1,
+      options: q.question_type === 'multiple_choice' ? q.options.filter(opt => opt.trim()) : undefined
+    }))
+
+    const strategy = await FeedbackService.getFormEditStrategy(editingForm.id, {
+      name: formName,
+      description: formDescription,
+      questions: questionsToSubmit
+    })
+
+    setEditStrategy(strategy)
+
+    if (strategy.type === 'require_confirmation' || strategy.warnings.length > 0) {
+      setShowStrategyModal(true)
+    } else {
+      setStrategyConfirmed(true)
+      // Retry submit
+      setTimeout(() => handleSubmit(new Event('submit') as any), 100)
+    }
+  }
+
+  const handleStrategyConfirm = () => {
+    setStrategyConfirmed(true)
+    setShowStrategyModal(false)
+    // Retry submit
+    setTimeout(() => handleSubmit(new Event('submit') as any), 100)
+  }
+
+  const handleStrategyCancel = () => {
+    setShowStrategyModal(false)
+    setStrategyConfirmed(false)
   }
 
   if (!isOpen) return null
@@ -219,6 +319,36 @@ export default function FeedbackFormModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Enter form description (optional)"
                 />
+              </div>
+
+              {/* All Star Rating Toggle */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    All Star Rating Questions
+                  </label>
+                  <p className="text-xs text-gray-600">
+                    When enabled, all questions will be star rating type. Satisfaction score will only be shown when all questions are star rating.
+                  </p>
+                </div>
+                <div className="ml-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      isManualToggleRef.current = true
+                      setAllStarRatingMode(!allStarRatingMode)
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      allStarRatingMode ? 'bg-blue-600' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        allStarRatingMode ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -283,12 +413,20 @@ export default function FeedbackFormModal({
                         <select
                           value={question.question_type}
                           onChange={(e) => updateQuestion(questionIndex, 'question_type', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={allStarRatingMode}
+                          className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            allStarRatingMode ? 'bg-gray-100 cursor-not-allowed' : ''
+                          }`}
                         >
                           <option value="text">Text Input</option>
                           <option value="multiple_choice">Multiple Choice</option>
                           <option value="star_rating">Star Rating (1-5)</option>
                         </select>
+                        {allStarRatingMode && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            All questions are set to star rating mode
+                          </p>
+                        )}
                       </div>
 
                       {/* Star Rating Preview */}
@@ -385,6 +523,70 @@ export default function FeedbackFormModal({
           </form>
         </div>
       </div>
+
+      {/* Strategy Confirmation Modal */}
+      {showStrategyModal && editStrategy && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full z-60">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-yellow-100 rounded-full mb-4">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  {editStrategy.type === 'create_new_version' ? 'Create New Version' : 
+                   editStrategy.type === 'update_current' ? 'Update Form' : 
+                   'Confirm Changes'}
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  {editStrategy.reason}
+                </p>
+                
+                {editStrategy.warnings.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">Important Notes:</h4>
+                    <ul className="text-sm text-gray-600 text-left space-y-1">
+                      {editStrategy.warnings.map((warning, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-yellow-500 mr-2">•</span>
+                          {warning}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {editStrategy.type === 'create_new_version' && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-md">
+                    <p className="text-sm text-blue-800">
+                      <strong>New Version:</strong> This will create a new version of the form while preserving all existing responses. 
+                      Students will see the updated form for new submissions.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-center space-x-3">
+                  <button
+                    onClick={handleStrategyCancel}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleStrategyConfirm}
+                    disabled={!editStrategy.canProceed}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    {editStrategy.type === 'create_new_version' ? 'Create New Version' : 'Confirm'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

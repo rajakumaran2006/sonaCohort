@@ -6,6 +6,8 @@ import Sidebar from '@/components/layout/Sidebar'
 import CreateDepartmentModal from '@/components/forms/CreateDepartmentModal'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { DepartmentService } from '@/lib/services/departmentService'
+import { PeerTutorService } from '@/lib/services/peerTutorService'
+import { StudentService } from '@/lib/services/studentService'
 import { Department } from '@/lib/types'
 import { Card, CardHeader, CardTitle, CardContent, StatCard, Button, LoadingOverlay, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 
@@ -17,10 +19,15 @@ export default function AdminDashboardPage() {
   )
 }
 
+interface DepartmentWithCounts extends Department {
+  peer_tutor_count: number
+  peer_student_count: number
+}
+
 function AdminDashboardContent() {
   const { user, signOut } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [departments, setDepartments] = useState<Department[]>([])
+  const [departments, setDepartments] = useState<DepartmentWithCounts[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -34,7 +41,27 @@ function AdminDashboardContent() {
       console.log('Loading departments...')
       const depts = await DepartmentService.getDepartments()
       console.log('Departments loaded:', depts)
-      setDepartments(depts)
+      
+      // Load all peer tutors and students to get counts
+      const allPeerTutors = await PeerTutorService.getAllPeerTutors()
+      const allStudents = await StudentService.getAllStudents()
+      
+      // Enrich departments with counts
+      const enrichedDepartments: DepartmentWithCounts[] = depts.map(dept => {
+        // Count peer tutors for this department
+        const peerTutorCount = allPeerTutors.filter(pt => pt.dept === dept.name).length
+        
+        // Count students for this department
+        const peerStudentCount = allStudents.filter(s => s.dept === dept.name).length
+        
+        return {
+          ...dept,
+          peer_tutor_count: peerTutorCount,
+          peer_student_count: peerStudentCount
+        }
+      })
+      
+      setDepartments(enrichedDepartments)
     } catch (error) {
       console.error('Error loading departments:', error)
       setDepartments([]) // Set empty array on error
@@ -153,6 +180,8 @@ function AdminDashboardContent() {
                         <TableHead>Department Name</TableHead>
                         <TableHead>Faculty Member</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>Peer Tutors</TableHead>
+                        <TableHead>Peer Students</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -168,6 +197,12 @@ function AdminDashboardContent() {
                           </TableCell>
                           <TableCell>
                             <div className="text-sm text-gray-500">{department.faculty_email}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm font-medium text-gray-900">{department.peer_tutor_count}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm font-medium text-gray-900">{department.peer_student_count}</div>
                           </TableCell>
                           <TableCell>
                             <div className="text-sm text-gray-500">

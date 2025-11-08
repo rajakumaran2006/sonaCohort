@@ -28,6 +28,12 @@ interface PeerTutorWithStudents {
   students: Student[]
 }
 
+interface YearSectionGroup {
+  year: string
+  section: string
+  peerTutorsWithStudents: PeerTutorWithStudents[]
+}
+
 export default function PeerTutorMappingExport({ 
   dept, 
   year, 
@@ -49,31 +55,38 @@ export default function PeerTutorMappingExport({
     try {
       setIsExporting(true)
 
-      // Get peer tutors with their assigned students
-      const peerTutorsWithStudents = await getPeerTutorsWithStudents()
+      // Get peer tutors with their assigned students, grouped by year/section
+      const yearSectionGroups = await getPeerTutorsWithStudents()
       
-      if (peerTutorsWithStudents.length === 0) {
-        alert('No peer tutor assignments found for this section.')
+      if (yearSectionGroups.length === 0) {
+        alert('No peer tutor assignments found for this department.')
+        setIsExporting(false)
         return
       }
 
       // Create workbook
       const wb = XLSX.utils.book_new()
       
-      // Create worksheet data
-      const worksheetData = createWorksheetData(peerTutorsWithStudents)
-      
-      // Create worksheet
-      const ws = XLSX.utils.aoa_to_sheet(worksheetData)
-      
-      // Apply styling and formatting
-      applyWorksheetFormatting(ws, worksheetData.length)
-      
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(wb, ws, 'Peer Tutor Mapping')
+      // Create a worksheet for each year/section combination
+      for (const group of yearSectionGroups) {
+        // Create worksheet data for this year/section
+        const worksheetData = createWorksheetData(group.peerTutorsWithStudents)
+        
+        // Create worksheet
+        const ws = XLSX.utils.aoa_to_sheet(worksheetData)
+        
+        // Apply styling and formatting
+        applyWorksheetFormatting(ws, worksheetData.length)
+        
+        // Create sheet name (Excel has a 31 character limit for sheet names)
+        const sheetName = `Year ${group.year} - Sec ${group.section}`.substring(0, 31)
+        
+        // Add worksheet to workbook
+        XLSX.utils.book_append_sheet(wb, ws, sheetName)
+      }
       
       // Generate filename
-      const filename = `Peer_Tutor_Mapping_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`
+      const filename = `Peer_Tutor_Mapping_${dept}_${new Date().toISOString().split('T')[0]}.xlsx`
       
       // Export file
       XLSX.writeFile(wb, filename)
@@ -87,36 +100,98 @@ export default function PeerTutorMappingExport({
     }
   }
 
-  const getPeerTutorsWithStudents = async (): Promise<PeerTutorWithStudents[]> => {
+  const getPeerTutorsWithStudents = async (): Promise<YearSectionGroup[]> => {
     try {
-      // Get all peer tutors for this section
-      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      // Get all students for the department
+      const allStudents = await StudentService.getAllStudents()
+      const departmentStudents = allStudents.filter(s => s.dept === dept && !s.peer_tutor)
       
-      // Get all students for this section
-      const students = await StudentService.getStudentsBySection(dept, year, section)
+      // Get all peer tutors for the department
+      const allPeerTutors = await PeerTutorService.getAllPeerTutors()
+      const departmentPeerTutors = allPeerTutors.filter(pt => pt.dept === dept)
       
-      // Get assignments
-      const assignments = await AssignmentService.getAssignmentsBySection(dept, year, section)
-      
-      // Create mapping of peer tutors to their assigned students
-      const peerTutorsWithStudents: PeerTutorWithStudents[] = []
-      
-      for (const peerTutor of peerTutors) {
-        const assignedStudentIds = assignments
-          .filter(assignment => assignment.peer_tutor_id === peerTutor.id)
-          .map(assignment => assignment.student_id)
-        
-        const assignedStudents = students.filter(student => 
-          assignedStudentIds.includes(student.id)
-        )
-        
-        peerTutorsWithStudents.push({
-          peerTutor,
-          students: assignedStudents
-        })
+      if (departmentStudents.length === 0 && departmentPeerTutors.length === 0) {
+        return []
       }
       
-      return peerTutorsWithStudents
+      // Get unique year/section combinations from students and peer tutors
+      const yearSectionSet = new Set<string>()
+      
+      // Add combinations from students
+      departmentStudents.forEach(student => {
+        const key = `${student.year}|${student.section}`
+        yearSectionSet.add(key)
+      })
+      
+      // Add combinations from peer tutors (in case there are peer tutors without students)
+      departmentPeerTutors.forEach(peerTutor => {
+        const key = `${peerTutor.year}|${peerTutor.section}`
+        yearSectionSet.add(key)
+      })
+      
+      // Group data by year/section
+      const yearSectionGroups: YearSectionGroup[] = []
+      
+      for (const key of yearSectionSet) {
+        const [yearValue, sectionValue] = key.split('|')
+        
+        // Get students for this year/section
+        const sectionStudents = departmentStudents.filter(s => 
+          s.year === yearValue && s.section === sectionValue
+        )
+        
+        // Get peer tutors for this year/section
+        const sectionPeerTutors = departmentPeerTutors.filter(pt => 
+          pt.year === yearValue && pt.section === sectionValue
+        )
+        
+        // Create mapping of peer tutors to their assigned students
+        const peerTutorsWithStudents: PeerTutorWithStudents[] = []
+        
+        for (const peerTutor of sectionPeerTutors) {
+          // Find students assigned to this peer tutor
+          const assignedStudents = sectionStudents.filter(student => 
+            student.assigned_peer_tutor_id === peerTutor.id
+          )
+          
+          peerTutorsWithStudents.push({
+            peerTutor,
+            students: assignedStudents
+          })
+        }
+        
+        // Also include peer tutors that have no students assigned
+        const peerTutorIdsWithStudents = new Set(peerTutorsWithStudents.map(pts => pts.peerTutor.id))
+        const unassignedPeerTutors = sectionPeerTutors.filter(pt => 
+          !peerTutorIdsWithStudents.has(pt.id)
+        )
+        
+        for (const peerTutor of unassignedPeerTutors) {
+          peerTutorsWithStudents.push({
+            peerTutor,
+            students: []
+          })
+        }
+        
+        // Only add group if it has peer tutors
+        if (peerTutorsWithStudents.length > 0) {
+          yearSectionGroups.push({
+            year: yearValue,
+            section: sectionValue,
+            peerTutorsWithStudents
+          })
+        }
+      }
+      
+      // Sort groups by year, then by section
+      yearSectionGroups.sort((a, b) => {
+        if (a.year !== b.year) {
+          return a.year.localeCompare(b.year)
+        }
+        return a.section.localeCompare(b.section)
+      })
+      
+      return yearSectionGroups
     } catch (error) {
       console.error('Error getting peer tutors with students:', error)
       return []

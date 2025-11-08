@@ -159,13 +159,17 @@ export default function FeedbackSubmissionModal({
 
           {submitted ? (
             <div className="text-center py-12">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Feedback Submitted Successfully!</h3>
-              <p className="text-gray-500">Thank you for your feedback. This window will close automatically.</p>
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">Feedback Submitted Successfully!</h3>
+              <p className="text-gray-600 mb-2">Thank you for taking the time to provide your valuable feedback.</p>
+              <p className="text-sm text-gray-500">Your response has been recorded and this window will close automatically.</p>
+              <div className="mt-4 flex justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">

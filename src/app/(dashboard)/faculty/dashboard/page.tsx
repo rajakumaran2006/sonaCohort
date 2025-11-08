@@ -2,14 +2,17 @@
 
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
+import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
-import { Card, CardHeader, CardTitle, CardContent, StatCard, LoadingOverlay } from '@/components/ui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, LoadingSpinner } from '@/components/ui'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { Building2, Users, GraduationCap } from 'lucide-react'
 
 export default function FacultyDashboardPage() {
   return (
@@ -22,38 +25,13 @@ export default function FacultyDashboardPage() {
 function FacultyDashboardContent() {
   const { user } = useAuth()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Check if sidebar is collapsed
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const sidebar = document.querySelector('[data-sidebar-collapsed]')
-      return sidebar?.getAttribute('data-sidebar-collapsed') === 'true'
-    }
-    return false
-  })
-
-  // Listen for sidebar collapse state changes
-  useEffect(() => {
-    const checkSidebarState = () => {
-      if (typeof window !== 'undefined') {
-        const sidebar = document.querySelector('[data-sidebar-collapsed]')
-        const collapsed = sidebar?.getAttribute('data-sidebar-collapsed') === 'true'
-        setIsSidebarCollapsed(collapsed)
-      }
-    }
-
-    // Check initially
-    checkSidebarState()
-
-    // Listen for custom events
-    const handleSidebarToggle = () => checkSidebarState()
-    window.addEventListener('sidebar-toggle', handleSidebarToggle)
-
-    return () => {
-      window.removeEventListener('sidebar-toggle', handleSidebarToggle)
-    }
-  }, [])
+  // Use custom hook for sidebar collapsed state (reads from localStorage synchronously)
+  const [isSidebarCollapsed] = useSidebarCollapsed()
 
   // Fetch department data with caching
   const { data: department, isLoading: isDepartmentLoading } = useQuery({
@@ -93,6 +71,21 @@ function FacultyDashboardContent() {
     router.push(`/faculty/department/${department?.id}/year/${yearId}`)
   }
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      // Invalidate all queries to force refetch
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['faculty-department', user?.email] }),
+        queryClient.invalidateQueries({ queryKey: ['peer-tutor-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['all-students'] }),
+      ])
+      setLastRefresh(new Date())
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
@@ -104,48 +97,38 @@ function FacultyDashboardContent() {
       {/* Main Content */}
       <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
         {/* Top Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
-          <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center">
-                <button
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
-                <div className="ml-2 lg:ml-0">
-                  <h1 className="text-2xl roboto-condensed-title text-gray-900">Faculty Dashboard</h1>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
+        <PageHeader
+          title="FACULTY DASHBOARD"
+          lastRefresh={lastRefresh}
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
+          onToggleSidebar={() => setIsSidebarOpen(true)}
+          isSidebarCollapsed={isSidebarCollapsed}
+        />
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          {loading ? (
-            <LoadingOverlay className="h-96" size="xl">
-              Loading dashboard...
-            </LoadingOverlay>
-          ) : (
-          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className={`max-w-full mx-auto py-6 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
+            {loading && (
+              <div className="flex items-center justify-center py-4 mb-4">
+                <LoadingSpinner size="sm" className="mr-2" />
+                <span className="text-sm text-gray-600">Loading dashboard...</span>
+              </div>
+            )}
+            {!loading && (
+          <>
             {/* Department Info */}
-            <Card className="mb-6">
+            <Card className="mb-4">
               <CardContent>
                 <div className="flex items-center space-x-4">
                   <div className="flex-shrink-0">
                     <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center">
-                      <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
+                      <Building2 className="h-8 w-8 text-blue-600" />
                     </div>
                   </div>
                   <div>
                     <h3 className="text-lg leading-6 font-semibold text-gray-900">
-                      Current Department Assignment
+                      DEPARTMENT ASSIGNMENT
                     </h3>
                     <p className="mt-1 max-w-2xl text-sm text-gray-500">
                       {department?.name || 'No department assigned'}
@@ -156,26 +139,22 @@ function FacultyDashboardContent() {
             </Card>
 
             {/* Peer Tutor Statistics Cards */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-6">
               <StatCard
                 title="Total Peer Tutors"
                 value={peerTutorStats?.total || 0}
                 description="Across all departments and years"
                 icon={
-                  <svg className="h-7 w-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                  </svg>
+                  <Users className="h-7 w-7 text-blue-600" />
                 }
               />
 
-              <StatCard
+              <StatCard 
                 title="Total Students"
                 value={totalStudents}
                 description="Across all departments and years"
                 icon={
-                  <svg className="h-7 w-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                  </svg>
+                  <GraduationCap className="h-7 w-7 text-green-600" />
                 }
               />
             </div>
@@ -215,8 +194,9 @@ function FacultyDashboardContent() {
                 </div>
               </CardContent>
             </Card>
+          </>
+            )}
           </div>
-          )}
         </main>
       </div>
     </div>

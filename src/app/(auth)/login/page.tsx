@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { AdminService } from '@/lib/services/adminService'
+import Image from 'next/image'
 
 export default function LoginPage() {
   const { user, signInWithMicrosoft, loading, userMode, setUserMode } = useAuth()
@@ -291,27 +292,19 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right Side - Blue Gradient */}
-      <div className="hidden lg:flex lg:flex-1 bg-blue-600 items-center justify-center p-12">
-        <div className="max-w-xl text-center text-white space-y-10">
-          {/* Icon */}
-          <div className="flex justify-center mb-8">
-            <svg className="w-28 h-28" fill="white" viewBox="0 0 24 24">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-              <circle cx="18.5" cy="8.5" r="2.5"/>
-              <path d="M18.5 11c-1.5 0-4.5.67-4.5 2v1h9v-1c0-1.33-3-2-4.5-2z" opacity="0.6"/>
-            </svg>
-          </div>
-
-          {/* Text Content */}
-          <div className="space-y-6">
-            <h1 className="text-4xl lg:text-5xl font-bold leading-tight tracking-wide">
-              JOIN A COMMUNITY OF<br />LEARNERS
-            </h1>
-            <p className="text-lg text-blue-100 px-8">
-              Connect with tutors and students to enhance your academic experience.
-            </p>
-          </div>
+      {/* Right Side - Login Image */}
+      <div className="hidden lg:flex lg:flex-1 relative w-full h-screen bg-gray-50">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Image
+            src="/login.svg"
+            alt="Authentication"
+            width={600}
+            height={800}
+            className="object-contain w-full h-full"
+            priority
+            sizes="(max-width: 768px) 0px, 50vw"
+            quality={90}
+          />
         </div>
       </div>
     </div>

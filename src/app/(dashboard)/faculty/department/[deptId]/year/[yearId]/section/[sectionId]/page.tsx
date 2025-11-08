@@ -1,10 +1,10 @@
-
 'use client'
+
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
@@ -12,16 +12,64 @@ import { AssignmentService, Assignment, AssignmentStats } from '@/lib/services/a
 import AssignPeerTutorModal from '@/components/forms/AssignPeerTutorModal'
 import AddStudentModal from '@/components/forms/AddStudentModal'
 import BulkImportExport from '@/components/forms/BulkImportExport'
+import ClassesImportExport from '@/components/forms/ClassesImportExport'
 import PeerTutorMappingExport from '@/components/forms/PeerTutorMappingExport'
 import DateAssignmentModal from '@/components/forms/DateAssignmentModal'
 import { ClassService, Class } from '@/lib/services/classService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
-import { ExamMarksService } from '@/lib/services/examMarksService'
 import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
 import { FacultyService } from '@/lib/services/facultyService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
+import { ReportService } from '@/lib/services/reportService'
 import { createClient } from '@/utils/supabase/client'
 import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { Eye } from 'lucide-react'
+
+// Helper to build an XLSX worksheet with a common header block and ordered columns
+function createSheetWithHeader(
+  dept: string,
+  year: string,
+  section: string,
+  title: string,
+  rows: Array<Record<string, any>>,
+  headersInOrder: string[]
+) {
+  const headerRows = [
+    [`${title} Export Report`],
+    [`Department: ${dept}`],
+    [`Year: ${year}`],
+    [`Section: ${section}`],
+    [
+      `Generated on: ${new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })}`
+    ],
+    [] // spacer row
+  ]
+
+  const ws = XLSX.utils.aoa_to_sheet(headerRows)
+
+  // Ensure columns are in the exact order by mapping each row
+  const orderedRows = rows.map((row) => {
+    const ordered: Record<string, any> = {}
+    headersInOrder.forEach((key) => {
+      ordered[key] = row[key]
+    })
+    return ordered
+  })
+
+  // Start data at A7 (after 6 header rows)
+  XLSX.utils.sheet_add_json(ws, orderedRows, {
+    header: headersInOrder,
+    origin: 'A7',
+    skipHeader: false
+  })
+
+  return ws
+}
 
 interface PeerTutorWithStats extends PeerTutor 
 {
@@ -39,9 +87,12 @@ interface PeerTutorsTabProps {
   setIsModalOpen: (isOpen: boolean) => void
   handleRemovePeerTutor: (tutorId: string) => void
   onPeerTutorClick: (tutorId: string) => void
+  dept: string
+  year: string
+  section: string
 }
 
-function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerTutor, onPeerTutorClick }: PeerTutorsTabProps) {
+function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerTutor, onPeerTutorClick, dept, year, section }: PeerTutorsTabProps) {
   const [peerTutorsWithStats, setPeerTutorsWithStats] = useState<PeerTutorWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [peerTutorStudentCounts, setPeerTutorStudentCounts] = useState<{[key: string]: number}>({})
@@ -63,7 +114,23 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
         const tutorsWithStats = await Promise.all(
           peerTutors.map(async (tutor) => {
             const classStats = await ScheduledClassService.getPeerTutorClassStats(tutor.id)
+            // Get all additional classes for this peer tutor
+            // Note: Since additional_classes table doesn't store dept/year/section,
+            // we count all additional classes for the peer tutor
+            // This is correct because peer tutors are already filtered by section,
+            // so their additional classes should logically belong to this section
             const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+            
+            // Debug logging
+            console.log(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
+              dept: tutor.dept,
+              year: tutor.year,
+              section: tutor.section,
+              currentSection: { dept, year, section },
+              additionalClassesCount: additionalClasses.length,
+              matchesSection: tutor.dept === dept && tutor.year === year && tutor.section === section
+            })
+            
             return {
               ...tutor,
               classStats,
@@ -131,9 +198,9 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
     }
   })
 
-  // Export function for peer tutors
+  // Export function for peer tutors (matches table order + header)
   const exportPeerTutors = () => {
-    const exportData = peerTutorsWithStats.map(tutor => ({
+    const rows = peerTutorsWithStats.map(tutor => ({
       'Name': tutor.name,
       'Email': tutor.email,
       'Total Classes Allocated': tutor.classStats?.totalClasses || 0,
@@ -143,11 +210,20 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
       'Students Assigned': peerTutorStudentCounts[tutor.id] || 0
     }))
 
-    const ws = XLSX.utils.json_to_sheet(exportData)
+    const headers = [
+      'Name',
+      'Email',
+      'Total Classes Allocated',
+      'Completed Classes',
+      'Pending Classes',
+      'Additional Classes Taken',
+      'Students Assigned'
+    ]
+
+    const ws = createSheetWithHeader(dept, year, section, 'Peer Tutors', rows, headers)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Peer Tutors')
-    
-    const fileName = `peer_tutors_${new Date().toISOString().split('T')[0]}.xlsx`
+    const fileName = `peer_tutors_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(wb, fileName)
   }
 
@@ -232,6 +308,8 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <div className="flex items-center gap-4">
           <h3 className="text-lg font-medium text-gray-900">Peer Tutors ({peerTutors.length})</h3>
+        </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           {isDeleteMode && selectedPeerTutors.size > 0 && (
             <button
               onClick={handleBulkDelete}
@@ -251,8 +329,6 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
               Cancel
             </button>
           )}
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           {!isDeleteMode && (
             <>
           {/* Sort/Filter Button */}
@@ -348,15 +424,6 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
             Add Peer Tutor
           </button>
 
-          <button
-            onClick={exportPeerTutors}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>Export</span>
-          </button>
 
           <button
             onClick={toggleDeleteMode}
@@ -367,6 +434,17 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
             </svg>
             <span>Delete</span>
           </button>
+          {sortedPeerTutors.length > 0 && (
+            <button
+              onClick={exportPeerTutors}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Export</span>
+            </button>
+          )}
             </>
           )}
         </div>
@@ -414,31 +492,31 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
                   </div>
                 </div>
                 
-                <div className="p-4">
+                <div className="p-4 border-t border-gray-200">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-50 rounded-lg p-3">
                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Classes</p>
-                      <p className="text-xl font-bold text-gray-900">{tutor.classStats.totalClasses}</p>
+                      <p className="text-xl font-bold text-black">{tutor.classStats.totalClasses}</p>
                     </div>
                     
                     <div className="bg-green-50 rounded-lg p-3">
                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Completed</p>
-                      <p className="text-xl font-bold text-gray-900">{tutor.classStats.completedClasses}</p>
+                      <p className="text-xl font-bold text-black">{tutor.classStats.completedClasses}</p>
                     </div>
                     
                     <div className="bg-yellow-50 rounded-lg p-3">
                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pending</p>
-                      <p className="text-xl font-bold text-gray-900">{tutor.classStats.pendingClasses}</p>
+                      <p className="text-xl font-bold text-black">{tutor.classStats.pendingClasses}</p>
                     </div>
                     
                     <div className="bg-purple-50 rounded-lg p-3">
                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Additional</p>
-                      <p className="text-xl font-bold text-gray-900">{tutor.additionalClassesCount || 0}</p>
+                      <p className="text-xl font-bold text-black">{tutor.additionalClassesCount || 0}</p>
                     </div>
                     
                     <div className="bg-blue-50 rounded-lg p-3 col-span-2">
                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Students Assigned</p>
-                      <p className="text-xl font-bold text-gray-900">{peerTutorStudentCounts[tutor.id] || 0}</p>
+                      <p className="text-xl font-bold text-black">{peerTutorStudentCounts[tutor.id] || 0}</p>
                     </div>
                   </div>
                   
@@ -455,7 +533,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
 
           {/* Desktop Table View */}
           <div className="hidden lg:block overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full table-fixed divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               {isDeleteMode && (
@@ -475,7 +553,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
                 Email
               </th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Total Classes Allocated
+                Total Classes
               </th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Completed Classes
@@ -484,13 +562,10 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
                 Pending Classes
               </th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Additional Classes Taken
+                    Additional Classes
               </th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Students Assigned
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
               </th>
             </tr>
           </thead>
@@ -519,40 +594,28 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
                     <div className="text-sm text-gray-500">{tutor.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-sm font-semibold text-black">
                       {tutor.classStats.totalClasses}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-sm font-semibold text-black">
                       {tutor.classStats.completedClasses}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-sm font-semibold text-black">
                       {tutor.classStats.pendingClasses}
                     </div>
                   </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="text-sm font-semibold text-gray-900">
+                      <div className="text-sm font-semibold text-black">
                         {tutor.additionalClassesCount || 0}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-sm font-semibold text-black">
                       {peerTutorStudentCounts[tutor.id] || 0}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center space-x-2">
-                      {!isDeleteMode && (
-                        <button
-                          onClick={() => handleSingleDelete(tutor.id)}
-                          className="text-red-600 hover:text-red-900 transition-colors"
-                        >
-                          Delete
-                        </button>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -585,9 +648,12 @@ interface StudentsTabProps {
   peerTutors: PeerTutor[]
   setIsStudentModalOpen: (isOpen: boolean) => void
   handleRemoveStudent: (studentId: string) => void
+  dept: string
+  year: string
+  section: string
 }
 
-function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemoveStudent }: StudentsTabProps) {
+function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemoveStudent, dept, year, section }: StudentsTabProps) {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>(students)
   const [selectedPeerTutor, setSelectedPeerTutor] = useState<string>('all')
   const [showFilterPopup, setShowFilterPopup] = useState(false)
@@ -598,7 +664,6 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
   const [singleDeleteId, setSingleDeleteId] = useState<string | null>(null)
   const [isDeleteMode, setIsDeleteMode] = useState(false)
   const [itemsToDeleteStudents, setItemsToDeleteStudents] = useState<Array<{name: string, email: string, additionalInfo: string}>>([])
-
 
   // Apply peer tutor filter
   useEffect(() => {
@@ -631,23 +696,50 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
     setSelectedPeerTutor('all')
   }
 
-  // Export function for students
+  // Ensure students with the same peer tutor are listed consecutively
+  const sortedStudents = useMemo(() => {
+    const copy = [...filteredStudents]
+    copy.sort((a, b) => {
+      const aKey = a.assigned_peer_tutor_id || 'unassigned'
+      const bKey = b.assigned_peer_tutor_id || 'unassigned'
+      if (aKey !== bKey) return aKey.localeCompare(bKey)
+      return a.name.localeCompare(b.name)
+    })
+    return copy
+  }, [filteredStudents])
+
+  // Group counts for peer tutor to enable rowSpan in table view
+  const tutorGroupInfo = useMemo(() => {
+    const groupMap = new Map<string, { count: number; firstIndex: number }>()
+    sortedStudents.forEach((student, index) => {
+      const key = student.assigned_peer_tutor_id || 'unassigned'
+      const existing = groupMap.get(key)
+      if (existing) {
+        existing.count += 1
+      } else {
+        groupMap.set(key, { count: 1, firstIndex: index })
+      }
+    })
+    return groupMap
+  }, [sortedStudents])
+
+  // Export function for students (matches table order + header)
   const exportStudents = () => {
-    const exportData = filteredStudents.map(student => {
+    const rows = filteredStudents.map(student => {
       const assignedPeerTutor = peerTutors.find(tutor => tutor.id === student.assigned_peer_tutor_id)
       return {
         'Name': student.name,
         'Email': student.email,
-        'Year & Section': `${student.year.includes('Year') ? student.year : `${student.year} Year`} - ${student.section.includes('Section') ? student.section : `Section ${student.section}`}`,
+        'Year & Section': `${student.year} - ${student.section}`,
         'Assigned Peer Tutor': assignedPeerTutor?.name || 'Not assigned'
       }
     })
 
-    const ws = XLSX.utils.json_to_sheet(exportData)
+    const headers = ['Name', 'Email', 'Year & Section', 'Assigned Peer Tutor']
+    const ws = createSheetWithHeader(dept, year, section, 'Students', rows, headers)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Students')
-    
-    const fileName = `students_${new Date().toISOString().split('T')[0]}.xlsx`
+    const fileName = `students_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(wb, fileName)
   }
 
@@ -743,6 +835,8 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
               </span>
             )}
           </h3>
+        </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           {isDeleteMode && selectedStudents.size > 0 && (
             <button
               onClick={handleBulkDeleteStudents}
@@ -762,8 +856,6 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
               Cancel
             </button>
           )}
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           {!isDeleteMode && (
             <>
           {/* Filter Button */}
@@ -827,16 +919,7 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
             Add Student
           </button>
 
-          {/* Export Button */}
-          <button
-            onClick={exportStudents}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>Export</span>
-          </button>
+
 
           <button
             onClick={toggleDeleteModeStudents}
@@ -847,6 +930,18 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
             </svg>
             <span>Delete</span>
           </button>
+                    {/* Export Button */}
+                    {filteredStudents.length > 0 && (
+                      <button
+                        onClick={exportStudents}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Export</span>
+                      </button>
+                    )}
             </>
           )}
         </div>
@@ -864,7 +959,7 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
         <>
           {/* Mobile Card View */}
           <div className="block lg:hidden space-y-4">
-            {filteredStudents.map((student) => {
+            {sortedStudents.map((student) => {
               const assignedPeerTutor = peerTutors.find(tutor => tutor.id === student.assigned_peer_tutor_id)
               return (
                 <div key={student.id} className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
@@ -886,15 +981,7 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
                   </div>
                   
                   <div className="p-4 space-y-3">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 w-24 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Year & Section
-                      </div>
-                      <div className="flex-1 text-sm text-gray-900">
-                        {student.year.includes('Year') ? student.year : `${student.year} Year`} - 
-                        {student.section.includes('Section') ? student.section : `Section ${student.section}`}
-                      </div>
-                    </div>
+                    
                     
                     <div className="flex items-start">
                       <div className="flex-shrink-0 w-24 text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -927,7 +1014,7 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
 
           {/* Desktop Table View */}
           <div className="hidden lg:block overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full table-fixed divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               {isDeleteMode && (
@@ -940,26 +1027,22 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
                   />
                 </th>
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">
                 Name
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200 w-1/3">
                 Email
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Year & Section
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">
                 Assigned Peer Tutor
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
               </th>
             </tr>
           </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                {filteredStudents.map((student) => {
+                {sortedStudents.map((student, index) => {
                         const assignedPeerTutor = peerTutors.find(tutor => tutor.id === student.assigned_peer_tutor_id)
+                        const groupKey = student.assigned_peer_tutor_id || 'unassigned'
+                        const group = tutorGroupInfo.get(groupKey)
                         return (
                           <tr key={student.id} className="hover:bg-gray-50">
                             {isDeleteMode && (
@@ -972,39 +1055,25 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
                                 />
                               </td>
                             )}
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-6 py-4 whitespace-nowrap align-middle w-1/3">
                               <div className="text-sm font-medium text-gray-900">{student.name}</div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200 align-middle w-1/3">
                               <div className="text-sm text-gray-500">{student.email}</div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                {student.year.includes('Year') ? student.year : `${student.year} Year`} - 
-                                {student.section.includes('Section') ? student.section : `Section ${student.section}`}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {assignedPeerTutor ? (
-                                <div className="text-sm text-gray-900">
-                                  {assignedPeerTutor.name}
-                                </div>
-                              ) : (
-                                <div className="text-sm text-gray-500">
-                                  Not assigned
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              {!isDeleteMode && (
-                                <button 
-                                  onClick={() => handleSingleDeleteStudent(student.id)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  Delete
-                                </button>
-                              )}
-                            </td>
+                            {group && group.firstIndex === index && (
+                              <td className="px-6 py-4 whitespace-nowrap align-middle w-1/3 text-center" rowSpan={group.count}>
+                                {assignedPeerTutor ? (
+                                  <div className="text-sm text-gray-900 inline-block">
+                                    {assignedPeerTutor.name}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-gray-500 inline-block">
+                                    Not assigned
+                                  </div>
+                                )}
+                              </td>
+                            )}
                           </tr>
                         )
                 })}
@@ -1031,26 +1100,776 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
   )
 }
 
+interface PeerTutorDetailViewProps {
+  peerTutorId: string
+  peerTutorName: string
+  dept: string
+  year: string
+  section: string
+  onBack: () => void
+}
+
+interface SubjectAttendanceData {
+  subjectName: string
+  dates: string[]
+  students: {
+    sNo: number
+    studentName: string
+    studentId: string
+    hour: number
+    dateAttendance: { [date: string]: 'P' | 'A' | '' }
+    totalHoursPresent: number
+    attendancePercentage: number
+  }[]
+}
+
+function PeerTutorDetailView({ peerTutorId, peerTutorName, dept, year, section, onBack }: PeerTutorDetailViewProps) {
+  const [loading, setLoading] = useState(true)
+  const [subjectsData, setSubjectsData] = useState<SubjectAttendanceData[]>([])
+
+  useEffect(() => {
+    loadDetailData()
+  }, [peerTutorId, dept, year, section])
+
+  const loadDetailData = async () => {
+    try {
+      setLoading(true)
+      const supabase = createClient()
+
+      // Get students assigned to this peer tutor
+      const students = await AttendanceService.getStudentsForAttendance(peerTutorId)
+      
+      // Get all subjects assigned to this peer tutor
+      const subjects = await ReportService.getPeerTutorSubjects(peerTutorId)
+      
+      // Get all scheduled classes for this peer tutor
+      const { data: scheduledClasses } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          *,
+          class:classes!inner(
+            id,
+            subject_name
+          )
+        `)
+        .eq('peer_tutor_id', peerTutorId)
+        .order('scheduled_date', { ascending: true })
+
+      // Get all additional classes for this peer tutor
+      const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(peerTutorId)
+
+      // Get all attendance records for scheduled classes
+      const scheduledClassIds = (scheduledClasses || []).map(sc => sc.id)
+      const { data: attendanceRecords } = await supabase
+        .from('attendance')
+        .select('scheduled_class_id, student_id, status')
+        .in('scheduled_class_id', scheduledClassIds)
+
+      // Get attendance records for additional classes
+      const additionalClassIds = additionalClasses.map(ac => ac.id)
+      const { data: additionalAttendanceRecords } = await supabase
+        .from('additional_class_attendance')
+        .select('additional_class_id, student_id, status')
+        .in('additional_class_id', additionalClassIds)
+
+      // Create attendance map: scheduled_class_id -> student_id -> status
+      const attendanceMap = new Map<string, Map<string, 'P' | 'A'>>()
+      attendanceRecords?.forEach(record => {
+        if (!attendanceMap.has(record.scheduled_class_id)) {
+          attendanceMap.set(record.scheduled_class_id, new Map())
+        }
+        attendanceMap.get(record.scheduled_class_id)!.set(record.student_id, record.status as 'P' | 'A')
+      })
+
+      // Create additional attendance map: additional_class_id -> student_id -> status
+      const additionalAttendanceMap = new Map<string, Map<string, 'P' | 'A'>>()
+      additionalAttendanceRecords?.forEach(record => {
+        if (!additionalAttendanceMap.has(record.additional_class_id)) {
+          additionalAttendanceMap.set(record.additional_class_id, new Map())
+        }
+        additionalAttendanceMap.get(record.additional_class_id)!.set(record.student_id, record.status as 'P' | 'A')
+      })
+
+      // Process each subject
+      const subjectsWithData: SubjectAttendanceData[] = []
+
+      subjects.forEach((subject: any, subjectIdx: number) => {
+        // Get scheduled classes for this subject
+        const subjectScheduledClasses = (scheduledClasses || []).filter(
+          sc => sc.class?.subject_name === subject.subject_name
+        )
+
+        // Get additional classes for this subject
+        const subjectAdditionalClasses = additionalClasses.filter(
+          ac => ac.subject_name === subject.subject_name
+        )
+
+        // Collect all dates (scheduled + additional)
+        const scheduledDates = subjectScheduledClasses.map(sc => sc.scheduled_date)
+        const additionalDates = subjectAdditionalClasses.map(ac => ac.class_date)
+        const allDates = [...new Set([...scheduledDates, ...additionalDates])].sort()
+
+        // Process each student
+        const studentRows = students.map((student, studentIdx) => {
+          const dateAttendance: { [date: string]: 'P' | 'A' | '' } = {}
+          let totalHoursPresent = 0
+          let totalHours = 0
+
+          // Process scheduled class dates
+          subjectScheduledClasses.forEach(sc => {
+            const date = sc.scheduled_date
+            const studentAttendance = attendanceMap.get(sc.id)?.get(student.id)
+            if (studentAttendance) {
+              dateAttendance[date] = studentAttendance
+              totalHours++
+              if (studentAttendance === 'P') {
+                totalHoursPresent++
+              }
+            } else {
+              dateAttendance[date] = ''
+              totalHours++
+            }
+          })
+
+          // Process additional class dates
+          subjectAdditionalClasses.forEach(ac => {
+            const date = ac.class_date
+            const studentAttendance = additionalAttendanceMap.get(ac.id)?.get(student.id)
+            if (studentAttendance) {
+              dateAttendance[date] = studentAttendance
+              totalHours++
+              if (studentAttendance === 'P') {
+                totalHoursPresent++
+              }
+            } else {
+              dateAttendance[date] = ''
+              totalHours++
+            }
+          })
+
+          const attendancePercentage = totalHours > 0 
+            ? Math.round((totalHoursPresent / totalHours) * 100) 
+            : 0
+
+          return {
+            sNo: studentIdx + 1,
+            studentName: student.name,
+            studentId: student.id,
+            hour: totalHours,
+            dateAttendance,
+            totalHoursPresent,
+            attendancePercentage
+          }
+        })
+
+        subjectsWithData.push({
+          subjectName: subject.subject_name,
+          dates: allDates,
+          students: studentRows
+        })
+      })
+
+      setSubjectsData(subjectsWithData)
+    } catch (error) {
+      console.error('Error loading detail data:', error)
+      setSubjectsData([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center space-x-2 text-sm">
+        <button
+          onClick={onBack}
+          className="text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          General
+        </button>
+        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="text-gray-900 font-medium">{peerTutorName}</span>
+      </div>
+
+      {/* Subject Tables */}
+      {subjectsData.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-gray-500">No subject data available</p>
+        </div>
+      ) : (
+        subjectsData.map((subjectData, subjectIdx) => (
+          <div key={subjectIdx} className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
+            {/* Subject Header */}
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Subject Name {subjectIdx + 1}: {subjectData.subjectName}
+              </h3>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
+                <thead className="bg-gray-50">
+                  {/* Top header row */}
+                  <tr>
+                    <th rowSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                      S.No
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                      Name
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                      Hour
+                    </th>
+                    {subjectData.dates.length > 0 && (
+                      <th colSpan={subjectData.dates.length} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                        Date
+                      </th>
+                    )}
+                    <th colSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                      No of Hours Present
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                      %
+                    </th>
+                  </tr>
+                  {/* Second header row */}
+                  <tr>
+                    {subjectData.dates.map((date, dateIdx) => {
+                      const dateObj = new Date(date)
+                      const formattedDate = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })
+                      return (
+                        <th key={dateIdx} className="px-2 py-2 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100 min-w-[60px]">
+                          {formattedDate}
+                        </th>
+                      )
+                    })}
+                    <th className="px-4 py-2 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                      Hours
+                    </th>
+                    <th className="px-4 py-2 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                      %
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {subjectData.students.length === 0 ? (
+                    <tr>
+                      <td colSpan={4 + subjectData.dates.length + 3} className="px-6 py-8 text-center text-sm text-gray-500">
+                        No students assigned
+                      </td>
+                    </tr>
+                  ) : (
+                    subjectData.students.map((student) => (
+                      <tr key={student.studentId} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-center text-sm text-gray-900 border border-gray-300">
+                          {student.sNo}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900 border border-gray-300">
+                          {student.studentName}
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-900 border border-gray-300">
+                          {student.hour}
+                        </td>
+                        {subjectData.dates.map((date, dateIdx) => {
+                          const status = student.dateAttendance[date] || ''
+                          return (
+                            <td key={dateIdx} className="px-2 py-3 text-center text-sm text-gray-900 border border-gray-300">
+                              {status}
+                            </td>
+                          )
+                        })}
+                        <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900 border border-gray-300">
+                          {student.totalHoursPresent}
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900 border border-gray-300">
+                          {student.attendancePercentage}%
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900 border border-gray-300">
+                          {student.attendancePercentage}%
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Signature Section */}
+            <div className="px-6 py-4 border-t border-gray-200">
+              <div className="text-sm font-medium text-gray-700">SIGNATURE OF FACULTY:</div>
+              <div className="mt-2 border-b border-gray-300 w-64"></div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+interface GeneralTabProps {
+  dept: string
+  year: string
+  section: string
+}
+
+interface PeerTutorGeneralRow {
+  peerTutorName: string
+  peerTutorId: string
+  classesAllocated: { completed: number; total: number }
+  additionalClassesTaken: number
+  attendancePercentage: number
+}
+
+function GeneralTab({ dept, year, section }: GeneralTabProps) {
+  const [loading, setLoading] = useState(true)
+  const [generalData, setGeneralData] = useState<PeerTutorGeneralRow[]>([])
+  const [selectedPeerTutor, setSelectedPeerTutor] = useState<string | null>(null)
+  const [selectedPeerTutorName, setSelectedPeerTutorName] = useState<string>('')
+
+  useEffect(() => {
+    loadGeneralData()
+  }, [dept, year, section])
+
+  const loadGeneralData = async () => {
+    try {
+      setLoading(true)
+      
+      // Get all peer tutors for this section
+      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      
+      // Get stats for each peer tutor
+      const tutorsWithStats = await Promise.all(
+        peerTutors.map(async (tutor) => {
+          const classStats = await ScheduledClassService.getPeerTutorClassStats(tutor.id)
+          const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+          
+          // Calculate attendance percentage
+          // Formula: (completed classes + additional classes) / total classes allocated * 100
+          const numerator = classStats.completedClasses + additionalClasses.length
+          const denominator = classStats.totalClasses
+          const attendancePercentage = denominator > 0 
+            ? Math.round((numerator / denominator) * 100) 
+            : 0
+          
+          return {
+            peerTutorName: tutor.name,
+            peerTutorId: tutor.id,
+            classesAllocated: {
+              completed: classStats.completedClasses,
+              total: classStats.totalClasses
+            },
+            additionalClassesTaken: additionalClasses.length,
+            attendancePercentage
+          }
+        })
+      )
+      
+      setGeneralData(tutorsWithStats)
+    } catch (error) {
+      console.error('Error loading general data:', error)
+      setGeneralData([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  if (selectedPeerTutor) {
+    return (
+      <PeerTutorDetailView
+        peerTutorId={selectedPeerTutor}
+        peerTutorName={selectedPeerTutorName}
+        dept={dept}
+        year={year}
+        section={section}
+        onBack={() => {
+          setSelectedPeerTutor(null)
+          setSelectedPeerTutorName('')
+        }}
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                  Peer Tutor Name
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                  Classes Allocated
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                  Additional Classes Taken
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Attendance Percentage
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {generalData.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
+                    No peer tutor data available
+                  </td>
+                </tr>
+              ) : (
+                generalData.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                      <div className="text-sm font-medium text-gray-900">{row.peerTutorName}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-200">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {row.classesAllocated.completed}/{row.classesAllocated.total}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-200">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {row.additionalClassesTaken}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {row.attendancePercentage}%
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                      <button
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                        onClick={() => {
+                          setSelectedPeerTutor(row.peerTutorId)
+                          setSelectedPeerTutorName(row.peerTutorName)
+                        }}
+                      >
+                        <Eye className="h-4 w-4 mr-1.5 text-gray-600" />
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface AdvancedAttendanceTabProps {
+  dept: string
+  year: string
+  section: string
+}
+
+interface PeerTutorAttendanceRow {
+  sNo: number
+  peerTutorName: string
+  subject: string
+  hour: number
+  dateAttendance: { [date: string]: 'P' | 'A' | '' }
+  totalHoursPresent: number
+  attendancePercentage: number
+}
+
+function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabProps) {
+  const [loading, setLoading] = useState(true)
+  const [attendanceData, setAttendanceData] = useState<PeerTutorAttendanceRow[]>([])
+  const [dates, setDates] = useState<string[]>([])
+
+  useEffect(() => {
+    loadAttendanceData()
+  }, [dept, year, section])
+
+  const loadAttendanceData = async () => {
+    try {
+      setLoading(true)
+      const supabase = createClient()
+
+      // Get all peer tutors for this section
+      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      
+      // Get all scheduled classes for this section
+      const { data: scheduledClasses, error } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          *,
+          class:classes!inner(
+            id,
+            subject_name
+          ),
+          peer_tutor:peer_tutors!inner(
+            id,
+            name,
+            email
+          )
+        `)
+        .eq('dept', dept)
+        .eq('year', year)
+        .in('section', [section, 'ALL'])
+        .order('scheduled_date', { ascending: true })
+
+      if (error) {
+        console.error('Error loading scheduled classes:', error)
+        setAttendanceData([])
+        setDates([])
+        return
+      }
+
+      // Get unique dates from scheduled classes
+      const uniqueDates = [...new Set((scheduledClasses || []).map(sc => sc.scheduled_date))].sort()
+      setDates(uniqueDates)
+
+      // Get attendance records for all scheduled classes
+      const scheduledClassIds = (scheduledClasses || []).map(sc => sc.id)
+      const { data: attendanceRecords } = await supabase
+        .from('attendance')
+        .select('scheduled_class_id, status')
+        .in('scheduled_class_id', scheduledClassIds)
+
+      // Create a map of scheduled class ID to attendance status
+      const attendanceMap = new Map<string, 'P' | 'A'>()
+      if (attendanceRecords) {
+        // Group by scheduled_class_id and determine if peer tutor was present
+        // If any student attendance exists, peer tutor was present
+        const classAttendanceMap = new Map<string, Set<string>>()
+        attendanceRecords.forEach(record => {
+          if (!classAttendanceMap.has(record.scheduled_class_id)) {
+            classAttendanceMap.set(record.scheduled_class_id, new Set())
+          }
+          classAttendanceMap.get(record.scheduled_class_id)?.add(record.status)
+        })
+
+        classAttendanceMap.forEach((statuses, classId) => {
+          // If there are any attendance records, peer tutor was present
+          attendanceMap.set(classId, 'P')
+        })
+      }
+
+      // Build attendance data rows
+      const rows: PeerTutorAttendanceRow[] = []
+      let sNo = 1
+
+      // Group by peer tutor and subject
+      const tutorSubjectMap = new Map<string, Map<string, any[]>>()
+      
+      scheduledClasses?.forEach(sc => {
+        const tutorId = sc.peer_tutor_id
+        const subjectName = sc.class?.subject_name || 'Unknown'
+        const key = `${tutorId}-${subjectName}`
+        
+        if (!tutorSubjectMap.has(tutorId)) {
+          tutorSubjectMap.set(tutorId, new Map())
+        }
+        const subjectMap = tutorSubjectMap.get(tutorId)!
+        if (!subjectMap.has(subjectName)) {
+          subjectMap.set(subjectName, [])
+        }
+        subjectMap.get(subjectName)!.push(sc)
+      })
+
+      // Create rows for each peer tutor-subject combination
+      peerTutors.forEach(tutor => {
+        const subjectMap = tutorSubjectMap.get(tutor.id)
+        if (!subjectMap || subjectMap.size === 0) {
+          // Add row even if no subjects assigned
+          rows.push({
+            sNo: sNo++,
+            peerTutorName: tutor.name,
+            subject: 'No subjects assigned',
+            hour: 0,
+            dateAttendance: {},
+            totalHoursPresent: 0,
+            attendancePercentage: 0
+          })
+        } else {
+          subjectMap.forEach((classes, subjectName) => {
+            const dateAttendance: { [date: string]: 'P' | 'A' | '' } = {}
+            let totalHoursPresent = 0
+            let totalHours = 0
+
+            classes.forEach(sc => {
+              const date = sc.scheduled_date
+              const isPresent = attendanceMap.has(sc.id) && attendanceMap.get(sc.id) === 'P'
+              dateAttendance[date] = isPresent ? 'P' : 'A'
+              totalHours++
+              if (isPresent) {
+                totalHoursPresent++
+              }
+            })
+
+            const attendancePercentage = totalHours > 0 ? Math.round((totalHoursPresent / totalHours) * 100) : 0
+
+            rows.push({
+              sNo: sNo++,
+              peerTutorName: tutor.name,
+              subject: subjectName,
+              hour: totalHours,
+              dateAttendance,
+              totalHoursPresent,
+              attendancePercentage
+            })
+          })
+        }
+      })
+
+      setAttendanceData(rows)
+    } catch (error) {
+      console.error('Error loading attendance data:', error)
+      setAttendanceData([])
+      setDates([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
+            <thead className="bg-gray-50">
+              {/* Top header row */}
+              <tr>
+                <th rowSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                  S.No
+                </th>
+                <th rowSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                  Name
+                </th>
+                <th rowSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                  Hour
+                </th>
+                {dates.length > 0 && (
+                  <th colSpan={dates.length} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                    Date
+                  </th>
+                )}
+                <th colSpan={2} className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                  No of Hours Present
+                </th>
+              </tr>
+              {/* Second header row */}
+              <tr>
+                {dates.map((date, idx) => {
+                  const dateObj = new Date(date)
+                  const formattedDate = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })
+                  return (
+                    <th key={idx} className="px-2 py-2 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100 min-w-[60px]">
+                      {formattedDate}
+                    </th>
+                  )
+                })}
+                <th className="px-4 py-2 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                  Hours
+                </th>
+                <th className="px-4 py-2 text-center text-xs font-bold text-gray-900 uppercase tracking-wider border border-gray-300 bg-gray-100">
+                  %
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {attendanceData.length === 0 ? (
+                <tr>
+                  <td colSpan={4 + dates.length + 2} className="px-6 py-8 text-center text-sm text-gray-500">
+                    No attendance data available
+                  </td>
+                </tr>
+              ) : (
+                attendanceData.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-center text-sm text-gray-900 border border-gray-300">
+                      {row.sNo}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900 border border-gray-300">
+                      <div>{row.peerTutorName}</div>
+                      <div className="text-xs text-gray-500">{row.subject}</div>
+                    </td>
+                    <td className="px-4 py-3 text-center text-sm text-gray-900 border border-gray-300">
+                      {row.hour}
+                    </td>
+                    {dates.map((date, dateIdx) => {
+                      const status = row.dateAttendance[date] || ''
+                      return (
+                        <td key={dateIdx} className="px-2 py-3 text-center text-sm text-gray-900 border border-gray-300">
+                          {status}
+                        </td>
+                      )
+                    })}
+                    <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900 border border-gray-300">
+                      {row.totalHoursPresent}
+                    </td>
+                    <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900 border border-gray-300">
+                      {row.attendancePercentage}%
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface ImportExportTabProps {
   dept: string
   year: string
   section: string
+  facultyId: string
   onImportComplete: () => void
   onShowExportModal: () => void
 }
 
-function ImportExportTab({ dept, year, section, onImportComplete, onShowExportModal }: ImportExportTabProps) {
+function ImportExportTab({ dept, year, section, facultyId, onImportComplete, onShowExportModal }: ImportExportTabProps) {
   const [loading, setLoading] = useState(true)
   const [analytics, setAnalytics] = useState({
     totalPeerTutors: 0,
     totalStudents: 0,
     totalClasses: 0,
     totalAttendanceRecords: 0,
-    totalExams: 0,
     assignedStudents: 0,
     scheduledClasses: 0
   })
-  const [activeSubTab, setActiveSubTab] = useState<'export' | 'import' | 'advanced'>('export')
+  const [activeSubTab, setActiveSubTab] = useState<'import' | 'export' | 'advanced'>('import')
+  const [activeAdvancedTab, setActiveAdvancedTab] = useState<'general' | 'attendance' | 'nextTopicSheet' | 'mark'>('general')
 
   const dbYear = year
   const dbSection = section
@@ -1062,12 +1881,11 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
   const loadAnalytics = async () => {
     try {
       setLoading(true)
-      const [tutors, sectionStudents, classes, scheduledClasses, examTypes] = await Promise.all([
+      const [tutors, sectionStudents, classes, scheduledClasses] = await Promise.all([
         PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection),
         StudentService.getStudentsBySection(dept, dbYear, dbSection),
         ClassService.getClassesByYearSection(dept, dbYear, dbSection),
-        ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection),
-        ExamMarksService.getExamTypesForSection(dept, dbYear, dbSection)
+        ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
       ])
 
       const assignedCount = sectionStudents.filter(s => s.assigned_peer_tutor_id).length
@@ -1077,7 +1895,6 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
         totalStudents: sectionStudents.length,
         totalClasses: classes.length,
         totalAttendanceRecords: 0, // Will be calculated if needed
-        totalExams: examTypes.length,
         assignedStudents: assignedCount,
         scheduledClasses: scheduledClasses.length
       })
@@ -1091,16 +1908,52 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
   const handleExportPeerDetails = async () => {
     try {
       const tutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
-      const exportData = tutors.map(tutor => ({
-        'Name': tutor.name,
-        'Email': tutor.email,
-        'Department': tutor.dept,
-        'Year': tutor.year,
-        'Section': tutor.section,
-        'Created At': new Date(tutor.created_at).toLocaleDateString()
+      const students = await StudentService.getStudentsBySection(dept, dbYear, dbSection)
+      const scheduledClasses = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
+      
+      // Get class statistics for each tutor
+      const tutorsWithStats = await Promise.all(tutors.map(async (tutor) => {
+        // Calculate the minimum date for classes (day after peer tutor was created)
+        const createdDate = new Date(tutor.created_at)
+        createdDate.setHours(0, 0, 0, 0)
+        const minimumClassDate = new Date(createdDate)
+        minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
+        
+        // Get class statistics for this tutor, only counting classes from day after creation
+        const tutorClasses = scheduledClasses.filter(sc => {
+          if (sc.peer_tutor_id !== tutor.id) return false
+          const classDate = new Date(sc.scheduled_date)
+          classDate.setHours(0, 0, 0, 0)
+          return classDate >= minimumClassDate
+        })
+        const completedClasses = tutorClasses.filter(sc => sc.completion_status === 'completed').length
+        const pendingClasses = tutorClasses.filter(sc => sc.completion_status === 'pending' || sc.completion_status === 'not_started').length
+        const totalClasses = tutorClasses.length
+        
+        // Get additional classes count
+        const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+        // Filter by current section (additional classes should have dept, year, section if they were created in the AttendanceTab)
+        const sectionAdditionalClasses = additionalClasses.filter(ac => {
+          // Since additional classes might not have dept/year/section directly,
+          // we'll count all additional classes for peer tutors in this section
+          return true
+        })
+        
+        // Get assigned students count
+        const assignedStudents = students.filter(s => s.assigned_peer_tutor_id === tutor.id)
+        
+        return {
+          'Name': tutor.name,
+          'Email': tutor.email,
+          'Total Classes Allocated': totalClasses,
+          'Completed Classes': completedClasses,
+          'Pending Classes': pendingClasses,
+          'Additional Classes Taken': sectionAdditionalClasses.length,
+          'Students Assigned': assignedStudents.length
+        }
       }))
 
-      const ws = XLSX.utils.json_to_sheet(exportData)
+      const ws = XLSX.utils.json_to_sheet(tutorsWithStats)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Peer Tutors')
       XLSX.writeFile(wb, `peer_tutors_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
@@ -1120,11 +1973,7 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
         return {
           'Name': student.name,
           'Email': student.email,
-          'Department': student.dept,
-          'Year': student.year,
-          'Section': student.section,
-          'Assigned Peer Tutor': assignedTutor?.name || 'Not Assigned',
-          'Created At': new Date(student.created_at).toLocaleDateString()
+          'Assigned Peer Tutor': assignedTutor?.name || 'Not assigned'
         }
       })
 
@@ -1210,109 +2059,8 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
     }
   }
 
-  const handleExportExams = async () => {
-    try {
-      const examTypes = await ExamMarksService.getExamTypesForSection(dept, dbYear, dbSection)
-      const allExamData: any[] = []
 
-      for (const exam of examTypes) {
-        const details = await ExamMarksService.getExamDetailsForSection(exam.exam_type, dept, dbYear, dbSection)
-        
-        details.forEach(tutorData => {
-          tutorData.students.forEach((student: any) => {
-            exam.subjects.forEach((subject: string) => {
-              allExamData.push({
-                'Exam Type': exam.exam_name,
-                'Subject': subject,
-                'Peer Tutor': tutorData.peer_tutor.name,
-                'Student': student.name,
-                'Student Email': student.email,
-                'Marks': student.marks[subject] || 'Pending'
-              })
-            })
-          })
-        })
-      }
 
-      const ws = XLSX.utils.json_to_sheet(allExamData)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Exam Marks')
-      XLSX.writeFile(wb, `exams_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
-    } catch (error) {
-      console.error('Error exporting exams:', error)
-      alert('Failed to export exam data')
-    }
-  }
-
-  const handleExportAll = async () => {
-    try {
-      const wb = XLSX.utils.book_new()
-
-      // Peer Tutors Sheet
-      const tutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
-      const tutorData = tutors.map(t => ({
-        'Name': t.name,
-        'Email': t.email,
-        'Department': t.dept,
-        'Year': t.year,
-        'Section': t.section
-      }))
-      const tutorWs = XLSX.utils.json_to_sheet(tutorData)
-      XLSX.utils.book_append_sheet(wb, tutorWs, 'Peer Tutors')
-
-      // Students Sheet
-      const sectionStudents = await StudentService.getStudentsBySection(dept, dbYear, dbSection)
-      const studentData = sectionStudents.map(s => {
-        const assignedTutor = tutors.find(t => t.id === s.assigned_peer_tutor_id)
-        return {
-          'Name': s.name,
-          'Email': s.email,
-          'Assigned Peer Tutor': assignedTutor?.name || 'Not Assigned'
-        }
-      })
-      const studentWs = XLSX.utils.json_to_sheet(studentData)
-      XLSX.utils.book_append_sheet(wb, studentWs, 'Students')
-
-      // Assignments Sheet
-      const assignments = await AssignmentService.getAssignments(dept, dbYear, dbSection)
-      const assignmentData = assignments.map(a => {
-        const tutor = tutors.find(t => t.id === a.peer_tutor_id)
-        const student = sectionStudents.find(s => s.id === a.student_id)
-        return {
-          'Peer Tutor': tutor?.name || 'Unknown',
-          'Student': student?.name || 'Unknown',
-          'Assigned Date': new Date(a.created_at).toLocaleDateString()
-        }
-      })
-      const assignmentWs = XLSX.utils.json_to_sheet(assignmentData)
-      XLSX.utils.book_append_sheet(wb, assignmentWs, 'Assignments')
-
-      XLSX.writeFile(wb, `complete_data_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
-    } catch (error) {
-      console.error('Error exporting all data:', error)
-      alert('Failed to export complete data')
-    }
-  }
-
-  const handleExportTemplate = () => {
-    const wb = XLSX.utils.book_new()
-
-    // Peer Tutors Template
-    const tutorTemplate = [
-      { 'Name': 'John Doe', 'Email': 'john.doe@example.com', 'Department': dept, 'Year': year, 'Section': section }
-    ]
-    const tutorWs = XLSX.utils.json_to_sheet(tutorTemplate)
-    XLSX.utils.book_append_sheet(wb, tutorWs, 'Peer Tutors Template')
-
-    // Students Template
-    const studentTemplate = [
-      { 'Name': 'Jane Smith', 'Email': 'jane.smith@example.com', 'Department': dept, 'Year': year, 'Section': section }
-    ]
-    const studentWs = XLSX.utils.json_to_sheet(studentTemplate)
-    XLSX.utils.book_append_sheet(wb, studentWs, 'Students Template')
-
-    XLSX.writeFile(wb, `import_template_${dept}_${year}_${section}.xlsx`)
-  }
 
   if (loading) {
   return (
@@ -1334,30 +2082,26 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
           <h3 className="text-lg sm:text-xl font-bold text-gray-900">Analytics Overview</h3>
         </div>
         
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
           <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-gray-200">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-blue-600">{analytics.totalPeerTutors}</div>
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-black">{analytics.totalPeerTutors}</div>
             <div className="text-xs sm:text-sm text-gray-600 mt-1">Peer Tutors</div>
           </div>
           <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-gray-200">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-600">{analytics.totalStudents}</div>
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-black">{analytics.totalStudents}</div>
             <div className="text-xs sm:text-sm text-gray-600 mt-1">Students</div>
           </div>
           <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-gray-200">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-purple-600">{analytics.assignedStudents}</div>
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-black">{analytics.assignedStudents}</div>
             <div className="text-xs sm:text-sm text-gray-600 mt-1">Assigned</div>
           </div>
           <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-gray-200">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-600">{analytics.totalClasses}</div>
-            <div className="text-xs sm:text-sm text-gray-600 mt-1">Classes</div>
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-black">{analytics.totalClasses}</div>
+            <div className="text-xs sm:text-sm text-gray-600 mt-1">Subjects</div>
           </div>
           <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-gray-200">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-indigo-600">{analytics.scheduledClasses}</div>
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-black">{analytics.scheduledClasses}</div>
             <div className="text-xs sm:text-sm text-gray-600 mt-1">Scheduled</div>
-          </div>
-          <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-gray-200">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-pink-600">{analytics.totalExams}</div>
-            <div className="text-xs sm:text-sm text-gray-600 mt-1">Exams</div>
           </div>
         </div>
       </div>
@@ -1367,30 +2111,30 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
         <div className="border-b border-gray-200 overflow-x-auto">
           <nav className="-mb-px flex space-x-4 sm:space-x-6 lg:space-x-8 px-4 sm:px-6 min-w-max sm:min-w-0" aria-label="Import Export Tabs">
             <button
-              onClick={() => setActiveSubTab('export')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
-                activeSubTab === 'export'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Export
-            </button>
-            <button
               onClick={() => setActiveSubTab('import')}
               className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
                 activeSubTab === 'import'
-                  ? 'border-indigo-500 text-indigo-600'
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               Import
             </button>
             <button
+              onClick={() => setActiveSubTab('export')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
+                activeSubTab === 'export'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Export
+            </button>
+            <button
               onClick={() => setActiveSubTab('advanced')}
               className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
                 activeSubTab === 'advanced'
-                  ? 'border-amber-500 text-amber-600'
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
@@ -1401,6 +2145,41 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
 
         {/* Tab Content */}
         <div className="p-4 sm:p-6">
+          {activeSubTab === 'import' && (
+            <div>
+              <div className="mb-4">
+                <div className="flex items-center mb-2">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Import Data</h3>
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600">Upload Excel files to import peer tutors, students, and classes</p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200">
+                  <BulkImportExport 
+                    dept={dept} 
+                    year={year} 
+                    section={section} 
+                    onImportComplete={onImportComplete}
+                  />
+                </div>
+                
+                <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200">
+                  <ClassesImportExport 
+                    dept={dept} 
+                    year={year} 
+                    section={section} 
+                    facultyId={facultyId}
+                    onImportComplete={onImportComplete}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeSubTab === 'export' && (
     <div>
       <div className="mb-6">
@@ -1408,7 +2187,7 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
                   <svg className="w-5 h-5 sm:w-6 sm:h-6 text-green-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Export Data to Excel</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">EXPORT DATA TO EXCEL</h3>
                 </div>
                 <p className="text-xs sm:text-sm text-gray-600">Select the data you want to export and download in Excel format</p>
               </div>
@@ -1421,11 +2200,11 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
+                <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13.5 3.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z" />
+                  </svg>
                 </div>
-                <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded">XLSX</span>
+                <span className="text-xs font-semibold text-black-600 bg-gray-100 px-2 py-1 rounded">XLSX</span>
               </div>
               <h4 className="text-sm font-semibold text-gray-900 mb-1">Peer Tutor Details</h4>
               <p className="text-xs text-gray-500">Export all peer tutor information</p>
@@ -1438,11 +2217,12 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                  <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13.5 3.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z" />
-                  </svg>
+                  
+                  <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
         </div>
-                <span className="text-xs font-semibold text-green-600 bg-green-100 px-2 py-1 rounded">XLSX</span>
+                <span className="text-xs font-semibold text-black bg-gray-100 px-2 py-1 rounded">XLSX</span>
       </div>
               <h4 className="text-sm font-semibold text-gray-900 mb-1">Student Details</h4>
               <p className="text-xs text-gray-500">Export all student information</p>
@@ -1459,7 +2239,7 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">XLSX</span>
+                <span className="text-xs font-semibold text-black bg-gray-100 px-2 py-1 rounded">XLSX</span>
               </div>
               <h4 className="text-sm font-semibold text-gray-900 mb-1">Peer-Student Assignments</h4>
               <p className="text-xs text-gray-500">Export assignment mappings</p>
@@ -1476,138 +2256,86 @@ function ImportExportTab({ dept, year, section, onImportComplete, onShowExportMo
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
                 </div>
-                <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-1 rounded">XLSX</span>
+                <span className="text-xs font-semibold text-black bg-gray-100 px-2 py-1 rounded">XLSX</span>
               </div>
               <h4 className="text-sm font-semibold text-gray-900 mb-1">Attendance Records</h4>
               <p className="text-xs text-gray-500">Export all attendance data</p>
-            </button>
-
-            {/* Export Exams */}
-            <button
-              onClick={handleExportExams}
-              className="group bg-white hover:bg-pink-50 border-2 border-gray-200 hover:border-pink-300 rounded-lg p-4 transition-all duration-200 text-left"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center group-hover:bg-pink-200 transition-colors">
-                  <svg className="w-5 h-5 text-pink-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <span className="text-xs font-semibold text-pink-600 bg-pink-100 px-2 py-1 rounded">XLSX</span>
-              </div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-1">Exam Marks</h4>
-              <p className="text-xs text-gray-500">Export all exam results</p>
-            </button>
-
-            {/* Export Complete Data */}
-            <button
-              onClick={handleExportAll}
-              className="group bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg p-4 transition-all duration-200 text-left shadow-md hover:shadow-lg"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center group-hover:bg-white/30 transition-colors">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                  </svg>
-                </div>
-                <span className="text-xs font-semibold bg-white/20 px-2 py-1 rounded">ALL</span>
-              </div>
-              <h4 className="text-sm font-semibold mb-1">Complete Export</h4>
-              <p className="text-xs opacity-90">All data in one file</p>
-            </button>
-
-            {/* Export Template */}
-            <button
-              onClick={handleExportTemplate}
-              className="group bg-white hover:bg-gray-50 border-2 border-dashed border-gray-300 hover:border-gray-400 rounded-lg p-4 transition-all duration-200 text-left"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-gray-200 transition-colors">
-                  <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded">TEMPLATE</span>
-              </div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-1">Download Template</h4>
-              <p className="text-xs text-gray-500">Get import template file</p>
             </button>
           </div>
             </div>
           )}
 
-          {activeSubTab === 'import' && (
-            <div>
-              <div className="mb-4">
-                <div className="flex items-center mb-2">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Import Data</h3>
-                </div>
-                <p className="text-xs sm:text-sm text-gray-600">Upload Excel files to import peer tutors and students</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg p-4 sm:p-6 border border-indigo-200">
-      <BulkImportExport 
-        dept={dept} 
-        year={year} 
-        section={section} 
-        onImportComplete={onImportComplete}
-      />
-              </div>
-            </div>
-          )}
-
           {activeSubTab === 'advanced' && (
             <div>
-              <div className="mb-4">
-                <div className="flex items-center mb-2">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Advanced Export Options</h3>
-                </div>
-                <p className="text-xs sm:text-sm text-gray-600">Specialized export formats with custom options</p>
+              {/* Advanced Sub-tabs */}
+              <div className="mb-6">
+                <nav className="flex space-x-4 sm:space-x-6 lg:space-x-8 border-b border-gray-200">
+                  <button
+                    onClick={() => setActiveAdvancedTab('general')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
+                      activeAdvancedTab === 'general'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    General
+                  </button>
+                  <button
+                    onClick={() => setActiveAdvancedTab('attendance')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
+                      activeAdvancedTab === 'attendance'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Attendance
+                  </button>
+                  <button
+                    onClick={() => setActiveAdvancedTab('nextTopicSheet')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
+                      activeAdvancedTab === 'nextTopicSheet'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Next Topic Sheet
+                  </button>
+                  <button
+                    onClick={() => setActiveAdvancedTab('mark')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
+                      activeAdvancedTab === 'mark'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Mark
+                  </button>
+                </nav>
               </div>
 
-              <button
-                onClick={onShowExportModal}
-                className="w-full group bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg px-6 py-6 transition-all duration-200 shadow-md hover:shadow-lg"
-              >
-                <div className="flex items-center justify-center sm:justify-start gap-4">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 rounded-lg flex items-center justify-center group-hover:bg-white/30 transition-colors flex-shrink-0">
-                    <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div className="text-left flex-1">
-                    <div className="font-bold text-base sm:text-lg mb-1">Export Peer Tutor Mapping</div>
-                    <div className="text-xs sm:text-sm opacity-90">Hierarchical structure with customizable headers and advanced formatting</div>
-                  </div>
+              {/* Advanced Tab Content */}
+              {activeAdvancedTab === 'general' && (
+                <GeneralTab dept={dept} year={dbYear} section={dbSection} />
+              )}
+              {activeAdvancedTab === 'attendance' && (
+                <AdvancedAttendanceTab dept={dept} year={dbYear} section={dbSection} />
+              )}
+              {activeAdvancedTab === 'nextTopicSheet' && (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Next Topic Sheet content coming soon...</p>
                 </div>
-              </button>
-
-              <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-xs sm:text-sm text-amber-800">
-                    <p className="font-semibold mb-1">Advanced Export Features:</p>
-                    <ul className="list-disc list-inside space-y-1 text-amber-700">
-                      <li>Customizable headers and footers</li>
-                      <li>Hierarchical organization by peer tutor</li>
-                      <li>Professional formatting for presentations</li>
-                      <li>Multiple layout options</li>
-                    </ul>
-                  </div>
+              )}
+              {activeAdvancedTab === 'mark' && (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Mark content coming soon...</p>
                 </div>
-              </div>
+              )}
             </div>
           )}
+
         </div>
       </div>
+
     </div>
   )
 }
@@ -1699,66 +2427,25 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
     }
   }
 
-  // Export assignments with unassigned data
+  // Export assignments (only table rows shown + header)
   const handleExportAssignments = async () => {
     try {
-      const wb = XLSX.utils.book_new()
-
-      // Sheet 1: Peer-Student Assignments
-      const assignmentData: any[] = []
+      const rows: any[] = []
       peerTutorsWithStudents.forEach(({ peerTutor, students }) => {
-        students.forEach(student => {
-          assignmentData.push({
-            'Peer Tutor Name': peerTutor.name,
+        students.forEach((student) => {
+          rows.push({
+            'Peer Tutor': peerTutor.name,
             'Peer Tutor Email': peerTutor.email,
-            'Student Name': student.name,
-            'Student Email': student.email,
-            'Department': dept,
-            'Year': year,
-            'Section': section
+            'Student': student.name,
+            'Student Email': student.email
           })
         })
       })
 
-      if (assignmentData.length > 0) {
-        const assignmentWs = XLSX.utils.json_to_sheet(assignmentData)
-        XLSX.utils.book_append_sheet(wb, assignmentWs, 'Peer-Student Assignments')
-      }
-
-      // Sheet 2: Unassigned Students (if any)
-      if (unassignedStudents.length > 0) {
-        const unassignedStudentData = unassignedStudents.map(student => ({
-          'Student Name': student.name,
-          'Student Email': student.email,
-          'Department': student.dept,
-          'Year': student.year,
-          'Section': student.section,
-          'Status': 'Unassigned'
-        }))
-        const unassignedStudentWs = XLSX.utils.json_to_sheet(unassignedStudentData)
-        XLSX.utils.book_append_sheet(wb, unassignedStudentWs, 'Unassigned Students')
-      }
-
-      // Sheet 3: Peer Tutors without Students (if any)
-      const allPeerTutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
-      const unassignedPeerTutors = allPeerTutors.filter(tutor => 
-        !peerTutorsWithStudents.some(pts => pts.peerTutor.id === tutor.id)
-      )
-
-      if (unassignedPeerTutors.length > 0) {
-        const unassignedPeerData = unassignedPeerTutors.map(tutor => ({
-          'Peer Tutor Name': tutor.name,
-          'Peer Tutor Email': tutor.email,
-          'Department': tutor.dept,
-          'Year': tutor.year,
-          'Section': tutor.section,
-          'Status': 'No Students Assigned'
-        }))
-        const unassignedPeerWs = XLSX.utils.json_to_sheet(unassignedPeerData)
-        XLSX.utils.book_append_sheet(wb, unassignedPeerWs, 'Unassigned Peer Tutors')
-      }
-
-      // Save the file
+      const headers = ['Peer Tutor', 'Peer Tutor Email', 'Student', 'Student Email']
+      const ws = createSheetWithHeader(dept, year, section, 'Assignments', rows, headers)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Assignments')
       const fileName = `assignments_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`
       XLSX.writeFile(wb, fileName)
     } catch (error) {
@@ -1793,56 +2480,37 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
           <h3 className="text-lg font-medium text-gray-900">Assignment Management</h3>
           <p className="text-sm text-gray-600 mt-1">Manage peer tutor and student assignments</p>
         </div>
-        <button
-          onClick={handleExportAssignments}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <span>Export Assignments</span>
-        </button>
+        {assignments.length > 0 && (
+          <button
+            onClick={handleExportAssignments}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Export</span>
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
-            <div className="text-xl sm:text-2xl font-bold text-blue-600">{stats.totalStudents}</div>
-            <div className="text-xs sm:text-sm text-gray-600 mt-1">Total Students</div>
-          </div>
-          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
-            <div className="text-xl sm:text-2xl font-bold text-green-600">{stats.totalPeerTutors}</div>
-            <div className="text-xs sm:text-sm text-gray-600 mt-1">Peer Tutors</div>
-          </div>
-          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
-            <div className="text-xl sm:text-2xl font-bold text-purple-600">{stats.assignedStudents}</div>
+            <div className="text-xl sm:text-2xl font-bold text-black">{stats.assignedStudents}</div>
             <div className="text-xs sm:text-sm text-gray-600 mt-1">Assigned</div>
           </div>
           <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
-            <div className="text-xl sm:text-2xl font-bold text-orange-600">{stats.unassignedStudents}</div>
+            <div className="text-xl sm:text-2xl font-bold text-black">{stats.unassignedStudents}</div>
             <div className="text-xs sm:text-sm text-gray-600 mt-1">Unassigned</div>
           </div>
-        </div>
-      )}
-
-      {/* Auto Assign Button - Only show if there are unassigned students */}
-      {unassignedStudents.length > 0 && (
-        <div className="mb-6 flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={handleAutoAssign}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <span>Auto Assign Students</span>
-          </button>
-          <div className="text-xs sm:text-sm text-gray-500 flex items-center px-2">
-            <svg className="w-4 h-4 mr-1 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            {stats?.unassignedStudents || 0} unassigned student{(stats?.unassignedStudents || 0) !== 1 ? 's' : ''} remaining
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
+            <div className="text-xl sm:text-2xl font-bold text-black">{stats?.averageStudentsPerTutor || 0}</div>
+            <div className="text-xs sm:text-sm text-gray-600 mt-1">Avg Students/Tutor</div>
+          </div>
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
+            <div className="text-xl sm:text-2xl font-bold text-black">{stats?.totalPeerTutors && stats?.totalStudents ? Math.round((stats.assignedStudents / stats.totalStudents) * 100) : 0}%</div>
+            <div className="text-xs sm:text-sm text-gray-600 mt-1">Assignment Rate</div>
           </div>
         </div>
       )}
@@ -1850,9 +2518,20 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
       {/* Manual Assignment Section */}
       {unassignedStudents.length > 0 && (
         <div className="bg-white rounded-lg border border-gray-200 mb-6">
-          <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Manual Assignment</h3>
-            <p className="text-sm text-gray-600 mt-1">Assign unassigned students to peer tutors</p>
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Manual Assignment</h3>
+              <p className="text-sm text-gray-600 mt-1">Assign unassigned students to peer tutors</p>
+            </div>
+            <button
+              onClick={handleAutoAssign}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>Auto Assign</span>
+            </button>
           </div>
           <div className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row gap-4">
@@ -1896,74 +2575,144 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
         </div>
       )}
 
-      {/* Peer Tutor Cards */}
-      <div className="space-y-4 sm:space-y-6">
+      {/* Current Assignments Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">Current Assignments</h3>
+          <p className="text-sm text-gray-600 mt-1">View all peer tutor and student assignments</p>
+        </div>
+        
         {peerTutorsWithStudents.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+          <div className="p-8 text-center">
             <div className="text-gray-400 mb-4">
               <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No peer tutors found</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments found</h3>
             <p className="text-gray-500 text-sm px-4">Add peer tutors to this section to start assigning students.</p>
           </div>
         ) : (
-          peerTutorsWithStudents.map(({ peerTutor, students }) => (
-            <div key={peerTutor.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm sm:text-base font-medium text-blue-600">
-                        {getInitials(peerTutor.name)}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base sm:text-lg font-medium text-gray-900 truncate">{peerTutor.name}</h3>
-                      <p className="text-xs sm:text-sm text-gray-500 truncate">{peerTutor.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {students.length} {students.length === 1 ? 'student' : 'students'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 sm:p-6">
-                {students.length === 0 ? (
-                  <div className="text-center py-4">
-                    <p className="text-gray-500 text-sm">No students assigned yet</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    {students.map((student) => (
-                      <div key={student.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-2">
-                        <div className="flex items-center space-x-3 min-w-0 flex-1">
-                          <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-medium text-green-600">
-                              {getInitials(student.name)}
-                            </span>
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 sm:px-4 md:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] sm:min-w-[150px]">
+                      Peer Tutor
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px] sm:min-w-[180px]">
+                      Peer Tutor Email
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] sm:min-w-[150px]">
+                      Student
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px] sm:min-w-[180px]">
+                      Student Email
+                    </th>
+                    <th className="px-3 sm:px-4 md:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px]">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {peerTutorsWithStudents.flatMap(({ peerTutor, students }) => {
+                    if (students.length === 0) {
+                      return [
+                        <tr key={`${peerTutor.id}-empty`} className="hover:bg-gray-50">
+                          <td className="px-3 sm:px-4 md:px-6 py-4 text-center align-middle border-r border-gray-200">
+                            <div className="flex flex-col items-center justify-center min-w-0">
+                              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mb-2">
+                                <span className="text-sm font-medium text-blue-600">
+                                  {getInitials(peerTutor.name)}
+                                </span>
+                              </div>
+                              <div className="text-sm font-medium text-gray-900 break-words text-center px-1 max-w-full">
+                                {peerTutor.name}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 sm:px-4 md:px-6 py-4 text-center align-middle border-r border-gray-200">
+                            <div 
+                              className="text-xs sm:text-sm text-gray-500 break-words text-center px-1 min-w-0 max-w-full" 
+                              style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                            >
+                              {peerTutor.email}
+                            </div>
+                          </td>
+                          <td colSpan={3} className="px-3 sm:px-4 md:px-6 py-4 text-center">
+                            <div className="text-sm text-gray-500 italic">No students assigned</div>
+                          </td>
+                        </tr>
+                      ]
+                    }
+                    return students.map((student, index) => (
+                      <tr key={`${peerTutor.id}-${student.id}`} className="hover:bg-gray-50">
+                        {index === 0 && (
+                          <>
+                            <td 
+                              rowSpan={students.length} 
+                              className="px-3 sm:px-4 md:px-6 py-4 text-center align-middle border-r border-gray-200"
+                            >
+                              <div className="flex flex-col items-center justify-center min-w-0">
+                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mb-2">
+                                  <span className="text-sm font-medium text-blue-600">
+                                    {getInitials(peerTutor.name)}
+                                  </span>
+                                </div>
+                                <div className="text-sm font-medium text-gray-900 break-words text-center px-1 max-w-full">
+                                  {peerTutor.name}
+                                </div>
+                              </div>
+                            </td>
+                            <td 
+                              rowSpan={students.length} 
+                              className="px-3 sm:px-4 md:px-6 py-4 text-center align-middle border-r border-gray-200"
+                            >
+                              <div 
+                                className="text-xs sm:text-sm text-gray-500 break-words text-center px-1 min-w-0 max-w-full" 
+                                style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                              >
+                                {peerTutor.email}
+                              </div>
+                            </td>
+                          </>
+                        )}
+                        <td className="px-3 sm:px-4 md:px-6 py-4">
+                          <div className="flex items-center min-w-0">
+                            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mr-2 sm:mr-3">
+                              <span className="text-xs font-medium text-green-600">
+                                {getInitials(student.name)}
+                              </span>
+                            </div>
+                            <div className="text-sm font-medium text-gray-900 break-words min-w-0 flex-1">
+                              {student.name}
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium text-gray-900 text-sm truncate">{student.name}</div>
-                            <div className="text-xs text-gray-500 truncate">{student.email}</div>
+                        </td>
+                        <td className="px-3 sm:px-4 md:px-6 py-4">
+                          <div 
+                            className="text-xs sm:text-sm text-gray-500 break-words min-w-0 max-w-full" 
+                            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                          >
+                            {student.email}
                           </div>
-                        </div>
-                        <button
-                          onClick={() => handleUnassignStudent(student.id)}
-                          className="sm:flex-shrink-0 text-red-600 hover:text-red-800 text-xs font-medium px-2 py-1 hover:bg-red-50 rounded transition-colors self-start sm:self-center"
-                        >
-                          Unassign
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                        </td>
+                        <td className="px-3 sm:px-4 md:px-6 py-4 text-center text-sm font-medium">
+                          <button
+                            onClick={() => handleUnassignStudent(student.id)}
+                            className="text-red-600 hover:text-red-900 px-2 sm:px-3 py-1 rounded-md hover:bg-red-50 transition-colors text-xs sm:text-sm whitespace-nowrap"
+                          >
+                            Unassign
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))
+          </div>
         )}
       </div>
     </div>
@@ -2095,6 +2844,12 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     e.preventDefault()
     if (!newClass.subject_name.trim()) return
 
+    // Validate section is not 'ALL'
+    if (!dbSection || dbSection.trim().toUpperCase() === 'ALL') {
+      alert('Cannot create class with section "ALL". Please navigate to a specific section page.')
+      return
+    }
+
     try {
       const success = await ClassService.createClass({
         subject_name: newClass.subject_name,
@@ -2110,9 +2865,12 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
         setShowSuggestions(false)
         setFilteredSubjects([])
         await loadClasses()
+      } else {
+        alert('Failed to create class. Please check the console for details.')
       }
     } catch (error) {
       console.error('Error adding class:', error)
+      alert('Error creating class: ' + (error instanceof Error ? error.message : 'Unknown error'))
     }
   }
 
@@ -2129,118 +2887,25 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     }
   }
 
-  const handleExportClasses = async () => {
+  const handleExportSubjects = async () => {
     try {
-      // Group classes by subject with their scheduled dates
-      const exportData: any[] = []
-      
-      // Add title and context information
-      exportData.push(['Classes Export Report'])
-      exportData.push([`Department: ${dept}`])
-      exportData.push([`Year: ${year}`])
-      exportData.push([`Section: ${section}`])
-      exportData.push([`Generated on: ${new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })}`])
-      exportData.push([]) // Empty row for spacing
-      
-      // Add header
-      exportData.push(['Subject', 'Scheduled Date'])
-      
-      // Group classes by subject
-      const subjectGroups = new Map<string, ScheduledClassWithDetails[]>()
-      
-      classes.forEach(classItem => {
-        const scheduledForClass = scheduledClasses.filter(sc => sc.class_id === classItem.id)
-        if (scheduledForClass.length > 0) {
-          if (!subjectGroups.has(classItem.subject_name)) {
-            subjectGroups.set(classItem.subject_name, [])
-          }
-          subjectGroups.get(classItem.subject_name)!.push(...scheduledForClass)
-        } else {
-          // Add unscheduled classes
-          if (!subjectGroups.has(classItem.subject_name)) {
-            subjectGroups.set(classItem.subject_name, [])
-          }
-        }
-      })
-      
-      // Create hierarchical export data
-      subjectGroups.forEach((scheduledClasses, subjectName) => {
-        if (scheduledClasses.length > 0) {
-          // Add subject as parent row
-          exportData.push([subjectName, ''])
-          
-          // Add scheduled dates as child rows
-          scheduledClasses.forEach(sc => {
-            const scheduledDate = new Date(sc.scheduled_date).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric'
-            })
-            exportData.push(['', scheduledDate])
-          })
-        } else {
-          // Add unscheduled subject
-          exportData.push([subjectName, 'Not Scheduled'])
-        }
-        
-        // Add empty row for spacing
-        exportData.push(['', ''])
-      })
-      
-      // Create workbook and worksheet
+      const subjectRows = getSubjectsWithAllocations().map((s) => ({
+        'Name': s.name,
+        'Classes Allocated': s.classesAllocated,
+        'Peer Tutors Allocated': s.peerTutorsAllocated,
+        'Status': s.isScheduled ? 'Scheduled' : 'Not scheduled'
+      }))
+
+      const headers = ['Name', 'Classes Allocated', 'Peer Tutors Allocated', 'Status']
+      const ws = createSheetWithHeader(dept, year, section, 'Subjects', subjectRows, headers)
       const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.aoa_to_sheet(exportData)
-      
-      // Set column widths
-      ws['!cols'] = [
-        { wch: 30 }, // Subject
-        { wch: 20 }  // Scheduled Date
-      ]
-      
-      // Add styling for different row types
-      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
-      for (let row = range.s.r; row <= range.e.r; row++) {
-        const cellAddress = XLSX.utils.encode_cell({ r: row, c: 0 })
-        const cell = ws[cellAddress]
-        
-        if (cell && cell.v) {
-          if (!cell.s) cell.s = {}
-          
-          // Style title row
-          if (row === 0 && cell.v === 'Classes Export Report') {
-            cell.s.font = { bold: true, size: 16 }
-            cell.s.alignment = { horizontal: 'center' }
-          }
-          // Style context information rows
-          else if (row >= 1 && row <= 4) {
-            cell.s.font = { bold: true }
-          }
-          // Style header row
-          else if (row === 6) {
-            cell.s.font = { bold: true }
-            cell.s.fill = { fgColor: { rgb: 'E5E7EB' } }
-          }
-          // Style subject rows (parent rows) - check if it's a subject name in first column
-          else if (cell.v && cell.v !== '' && ws[`A${row + 1}`] && ws[`A${row + 1}`].v === cell.v && ws[`B${row + 1}`] && ws[`B${row + 1}`].v === '') {
-            cell.s.font = { bold: true }
-          }
-        }
-      }
-      
-      XLSX.utils.book_append_sheet(wb, ws, 'Classes Export')
-      
-      // Export as Excel file
-      const fileName = `classes_export_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`
+      XLSX.utils.book_append_sheet(wb, ws, 'Subjects')
+      const fileName = `subjects_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`
       XLSX.writeFile(wb, fileName)
-      
       setShowExportModal(false)
     } catch (error) {
-      console.error('Error exporting classes:', error)
-      alert('Error exporting classes. Please try again.')
+      console.error('Error exporting subjects:', error)
+      alert('Failed to export subjects')
     }
   }
 
@@ -2262,6 +2927,38 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     const subjects = new Set<string>()
     scheduledClasses.forEach(sc => subjects.add(sc.class.subject_name))
     return Array.from(subjects).sort()
+  }
+
+  // Get subjects with their allocation data for table view
+  const getSubjectsWithAllocations = () => {
+    const subjectMap = new Map<string, {
+      name: string,
+      classesAllocated: number,
+      peerTutorsAllocated: number,
+      isScheduled: boolean
+    }>()
+
+    // Process all classes
+    classes.forEach(classItem => {
+      const scheduledForClass = scheduledClasses.filter(sc => sc.class_id === classItem.id)
+      const uniquePeerTutors = new Set(scheduledForClass.map(sc => sc.peer_tutor_id))
+      
+      if (!subjectMap.has(classItem.subject_name)) {
+        subjectMap.set(classItem.subject_name, {
+          name: classItem.subject_name,
+          classesAllocated: 0,
+          peerTutorsAllocated: 0,
+          isScheduled: false
+        })
+      }
+      
+      const subjectData = subjectMap.get(classItem.subject_name)!
+      subjectData.classesAllocated += scheduledForClass.length
+      subjectData.peerTutorsAllocated = Math.max(subjectData.peerTutorsAllocated, uniquePeerTutors.size)
+      subjectData.isScheduled = scheduledForClass.length > 0 || subjectData.isScheduled
+    })
+
+    return Array.from(subjectMap.values()).sort((a, b) => a.name.localeCompare(b.name))
   }
 
   // Filter and sort scheduled classes
@@ -2287,6 +2984,66 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     return filtered
   }
 
+  // Group scheduled classes by subject and date for table view
+  const getGroupedScheduledClasses = () => {
+    const filtered = getFilteredAndSortedScheduledClasses()
+    
+    // Group by subject name and scheduled date
+    const grouped = new Map<string, {
+      subject_name: string
+      scheduled_date: string
+      peer_tutor_count: number
+      scheduled_class_ids: string[]
+    }>()
+
+    filtered.forEach(scheduledClass => {
+      const key = `${scheduledClass.class.subject_name}-${scheduledClass.scheduled_date}`
+      
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          subject_name: scheduledClass.class.subject_name,
+          scheduled_date: scheduledClass.scheduled_date,
+          peer_tutor_count: 0,
+          scheduled_class_ids: []
+        })
+      }
+      
+      const group = grouped.get(key)!
+      group.peer_tutor_count++
+      group.scheduled_class_ids.push(scheduledClass.id)
+    })
+
+    return Array.from(grouped.values())
+  }
+
+  // Handle deletion of scheduled class group (all peer tutors for a subject on a specific date)
+  const handleDeleteScheduledClassGroup = async (subjectName: string, scheduledDate: string) => {
+    if (!confirm(`Are you sure you want to remove the schedule for "${subjectName}" on ${new Date(scheduledDate).toLocaleDateString('en-GB')}? This will remove the schedule for all peer tutors assigned to this subject on this date.`)) {
+      return
+    }
+
+    try {
+      // Find all scheduled classes for this subject and date
+      const classesToDelete = scheduledClasses.filter(sc => 
+        sc.class.subject_name === subjectName && sc.scheduled_date === scheduledDate
+      )
+
+      // Delete each scheduled class
+      for (const scheduledClass of classesToDelete) {
+        const success = await ScheduledClassService.deleteScheduledClass(scheduledClass.id)
+        if (!success) {
+          console.error(`Failed to delete scheduled class ${scheduledClass.id}`)
+        }
+      }
+
+      // Reload classes to reflect changes
+      await loadClasses()
+    } catch (error) {
+      console.error('Error deleting scheduled class group:', error)
+      alert('Failed to remove schedule. Please try again.')
+    }
+  }
+
 
   if (loading) {
     return (
@@ -2298,52 +3055,56 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
 
   return (
     <div>
-      {/* Action Buttons */}
-      <div className="mb-6 flex space-x-3">
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span>Add New Class</span>
-        </button>
-        
-        {classes.length > 0 && (
-          <button
-            onClick={() => setShowDateAssignmentModal(true)}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span>Assign Dates</span>
-          </button>
-        )}
-        
-        {classes.length > 0 && (
-          <button
-            onClick={() => setShowExportModal(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>Export Classes</span>
-          </button>
-        )}
-      </div>
-
-      {/* Classes List */}
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">
-            Classes ({classes.length}) - Scheduled ({scheduledClasses.length})
-          </h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Manage subjects and schedules for this section
-          </p>
+      {/* Subjects List */}
+      <div className="bg-white rounded-lg">
+        <div className="border-b border-gray-200">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">
+                Subjects ({classes.length}) - Scheduled ({getGroupedScheduledClasses().length})
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage subjects and schedules for this section
+              </p>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Add New Subject</span>
+              </button>
+              
+              {classes.length > 0 && (
+                <button
+                  onClick={() => setShowDateAssignmentModal(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span>Assign Dates</span>
+                </button>
+              )}
+              
+              {classes.length > 0 && (
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Export Subjects</span>
+                </button>
+              )}
+            </div>
+          </div>
           
           {/* Sub-tabs */}
           <div className="mt-4">
@@ -2356,7 +3117,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                All Classes
+                All Subjects
               </button>
               <button
                 onClick={() => setActiveSubTab('scheduled')}
@@ -2371,9 +3132,9 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
             </nav>
           </div>
         </div>
-        <div className="p-6">
+        <div className="border border-gray-200">
           {activeSubTab === 'all' ? (
-            // All Classes Tab
+            // All Subjects Tab
             classes.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 mb-4">
@@ -2381,51 +3142,87 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No classes created</h3>
-                <p className="text-gray-500">Click "Add New Class" to create the first class for this section.</p>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No subjects created</h3>
+                <p className="text-gray-500">Click "Add New Subject" to create the first subject for this section.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {classes.map((classItem) => {
-                  const isScheduled = scheduledClasses.some(sc => sc.class_id === classItem.id)
-                  return (
-                    <div key={classItem.id} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 ${
-                      isScheduled ? 'border-green-200 bg-green-50' : 'border-gray-200'
-                    }`}>
-                      <div className="flex items-center space-x-4">
-                        <div className="flex-shrink-0">
-                          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                            isScheduled ? 'bg-green-100' : 'bg-blue-100'
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Classes Allocated
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Peer Tutors Allocated
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {getSubjectsWithAllocations().map((subject) => (
+                      <tr key={subject.name} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
+                              subject.isScheduled ? 'bg-green-100' : 'bg-blue-100'
+                            }`}>
+                              <svg className={`h-4 w-4 ${
+                                subject.isScheduled ? 'text-green-600' : 'text-blue-600'
+                              }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                              </svg>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">{subject.name}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                          {subject.classesAllocated}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                          {subject.peerTutorsAllocated}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            subject.isScheduled 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
                           }`}>
-                            <svg className={`h-5 w-5 ${
-                              isScheduled ? 'text-green-600' : 'text-blue-600'
-                            }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                            </svg>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900">{classItem.subject_name}</div>
-                          <div className="text-sm text-gray-500">
-                            {isScheduled ? 'Scheduled' : 'Not scheduled'}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleDeleteClass(classItem.id)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
+                            {subject.isScheduled ? 'Scheduled' : 'Not scheduled'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                          <button
+                            onClick={() => {
+                              // Find the first class for this subject to delete
+                              const classToDelete = classes.find(c => c.subject_name === subject.name)
+                              if (classToDelete) {
+                                handleDeleteClass(classToDelete.id)
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )
-          ) : (
-            // Scheduled Classes Tab
+          ) : activeSubTab === 'scheduled' ? (
+            // Scheduled Subjects Tab
             <div>
               {scheduledClasses.length === 0 ? (
                 <div className="text-center py-8">
@@ -2434,23 +3231,20 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No scheduled classes</h3>
-                  <p className="text-gray-500">Click "Assign Dates" to schedule classes for this section.</p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No scheduled subjects</h3>
+                  <p className="text-gray-500">Click "Assign Dates" to schedule subjects for this section.</p>
                 </div>
               ) : (
                 <div>
                   {/* Filter and Sort Controls */}
-                  <div className="mb-6 flex flex-col sm:flex-row gap-4">
+                  <div className="mb-6 w-48 flex flex-col sm:flex-row gap-4 mx-4 my-4">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Filter by Class
-                      </label>
                       <select
                         value={filterByClass}
                         onChange={(e) => setFilterByClass(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value="">All Classes</option>
+                        <option value="">All Subjects</option>
                         {getUniqueSubjects().map((subject) => (
                           <option key={subject} value={subject}>
                             {subject}
@@ -2458,61 +3252,85 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                         ))}
                       </select>
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Sort by
-                      </label>
-                      <select
-                        value={sortOrder}
-                        onChange={(e) => setSortOrder(e.target.value as 'date' | 'class')}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="date">Date</option>
-                        <option value="class">Class Name</option>
-                      </select>
                     </div>
-                  </div>
 
-                  {/* Scheduled Classes List */}
-                  <div className="space-y-3">
-                    {getFilteredAndSortedScheduledClasses().map((scheduledClass) => (
-                      <div key={scheduledClass.id} className="flex items-center justify-between p-4 border border-green-200 rounded-lg bg-green-50 hover:bg-green-100">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex-shrink-0">
-                            <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                              <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="font-medium text-gray-900">{scheduledClass.class.subject_name}</div>
-                            <div className="text-sm text-green-600">
-                              Scheduled: {new Date(scheduledClass.scheduled_date).toLocaleDateString('en-GB', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric'
-                              })} ({new Date(scheduledClass.scheduled_date).toLocaleDateString('en-US', {
-                                weekday: 'long'
-                              })})
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => handleDeleteScheduledClass(scheduledClass.id)}
-                            className="text-red-600 hover:text-red-800 text-sm font-medium"
-                          >
-                            Remove Schedule
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  {/* Scheduled Subjects Table */}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Subject Name
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Scheduled Date
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Day
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            No. of Peer Tutors
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {getGroupedScheduledClasses().map((group) => (
+                          <tr key={`${group.subject_name}-${group.scheduled_date}`} className="hover:bg-green-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-8 w-8">
+                                  <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                                    <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">{group.subject_name}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <div className="text-sm text-gray-900">
+                                {new Date(group.scheduled_date).toLocaleDateString('en-GB', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                })}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <div className="text-sm text-green-600 font-medium">
+                                {new Date(group.scheduled_date).toLocaleDateString('en-US', {
+                                  weekday: 'long'
+                                })}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <div className="text-sm text-gray-900 font-semibold">
+                                {group.peer_tutor_count}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                              <button
+                                onClick={() => handleDeleteScheduledClassGroup(group.subject_name, group.scheduled_date)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                Remove Schedule
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -2659,7 +3477,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                 Cancel
               </button>
               <button
-                onClick={handleExportClasses}
+                onClick={handleExportSubjects}
                 className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 flex items-center space-x-2"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2684,11 +3502,18 @@ interface AttendanceTabProps {
 function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   const [loading, setLoading] = useState(false)
   const [scheduledClasses, setScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
+  const [additionalClasses, setAdditionalClasses] = useState<any[]>([])
   const [selectedClass, setSelectedClass] = useState<string>('')
+  const [selectedClassType, setSelectedClassType] = useState<'scheduled' | 'additional'>('scheduled')
   const [peerTutorAttendance, setPeerTutorAttendance] = useState<any[]>([])
   const [selectedPeerTutor, setSelectedPeerTutor] = useState<any>(null)
   const [studentDetails, setStudentDetails] = useState<any[]>([])
   const [view, setView] = useState<'classes' | 'peer-tutors' | 'students'>('classes')
+  const [expandedClassRows, setExpandedClassRows] = useState<Set<string>>(new Set())
+  const [expandedPeerTutorRows, setExpandedPeerTutorRows] = useState<Set<string>>(new Set())
+  const [peerTutorStudentDetails, setPeerTutorStudentDetails] = useState<Map<string, any[]>>(new Map())
+  const [subjectAttendanceRate, setSubjectAttendanceRate] = useState<Record<string, number>>({})
+  const [presentScheduledClassIds, setPresentScheduledClassIds] = useState<Set<string>>(new Set())
 
   // Use raw values directly for database operations
   const dbYear = year
@@ -2719,6 +3544,104 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       setLoading(false)
     }
   }
+
+  const loadAdditionalClasses = async () => {
+    try {
+      // Get all peer tutors for this section
+      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
+      
+      // Get additional classes for all peer tutors
+      const allAdditionalClasses = await Promise.all(
+        peerTutors.map(async (tutor) => {
+          const classes = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+          return classes.map(cls => ({
+            ...cls,
+            peer_tutor: {
+              id: tutor.id,
+              name: tutor.name,
+              email: tutor.email
+            },
+            dept,
+            year: dbYear,
+            section: dbSection,
+            class: {
+              id: cls.id,
+              subject_name: cls.subject_name,
+              created_at: cls.created_at
+            },
+            scheduled_date: cls.class_date,
+            isAdditional: true
+          }))
+        })
+      )
+      
+      const flattened = allAdditionalClasses.flat()
+      const sortedAdditionalClasses = flattened.sort((a, b) => {
+        const dateA = new Date(a.class_date)
+        const dateB = new Date(b.class_date)
+        return dateA.getTime() - dateB.getTime()
+      })
+      
+      console.log('Loaded additional classes:', sortedAdditionalClasses)
+      setAdditionalClasses(sortedAdditionalClasses)
+    } catch (error) {
+      console.error('Error loading additional classes:', error)
+      setAdditionalClasses([])
+    }
+  }
+
+  // Compute peer tutor attendance percentage per subject for scheduled classes only
+  useEffect(() => {
+    const computeSubjectAttendanceRate = async () => {
+      try {
+        if (!scheduledClasses || scheduledClasses.length === 0) {
+          setSubjectAttendanceRate({})
+          return
+        }
+        const supabase = createClient()
+        const scheduledIds = scheduledClasses.map(sc => sc.id)
+        const { data, error } = await supabase
+          .from('attendance')
+          .select('scheduled_class_id')
+          .in('scheduled_class_id', scheduledIds)
+
+        if (error) {
+          console.error('Error loading attendance for rate calc:', error)
+          setSubjectAttendanceRate({})
+          return
+        }
+
+        const presentSet = new Set<string>((data || [])
+          .map((r: any) => r.scheduled_class_id)
+          .filter(Boolean))
+
+        // store for per-date calculations
+        setPresentScheduledClassIds(new Set<string>(presentSet))
+
+        const bySubject = new Map<string, string[]>()
+        scheduledClasses.forEach(sc => {
+          const subject = sc.class.subject_name
+          if (!bySubject.has(subject)) bySubject.set(subject, [])
+          bySubject.get(subject)!.push(sc.id)
+        })
+
+        const rateMap: Record<string, number> = {}
+        bySubject.forEach((ids, subject) => {
+          const total = ids.length
+          const present = ids.filter(id => presentSet.has(id)).length
+          const rate = total > 0 ? Math.round((present / total) * 100) : 0
+          rateMap[subject] = rate
+        })
+
+        setSubjectAttendanceRate(rateMap)
+      } catch (err) {
+        console.error('Error computing subject attendance rate:', err)
+        setSubjectAttendanceRate({})
+      }
+    }
+
+    computeSubjectAttendanceRate()
+  }, [scheduledClasses])
 
   const loadPeerTutorAttendance = async (scheduledClassId: string) => {
     try {
@@ -2888,119 +3811,139 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
     }
   }
 
-  const handleClassSelect = async (scheduledClassId: string) => {
-    setSelectedClass(scheduledClassId)
-    setView('peer-tutors')
-    await loadPeerTutorAttendanceForClass(scheduledClassId)
-  }
 
-  const loadPeerTutorAttendanceForClass = async (scheduledClassId: string) => {
+  const loadPeerTutorAttendanceForClass = async (classIdOrSubject: string, isAdditional: boolean = false) => {
     try {
       setLoading(true)
       const supabase = createClient()
       
-      console.log('Loading peer tutor attendance for class:', scheduledClassId)
+      console.log('Loading peer tutor attendance for class:', classIdOrSubject, 'isAdditional:', isAdditional)
       
-      // Get the scheduled class details
-      const selectedScheduledClass = scheduledClasses.find(sc => sc.id === scheduledClassId)
-      if (!selectedScheduledClass) {
-        console.error('Scheduled class not found')
-        return
-      }
-
-      // Get all scheduled classes for the same class (all peer tutors)
-      // Scheduled classes are created per peer tutor for the same class
-      const { data: allScheduledClasses, error: scheduledClassError } = await supabase
-        .from('scheduled_classes')
-        .select(`
-          *,
-          peer_tutor:peer_tutors(
-            id,
-            name,
-            email
-          )
-        `)
-        .eq('class_id', selectedScheduledClass.class_id)
-        .eq('dept', dept)
-        .eq('year', dbYear)
-        .eq('section', dbSection)
-        .eq('scheduled_date', selectedScheduledClass.scheduled_date)
-
-      if (scheduledClassError) {
-        console.error('Error loading scheduled classes:', scheduledClassError)
-        return
-      }
-
-      console.log('All scheduled classes for this class:', allScheduledClasses)
-
-      // For each scheduled class, check if there are any attendance records (student attendance)
-      // If the peer tutor marked any student attendance, they were present
-      const scheduledClassIds = allScheduledClasses?.map(sc => sc.id) || []
-      console.log('Querying attendance for scheduled class IDs:', scheduledClassIds)
-      
-      const { data: attendanceRecords, error: attendanceError } = await supabase
-        .from('attendance')
-        .select('*')
-        .in('scheduled_class_id', scheduledClassIds)
-
-      if (attendanceError) {
-        console.error('Error loading attendance records:', attendanceError)
-        return
-      }
-
-      console.log('Attendance records found:', attendanceRecords?.length || 0, attendanceRecords)
-
-      // Create a map to track if peer tutor marked attendance (has any student records)
-      // Group attendance records by scheduled_class_id
-      const attendanceByScheduledClass = new Map()
-      if (attendanceRecords && attendanceRecords.length > 0) {
-        attendanceRecords.forEach(record => {
-          if (record.scheduled_class_id) {
-            // If there's at least one attendance record for this scheduled class,
-            // it means the peer tutor was present and marked attendance
-            if (!attendanceByScheduledClass.has(record.scheduled_class_id)) {
-              attendanceByScheduledClass.set(record.scheduled_class_id, 'present')
-            }
-          }
-        })
-      }
-
-      console.log('Attendance map by scheduled class:', attendanceByScheduledClass)
-
-      // Process scheduled classes to create peer tutor attendance list
       const peerTutorAttendanceList: any[] = []
       
-      if (allScheduledClasses) {
-        allScheduledClasses.forEach(scheduledClass => {
-          const peerTutor = scheduledClass.peer_tutor
-          if (peerTutor) {
-            const completionStatus = scheduledClass.completion_status || 'not_started'
-            const hasAttendanceRecord = attendanceByScheduledClass.has(scheduledClass.id)
-            
-            // Determine attendance status:
-            // - If class is not completed, show as 'pending'
-            // - If completed and has record, use the record status
-            // - If completed but no record, default to 'absent'
-            let attendanceStatus = 'pending'
-            if (completionStatus === 'completed') {
-              attendanceStatus = hasAttendanceRecord 
-                ? attendanceByScheduledClass.get(scheduledClass.id) 
-                : 'absent'
-            }
-            
-            peerTutorAttendanceList.push({
-              scheduled_class_id: scheduledClass.id,
-              peer_tutor_id: peerTutor.id,
-              peer_tutor_name: peerTutor.name,
-              peer_tutor_email: peerTutor.email,
-              attendance_status: attendanceStatus,
-              completion_status: completionStatus,
-              present_count: attendanceStatus === 'present' ? 1 : 0,
-              absent_count: attendanceStatus === 'absent' ? 1 : 0,
-              total_count: 1
-            })
-          }
+      if (isAdditional) {
+        // Handle additional class
+        const additionalClass = additionalClasses.find(ac => ac.id === classIdOrSubject)
+        if (!additionalClass) {
+          console.error('Additional class not found')
+          return
+        }
+        
+        // For additional classes, the peer tutor is always present (they created it)
+        // Show attendance records from additional_class_attendance
+        peerTutorAttendanceList.push({
+          scheduled_class_id: additionalClass.id,
+          peer_tutor_id: additionalClass.peer_tutor_id,
+          peer_tutor_name: additionalClass.peer_tutor.name,
+          peer_tutor_email: additionalClass.peer_tutor.email,
+          attendance_status: 'present',
+          completion_status: 'completed',
+          present_count: additionalClass.attendance_records.filter((r: any) => r.status === 'present').length,
+          absent_count: additionalClass.attendance_records.filter((r: any) => r.status === 'absent').length,
+          total_count: additionalClass.attendance_records.length,
+          isAdditional: true
         })
+      } else {
+        // Handle scheduled class
+        const selectedScheduledClass = scheduledClasses.find(sc => sc.id === classIdOrSubject)
+        if (!selectedScheduledClass) {
+          console.error('Scheduled class not found')
+          return
+        }
+
+        // Get all scheduled classes for the same class (all peer tutors)
+        // Scheduled classes are created per peer tutor for the same class
+        const { data: allScheduledClasses, error: scheduledClassError } = await supabase
+          .from('scheduled_classes')
+          .select(`
+            *,
+            peer_tutor:peer_tutors(
+              id,
+              name,
+              email
+            )
+          `)
+          .eq('class_id', selectedScheduledClass.class_id)
+          .eq('dept', dept)
+          .eq('year', dbYear)
+          .eq('section', dbSection)
+          .eq('scheduled_date', selectedScheduledClass.scheduled_date)
+
+        if (scheduledClassError) {
+          console.error('Error loading scheduled classes:', scheduledClassError)
+          return
+        }
+
+        console.log('All scheduled classes for this class:', allScheduledClasses)
+
+        // For each scheduled class, check if there are any attendance records (student attendance)
+        // If the peer tutor marked any student attendance, they were present
+        const scheduledClassIds = allScheduledClasses?.map(sc => sc.id) || []
+        console.log('Querying attendance for scheduled class IDs:', scheduledClassIds)
+        
+        const { data: attendanceRecords, error: attendanceError } = await supabase
+          .from('attendance')
+          .select('*')
+          .in('scheduled_class_id', scheduledClassIds)
+
+        if (attendanceError) {
+          console.error('Error loading attendance records:', attendanceError)
+          return
+        }
+
+        console.log('Attendance records found:', attendanceRecords?.length || 0, attendanceRecords)
+
+        // Create a map to track if peer tutor marked attendance (has any student records)
+        // Group attendance records by scheduled_class_id
+        const attendanceByScheduledClass = new Map()
+        if (attendanceRecords && attendanceRecords.length > 0) {
+          attendanceRecords.forEach(record => {
+            if (record.scheduled_class_id) {
+              // If there's at least one attendance record for this scheduled class,
+              // it means the peer tutor was present and marked attendance
+              if (!attendanceByScheduledClass.has(record.scheduled_class_id)) {
+                attendanceByScheduledClass.set(record.scheduled_class_id, 'present')
+              }
+            }
+          })
+        }
+
+        console.log('Attendance map by scheduled class:', attendanceByScheduledClass)
+
+        // Process scheduled classes to create peer tutor attendance list
+        if (allScheduledClasses) {
+          allScheduledClasses.forEach(scheduledClass => {
+            const peerTutor = scheduledClass.peer_tutor
+            if (peerTutor) {
+              const completionStatus = scheduledClass.completion_status || 'not_started'
+              const hasAttendanceRecord = attendanceByScheduledClass.has(scheduledClass.id)
+              
+              // Determine attendance status:
+              // - If class is not completed, show as 'pending'
+              // - If completed and has record, use the record status
+              // - If completed but no record, default to 'absent'
+              let attendanceStatus = 'pending'
+              if (completionStatus === 'completed') {
+                attendanceStatus = hasAttendanceRecord 
+                  ? attendanceByScheduledClass.get(scheduledClass.id) 
+                  : 'absent'
+              }
+              
+              peerTutorAttendanceList.push({
+                scheduled_class_id: scheduledClass.id,
+                peer_tutor_id: peerTutor.id,
+                peer_tutor_name: peerTutor.name,
+                peer_tutor_email: peerTutor.email,
+                attendance_status: attendanceStatus,
+                completion_status: completionStatus,
+                present_count: attendanceStatus === 'present' ? 1 : 0,
+                absent_count: attendanceStatus === 'absent' ? 1 : 0,
+                total_count: 1,
+                isAdditional: false
+              })
+            }
+          })
+        }
       }
 
       console.log('Peer tutor attendance for class:', peerTutorAttendanceList)
@@ -3019,9 +3962,45 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       const supabase = createClient()
       
       console.log('=== Loading Student Details ===')
-      console.log('Scheduled Class ID:', scheduledClassId)
+      console.log('Class ID:', scheduledClassId)
       console.log('Peer Tutor ID:', peerTutorId)
       
+      // Check if this is an additional class
+      const additionalClass = additionalClasses.find(ac => ac.id === scheduledClassId)
+      
+      if (additionalClass) {
+        // Handle additional class attendance
+        console.log('Loading student details for additional class:', additionalClass)
+        
+        const studentDetailsList = additionalClass.attendance_records.map((record: any) => ({
+          student_id: record.student_id,
+          student_name: record.student_name,
+          student_email: '', // Additional class attendance doesn't have email in the record
+          status: record.status,
+          created_at: record.created_at,
+          updated_at: record.updated_at
+        }))
+        
+        // Fetch student emails if needed
+        if (studentDetailsList.length > 0) {
+          const studentIds = studentDetailsList.map((s: any) => s.student_id)
+          const { data: students } = await supabase
+            .from('peer_students')
+            .select('id, email')
+            .in('id', studentIds)
+          
+          const studentEmailMap = new Map(students?.map((s: any) => [s.id, s.email]) || [])
+          studentDetailsList.forEach((student: any) => {
+            student.student_email = studentEmailMap.get(student.student_id) || ''
+          })
+        }
+        
+        console.log('Student details for additional class:', studentDetailsList)
+        setStudentDetails(studentDetailsList)
+        return
+      }
+      
+      // Handle scheduled class (existing logic)
       // Check the scheduled class details first
       const { data: scheduledClassData } = await supabase
         .from('scheduled_classes')
@@ -3131,10 +4110,100 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   }
 
   const handlePeerTutorClick = async (peerTutor: any) => {
-    setSelectedPeerTutor(peerTutor)
-    setView('students')
-    // Use the peer tutor's specific scheduled class ID
-    await loadStudentDetails(peerTutor.scheduled_class_id, peerTutor.peer_tutor_id)
+    const isExpanded = expandedPeerTutorRows.has(peerTutor.peer_tutor_id)
+    
+    if (isExpanded) {
+      // Collapse
+      const newExpanded = new Set(expandedPeerTutorRows)
+      newExpanded.delete(peerTutor.peer_tutor_id)
+      setExpandedPeerTutorRows(newExpanded)
+    } else {
+      // Expand and load student details if not already loaded
+      const newExpanded = new Set(expandedPeerTutorRows)
+      newExpanded.add(peerTutor.peer_tutor_id)
+      setExpandedPeerTutorRows(newExpanded)
+      
+      // Load student details if not already cached
+      if (!peerTutorStudentDetails.has(peerTutor.peer_tutor_id)) {
+        await loadStudentDetailsForPeerTutor(peerTutor.scheduled_class_id, peerTutor.peer_tutor_id)
+      }
+    }
+  }
+  
+  const loadStudentDetailsForPeerTutor = async (scheduledClassId: string, peerTutorId: string) => {
+    try {
+      const supabase = createClient()
+      
+      // Check if this is an additional class
+      const additionalClass = additionalClasses.find(ac => ac.id === scheduledClassId)
+      
+      if (additionalClass) {
+        // Handle additional class attendance
+        const studentDetailsList = additionalClass.attendance_records.map((record: any) => ({
+          student_id: record.student_id,
+          student_name: record.student_name,
+          student_email: '',
+          status: record.status,
+          created_at: record.created_at,
+          updated_at: record.updated_at
+        }))
+        
+        // Fetch student emails if needed
+        if (studentDetailsList.length > 0) {
+          const studentIds = studentDetailsList.map((s: any) => s.student_id)
+          const { data: students } = await supabase
+            .from('peer_students')
+            .select('id, email')
+            .in('id', studentIds)
+          
+          const studentEmailMap = new Map(students?.map((s: any) => [s.id, s.email]) || [])
+          studentDetailsList.forEach((student: any) => {
+            student.student_email = studentEmailMap.get(student.student_id) || ''
+          })
+        }
+        
+        // Cache the student details
+        const newMap = new Map(peerTutorStudentDetails)
+        newMap.set(peerTutorId, studentDetailsList)
+        setPeerTutorStudentDetails(newMap)
+        return
+      }
+      
+      // Handle scheduled class
+      const { data: attendanceData, error } = await supabase
+        .from('attendance')
+        .select(`
+          *,
+          peer_students(
+            id,
+            name,
+            email
+          )
+        `)
+        .eq('scheduled_class_id', scheduledClassId)
+        .eq('peer_tutor_id', peerTutorId)
+      
+      if (error) {
+        console.error('Error loading student details:', error)
+        return
+      }
+      
+      // Process and store student details
+      const students = (attendanceData || []).map(record => ({
+        student_id: record.student_id,
+        student_name: record.peer_students?.name || 'Unknown Student',
+        student_email: record.peer_students?.email || 'No email',
+        status: record.status,
+        created_at: record.created_at
+      }))
+      
+      // Cache the student details
+      const newMap = new Map(peerTutorStudentDetails)
+      newMap.set(peerTutorId, students)
+      setPeerTutorStudentDetails(newMap)
+    } catch (error) {
+      console.error('Error in loadStudentDetailsForPeerTutor:', error)
+    }
   }
 
   const handleBackToClasses = () => {
@@ -3337,17 +4406,77 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
 
   // Classes View
   if (view === 'classes') {
+    // Group scheduled classes by subject_name to show unique classes with counts
+    const groupedClasses = scheduledClasses.reduce((acc, scheduledClass) => {
+      const subjectName = scheduledClass.class.subject_name
+      if (!acc[subjectName]) {
+        acc[subjectName] = {
+          subject_name: subjectName,
+          dept: scheduledClass.dept,
+          year: scheduledClass.year,
+          section: scheduledClass.section,
+          peer_tutor_ids: new Set<string>(),
+          dates: new Set<string>(),
+          scheduled_class_ids: [] as string[]
+        }
+      }
+      acc[subjectName].peer_tutor_ids.add(scheduledClass.peer_tutor_id)
+      if (scheduledClass.scheduled_date) acc[subjectName].dates.add(scheduledClass.scheduled_date)
+      acc[subjectName].scheduled_class_ids.push(scheduledClass.id)
+      return acc
+    }, {} as Record<string, { subject_name: string; dept: string; year: string; section: string; peer_tutor_ids: Set<string>; dates: Set<string>; scheduled_class_ids: string[] }>)
+
+    const uniqueClasses = Object.values(groupedClasses).map(gc => ({
+      subject_name: gc.subject_name,
+      dept: gc.dept,
+      year: gc.year,
+      section: gc.section,
+      total_scheduled_instances: gc.dates.size,
+      peer_tutors_count: gc.peer_tutor_ids.size,
+      scheduled_class_ids: gc.scheduled_class_ids
+    }))
+
+    const toggleExpandClass = (classId: string) => {
+      const next = new Set(expandedClassRows)
+      if (next.has(classId)) next.delete(classId)
+      else next.add(classId)
+      setExpandedClassRows(next)
+    }
+
+    const getDateSummaryForClass = (subjectName: string) => {
+      const scheduledItems = scheduledClasses.filter(sc => sc.class.subject_name === subjectName)
+      const byDate = new Map<string, { tutors: Set<string> }>()
+      
+      scheduledItems.forEach(sc => {
+        const dateKey = sc.scheduled_date
+        if (!dateKey) return
+        if (!byDate.has(dateKey)) byDate.set(dateKey, { tutors: new Set<string>() })
+        byDate.get(dateKey)!.tutors.add(sc.peer_tutor_id)
+      })
+      
+      return Array.from(byDate.entries()).sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+    }
+
+    const handleClassSelect = async (classIdOrSubject: string) => {
+      setSelectedClass(classIdOrSubject)
+      setSelectedClassType('scheduled')
+      setView('peer-tutors')
+      await loadPeerTutorAttendanceForClass(classIdOrSubject, false)
+    }
+
     return (
       <div>
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">Scheduled Classes</h3>
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
+              {`Classes (${uniqueClasses.length}) - Scheduled (${scheduledClasses.length})`}
+            </h3>
             <p className="text-xs sm:text-sm text-gray-600">
-            Click on a class to view attendance records by peer tutor
-          </p>
+              Click on a class to view allocated peer tutors and attendance records
+            </p>
           </div>
           
-          {scheduledClasses.length > 0 && (
+          {uniqueClasses.length > 0 && (
             <button
               onClick={handleExportAllAttendance}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
@@ -3360,46 +4489,206 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
             </button>
           )}
         </div>
-
-        {scheduledClasses.length > 0 ? (
-          <div className="space-y-3 sm:space-y-4">
-            {scheduledClasses.map((scheduledClass) => (
-              <div
-                key={scheduledClass.id}
-                onClick={() => handleClassSelect(scheduledClass.id)}
-                className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:border-blue-300 hover:shadow-md transition-all duration-200 cursor-pointer"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-base sm:text-lg font-medium text-gray-900 mb-2 truncate">
-                      {scheduledClass.class.subject_name}
-                    </h4>
-                    <div className="text-xs sm:text-sm text-gray-600 space-y-1">
-                      <div>
-                        <span className="font-medium">Date:</span> {new Date(scheduledClass.scheduled_date).toLocaleDateString('en-GB', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          weekday: 'short'
-                        })}
-                      </div>
-                      <div className="flex flex-wrap gap-x-2">
-                        <span><span className="font-medium">Dept:</span> {scheduledClass.dept}</span>
-                        <span>|</span>
-                        <span><span className="font-medium">Year:</span> {scheduledClass.year}</span>
-                        <span>|</span>
-                        <span><span className="font-medium">Sec:</span> {scheduledClass.section}</span>
+        {uniqueClasses.length > 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            {/* Mobile Card View */}
+            <div className="block lg:hidden">
+              {uniqueClasses.map((classItem) => (
+                <div
+                  key={classItem.subject_name}
+                  onClick={() => handleClassSelect(classItem.subject_name)}
+                  className="border-b border-gray-200 last:border-b-0 p-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-base font-medium text-gray-900 mb-1 truncate">
+                        {classItem.subject_name}
+                      </h4>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            {classItem.total_scheduled_instances} Instance{classItem.total_scheduled_instances !== 1 ? 's' : ''}
+                          </span>
+                          <span className="text-xs text-gray-900">
+                            {classItem.peer_tutors_count} Peer Tutor{classItem.peer_tutors_count !== 1 ? 's' : ''}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <div className="flex-shrink-0 ml-3">
+                      <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden lg:block">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h4 className="text-md font-medium text-gray-900">Scheduled Classes Overview</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  {uniqueClasses.length} scheduled classes
+                </p>
               </div>
-            ))}
+              <div className="w-full">
+                <table className="w-full table-fixed divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="w-[40%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Class Name
+                      </th>
+                      <th className="w-[30%] px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Scheduled Classes
+                      </th>
+                      <th className="w-[30%] px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        PP Attendance %
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {uniqueClasses.map((classItem) => (
+                      <Fragment key={classItem.subject_name}>
+                        <tr 
+                          className="hover:bg-gray-50 transition-colors duration-200"
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                </svg>
+                              </div>
+                              <button
+                                onClick={() => toggleExpandClass(classItem.subject_name)}
+                                className="text-sm font-medium text-gray-900 text-left"
+                              >
+                                {classItem.subject_name}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              {classItem.total_scheduled_instances}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-sm text-gray-900">
+                                {subjectAttendanceRate[classItem.subject_name] !== undefined ? `${subjectAttendanceRate[classItem.subject_name]}%` : '-'}
+                              </span>
+                              <button
+                                onClick={() => toggleExpandClass(classItem.subject_name)}
+                                className="text-gray-500 hover:text-gray-700"
+                                aria-label={expandedClassRows.has(classItem.subject_name) ? 'Collapse' : 'Expand'}
+                              >
+                                {expandedClassRows.has(classItem.subject_name) ? (
+                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                ) : (
+                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedClassRows.has(classItem.subject_name) && (() => {
+                          const dateSummary = getDateSummaryForClass(classItem.subject_name)
+                          if (dateSummary.length === 0) {
+                            return (
+                              <tr key={`${classItem.subject_name}-expanded`} className="bg-gray-50">
+                                <td colSpan={3} className="px-6 py-4">
+                                  <div className="text-sm text-gray-500 text-center">No class instances found.</div>
+                                </td>
+                              </tr>
+                            )
+                          }
+                          return (
+                            <tr key={`${classItem.subject_name}-expanded`} className="bg-gray-50">
+                              <td colSpan={3} className="px-6 py-4">
+                                <div className="w-full">
+                                  <table className="w-full table-fixed divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="w-[18%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                          Date
+                                        </th>
+                                        <th className="w-[18%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                          Day
+                                        </th>
+                    <th className="w-[24%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Attendance
+                    </th>
+                                        <th className="w-[12%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                          Peer Tutors
+                                        </th>
+                                        <th className="w-[28%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                          Actions
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                      {dateSummary.map(([dateStr, data]) => (
+                                        <tr key={dateStr} className="hover:bg-gray-50">
+                                          <td className="px-4 py-4">
+                                            <div className="text-sm text-gray-900">
+                                              {new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                            </div>
+                                          </td>
+                                          <td className="px-4 py-4 text-center">
+                        <div className="text-sm text-gray-700 font-medium">
+                                              {new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long' })}
+                                            </div>
+                                          </td>
+                                          <td className="px-4 py-4 text-center">
+                        {(() => {
+                          const idsForDate = scheduledClasses
+                            .filter(sc => sc.class.subject_name === classItem.subject_name && sc.scheduled_date === dateStr)
+                            .map(sc => sc.id)
+                          const total = idsForDate.length
+                          const present = idsForDate.filter(id => presentScheduledClassIds.has(id)).length
+                          const rate = total > 0 ? Math.round((present / total) * 100) : 0
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {rate}%
+                            </span>
+                          )
+                        })()}
+                                          </td>
+                                          <td className="px-4 py-4 text-center">
+                                            <div className="text-sm text-gray-900">
+                                              {data.tutors.size}
+                                            </div>
+                                          </td>
+                                          <td className="px-4 py-4 text-sm font-medium text-center">
+                                            <button
+                                              onClick={() => {
+                            const scheduledMatch = scheduledClasses.find(sc => sc.class.subject_name === classItem.subject_name && sc.scheduled_date === dateStr)
+                                                if (scheduledMatch) {
+                                                  handleClassSelect(scheduledMatch.id)
+                                                }
+                                              }}
+                                              className="text-blue-600 hover:text-blue-800"
+                                            >
+                                              View Details
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })()}
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-8 text-center">
@@ -3420,6 +4709,8 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   // Peer Tutors View
   if (view === 'peer-tutors') {
     const selectedScheduledClass = scheduledClasses.find(sc => sc.id === selectedClass)
+    const displayClass = selectedScheduledClass
+    const classDate = selectedScheduledClass?.scheduled_date
     
     return (
       <div>
@@ -3435,10 +4726,10 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
             </button>
             <div className="flex-1 min-w-0">
               <h3 className="text-sm sm:text-base lg:text-lg font-medium text-gray-900 truncate">
-                {selectedScheduledClass?.class.subject_name} - Peer Tutor Attendance
+                {displayClass?.class?.subject_name || 'Unknown'} - Peer Tutor Attendance
               </h3>
               <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                <span className="font-medium">Date:</span> {selectedScheduledClass && new Date(selectedScheduledClass.scheduled_date).toLocaleDateString('en-GB', {
+                <span className="font-medium">Date:</span> {classDate && new Date(classDate).toLocaleDateString('en-GB', {
                   day: '2-digit',
                   month: '2-digit',
                   year: 'numeric',
@@ -3449,16 +4740,18 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           </div>
           
           {/* Export Button */}
-          <button
-            onClick={handleExportClassAttendance}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2 flex-shrink-0"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span className="hidden sm:inline">Export Attendance</span>
-            <span className="sm:hidden">Export</span>
-          </button>
+          {peerTutorAttendance.length > 0 && (
+            <button
+              onClick={handleExportClassAttendance}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2 flex-shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span className="hidden sm:inline">Export Attendance</span>
+              <span className="sm:hidden">Export</span>
+            </button>
+          )}
         </div>
 
         {peerTutorAttendance.length > 0 ? (
@@ -3531,7 +4824,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Email
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium te`xt-gray-500 uppercase tracking-wider">
                       Attendance Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -3541,45 +4834,141 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {peerTutorAttendance.map((peerTutor) => (
-                    <tr key={peerTutor.peer_tutor_id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handlePeerTutorClick(peerTutor)}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                            <span className="text-sm font-medium text-blue-600">
-                              {peerTutor.peer_tutor_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                    <>
+                      <tr key={peerTutor.peer_tutor_id} className="hover:bg-gray-50 cursor-pointer">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                              <span className="text-sm font-medium text-blue-600">
+                                {peerTutor.peer_tutor_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {peerTutor.peer_tutor_name}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">{peerTutor.peer_tutor_email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            peerTutor.attendance_status === 'present' 
+                              ? 'bg-green-100 text-green-800' 
+                              : peerTutor.attendance_status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {peerTutor.attendance_status === 'present' ? 'Present' : peerTutor.attendance_status === 'pending' ? 'Pending' : 'Absent'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-900">
+                              {peerTutorStudentDetails.get(peerTutor.peer_tutor_id)?.length || 0} Student{(peerTutorStudentDetails.get(peerTutor.peer_tutor_id)?.length || 0) !== 1 ? 's' : ''}
                             </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handlePeerTutorClick(peerTutor)
+                              }}
+                              className="ml-4 text-gray-500 hover:text-gray-700"
+                              aria-label={expandedPeerTutorRows.has(peerTutor.peer_tutor_id) ? 'Collapse' : 'Expand'}
+                            >
+                              {expandedPeerTutorRows.has(peerTutor.peer_tutor_id) ? (
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                              ) : (
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                              )}
+                            </button>
                           </div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {peerTutor.peer_tutor_name}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">{peerTutor.peer_tutor_email}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          peerTutor.attendance_status === 'present' 
-                            ? 'bg-green-100 text-green-800' 
-                            : peerTutor.attendance_status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {peerTutor.attendance_status === 'present' ? 'Present' : peerTutor.attendance_status === 'pending' ? 'Pending' : 'Absent'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handlePeerTutorClick(peerTutor)
-                          }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-medium transition-colors duration-200"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
+                      {expandedPeerTutorRows.has(peerTutor.peer_tutor_id) && (() => {
+                        const students = peerTutorStudentDetails.get(peerTutor.peer_tutor_id) || []
+                        if (students.length === 0) {
+                          return (
+                            <tr key={`${peerTutor.peer_tutor_id}-expanded`} className="bg-gray-50">
+                              <td colSpan={4} className="px-6 py-4">
+                                <div className="text-sm text-gray-500 text-center">No student attendance records found.</div>
+                              </td>
+                            </tr>
+                          )
+                        }
+                        return (
+                          <tr key={`${peerTutor.peer_tutor_id}-expanded`} className="bg-gray-50">
+                            <td colSpan={4} className="px-6 py-4">
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Student Name
+                                      </th>
+                                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Email
+                                      </th>
+                                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Attendance Status
+                                      </th>
+                                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Recorded At
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {students.map((student) => (
+                                      <tr key={student.student_id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                          <div className="flex items-center">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                                              student.status === 'present' ? 'bg-green-100' : 'bg-red-100'
+                                            }`}>
+                                              <span className={`text-sm font-medium ${
+                                                student.status === 'present' ? 'text-green-600' : 'text-red-600'
+                                              }`}>
+                                                {student.student_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                                              </span>
+                                            </div>
+                                            <div className="text-sm font-medium text-gray-900">
+                                              {student.student_name}
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                          <div className="text-sm text-gray-500">{student.student_email}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            student.status === 'present' 
+                                              ? 'bg-green-100 text-green-800' 
+                                              : 'bg-red-100 text-red-800'
+                                          }`}>
+                                            {student.status === 'present' ? 'Present' : 'Absent'}
+                                          </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                          <div className="text-sm text-gray-900">
+                                            {student.created_at ? new Date(student.created_at).toLocaleDateString('en-GB', {
+                                              day: '2-digit',
+                                              month: '2-digit',
+                                              year: 'numeric'
+                                            }) : 'N/A'}
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            {student.created_at ? new Date(student.created_at).toLocaleTimeString() : 'N/A'}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })()}
+                    </>
                   ))}
                 </tbody>
               </table>
@@ -3838,936 +5227,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   return null
 }
 
-interface ExamTabProps {
-  dept: string
-  year: string
-  section: string
-}
 
-function ExamTab({ dept, year, section }: ExamTabProps) {
-  const [loading, setLoading] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [selectedExamType, setSelectedExamType] = useState('')
-  const [subjects, setSubjects] = useState<string[]>([])
-  const [availableSubjects, setAvailableSubjects] = useState<string[]>([])
-  const [peerTutors, setPeerTutors] = useState<PeerTutor[]>([])
-  const [students, setStudents] = useState<Student[]>([])
-  const [examRequests, setExamRequests] = useState<any[]>([])
-  const [selectedExam, setSelectedExam] = useState<any>(null)
-  const [examDetails, setExamDetails] = useState<any[]>([])
-  const [view, setView] = useState<'list' | 'create' | 'details'>('list')
-
-  // Use raw values directly for database operations
-  const dbYear = year
-  const dbSection = section
-
-  const allExamTypes = [
-    { value: 'cie-1', label: 'CIE - 1' },
-    { value: 'cie-2', label: 'CIE - 2' },
-    { value: 'cie-3', label: 'CIE - 3' },
-    { value: 'semester', label: 'Semester' }
-  ]
-
-  // Filter out exam types that already exist
-  const availableExamTypes = allExamTypes.filter(examType => 
-    !examRequests.some(request => request.exam_type === examType.value)
-  )
-
-  useEffect(() => {
-    loadData()
-  }, [dept, dbYear, dbSection])
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      
-      // Load subjects from classes
-      const classes = await ClassService.getClassesByYearSection(dept, dbYear, dbSection)
-      const subjectNames = classes.map(cls => cls.subject_name)
-      const uniqueSubjects = [...new Set(subjectNames)]
-      setAvailableSubjects(uniqueSubjects)
-      setSubjects(uniqueSubjects) // Auto-populate subjects
-
-      // Load peer tutors for this section
-      const tutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
-      setPeerTutors(tutors)
-
-      // Load students for this section
-      const sectionStudents = await StudentService.getStudentsBySection(dept, dbYear, dbSection)
-      setStudents(sectionStudents)
-
-      // Load exam requests for this section
-      const requests = await ExamMarksService.getExamTypesForSection(dept, dbYear, dbSection)
-      setExamRequests(requests)
-    } catch (error) {
-      console.error('Error loading exam data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSendExam = async () => {
-    if (!selectedExamType) {
-      alert('Please select an exam type.')
-      return
-    }
-
-    if (subjects.length === 0) {
-      alert('Please add at least one subject.')
-      return
-    }
-
-    if (peerTutors.length === 0) {
-      alert('No peer tutors found for this section. Please assign peer tutors first.')
-      return
-    }
-
-    if (students.length === 0) {
-      alert('No students found for this section.')
-      return
-    }
-
-    setSending(true)
-    try {
-      // Create exam marks for all peer tutors and their assigned students
-      const allMarksToSave = []
-      
-      console.log('Starting exam creation process...')
-      console.log('Peer tutors:', peerTutors)
-      console.log('Subjects:', subjects)
-      console.log('Selected exam type:', selectedExamType)
-
-      for (const peerTutor of peerTutors) {
-        console.log(`Processing peer tutor: ${peerTutor.name} (${peerTutor.id})`)
-        
-        // Validate peer tutor data
-        if (!peerTutor.id) {
-          console.error('Invalid peer tutor data:', peerTutor)
-          alert(`Invalid peer tutor data for ${peerTutor.name}. Please check the data.`)
-          return
-        }
-
-        // Get assigned students for this peer tutor
-        const assignedStudents = await AssignmentService.getStudentsByPeerTutor(peerTutor.id)
-        console.log(`Assigned students for ${peerTutor.name}:`, assignedStudents)
-        
-        // Create marks for each assigned student and subject
-        for (const student of assignedStudents) {
-          // Validate student data
-          if (!student.id) {
-            console.error('Invalid student data:', student)
-            alert(`Invalid student data for ${student.name}. Please check the data.`)
-            return
-          }
-
-          for (const subject of subjects) {
-            // Validate subject data
-            if (!subject || subject.trim() === '') {
-              console.error('Invalid subject:', subject)
-              alert(`Invalid subject: "${subject}". Please check the subjects.`)
-              return
-            }
-
-            allMarksToSave.push({
-              peer_tutor_id: peerTutor.id,
-              student_id: student.id,
-              subject_name: subject.trim(),
-              marks: 0 // Default to 0, peer tutors can update later
-            })
-          }
-        }
-      }
-
-      console.log('Total marks to save:', allMarksToSave.length)
-      console.log('Sample marks data:', allMarksToSave.slice(0, 3))
-
-      if (allMarksToSave.length === 0) {
-        alert('No student assignments found. Please assign students to peer tutors first.')
-        return
-      }
-
-      // Validate all marks before sending
-      const invalidMarks = allMarksToSave.filter(mark => 
-        !mark.peer_tutor_id || 
-        !mark.student_id || 
-        !mark.subject_name || 
-        typeof mark.marks !== 'number'
-      )
-
-      if (invalidMarks.length > 0) {
-        console.error('Invalid marks found:', invalidMarks)
-        alert('Some marks data is invalid. Please check the console for details.')
-        return
-      }
-
-      // Check if the exam_marks table exists before attempting to save
-      const tableExists = await ExamMarksService.checkTableExists()
-      if (!tableExists) {
-        alert(`The exam_marks table does not exist in the database. 
-
-Please run the following SQL script in your Supabase SQL editor:
-
-1. Go to your Supabase dashboard
-2. Navigate to SQL Editor
-3. Run the create_exam_marks_table.sql script
-
-This will create the necessary table for storing exam marks.`)
-        return
-      }
-
-      const success = await ExamMarksService.saveMarks(selectedExamType, allMarksToSave)
-      if (success) {
-        alert(`Exam "${availableExamTypes.find(t => t.value === selectedExamType)?.label}" sent successfully to all peer tutors and students!`)
-        setSelectedExamType('')
-        setSubjects(availableSubjects) // Reset to all available subjects
-        
-        // Reload exam requests and go back to list view
-        await loadData()
-        setView('list')
-      } else {
-        alert('Failed to send exam. Please check the console for error details and try again.')
-      }
-    } catch (error) {
-      console.error('Error sending exam:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      alert(`An error occurred while sending the exam: ${errorMessage}`)
-    } finally {
-      setSending(false)
-    }
-  }
-
-  const handleAddSubject = () => {
-    const newSubject = prompt('Enter subject name:')
-    if (newSubject && newSubject.trim() && !subjects.includes(newSubject.trim())) {
-      setSubjects([...subjects, newSubject.trim()])
-    }
-  }
-
-  const handleRemoveSubject = (subject: string) => {
-    setSubjects(subjects.filter(s => s !== subject))
-  }
-
-  const handleExamSelect = async (exam: any) => {
-    console.log('handleExamSelect called with exam:', exam)
-    console.log('Parameters being passed:', {
-      examType: exam.exam_type,
-      dept,
-      dbYear,
-      dbSection
-    })
-    
-    setSelectedExam(exam)
-    setView('details')
-    
-    try {
-      setLoading(true)
-      const details = await ExamMarksService.getExamDetailsForSection(exam.exam_type, dept, dbYear, dbSection)
-      console.log('Exam details received:', details)
-      setExamDetails(details)
-    } catch (error) {
-      console.error('Error loading exam details:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      alert(`Error loading exam details: ${errorMessage}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleBackToList = () => {
-    setView('list')
-    setSelectedExam(null)
-    setExamDetails([])
-  }
-
-  const handleCreateNew = () => {
-    setView('create')
-    setSelectedExamType('')
-    setSubjects(availableSubjects)
-  }
-
-  const handleExportAllExams = async () => {
-    try {
-      const wb = XLSX.utils.book_new()
-
-      for (const exam of examRequests) {
-        const details = await ExamMarksService.getExamDetailsForSection(exam.exam_type, dept, dbYear, dbSection)
-        const examData: any[] = []
-
-        details.forEach(tutorData => {
-          tutorData.students.forEach((student: any) => {
-            const rowData: any = {
-              'Exam Type': exam.exam_name,
-              'Peer Tutor': tutorData.peer_tutor.name,
-              'Peer Tutor Email': tutorData.peer_tutor.email,
-              'Student Name': student.name,
-              'Student Email': student.email
-            }
-
-            // Add each subject as a column
-            exam.subjects.forEach((subject: string) => {
-              rowData[subject] = student.marks[subject] || 'Pending'
-            })
-
-            examData.push(rowData)
-          })
-        })
-
-        if (examData.length > 0) {
-          const ws = XLSX.utils.json_to_sheet(examData)
-          XLSX.utils.book_append_sheet(wb, ws, exam.exam_name)
-        }
-      }
-
-      XLSX.writeFile(wb, `all_exams_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
-    } catch (error) {
-      console.error('Error exporting all exams:', error)
-      alert('Failed to export all exams. Please try again.')
-    }
-  }
-
-  const handleExportExamDetails = async () => {
-    try {
-      if (!selectedExam) return
-
-      const wb = XLSX.utils.book_new()
-
-      // Summary Sheet
-      const summaryData = [{
-        'Exam Type': selectedExam.exam_name,
-        'Total Peer Tutors': examDetails.length,
-        'Total Students': examDetails.reduce((sum, td) => sum + td.students.length, 0),
-        'Subjects': selectedExam.subjects.join(', '),
-        'Department': dept,
-        'Year': year,
-        'Section': section,
-        'Created': new Date(selectedExam.created_at).toLocaleDateString('en-GB')
-      }]
-      const summaryWs = XLSX.utils.json_to_sheet(summaryData)
-      XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
-
-      // Create a sheet for each peer tutor with their students' marks
-      examDetails.forEach(tutorData => {
-        const tutorSheetData: any[] = []
-
-        tutorData.students.forEach((student: any) => {
-          const rowData: any = {
-            'Student Name': student.name,
-            'Student Email': student.email
-          }
-
-          // Add each subject as a column with marks
-          selectedExam.subjects.forEach((subject: string) => {
-            rowData[subject] = student.marks[subject] || 'Pending'
-          })
-
-          tutorSheetData.push(rowData)
-        })
-
-        if (tutorSheetData.length > 0) {
-          const ws = XLSX.utils.json_to_sheet(tutorSheetData)
-          // Sheet name limited to 31 characters
-          const sheetName = tutorData.peer_tutor.name.substring(0, 31)
-          XLSX.utils.book_append_sheet(wb, ws, sheetName)
-        }
-      })
-
-      // All Data Combined Sheet
-      const allData: any[] = []
-      examDetails.forEach(tutorData => {
-        tutorData.students.forEach((student: any) => {
-          const rowData: any = {
-            'Peer Tutor': tutorData.peer_tutor.name,
-            'Peer Tutor Email': tutorData.peer_tutor.email,
-            'Student Name': student.name,
-            'Student Email': student.email
-          }
-
-          selectedExam.subjects.forEach((subject: string) => {
-            rowData[subject] = student.marks[subject] || 'Pending'
-          })
-
-          allData.push(rowData)
-        })
-      })
-
-      if (allData.length > 0) {
-        const allDataWs = XLSX.utils.json_to_sheet(allData)
-        XLSX.utils.book_append_sheet(wb, allDataWs, 'All Students Combined')
-      }
-
-      const fileName = `exam_${selectedExam.exam_name}_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`
-      XLSX.writeFile(wb, fileName)
-    } catch (error) {
-      console.error('Error exporting exam details:', error)
-      alert('Failed to export exam details. Please try again.')
-    }
-  }
-
-  const handleDeleteExam = async (examType: string, examName: string) => {
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      `Are you sure you want to delete the "${examName}" exam?\n\nThis will permanently delete all marks for this exam type for all students. This action cannot be undone.`
-    )
-
-    if (!confirmed) return
-
-    setSending(true)
-    try {
-      const success = await ExamMarksService.deleteExamTypeForSection(examType, dept, dbYear, dbSection)
-      if (success) {
-        alert(`"${examName}" exam deleted successfully!`)
-        // Reload exam requests and go back to list view
-        await loadData()
-        setView('list')
-        setSelectedExam(null)
-        setExamDetails([])
-      } else {
-        alert('Failed to delete exam. Please try again.')
-      }
-    } catch (error) {
-      console.error('Error deleting exam:', error)
-      alert('An error occurred while deleting the exam.')
-    } finally {
-      setSending(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
-
-  // List View
-  if (view === 'list') {
-    return (
-      <div>
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex-1">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">Exam Requests</h3>
-            <p className="text-xs sm:text-sm text-gray-600">
-              View and manage exam requests sent to this section
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            {examRequests.length > 0 && (
-              <button
-                onClick={handleExportAllExams}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span className="hidden sm:inline">Export All Exams</span>
-                <span className="sm:hidden">Export</span>
-              </button>
-            )}
-          <button
-            onClick={handleCreateNew}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2 flex-shrink-0"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Create New Exam</span>
-          </button>
-          </div>
-        </div>
-
-        {examRequests.length > 0 ? (
-          <div className="space-y-3 sm:space-y-4">
-            {examRequests.map((exam) => (
-              <div
-                key={exam.exam_type}
-                onClick={() => handleExamSelect(exam)}
-                className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:border-blue-300 hover:shadow-md transition-all duration-200 cursor-pointer"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-base sm:text-lg font-medium text-gray-900 mb-2 truncate">{exam.exam_name}</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
-                      <div>
-                        <span className="font-medium">Subjects:</span> {exam.subjects.length}
-                      </div>
-                      <div>
-                        <span className="font-medium">Peer Tutors:</span> {exam.peer_tutors.length}
-                      </div>
-                      <div>
-                        <span className="font-medium">Total Students:</span> {exam.total_students}
-                      </div>
-                    </div>
-                    <div className="mt-2">
-                      <span className="text-xs text-gray-500">
-                        Created: {new Date(exam.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-8 text-center">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No exam requests yet</h3>
-            <p className="text-sm text-gray-500 mb-4 px-4">Create your first exam request to get started.</p>
-            <button
-              onClick={handleCreateNew}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-            >
-              Create First Exam
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // Details View
-  if (view === 'details' && selectedExam) {
-    return (
-      <div>
-        <div className="mb-6 flex flex-col gap-4">
-          <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-            <button
-              onClick={handleBackToList}
-              className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors duration-200"
-            >
-              <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 truncate">{selectedExam.exam_name}</h3>
-              <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                Peer tutors and student marks for this exam
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={handleExportExamDetails}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span className="hidden sm:inline">Export Exam Data</span>
-              <span className="sm:hidden">Export</span>
-            </button>
-          <button
-            onClick={() => handleDeleteExam(selectedExam.exam_type, selectedExam.exam_name)}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2 flex-shrink-0"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-              <span className="hidden sm:inline">Delete Exam</span>
-              <span className="sm:hidden">Delete</span>
-          </button>
-          </div>
-        </div>
-
-        {examDetails.length > 0 ? (
-          <div>
-            {/* Status Summary */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-              <h4 className="text-sm sm:text-md font-medium text-gray-900 mb-4">Exam Status Summary</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                {(() => {
-                  let totalStudents = 0
-                  let totalMarks = 0
-                  let pendingMarks = 0
-                  let completedMarks = 0
-                  
-                  examDetails.forEach(tutorData => {
-                    tutorData.students.forEach((student: any) => {
-                      totalStudents++
-                      selectedExam.subjects.forEach((subject: string) => {
-                        totalMarks++
-                        const mark = student.marks[subject]
-                        if (!mark || mark === '' || mark === '0') {
-                          pendingMarks++
-                        } else {
-                          completedMarks++
-                        }
-                      })
-                    })
-                  })
-                  
-                  return (
-                    <>
-                      <div className="text-center p-3 bg-blue-50 rounded-lg">
-                        <div className="text-xl sm:text-2xl font-bold text-blue-600">{totalStudents}</div>
-                        <div className="text-xs sm:text-sm text-gray-600 mt-1">Total Students</div>
-                      </div>
-                      <div className="text-center p-3 bg-green-50 rounded-lg">
-                        <div className="text-xl sm:text-2xl font-bold text-green-600">{completedMarks}</div>
-                        <div className="text-xs sm:text-sm text-gray-600 mt-1">Completed Marks</div>
-                      </div>
-                      <div className="text-center p-3 bg-orange-50 rounded-lg">
-                        <div className="text-xl sm:text-2xl font-bold text-orange-600">{pendingMarks}</div>
-                        <div className="text-xs sm:text-sm text-gray-600 mt-1">Pending Marks</div>
-                      </div>
-                      <div className="text-center p-3 bg-gray-50 rounded-lg">
-                        <div className="text-xl sm:text-2xl font-bold text-gray-600">{totalMarks}</div>
-                        <div className="text-xs sm:text-sm text-gray-600 mt-1">Total Marks</div>
-                      </div>
-                    </>
-                  )
-                })()}
-              </div>
-            </div>
-
-            {/* Peer Tutor Details */}
-            <div className="space-y-4 sm:space-y-6">
-              {examDetails.map((tutorData) => (
-                <div key={tutorData.peer_tutor.id} className="bg-white rounded-lg border border-gray-200">
-                  <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm font-medium text-blue-600">
-                          {tutorData.peer_tutor.name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-                        </span>
-                      </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-base sm:text-lg font-medium text-gray-900 truncate">{tutorData.peer_tutor.name}</h4>
-                          <p className="text-xs sm:text-sm text-gray-500 truncate">{tutorData.peer_tutor.email}</p>
-                      </div>
-                    </div>
-                      <div className="flex-shrink-0">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {tutorData.students.length} {tutorData.students.length === 1 ? 'student' : 'students'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                  {/* Mobile Card View */}
-                  <div className="block lg:hidden p-4">
-                    <div className="space-y-3">
-                      {tutorData.students.map((student: any) => (
-                        <div key={student.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3 border-b border-gray-200">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                <span className="text-sm font-medium text-green-600">
-                                  {(student.name || 'Unknown').split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-                                </span>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h5 className="text-sm font-semibold text-gray-900 truncate">{student.name || 'Unknown Student'}</h5>
-                                <p className="text-xs text-gray-600 truncate">{student.email || 'No email'}</p>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="p-4 space-y-2">
-                            {selectedExam.subjects.map((subject: string) => {
-                              const mark = student.marks[subject]
-                              const isCIE = selectedExam.exam_type.toLowerCase().includes('cie')
-                              const isSEM = selectedExam.exam_type.toLowerCase().includes('sem')
-                              const isPending = !mark || mark === '' || mark === '0'
-                              
-                              return (
-                                <div key={subject} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{subject}</span>
-                                  <div>
-                                    {isPending ? (
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                        Pending
-                                      </span>
-                                    ) : isCIE ? (
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        parseInt(mark) >= 40 ? 'bg-green-100 text-green-800' : 
-                                        parseInt(mark) >= 25 ? 'bg-yellow-100 text-yellow-800' : 
-                                        'bg-red-100 text-red-800'
-                                      }`}>
-                                        {mark}
-                                      </span>
-                                    ) : isSEM ? (
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        mark === 'pass' ? 'bg-green-100 text-green-800' :
-                                        mark === 'fail' ? 'bg-red-100 text-red-800' :
-                                        mark === 'absent' ? 'bg-gray-100 text-gray-800' :
-                                        mark === 'retest' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-blue-100 text-blue-800'
-                                      }`}>
-                                        {mark}
-                                      </span>
-                                    ) : (
-                                      <span className="text-sm font-medium text-gray-900">{mark}</span>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Desktop Table View */}
-                  <div className="hidden lg:block p-6">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Student Name
-                          </th>
-                          {selectedExam.subjects.map((subject: string) => (
-                            <th key={subject} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              {subject}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {tutorData.students.map((student: any) => (
-                          <tr key={student.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                                  <span className="text-sm font-medium text-green-600">
-                                    {(student.name || 'Unknown').split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-                                  </span>
-                                </div>
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {student.name || 'Unknown Student'}
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {student.email || 'No email'}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            {selectedExam.subjects.map((subject: string) => {
-                              const mark = student.marks[subject]
-                              const isCIE = selectedExam.exam_type.toLowerCase().includes('cie')
-                              const isSEM = selectedExam.exam_type.toLowerCase().includes('sem')
-                              
-                              // Check if mark is pending (not assigned yet)
-                              const isPending = !mark || mark === '' || mark === '0'
-                              
-                              return (
-                                <td key={subject} className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center space-x-2">
-                                    {isPending ? (
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                        Pending
-                                      </span>
-                                    ) : isCIE ? (
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        parseInt(mark) >= 40 ? 'bg-green-100 text-green-800' : 
-                                        parseInt(mark) >= 25 ? 'bg-yellow-100 text-yellow-800' : 
-                                        'bg-red-100 text-red-800'
-                                      }`}>
-                                        {mark}
-                                      </span>
-                                    ) : isSEM ? (
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        mark === 'pass' ? 'bg-green-100 text-green-800' :
-                                        mark === 'fail' ? 'bg-red-100 text-red-800' :
-                                        mark === 'absent' ? 'bg-gray-100 text-gray-800' :
-                                        mark === 'retest' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-blue-100 text-blue-800'
-                                      }`}>
-                                        {mark}
-                                      </span>
-                                    ) : (
-                                      <span className="text-sm text-gray-900">{mark}</span>
-                                    )}
-                                  </div>
-                                </td>
-                              )
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            ))}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-8 text-center">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No marks found</h3>
-            <p className="text-sm text-gray-500 px-4">No marks have been entered for this exam yet.</p>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // Create View
-  return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={handleBackToList}
-            className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-          >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Send Exam to Students</h3>
-            <p className="text-sm text-gray-600">
-              Create and send exam types to all peer tutors and students in this section
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Exam Type Selection */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <h4 className="text-md font-medium text-gray-900 mb-4">Select Exam Type</h4>
-        {availableExamTypes.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {availableExamTypes.map((examType) => (
-              <button
-                key={examType.value}
-                onClick={() => setSelectedExamType(examType.value)}
-                className={`p-3 border rounded-lg text-center transition-colors duration-200 ${
-                  selectedExamType === examType.value
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <div className="font-medium">{examType.label}</div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">All exam types created</h3>
-            <p className="text-gray-500">All available exam types (CIE-1, CIE-2, CIE-3, Semester) have already been created for this section.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Subjects Selection */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-md font-medium text-gray-900">Subjects</h4>
-          <button
-            onClick={handleAddSubject}
-            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm font-medium transition-colors duration-200"
-          >
-            Add Subject
-          </button>
-        </div>
-        
-        {subjects.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {subjects.map((subject) => (
-              <div
-                key={subject}
-                className="flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
-              >
-                <span>{subject}</span>
-                <button
-                  onClick={() => handleRemoveSubject(subject)}
-                  className="ml-2 text-blue-600 hover:text-blue-800"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-500 text-sm">No subjects selected. Add subjects from classes or create new ones.</p>
-        )}
-      </div>
-
-      {/* Summary */}
-      <div className="bg-gray-50 rounded-lg border border-gray-200 p-6 mb-6">
-        <h4 className="text-md font-medium text-gray-900 mb-3">Summary</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <span className="text-gray-600">Exam Type:</span>
-            <span className="ml-2 font-medium">
-              {selectedExamType ? availableExamTypes.find(t => t.value === selectedExamType)?.label : 'Not selected'}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-600">Subjects:</span>
-            <span className="ml-2 font-medium">{subjects.length}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Peer Tutors:</span>
-            <span className="ml-2 font-medium">{peerTutors.length}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Send Button */}
-      <div className="flex justify-between">
-        <button
-          onClick={async () => {
-            console.log('Testing database connection...')
-            const tableExists = await ExamMarksService.checkTableExists()
-            const testResult = await ExamMarksService.testCreateExamMark()
-            alert(`Table exists: ${tableExists}\nTest insert: ${testResult ? 'Success' : 'Failed'}\nCheck console for details.`)
-          }}
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-        >
-          Test Database
-        </button>
-        
-        <button
-          onClick={handleSendExam}
-          disabled={!selectedExamType || subjects.length === 0 || sending}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
-        >
-          {sending ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Sending...</span>
-            </>
-          ) : (
-            <>
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-              <span>Send Exam</span>
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  )
-}
 
 export default function SectionPage() {
   return (
@@ -4804,7 +5264,7 @@ function SectionContent() {
   const sectionIdStr = Array.isArray(sectionId) ? sectionId[0] : sectionId
   
   const [department, setDepartment] = useState<any>(null)
-  const [activeTab, setActiveTab] = useState<'peer-tutors' | 'students' | 'assign' | 'classes' | 'attendance' | 'exam' | 'import-export'>('peer-tutors')
+  const [activeTab, setActiveTab] = useState<'peer-tutors' | 'students' | 'assign' | 'classes' | 'attendance'  | 'import-export'>('peer-tutors')
   const [loading, setLoading] = useState(true)
   const [peerTutors, setPeerTutors] = useState<PeerTutor[]>([])
   const [students, setStudents] = useState<Student[]>([])
@@ -4815,17 +5275,16 @@ function SectionContent() {
   const [showExportModal, setShowExportModal] = useState(false)
   
   // Delete confirmation modal state
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [peerTutorToDelete, setPeerTutorToDelete] = useState<PeerTutor | null>(null)
-  const [deleteStep, setDeleteStep] = useState<'confirm' | 'force-confirm' | 'success' | 'error'>('confirm')
-  const [deleteMessage, setDeleteMessage] = useState('')
-  const [deleteType, setDeleteType] = useState<'peer-tutors' | 'students'>('peer-tutors')
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Check if sidebar is collapsed
+  // Check if sidebar is collapsed - read from localStorage first (source of truth)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
-      const sidebar = document.querySelector('[data-sidebar-collapsed]')
-      return sidebar?.getAttribute('data-sidebar-collapsed') === 'true'
+      const saved = localStorage.getItem('sidebar-collapsed')
+      if (saved !== null) {
+        return JSON.parse(saved)
+      }
     }
     return false
   })
@@ -4834,29 +5293,47 @@ function SectionContent() {
   useEffect(() => {
     const checkSidebarState = () => {
       if (typeof window !== 'undefined') {
-        const sidebar = document.querySelector('[data-sidebar-collapsed]')
-        const collapsed = sidebar?.getAttribute('data-sidebar-collapsed') === 'true'
-        setIsSidebarCollapsed(collapsed)
+        // Read from localStorage first (sidebar's source of truth)
+        const saved = localStorage.getItem('sidebar-collapsed')
+        if (saved !== null) {
+          const collapsed = JSON.parse(saved)
+          setIsSidebarCollapsed(collapsed)
+        } else {
+          // Fallback to DOM check if localStorage doesn't have value
+          const sidebar = document.querySelector('[data-sidebar-collapsed]')
+          if (sidebar) {
+            const collapsed = sidebar.getAttribute('data-sidebar-collapsed') === 'true'
+            setIsSidebarCollapsed(collapsed)
+          }
+        }
       }
     }
 
-    // Check initially
-    checkSidebarState()
+    // Check initially with a small delay to ensure sidebar has rendered
+    const timer = setTimeout(checkSidebarState, 0)
 
     // Listen for custom events
-    const handleSidebarToggle = () => checkSidebarState()
+    const handleSidebarToggle = () => {
+      // Use a small delay to ensure localStorage is updated
+      setTimeout(checkSidebarState, 0)
+    }
     window.addEventListener('sidebar-toggle', handleSidebarToggle)
 
+    // Also listen for storage changes (in case sidebar state changes in another tab/window)
+    window.addEventListener('storage', checkSidebarState)
+
     return () => {
+      clearTimeout(timer)
       window.removeEventListener('sidebar-toggle', handleSidebarToggle)
+      window.removeEventListener('storage', checkSidebarState)
     }
   }, [])
 
   // Handle tab parameter from URL
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['peer-tutors', 'students', 'assign', 'classes', 'attendance', 'exam', 'import-export'].includes(tabParam)) {
-      setActiveTab(tabParam as 'peer-tutors' | 'students' | 'assign' | 'classes' | 'attendance' | 'exam' | 'import-export')
+    if (tabParam && ['peer-tutors', 'students', 'assign', 'classes', 'attendance', 'import-export'].includes(tabParam)) {
+      setActiveTab(tabParam as 'peer-tutors' | 'students' | 'assign' | 'classes' | 'attendance'  | 'import-export')
     }
   }, [searchParams])
 
@@ -4976,6 +5453,55 @@ function SectionContent() {
     router.push('/faculty/dashboard')
   }
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      // Reload all data
+      const loadData = async () => {
+        try {
+          // Get faculty's actual department
+          let facultyDepartment = 'Computer Science' // fallback
+          if (user?.email) {
+            const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
+            if (facultyDept) {
+              facultyDepartment = facultyDept.name
+            }
+          }
+
+          // Set department info with actual faculty department
+          setDepartment({
+            id: deptIdStr,
+            name: facultyDepartment,
+            faculty_name: user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'
+          })
+
+          // Load peer tutors for this section using actual department
+          const tutors = await PeerTutorService.getPeerTutorsBySection(
+            facultyDepartment,
+            yearIdStr,
+            sectionIdStr
+          )
+          setPeerTutors(tutors)
+
+          // Load students for this section using actual department
+          const sectionStudents = await StudentService.getStudentsBySection(
+            facultyDepartment,
+            yearIdStr,
+            sectionIdStr
+          )
+          setStudents(sectionStudents)
+        } catch (error) {
+          console.error('Error refreshing section data:', error)
+        }
+      }
+
+      await loadData()
+      setLastRefresh(new Date())
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500)
+    }
+  }
+
   const handlePeerTutorAssigned = () => {
     // Reload peer tutors data
     const loadPeerTutors = async () => {
@@ -5028,108 +5554,47 @@ function SectionContent() {
     loadStudents()
   }
 
-  const handleRemovePeerTutor = (tutorId: string) => {
-    const tutor = peerTutors.find(t => t.id === tutorId)
-    if (tutor) {
-      setPeerTutorToDelete(tutor)
-      setDeleteStep('confirm')
-      setDeleteMessage('')
-      setDeleteType('peer-tutors')
-      setShowDeleteModal(true)
-    }
-  }
-
-  const confirmDeletePeerTutor = async () => {
-    if (!peerTutorToDelete) return
-
+  const handleRemovePeerTutor = async (tutorId: string) => {
     try {
-      const result = await PeerTutorService.removePeerTutor(peerTutorToDelete.id)
+      const result = await PeerTutorService.removePeerTutor(tutorId)
       if (result.success) {
-        setDeleteStep('success')
-        setDeleteMessage(result.message)
         handlePeerTutorAssigned() // Reload data
+        alert(result.message)
       } else {
         // Check if the error is about assigned students
         if (result.message.includes('students are still assigned')) {
-          setDeleteStep('force-confirm')
-          setDeleteMessage(result.message)
+          const forceDelete = confirm(`${result.message}\n\nDo you want to force delete this peer tutor? This will unassign all students.`)
+          if (forceDelete) {
+            const forceResult = await PeerTutorService.removePeerTutor(tutorId, true)
+            if (forceResult.success) {
+              handlePeerTutorAssigned() // Reload data
+              alert(forceResult.message)
+            } else {
+              alert(forceResult.message)
+            }
+          }
         } else {
-          setDeleteStep('error')
-          setDeleteMessage(result.message)
+          alert(result.message)
         }
       }
     } catch (error) {
       console.error('Error removing peer tutor:', error)
-      setDeleteStep('error')
-      setDeleteMessage('An unexpected error occurred while deleting the peer tutor.')
+      alert('An unexpected error occurred while deleting the peer tutor.')
     }
   }
 
-  const confirmForceDeletePeerTutor = async () => {
-    if (!peerTutorToDelete) return
-
+  const handleRemoveStudent = async (studentId: string) => {
     try {
-      const forceResult = await PeerTutorService.removePeerTutor(peerTutorToDelete.id, true)
-      if (forceResult.success) {
-        setDeleteStep('success')
-        setDeleteMessage(forceResult.message)
-        handlePeerTutorAssigned() // Reload data
-      } else {
-        setDeleteStep('error')
-        setDeleteMessage(forceResult.message)
-      }
-    } catch (error) {
-      console.error('Error force removing peer tutor:', error)
-      setDeleteStep('error')
-      setDeleteMessage('An unexpected error occurred while force deleting the peer tutor.')
-    }
-  }
-
-  const closeDeleteModal = () => {
-    setShowDeleteModal(false)
-    setPeerTutorToDelete(null)
-    setDeleteStep('confirm')
-    setDeleteMessage('')
-  }
-
-  const handleRemoveStudent = (studentId: string) => {
-    const student = students.find(s => s.id === studentId)
-    if (student) {
-      setPeerTutorToDelete({
-        id: student.id,
-        name: student.name,
-        email: student.email,
-        dept: student.dept,
-        year: student.year,
-        section: student.section,
-        faculty_id: '',
-        created_at: '',
-        assigned_by: ''
-      } as PeerTutor) // Cast to PeerTutor for modal compatibility
-      setDeleteStep('confirm')
-      setDeleteMessage('')
-      setDeleteType('students')
-      setShowDeleteModal(true)
-    }
-  }
-
-  const confirmDeleteStudent = async () => {
-    if (!peerTutorToDelete) return
-
-    try {
-      const success = await StudentService.removeStudent(peerTutorToDelete.id)
+      const success = await StudentService.removeStudent(studentId)
       if (success) {
-        setDeleteStep('success')
-        setDeleteMessage('Student deleted successfully')
         handleStudentAdded() // Reload data
+        alert('Student deleted successfully')
       } else {
-        setDeleteStep('error')
-        setDeleteMessage('Failed to delete student')
+        alert('Failed to delete student')
       }
     } catch (error) {
       console.error('Error removing student:', error)
-      setDeleteStep('error')
-      setDeleteMessage('An unexpected error occurred while deleting the student.')
+      alert('An unexpected error occurred while deleting the student.')
     }
   }
 
@@ -5145,8 +5610,46 @@ function SectionContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gray-50">
+        {/* Sidebar */}
+        <FacultySidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+
+        {/* Main content */}
+        <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b border-gray-200 h-16 w-full">
+          <div className={`max-w-full mx-auto h-full flex items-center ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 lg:hidden"
+                  >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  </button>
+                  <div className="ml-2 lg:ml-0">
+                    <h1 className="text-2xl roboto-condensed-title text-gray-900">
+                      Loading...
+                    </h1>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Loading Content */}
+          <main className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading section data...</p>
+            </div>
+          </main>
+        </div>
       </div>
     )
   }
@@ -5162,8 +5665,8 @@ function SectionContent() {
       {/* Main content */}
       <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
         {/* Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200 h-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
+        <header className="bg-white shadow-sm border-b border-gray-200 h-16 w-full">
+          <div className={`max-w-full mx-auto h-full flex items-center ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center">
                 <button
@@ -5183,21 +5686,46 @@ function SectionContent() {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => router.back()}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-              >
-                Back
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Refresh data"
+                >
+                  <svg 
+                    className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => router.back()}
+                  className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors"
+                >
+                  <svg 
+                    className="w-4 h-4 mr-2" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Back
+                </button>
+              </div>
             </div>
           </div>
         </header>
 
         {/* Main Content */}
         <main className="flex-1">
-          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+          <div className={`max-w-full mx-auto py-6 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
             {/* Interactive Breadcrumb */}
-            <div className="py-4">
+            <div className="mb-4">
               <nav className="flex" aria-label="Breadcrumb">
                 <ol className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
                   <li>
@@ -5330,16 +5858,6 @@ function SectionContent() {
                   Attendance
                 </button>
                 <button
-                  onClick={() => setActiveTab('exam')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
-                    activeTab === 'exam'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Exam
-                </button>
-                <button
                   onClick={() => setActiveTab('import-export')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors duration-200 ${
                     activeTab === 'import-export'
@@ -5361,6 +5879,9 @@ function SectionContent() {
                   setIsModalOpen={setIsModalOpen} 
                   handleRemovePeerTutor={handleRemovePeerTutor}
                   onPeerTutorClick={handlePeerTutorClick}
+                  dept={department?.name || 'Computer Science'}
+                  year={yearId}
+                  section={sectionId}
                 />
               ) : activeTab === 'students' ? (
                 <StudentsTab 
@@ -5368,6 +5889,9 @@ function SectionContent() {
                   peerTutors={peerTutors}
                   setIsStudentModalOpen={setIsStudentModalOpen} 
                   handleRemoveStudent={handleRemoveStudent}
+                  dept={department?.name || 'Computer Science'}
+                  year={yearId}
+                  section={sectionId}
                 />
               ) : activeTab === 'assign' ? (
                 <AssignTab 
@@ -5388,17 +5912,12 @@ function SectionContent() {
                   year={yearId} 
                   section={sectionId}
                 />
-              ) : activeTab === 'exam' ? (
-                <ExamTab 
-                  dept={department?.name || 'Computer Science'} 
-                  year={yearId} 
-                  section={sectionId}
-                />
               ) : activeTab === 'import-export' ? (
                 <ImportExportTab 
                   dept={department?.name || 'Computer Science'} 
                   year={yearId} 
                   section={sectionId}
+                  facultyId={department?.id || deptId}
                   onImportComplete={handleBulkImportComplete}
                   onShowExportModal={() => setShowExportModal(true)}
                 />
@@ -5434,40 +5953,6 @@ function SectionContent() {
           year={yearId}
           section={sectionId}
           onClose={() => setShowExportModal(false)}
-        />
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && peerTutorToDelete && (
-        <DeleteConfirmationModal
-          isOpen={showDeleteModal}
-          onClose={closeDeleteModal}
-          onConfirm={
-            deleteStep === 'confirm' 
-              ? (deleteType === 'peer-tutors' ? confirmDeletePeerTutor : confirmDeleteStudent)
-              : deleteStep === 'force-confirm' 
-                ? confirmForceDeletePeerTutor 
-                : closeDeleteModal
-          }
-          title={
-            deleteStep === 'confirm' 
-              ? `Delete ${deleteType === 'peer-tutors' ? 'Peer Tutor' : 'Student'}` 
-              : deleteStep === 'force-confirm' 
-                ? 'Force Delete Peer Tutor' 
-                : deleteStep === 'success' 
-                  ? 'Deletion Successful' 
-                  : 'Deletion Failed'
-          }
-          itemsToDelete={[{
-            name: peerTutorToDelete.name,
-            email: peerTutorToDelete.email,
-            additionalInfo: deleteStep === 'force-confirm' 
-              ? 'This will unassign all students from this peer tutor'
-              : deleteStep === 'success' || deleteStep === 'error'
-                ? deleteMessage
-                : 'This action cannot be undone'
-          }]}
-          type={deleteType}
         />
       )}
       </div>

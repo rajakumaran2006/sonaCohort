@@ -2,9 +2,14 @@
 
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
+import StatCard from '@/components/ui/StatCard'
 import { useAuth } from '@/lib/auth/AuthContext'
+import { AssignmentService } from '@/lib/services/assignmentService'
+import { FacultyService } from '@/lib/services/facultyService'
 import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { Users, GraduationCap } from 'lucide-react'
 
 export default function YearPage() {
   return (
@@ -21,15 +26,30 @@ function YearContent() {
   const { deptId, yearId } = params
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [department, setDepartment] = useState<any>(null)
+  const [department, setDepartment] = useState<{
+    id: string
+    name: string
+    faculty_name: string
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [showYearDropdown, setShowYearDropdown] = useState(false)
+  const [yearStats, setYearStats] = useState<{
+    totalStudents: number
+    totalPeerTutors: number
+    assignedStudents: number
+    unassignedStudents: number
+    averageStudentsPerTutor: number
+  } | null>(null)
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Check if sidebar is collapsed
+  // Check if sidebar is collapsed - read from localStorage first (source of truth)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
-      const sidebar = document.querySelector('[data-sidebar-collapsed]')
-      return sidebar?.getAttribute('data-sidebar-collapsed') === 'true'
+      const saved = localStorage.getItem('sidebar-collapsed')
+      if (saved !== null) {
+        return JSON.parse(saved)
+      }
     }
     return false
   })
@@ -38,21 +58,39 @@ function YearContent() {
   useEffect(() => {
     const checkSidebarState = () => {
       if (typeof window !== 'undefined') {
-        const sidebar = document.querySelector('[data-sidebar-collapsed]')
-        const collapsed = sidebar?.getAttribute('data-sidebar-collapsed') === 'true'
-        setIsSidebarCollapsed(collapsed)
+        // Read from localStorage first (sidebar's source of truth)
+        const saved = localStorage.getItem('sidebar-collapsed')
+        if (saved !== null) {
+          const collapsed = JSON.parse(saved)
+          setIsSidebarCollapsed(collapsed)
+        } else {
+          // Fallback to DOM check if localStorage doesn't have value
+          const sidebar = document.querySelector('[data-sidebar-collapsed]')
+          if (sidebar) {
+            const collapsed = sidebar.getAttribute('data-sidebar-collapsed') === 'true'
+            setIsSidebarCollapsed(collapsed)
+          }
+        }
       }
     }
 
-    // Check initially
-    checkSidebarState()
+    // Check initially with a small delay to ensure sidebar has rendered
+    const timer = setTimeout(checkSidebarState, 0)
 
     // Listen for custom events
-    const handleSidebarToggle = () => checkSidebarState()
+    const handleSidebarToggle = () => {
+      // Use a small delay to ensure localStorage is updated
+      setTimeout(checkSidebarState, 0)
+    }
     window.addEventListener('sidebar-toggle', handleSidebarToggle)
 
+    // Also listen for storage changes (in case sidebar state changes in another tab/window)
+    window.addEventListener('storage', checkSidebarState)
+
     return () => {
+      clearTimeout(timer)
       window.removeEventListener('sidebar-toggle', handleSidebarToggle)
+      window.removeEventListener('storage', checkSidebarState)
     }
   }, [])
 
@@ -71,17 +109,39 @@ function YearContent() {
     }
   }, [showYearDropdown])
 
-  // Mock data - replace with actual API call
+  // Load department and year statistics
   useEffect(() => {
-    setTimeout(() => {
-      setDepartment({
-        id: deptId,
-        name: 'Computer Science',
-        faculty_name: user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'
-      })
-      setLoading(false)
-    }, 500)
-  }, [deptId, user])
+    const loadData = async () => {
+      try {
+        // Get faculty's actual department using verification (consistent with section page)
+        let facultyDepartment = 'Computer Science' // fallback
+        if (user?.email) {
+          const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
+          if (facultyDept) {
+            facultyDepartment = facultyDept.name
+          }
+        }
+
+        setDepartment({
+          id: deptId as string,
+          name: facultyDepartment,
+          faculty_name: user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'
+        })
+
+        // Load year statistics
+        const stats = await AssignmentService.getAssignmentStatsByYear(facultyDepartment, yearId as string)
+        setYearStats(stats)
+      } catch (error) {
+        console.error('Error loading year data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (user) {
+      loadData()
+    }
+  }, [deptId, yearId, user])
 
   const yearNames: { [key: string]: string } = {
     '2': '2nd Year',
@@ -109,6 +169,42 @@ function YearContent() {
     router.push('/faculty/dashboard')
   }
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      // Reload all data
+      const loadData = async () => {
+        try {
+          // Get faculty's actual department using verification
+          let facultyDepartment = 'Computer Science' // fallback
+          if (user?.email) {
+            const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
+            if (facultyDept) {
+              facultyDepartment = facultyDept.name
+            }
+          }
+
+          setDepartment({
+            id: deptId as string,
+            name: facultyDepartment,
+            faculty_name: user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'
+          })
+
+          // Load year statistics
+          const stats = await AssignmentService.getAssignmentStatsByYear(facultyDepartment, yearId as string)
+          setYearStats(stats)
+        } catch (error) {
+          console.error('Error refreshing year data:', error)
+        }
+      }
+
+      await loadData()
+      setLastRefresh(new Date())
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500)
+    }
+  }
+
   const handleYearChange = (newYearId: string) => {
     setShowYearDropdown(false)
     router.push(`/faculty/department/${deptId}/year/${newYearId}`)
@@ -116,8 +212,46 @@ function YearContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gray-50">
+        {/* Sidebar */}
+        <FacultySidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+
+        {/* Main content */}
+        <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200 h-16 w-full">
+            <div className={`max-w-full mx-auto h-full flex items-center ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
+              <div className="flex justify-between items-center w-full">
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 lg:hidden"
+                  >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  </button>
+                  <div className="ml-2 lg:ml-0">
+                    <h1 className="text-2xl roboto-condensed-title text-gray-900">
+                      Loading...
+                    </h1>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Loading Content */}
+          <main className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading year data...</p>
+            </div>
+          </main>
+        </div>
       </div>
     )
   }
@@ -133,8 +267,8 @@ function YearContent() {
       {/* Main content */}
       <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
         {/* Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200 h-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
+        <header className="bg-white shadow-sm border-b border-gray-200 h-16 w-full">
+          <div className={`max-w-full mx-auto h-full flex items-center ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
             <div className="flex justify-between items-center w-full">
               <div className="flex items-center">
                 <button
@@ -154,15 +288,46 @@ function YearContent() {
                   </p>
                 </div>
               </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Refresh data"
+                >
+                  <svg 
+                    className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => router.back()}
+                  className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors"
+                >
+                  <svg 
+                    className="w-4 h-4 mr-2" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Back
+                </button>
+              </div>
             </div>
           </div>
         </header>
 
         {/* Main Content */}
         <main className="flex-1">
-          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+          <div className={`max-w-full mx-auto py-6 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
             {/* Breadcrumb */}
-            <div className="py-4">
+            <div className="mb-4">
               <nav className="flex" aria-label="Breadcrumb">
                 <ol className="flex items-center space-x-2">
                   <li className="flex items-center">
@@ -217,6 +382,29 @@ function YearContent() {
                 </ol>
               </nav>
             </div>
+
+            {/* Year Statistics Cards */}
+            {yearStats && (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-6">
+                <StatCard
+                  title="Total Peer Tutors"
+                  value={yearStats.totalPeerTutors}
+                  description="Across all sections in this year"
+                  icon={
+                    <Users className="h-7 w-7 text-blue-600" />
+                  }
+                />
+
+                <StatCard
+                  title="Total Students"
+                  value={yearStats.totalStudents}
+                  description="Across all sections in this year"
+                  icon={
+                    <GraduationCap className="h-7 w-7 text-green-600" />
+                  }
+                />
+              </div>
+            )}
 
             {/* Sections */}
             <div className="bg-white overflow-hidden shadow rounded-lg">

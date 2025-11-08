@@ -13,22 +13,9 @@ interface RenumerationDetailsModalProps {
 export default function RenumerationDetailsModal({ 
   submission, 
   isOpen, 
-  onClose, 
-  onStatusUpdate 
+  onClose
 }: RenumerationDetailsModalProps) {
-  const [loading, setLoading] = useState(false)
-
-  const handleStatusUpdate = async (status: 'approved' | 'rejected') => {
-    setLoading(true)
-    try {
-      await onStatusUpdate(submission.id, status)
-      onClose()
-    } catch (error) {
-      console.error('Error updating status:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [loading] = useState(false)
 
   if (!isOpen || !submission) return null
 
@@ -83,17 +70,6 @@ export default function RenumerationDetailsModal({
             <h3 className="text-lg font-medium text-gray-900 mb-3">Submission Status</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Current Status</label>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  submission.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  submission.status === 'submitted' ? 'bg-blue-100 text-blue-800' :
-                  submission.status === 'approved' ? 'bg-green-100 text-green-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
-                  {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
-                </span>
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700">Created</label>
                 <p className="text-sm text-gray-900">
                   {new Date(submission.created_at).toLocaleDateString()}
@@ -109,17 +85,7 @@ export default function RenumerationDetailsModal({
                 </p>
               </div>
             </div>
-            {submission.approved_at && (
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  {submission.status === 'approved' ? 'Approved' : 'Rejected'}
-                </label>
-                <p className="text-sm text-gray-900">
-                  {new Date(submission.approved_at).toLocaleDateString()}
-                  {submission.approved_by && ` by ${submission.approved_by}`}
-                </p>
-              </div>
-            )}
+            {/* Approval details removed */}
           </div>
 
           {/* Form Responses */}
@@ -194,24 +160,7 @@ export default function RenumerationDetailsModal({
               >
                 Close
               </button>
-              {submission.status === 'submitted' && (
-                <>
-                  <button
-                    onClick={() => handleStatusUpdate('rejected')}
-                    disabled={loading}
-                    className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? 'Processing...' : 'Reject'}
-                  </button>
-                  <button
-                    onClick={() => handleStatusUpdate('approved')}
-                    disabled={loading}
-                    className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? 'Processing...' : 'Approve'}
-                  </button>
-                </>
-              )}
+              {/* No approve/reject actions */}
             </div>
           </div>
         </div>
