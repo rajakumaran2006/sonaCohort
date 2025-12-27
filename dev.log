@@ -1,0 +1,28 @@
+
+> peertutors@0.1.0 dev
+> next dev --turbopack
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/raja/package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * /Users/raja/peertutors/package-lock.json
+
+   ▲ Next.js 15.5.2 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://10.188.146.120:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Compiled middleware in 78ms
+ ✓ Ready in 929ms
+ ○ Compiling /faculty/dashboard ...
+ ✓ Compiled /faculty/dashboard in 3.2s
+ GET /faculty/dashboard 200 in 3599ms
+ ✓ Compiled /login in 281ms
+ GET /login 200 in 335ms
+ GET /login 200 in 51ms
+ GET /faculty/dashboard 200 in 102ms
+ GET /login 200 in 910ms
+ GET /login 200 in 467ms
