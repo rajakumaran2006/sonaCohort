@@ -1,16 +1,18 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { ClassService, Class } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
-import { useCachedData } from '@/lib/hooks/useCachedData'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui/Table'
+import ClassesPageSkeleton from '@/components/skeletons/ClassesPageSkeleton'
+import ClassesExportModal from '@/components/forms/ClassesExportModal'
 
 export default function FacultyClassesPage() {
   return (
@@ -23,30 +25,17 @@ export default function FacultyClassesPage() {
 function FacultyClassesContent() {
   const { user } = useAuth()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterYear, setFilterYear] = useState('')
   const [filterSection, setFilterSection] = useState('')
   const [filterSubject, setFilterSubject] = useState('')
-  const [scheduledClassCounts, setScheduledClassCounts] = useState<Record<string, number>>({})
+  // scheduledClassCounts will be populated by useQuery
   const [showExportModal, setShowExportModal] = useState(false)
-  const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel' | null>(null)
-  const [showConfirmExport, setShowConfirmExport] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
-  // Fetch classes data with caching
-  const { data: classesData, isLoading: classesLoading, refresh: refreshClasses, isRefreshing: isClassesRefreshing } = useCachedData({
-    queryKey: ['classes-by-faculty', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return []
-      return await ClassService.getClassesByFaculty(user.id)
-    },
-    enabled: !!user?.id,
-    initialData: [],
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  })
-
-  const { data: allClassesData, isLoading: allClassesLoading, refresh: refreshAllClasses, isRefreshing: isAllClassesRefreshing, error: allClassesError } = useCachedData({
+  const { data: allClasses = [], isLoading: allClassesLoading, isRefetching: isAllClassesRefetching, error: allClassesError } = useQuery({
     queryKey: ['all-classes'],
     queryFn: async () => {
       try {
@@ -59,55 +48,24 @@ function FacultyClassesContent() {
         throw error
       }
     },
-    initialData: [],
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000
   })
 
-  const classes = useMemo(() => classesData || [], [classesData])
-  const allClasses = useMemo(() => allClassesData || [], [allClassesData])
-  const loading = classesLoading || allClassesLoading
-
-  // Ensure data is fetched on mount
-  useEffect(() => {
-    // Small delay to allow React Query to initialize, then check if we need to fetch
-    const timer = setTimeout(() => {
-      if (!allClassesLoading && allClasses.length === 0 && !allClassesError) {
-        console.log('No classes data found on mount, triggering fetch...')
-        refreshAllClasses()
-      }
-    }, 100)
-
-    return () => clearTimeout(timer)
-  }, []) // Only run on mount
-
-  // Debug: Log data state changes
-  useEffect(() => {
-    console.log('Classes page data state:', {
-      allClassesData,
-      allClassesLoading,
-      allClassesError,
-      allClassesLength: allClasses.length,
-      classesData,
-      classesLoading
-    })
-  }, [allClassesData, allClassesLoading, allClassesError, allClasses.length, classesData, classesLoading])
+  const { data: scheduledClassCounts = {} } = useQuery({
+    queryKey: ['scheduled-class-counts', allClasses.length],
+    queryFn: async () => {
+      if (allClasses.length === 0) return {}
+      const counts: Record<string, number> = {}
+      await Promise.all(allClasses.map(async (cls) => {
+        counts[cls.id] = await ScheduledClassService.getScheduledClassCount(cls.id)
+      }))
+      return counts
+    },
+    enabled: allClasses.length > 0
+  })
 
   // Use custom hook for sidebar collapsed state (reads from localStorage synchronously)
   const [isSidebarCollapsed] = useSidebarCollapsed()
-
-  // Load scheduled class counts when allClasses changes
-  useEffect(() => {
-    const loadCounts = async () => {
-      if (allClasses.length > 0) {
-        const counts: Record<string, number> = {}
-        for (const classItem of allClasses) {
-          counts[classItem.id] = await ScheduledClassService.getScheduledClassCount(classItem.id)
-        }
-        setScheduledClassCounts(counts)
-      }
-    }
-    loadCounts()
-  }, [allClasses])
 
   // Filter classes based on search and filter criteria
   const filteredClasses = useMemo(() => {
@@ -211,56 +169,14 @@ function FacultyClassesContent() {
 
   // Handle refresh
   const handleRefresh = async () => {
-    await Promise.all([refreshClasses(), refreshAllClasses()])
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['all-classes'] }),
+      queryClient.invalidateQueries({ queryKey: ['scheduled-class-counts'] })
+    ])
     setLastRefresh(new Date())
   }
 
-  const handleExportData = () => {
-    if (!selectedFormat) return
 
-    const headers = ['Subject', 'Department', 'Year', 'Section', 'Scheduled Class Count', 'Created Date']
-    const csvContent = [
-      headers.join(','),
-      ...filteredClasses.map(classItem => [
-        `"${classItem.subject_name}"`,
-        `"${classItem.dept}"`,
-        `"${classItem.year}"`,
-        `"${classItem.section}"`,
-        scheduledClassCounts[classItem.id] || 0,
-        `"${new Date(classItem.created_at).toLocaleDateString()}"`
-      ].join(','))
-    ].join('\n')
-    
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    
-    // Generate filename based on current filters
-    const filterInfo = []
-    if (searchTerm) filterInfo.push(`Search-${searchTerm}`)
-    if (filterYear) filterInfo.push(`Year-${filterYear}`)
-    if (filterSection) filterInfo.push(`Section-${filterSection}`)
-    if (filterSubject) filterInfo.push(`Subject-${filterSubject}`)
-    
-    const filename = `classes-export${filterInfo.length > 0 ? `-${filterInfo.join('-')}` : ''}-${new Date().toISOString().split('T')[0]}.${selectedFormat === 'excel' ? 'xlsx' : 'csv'}`
-    link.setAttribute('download', filename)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    setShowExportModal(false)
-    setShowConfirmExport(false)
-    setSelectedFormat(null)
-  }
-
-  const handleFormatSelection = (format: 'csv' | 'excel') => {
-    setSelectedFormat(format)
-    setShowExportModal(false)
-    setShowConfirmExport(true)
-  }
 
   const resetFilters = () => {
     setSearchTerm('')
@@ -281,7 +197,7 @@ function FacultyClassesContent() {
           title="GLOBAL CLASSES"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
-          isRefreshing={isClassesRefreshing || isAllClassesRefreshing}
+          isRefreshing={isAllClassesRefetching}
           onToggleSidebar={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
         />
@@ -289,6 +205,9 @@ function FacultyClassesContent() {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           <div className={`max-w-full mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
+            {allClassesLoading && allClasses.length === 0 ? (
+              <ClassesPageSkeleton />
+            ) : (
             <>
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -351,14 +270,14 @@ function FacultyClassesContent() {
                   <div>
                     <h3 className="text-xl font-semibold text-gray-900">
                       ALL CLASSES
-                      {!loading && !allClassesError && (
+                      {!allClassesLoading && !allClassesError && (
                         <span className="ml-2 text-base font-normal text-gray-500">
                           ({filteredClasses.length} of {allClasses.length})
                         </span>
                       )}
                     </h3>
                   </div>
-                  {!loading && filteredClasses.length > 0 && (
+                  {!allClassesLoading && filteredClasses.length > 0 && (
                     <button
                       onClick={() => setShowExportModal(true)}
                       className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm"
@@ -487,16 +406,7 @@ function FacultyClassesContent() {
                   
                   {/* Table Body - Dynamic Content */}
                   <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-12">
-                          <div className="flex items-center justify-center space-x-3">
-                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                            <span className="text-sm text-gray-600">Loading classes data...</span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : filteredClasses.length > 0 ? (
+                    {filteredClasses.length > 0 ? (
                       filteredClasses.map((classItem) => (
                         <TableRow 
                           key={classItem.id} 
@@ -580,6 +490,7 @@ function FacultyClassesContent() {
               </div>
             </div>
             </>
+            )}
           </div>
         </main>
       </div>
@@ -587,119 +498,10 @@ function FacultyClassesContent() {
 
       {/* Export Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" onClick={() => setShowExportModal(false)}>
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" onClick={(e) => e.stopPropagation()}>
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Export Classes Data</h3>
-                <button
-                  onClick={() => setShowExportModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600">
-                  Export {filteredClasses.length} classes to your preferred format.
-                </p>
-                
-                <div className="space-y-3">
-                  <button
-                    onClick={() => handleFormatSelection('csv')}
-                    className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <svg className="w-5 h-5 mr-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Export as CSV
-                  </button>
-                  
-                  <button
-                    onClick={() => handleFormatSelection('excel')}
-                    className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <svg className="w-5 h-5 mr-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Export as Excel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Modal */}
-      {showConfirmExport && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" onClick={() => {
-          setShowConfirmExport(false)
-          setSelectedFormat(null)
-        }}>
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" onClick={(e) => e.stopPropagation()}>
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Confirm Download</h3>
-                <button
-                  onClick={() => {
-                    setShowConfirmExport(false)
-                    setSelectedFormat(null)
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600 mb-4">
-                  Are you sure you want to download {filteredClasses.length} classes as {selectedFormat?.toUpperCase()}?
-                </p>
-                
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <div className="text-sm">
-                    <span className="font-medium text-gray-700">Format:</span>
-                    <span className="ml-2 text-gray-900">{selectedFormat?.toUpperCase()}</span>
-                  </div>
-                  <div className="text-sm">
-                    <span className="font-medium text-gray-700">Total Classes:</span>
-                    <span className="ml-2 text-gray-900">{filteredClasses.length}</span>
-                  </div>
-                  {searchTerm && (
-                    <div className="text-sm">
-                      <span className="font-medium text-gray-700">Search:</span>
-                      <span className="ml-2 text-gray-900">&quot;{searchTerm}&quot;</span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    onClick={() => {
-                      setShowConfirmExport(false)
-                      setSelectedFormat(null)
-                    }}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleExportData}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    Download
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ClassesExportModal
+          filteredClasses={filteredClasses}
+          onClose={() => setShowExportModal(false)}
+        />
       )}
     </div>
   )

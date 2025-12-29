@@ -99,6 +99,32 @@ export class StudentService {
   }
 
   /**
+   * Get all students for a specific department
+   */
+  static async getStudentsByDepartment(dept: string): Promise<Student[]> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('peer_students')
+        .select('*')
+        .eq('dept', dept)
+        .eq('peer_tutor', false)
+        .order('year, section, name')
+
+      if (error) {
+        console.error('Error getting students by department:', error)
+        return []
+      }
+
+      return data as Student[] || []
+    } catch (error) {
+      console.error('Error in getStudentsByDepartment:', error)
+      return []
+    }
+  }
+
+  /**
    * Get all students for a specific department, year, and section
    */
   static async getStudentsBySection(dept: string, year: string, section: string): Promise<Student[]> {

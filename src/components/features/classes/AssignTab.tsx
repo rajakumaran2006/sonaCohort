@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react'
 import { AssignmentService, AssignmentStats, Assignment } from '@/lib/services/assignmentService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { Upload, Download } from 'lucide-react'
+import AssignmentImportModal from '@/components/forms/AssignmentImportModal'
+import PeerTutorMappingExport from '@/components/forms/PeerTutorMappingExport'
 
 interface AssignTabProps {
   dept: string
@@ -44,6 +47,8 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
   const [peerTutors, setPeerTutors] = useState<PeerTutor[]>([])
   const [loading, setLoading] = useState(true)
   const [autoAssigning, setAutoAssigning] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -192,22 +197,66 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
               Distribute <span className="font-semibold text-blue-600">{stats.unassignedStudents}</span> unassigned students among <span className="font-semibold text-green-600">{stats.totalPeerTutors}</span> peer tutors
             </p>
           </div>
-          <button
-            onClick={handleAutoAssign}
-            disabled={autoAssigning || stats.unassignedStudents === 0 || stats.totalPeerTutors === 0}
-            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:shadow-none"
-          >
-            {autoAssigning ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Assigning...
-              </div>
-            ) : (
-              'Auto Assign'
+          <div className="flex items-center gap-3">
+            {/* Import Button - Always Shown */}
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center shadow-sm"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import
+            </button>
+            
+            {/* Export Button - Conditional */}
+            {assignments.length > 0 && (
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="bg-white border border-green-200 text-green-700 hover:bg-green-50 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center shadow-sm"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </button>
             )}
-          </button>
+
+            <button
+              onClick={handleAutoAssign}
+              disabled={autoAssigning || stats.unassignedStudents === 0 || stats.totalPeerTutors === 0}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:shadow-none"
+            >
+              {autoAssigning ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Assigning...
+                </div>
+              ) : (
+                'Auto Assign'
+              )}
+            </button>
+          </div>
         </div>
       </div>
+
+      {showImportModal && (
+        <AssignmentImportModal
+          dept={dept}
+          year={year}
+          section={section}
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false)
+            loadData()
+          }}
+        />
+      )}
+
+      {showExportModal && (
+        <PeerTutorMappingExport
+          dept={dept}
+          year={year}
+          section={section}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
 
       {/* Peer Tutor Cards */}
       <div className="space-y-6">

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui'
 import { useQuery } from '@tanstack/react-query'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 import { ExamService } from '@/lib/services/examService'
-import { LayoutDashboard, GraduationCap, ClipboardList, FileText, FileBarChart, LogOut, User } from 'lucide-react'
+import { LayoutGrid, GraduationCap, ClipboardList, FileText, FileBarChart, LogOut, User } from 'lucide-react'
 
 interface PeerSidebarProps {
   isOpen: boolean
@@ -47,7 +47,7 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
   })
 
   const baseNavigation = [
-    { name: 'Dashboard', href: '/peer/dashboard', Icon: LayoutDashboard },
+    { name: 'Dashboard', href: '/peer/dashboard', Icon: LayoutGrid },
     { name: 'Classes', href: '/peer/classes', Icon: GraduationCap },
     { name: 'Attendance', href: '/peer/attendance', Icon: ClipboardList },
     { name: 'Reports', href: '/peer/reports', Icon: FileBarChart },
@@ -89,16 +89,23 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:flex lg:flex-col
+        fixed inset-y-0 left-0 z-50 w-64 bg-[#0f291e] shadow-lg transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:flex lg:flex-col
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo */}
-        <div className="flex items-center justify-center h-16 bg-blue-600 flex-shrink-0">
-          <h1 className="text-2xl font-bold text-white">PEER PORTAL</h1>
+        <div className="flex items-center h-20 flex-shrink-0 px-6 pt-4 mb-6">
+          <div className="flex items-center gap-3">
+             <h1 className="font-bold text-white text-xl tracking-wide">
+               PEER PORTAL
+             </h1>
+          </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 mt-8 px-4">
+        <nav className="flex-1 px-4 overflow-y-auto">
+          <div className="px-4 mb-4 text-xs font-bold text-gray-500 tracking-wider uppercase">
+            Menu
+          </div>
           <div className="space-y-2">
             {navigation.map((item) => {
               const isActive = pathname === item.href
@@ -108,33 +115,57 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
                   key={item.name}
                   onClick={() => handleNavigation(item.href)}
                   className={`
-                    w-full flex items-center px-4 py-3 text-left rounded-lg transition-colors
+                    w-full flex items-center px-4 py-3 text-left rounded-lg transition-all duration-200 group relative
                     ${isActive 
-                      ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-600' 
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'text-white' 
+                      : 'text-gray-400 hover:text-white'
                     }
                   `}
                 >
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#bef264] rounded-r-full" />
+                  )}
+                  <Icon className={`w-5 h-5 mr-3 ${isActive ? 'text-[#bef264]' : 'text-gray-400 group-hover:text-white'}`} />
+                  <span className="font-medium">{item.name}</span>
                 </button>
               )
             })}
           </div>
         </nav>
 
+        {/* Profile Section */}
+        <div className="border-t border-gray-800 flex-shrink-0 p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 relative">
+              <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden ring-2 ring-[#bef264] ring-offset-2 ring-offset-[#0f291e]">
+                <User className="h-6 w-6 text-gray-300" />
+              </div>
+              <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">
+                {peerTutor?.name || user?.user_metadata?.full_name || 'Peer Tutor'}
+              </p>
+              <p className="text-xs text-gray-400 truncate">
+                {user?.email}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Logout Button */}
-        <div className="p-4 border-t border-gray-200 flex-shrink-0">
-          <Button
+        <div className="p-4 flex-shrink-0">
+          <button
             onClick={handleSignOut}
             disabled={isLoggingOut}
-            variant="danger"
-            className="w-full justify-center"
-            loading={isLoggingOut}
+            className={`
+              w-full flex items-center px-4 py-3 text-left rounded-lg transition-colors hover:bg-white/5
+              text-red-400 hover:text-red-300
+            `}
           >
-            {!isLoggingOut && <LogOut className="w-5 h-5 mr-2" />}
-            {isLoggingOut ? 'Signing Out...' : 'Sign Out'}
-          </Button>
+            <LogOut className="w-5 h-5 mr-3" />
+            <span className="font-medium">{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>
+          </button>
         </div>
       </div>
     </>

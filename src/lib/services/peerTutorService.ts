@@ -129,6 +129,31 @@ export class PeerTutorService {
   }
 
   /**
+   * Get all peer tutors for a specific department
+   */
+  static async getPeerTutorsByDepartment(dept: string): Promise<PeerTutor[]> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('peer_tutors')
+        .select('*')
+        .eq('dept', dept)
+        .order('year, section, name')
+
+      if (error) {
+        console.error('Error getting peer tutors by department:', error)
+        return []
+      }
+
+      return data as PeerTutor[] || []
+    } catch (error) {
+      console.error('Error in getPeerTutorsByDepartment:', error)
+      return []
+    }
+  }
+
+  /**
    * Get peer tutors by years (array of years)
    */
   static async getPeerTutorsByYears(years: string[]): Promise<PeerTutor[]> {

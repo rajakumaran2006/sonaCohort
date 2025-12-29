@@ -306,4 +306,33 @@ export class AdditionalClassService {
       return false
     }
   }
+
+  /**
+   * Get all additional classes for a department
+   */
+  static async getAllAdditionalClassesForDepartment(dept: string): Promise<AdditionalClass[]> {
+    try {
+      const supabase = createClient()
+      
+      // We need to join with peer_tutors to filter by department
+      const { data, error } = await supabase
+        .from('additional_classes')
+        .select(`
+          *,
+          peer_tutors!inner(dept)
+        `)
+        .eq('peer_tutors.dept', dept)
+        .order('class_date', { ascending: false })
+
+      if (error) {
+        console.error('Error getting all additional classes for department:', error)
+        return []
+      }
+
+      return data as AdditionalClass[] || []
+    } catch (error) {
+      console.error('Error in getAllAdditionalClassesForDepartment:', error)
+      return []
+    }
+  }
 }
