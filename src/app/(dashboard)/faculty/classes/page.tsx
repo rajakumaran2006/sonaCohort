@@ -13,6 +13,8 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui/Table'
 import ClassesPageSkeleton from '@/components/skeletons/ClassesPageSkeleton'
 import ClassesExportModal from '@/components/forms/ClassesExportModal'
+import FilterDropdown from '@/components/ui/FilterDropdown'
+import ExportButton from '@/components/ui/ExportButton'
 
 export default function FacultyClassesPage() {
   return (
@@ -195,6 +197,7 @@ function FacultyClassesContent() {
         {/* Top Header */}
         <PageHeader
           title="GLOBAL CLASSES"
+          tagline="Subject Management & Schedule Overview"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
           isRefreshing={isAllClassesRefetching}
@@ -209,174 +212,125 @@ function FacultyClassesContent() {
               <ClassesPageSkeleton />
             ) : (
             <>
-            {/* Stats Cards */}
+            {/* Stats Cards - Clean White Design */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
-                    </div>
+              {/* Total Subjects Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Subjects</p>
+                    <p className="text-3xl font-bold text-gray-900 tracking-tight">{allClasses.length > 0 ? getTotalSubjects() : 0}</p>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Total Subjects</p>
-                    <p className="text-2xl font-semibold text-gray-900">{allClasses.length > 0 ? getTotalSubjects() : 0}</p>
+                  <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                    </svg>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                    Across All Years
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M7 6h10m-7 12h4" />
-                      </svg>
-                    </div>
+              {/* Avg Classes Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Avg Classes / Year</p>
+                    <p className="text-3xl font-bold text-gray-900 tracking-tight">{allClasses.length > 0 ? getAverageClassesPerYear() : '0'}</p>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Avg Classes / Year</p>
-                    <p className="text-2xl font-semibold text-gray-900">{allClasses.length > 0 ? getAverageClassesPerYear() : '0'}</p>
+                  <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                    </svg>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+                  <p className="text-[9px] font-bold text-purple-600 uppercase tracking-widest flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Per Academic Year
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </div>
+              {/* Scheduled Class Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Scheduled Class</p>
+                    <p className="text-3xl font-bold text-gray-900 tracking-tight">{getTotalScheduledClassCount()}</p>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Scheduled Class</p>
-                    <p className="text-2xl font-semibold text-gray-900">{getTotalScheduledClassCount()}</p>
+                  <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                    </svg>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
+                  <p className="text-[9px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Total Sessions
+                  </p>
                 </div>
               </div>
             </div>
 
 
 
-            {/* Classes List */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              {/* Header with Title and Export Button */}
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900">
-                      ALL CLASSES
-                      {!allClassesLoading && !allClassesError && (
-                        <span className="ml-2 text-base font-normal text-gray-500">
-                          ({filteredClasses.length} of {allClasses.length})
-                        </span>
-                      )}
-                    </h3>
-                  </div>
-                  {!allClassesLoading && filteredClasses.length > 0 && (
-                    <button
-                      onClick={() => setShowExportModal(true)}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Export
-                    </button>
-                  )}
-                </div>
-              </div>
-              
-              {/* Filters Section with Labels Above */}
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-end gap-4">
-                  {/* Search Field */}
-                  <div className="flex-1 max-w-md">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Search
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </div>
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search"
-                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            {/* Classes List - Clean White Design */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                    All Classes ({filteredClasses.length})
+                  </h3>
+                  
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="w-40">
+                      <FilterDropdown
+                        value={filterYear}
+                        onChange={setFilterYear}
+                        options={getUniqueYears().map(year => ({ label: year, value: year }))}
+                        placeholder="All Years"
                       />
                     </div>
-                  </div>
 
-                  {/* Year Filter */}
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Year
-                    </label>
-                    <select
-                      value={filterYear}
-                      onChange={(e) => setFilterYear(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">All Years</option>
-                      {getUniqueYears().map(year => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </select>
-                  </div>
+                    <div className="w-40">
+                      <FilterDropdown
+                        value={filterSection}
+                        onChange={setFilterSection}
+                        options={getUniqueSections().map(section => ({ label: section, value: section }))}
+                        placeholder="All Sections"
+                      />
+                    </div>
 
-                  {/* Section Filter */}
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Section
-                    </label>
-                    <select
-                      value={filterSection}
-                      onChange={(e) => setFilterSection(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    >
-                      <option value="">All Sections</option>
-                      {getUniqueSections().map(section => (
-                        <option key={section} value={section}>{section}</option>
-                      ))}
-                    </select>
-                  </div>
+                    <div className="w-40">
+                      <FilterDropdown
+                        value={filterSubject}
+                        onChange={setFilterSubject}
+                        options={getUniqueSubjects().map(subject => ({ label: subject, value: subject }))}
+                        placeholder="All Subjects"
+                      />
+                    </div>
 
-                  {/* Subject Filter */}
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Subject
-                    </label>
-                    <select
-                      value={filterSubject}
-                      onChange={(e) => setFilterSubject(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">All Subjects</option>
-                      {getUniqueSubjects().map(subject => (
-                        <option key={subject} value={subject}>{subject}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Clear Button */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 opacity-0">
-                      Clear
-                    </label>
-                    <button
-                      onClick={resetFilters}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-                    >
-                      Clear
-                    </button>
+                    {!allClassesLoading && filteredClasses.length > 0 && (
+                      <ExportButton 
+                        onClick={() => setShowExportModal(true)}
+                        text="Export"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -385,21 +339,21 @@ function FacultyClassesContent() {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead className="pl-6">
-                        <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">SUBJECT</span>
+                    <TableRow className="bg-white">
+                      <TableHead className="pl-6 py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</span>
                       </TableHead>
-                      <TableHead className="text-center">
-                        <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">DEPARTMENT</span>
+                      <TableHead className="py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</span>
                       </TableHead>
-                      <TableHead className="text-center">
-                        <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">YEAR & SECTION</span>
+                      <TableHead className="py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year & Section</span>
                       </TableHead>
-                      <TableHead className="text-center">
-                        <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">SCHEDULED CLASS COUNT</span>
+                      <TableHead className="text-center py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Scheduled Class</span>
                       </TableHead>
-                      <TableHead className="text-center">
-                        <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">CREATED</span>
+                      <TableHead className="text-right pr-6 py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Created</span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -410,40 +364,41 @@ function FacultyClassesContent() {
                       filteredClasses.map((classItem) => (
                         <TableRow 
                           key={classItem.id} 
-                          className="hover:bg-gray-50 border-b border-gray-200"
+                          className="hover:bg-gray-50/50 transition-colors group"
                         >
-                          <TableCell className="pl-6">
-                            <div className="text-sm font-medium text-gray-900 flex items-center">
-                              {classItem.subject_name}
-                              <svg 
-                                className="ml-2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" 
-                                fill="none" 
-                                viewBox="0 0 24 24" 
-                                stroke="currentColor"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleClassClick(classItem)
-                                }}
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
+                          <TableCell className="pl-6 py-4">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+                                <span className="text-xs font-bold text-gray-400 uppercase">
+                                  {classItem.subject_name.substring(0, 2)}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-gray-900 mb-0.5">{classItem.subject_name}</p>
+                                <button 
+                                  onClick={() => handleClassClick(classItem)}
+                                  className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
+                                >
+                                  VIEW
+                                </button>
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">{classItem.dept}</div>
+                          <TableCell className="py-4">
+                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">{classItem.dept}</span>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">{classItem.year} - {classItem.section}</div>
+                          <TableCell className="py-4 text-gray-500">
+                            <span className="text-xs font-medium">{classItem.year} - {classItem.section}</span>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">
+                          <TableCell className="text-center py-4">
+                            <span className="text-sm font-bold text-gray-900">
                               {scheduledClassCounts[classItem.id] || 0}
-                            </div>
+                            </span>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">
+                          <TableCell className="text-right pr-6 py-4">
+                            <span className="text-xs font-medium text-gray-500">
                               {new Date(classItem.created_at).toLocaleDateString()}
-                            </div>
+                            </span>
                           </TableCell>
                         </TableRow>
                       ))

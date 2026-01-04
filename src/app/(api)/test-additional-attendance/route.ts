@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/server'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     
     // Test if additional_classes table exists and is accessible
     const { data: additionalClasses, error: classesError } = await supabase

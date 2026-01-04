@@ -31,6 +31,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTab
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { Input } from '@/components/ui'
 import { ArrowLeft, Edit, Save, X, Plus, Download, Filter, RotateCw } from 'lucide-react'
+import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
 import { Student } from '@/lib/services/studentService'
 
@@ -620,361 +621,332 @@ function PeerTutorExamDetailsContent() {
               <span className="text-gray-900 font-medium">{peerTutor.name}</span>
             </nav>
 
-            {/* Peer Tutor Info Card */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="text-xl">{peerTutor.name} - Exam Marks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Email</p>
-                    <p className="text-base text-gray-900 mt-1">{peerTutor.email}</p>
+            {/* Peer Tutor Info Card - Clean White Design */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 relative group overflow-hidden">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em]">Peer Tutor Performance</p>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Year & Section</p>
-                    <p className="text-base text-gray-900 mt-1">
-                      {peerTutor.year} - {peerTutor.section}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Students</p>
-                    <p className="text-base text-gray-900 mt-1">
-                      {students?.length || 0} student(s) assigned
-                    </p>
+                  <h3 className="text-2xl font-bold text-gray-900 tracking-tight mb-4">{peerTutor.name}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email Address</p>
+                        <p className="text-sm font-bold text-gray-700">{peerTutor.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year & Section</p>
+                        <p className="text-sm font-bold text-gray-700">{peerTutor.year} - {peerTutor.section}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Assigned Students</p>
+                        <p className="text-sm font-bold text-gray-700">{students?.length || 0} Students</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            {/* Marks Table Card */}
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            {/* Marks Table View - Clean White Design */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+              <div className="px-6 py-5 border-b border-gray-100">
+                <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
-                    <CardTitle className="text-xl">Student Marks</CardTitle>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Manage marks for all assigned students
-                    </p>
+                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Student Marks Table
+                    </h3>
                   </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                    {/* Filter and Edit Actions - Top Row on Mobile */}
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      {/* Filter Dropdown */}
-                      <div className="relative" ref={filterRef}>
-                        <button
-                          onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                          className={`inline-flex items-center justify-center p-2 transition-colors hover:bg-gray-100 rounded ${
-                            sortBy !== 'name' ? 'text-blue-600' : 'text-gray-600'
-                          }`}
-                          title="Sort students"
-                        >
-                          <Filter className="h-5 w-5" />
-                        </button>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="relative" ref={filterRef}>
+                      <button
+                        onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                        className={`p-2 rounded-lg border transition-all ${
+                          sortBy !== 'name'
+                            ? 'bg-blue-50 border-blue-200 text-blue-600'
+                            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                        title="Sort Students"
+                      >
+                        <Filter className="w-5 h-5" />
+                      </button>
 
-                        {/* Filter Dropdown */}
-                        {showFilterDropdown && (
-                          <div className="absolute left-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
-                            <div className="p-4">
-                              <h4 className="text-sm font-medium text-gray-900 mb-3">Sort Students By</h4>
-                              
-                              <div className="space-y-2">
-                                <button
-                                  onClick={() => {
-                                    setSortBy('name')
-                                    setShowFilterDropdown(false)
-                                  }}
-                                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                                    sortBy === 'name'
-                                      ? 'bg-blue-100 text-blue-700 font-medium'
-                                      : 'text-gray-700 hover:bg-gray-100'
-                                  }`}
-                                >
-                                  Name (A-Z)
-                                </button>
-                                
-                                <button
-                                  onClick={() => {
-                                    setSortBy('avg')
-                                    setShowFilterDropdown(false)
-                                  }}
-                                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                                    sortBy === 'avg'
-                                      ? 'bg-blue-100 text-blue-700 font-medium'
-                                      : 'text-gray-700 hover:bg-gray-100'
-                                  }`}
-                                >
-                                  Average (High to Low)
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {!isEditing ? (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => setIsEditing(true)}
-                          className="flex-1 sm:flex-initial"
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit Marks
-                        </Button>
-                      ) : (
-                        <>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={handleCancel}
-                            disabled={isSaving}
-                            className="flex-1 sm:flex-initial"
+                      {showFilterDropdown && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 z-30 py-2">
+                          <button
+                            onClick={() => { setSortBy('name'); setShowFilterDropdown(false); }}
+                            className={`w-full text-left px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                              sortBy === 'name' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
+                            }`}
                           >
-                            <X className="h-4 w-4 mr-2" />
-                            Cancel
-                          </Button>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={handleSave}
-                            loading={isSaving}
-                            disabled={isSaving}
-                            className="flex-1 sm:flex-initial"
+                            Name (A-Z)
+                          </button>
+                          <button
+                            onClick={() => { setSortBy('avg'); setShowFilterDropdown(false); }}
+                            className={`w-full text-left px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                              sortBy === 'avg' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
+                            }`}
                           >
-                            <Save className="h-4 w-4 mr-2" />
-                            Save
-                          </Button>
-                        </>
+                            Average Score
+                          </button>
+                        </div>
                       )}
                     </div>
-                    
-                    {/* Add Subject and Export - Bottom Row on Mobile */}
-                    <div className="flex items-center gap-2 sm:gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowAddSubjectModal(true)}
-                        className="flex-1 sm:flex-initial"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Subject
-                    </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExportToExcel}
-                        className="flex-1 sm:flex-initial inline-flex items-center bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
-                        disabled={!students || !examSubjects || students.length === 0 || examSubjects.length === 0}
+
+                    <div className="h-8 w-[1px] bg-gray-200 mx-1"></div>
+
+                    {!isEditing ? (
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-sm shadow-blue-200"
                       >
-                        <Download className="h-4 w-4 mr-2" />
-                        Export
-                    </Button>
-                    </div>
+                        <Edit className="w-3.5 h-3.5" />
+                        Edit Marks
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleCancel}
+                          className="px-4 py-2 bg-white border border-gray-200 text-gray-500 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-gray-50 transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSave}
+                          disabled={isSaving}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-green-700 transition-all disabled:opacity-50"
+                        >
+                          {isSaving ? 'Saving...' : (
+                            <>
+                              <Save className="w-3.5 h-3.5" />
+                              Save Changes
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => setShowAddSubjectModal(true)}
+                      className="p-2 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-all"
+                      title="Add Subject"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+
+                    <ExportButton onClick={handleExportToExcel} />
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
+              </div>
                 {students && examSubjects && students.length > 0 && examSubjects.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 sm:mx-0">
-                    <div className="inline-block min-w-full align-middle">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                            <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[150px] sm:min-w-[200px] px-2 sm:px-4">
-                            Student Name
+                  <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-white border-b border-gray-100">
+                        <TableHead className="pl-6 py-4 sticky left-0 bg-white z-10 min-w-[200px]">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Student Name</span>
+                        </TableHead>
+                        {examSubjects.map((subject) => (
+                          <TableHead key={subject.id} className="text-center py-4 min-w-[120px]">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{subject.subject_name}</span>
                           </TableHead>
-                          {examSubjects.map((subject) => (
-                              <TableHead key={subject.id} className="min-w-[120px] sm:min-w-[150px] px-2 sm:px-4">
-                                <span className="text-xs sm:text-sm">{subject.subject_name}</span>
-                            </TableHead>
-                          ))}
-                            <TableHead className="min-w-[80px] sm:min-w-[100px] bg-gray-50 font-semibold px-2 sm:px-4">
-                              <span className="text-xs sm:text-sm">AVG</span>
-                            </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                          {sortedStudents.map((student) => {
-                            const avg = calculateStudentAverage(student.id)
-                            return (
-                          <TableRow key={student.id}>
-                                <TableCell className="sticky left-0 bg-white z-10 font-medium text-gray-900 min-w-[150px] sm:min-w-[200px] px-2 sm:px-4">
-                                  <span className="text-xs sm:text-sm">{student.name}</span>
+                        ))}
+                        <TableHead className="text-right pr-6 py-4 min-w-[100px]">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-blue-600">Average</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sortedStudents.map((student) => {
+                        const avg = calculateStudentAverage(student.id)
+                        return (
+                          <TableRow key={student.id} className="hover:bg-gray-50/50 transition-colors group border-b border-gray-50">
+                            <TableCell className="pl-6 py-4 sticky left-0 bg-white z-10 group-hover:bg-gray-50/50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-[10px] font-bold text-blue-600">{student.name.substring(0, 2).toUpperCase()}</span>
+                                </div>
+                                <span className="text-sm font-bold text-gray-700">{student.name}</span>
+                              </div>
                             </TableCell>
                             {examSubjects.map((subject) => (
-                                  <TableCell key={subject.id} className="min-w-[120px] sm:min-w-[150px] px-2 sm:px-4">
+                              <TableCell key={subject.id} className="text-center py-4">
                                 {isEditing ? (
                                   <input
                                     type="text"
                                     value={marksData[student.id]?.[subject.id]?.[markField] || ''}
-                                    onChange={(e) => {
-                                      let value = e.target.value
-                                      // Allow "40/100" format or just "40"
-                                      handleMarkChange(student.id, subject.id, markField, value)
-                                    }}
-                                        className="w-full px-1.5 sm:px-2 py-1 text-xs sm:text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder={`e.g., 40`}
+                                    onChange={(e) => handleMarkChange(student.id, subject.id, markField, e.target.value)}
+                                    className="w-16 mx-auto px-2 py-1 text-center text-sm font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                                    placeholder="-"
                                   />
                                 ) : (
-                                      <div className="text-xs sm:text-sm">
-                                    {marksData[student.id]?.[subject.id]?.[markField] ? (
-                                      <span className="font-medium">
-                                        {marksData[student.id][subject.id][markField]}/{exam?.max_marks || 100}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400">0/{exam?.max_marks || 100}</span>
-                                    )}
-                                  </div>
+                                  <span className={`text-sm font-bold ${
+                                    (marksData[student.id]?.[subject.id]?.[markField]) ? 'text-gray-700' : 'text-gray-300'
+                                  }`}>
+                                    {marksData[student.id]?.[subject.id]?.[markField] || '-'}
+                                  </span>
                                 )}
                               </TableCell>
                             ))}
-                                <TableCell className="min-w-[80px] sm:min-w-[100px] bg-gray-50 font-semibold text-gray-900 px-2 sm:px-4">
-                                  <span className="text-xs sm:text-sm">{avg > 0 ? avg.toFixed(2) : '-'}</span>
-                                </TableCell>
+                            <TableCell className="text-right pr-6 py-4">
+                              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50/50 border border-blue-100">
+                                <span className={`text-xs font-black ${
+                                  avg >= 80 ? 'text-green-600' : 
+                                  avg >= 60 ? 'text-blue-600' : 
+                                  avg > 0 ? 'text-orange-600' : 
+                                  'text-gray-400'
+                                }`}>
+                                  {avg.toFixed(1)}%
+                                </span>
+                              </div>
+                            </TableCell>
                           </TableRow>
-                            )
-                          })}
-                      </TableBody>
-                    </Table>
-                    </div>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <p className="text-gray-500">
+                  <div className="p-12 text-center border-t border-gray-100">
+                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
                       {!students || students.length === 0
-                        ? 'NO STUDENTS ASSIGNED'
-                        : 'NO SUBJECTS FOUND. ADD A SUBJECT.'}
+                        ? 'No Students Assigned'
+                        : 'No Subjects Found. Please Add a Subject.'}
                     </p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Performance Analytics Section */}
+            {/* Performance Analytics Section - Clean White Design */}
             {students && examSubjects && students.length > 0 && examSubjects.length > 0 && (
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle className="text-xl">Performance Analytics</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {/* Line Chart */}
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-4">Student Performance Chart</h3>
-                      <div className="bg-white p-4 rounded-lg border border-gray-200">
-                        <StudentPerformanceChart
-                          students={sortedStudents.map(student => {
-                            const avg = calculateStudentAverage(student.id)
-                            const marks = examSubjects.map(subject => {
-                              const markValue = marksData[student.id]?.[subject.id]?.[markField]
-                              if (markValue) {
-                                const markStr = String(markValue)
-                                const numericValue = parseFloat(markStr.split('/')[0])
-                                return isNaN(numericValue) ? 0 : numericValue
-                              }
-                              return 0
-                            })
-                            return {
-                              studentName: student.name,
-                              marks,
-                              average: avg
-                            }
-                          })}
-                          subjectNames={examSubjects.map(s => s.subject_name)}
-                          maxMarks={exam?.max_marks || 100}
-                        />
+              <div className="space-y-8 mt-12">
+                <div className="flex items-center gap-3">
+                  <div className="h-[1px] flex-1 bg-gray-200"></div>
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-4">Performance Analytics</h3>
+                  <div className="h-[1px] flex-1 bg-gray-200"></div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Performance Chart Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-gray-100">
+                      <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Student Performance Overview</h4>
+                    </div>
+                    <div className="p-6">
+                      <StudentPerformanceChart data={studentPerformance} maxMarks={exam.max_marks || 100} />
+                    </div>
+                  </div>
+
+                  {/* Subject Heatmap Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-gray-100">
+                      <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Student-Subject Distribution</h4>
+                    </div>
+                    <div className="p-6">
+                      <Heatmap
+                        data={heatmapData}
+                        xKey="subject"
+                        yKey="student"
+                        valueKey="value"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {/* Attention Required Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-gray-100 bg-red-50/30">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                        <h4 className="text-xs font-bold text-red-700 uppercase tracking-wider">Critical Attention</h4>
                       </div>
                     </div>
-
-                    {/* Ranked Table */}
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-4">Student Priority Ranking (ML Analysis)</h3>
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="min-w-[60px]">Rank</TableHead>
-                              <TableHead>Student Name</TableHead>
-                              <TableHead className="min-w-[100px]">Priority</TableHead>
-                              <TableHead className="min-w-[100px]">Average</TableHead>
-                              <TableHead>Key Subjects</TableHead>
-                              <TableHead>Reasons</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {attentionItems.length > 0 ? (
-                              attentionItems.map((item, index) => {
-                                const priorityColors = {
-                                  high: 'bg-red-100 text-red-800',
-                                  medium: 'bg-yellow-100 text-yellow-800',
-                                  low: 'bg-green-100 text-green-800'
-                                }
-                                
-                                const criticalSubjects = item.subjects.filter(s => s.status === 'critical').map(s => s.subjectName)
-                                const warningSubjects = item.subjects.filter(s => s.status === 'warning').map(s => s.subjectName)
-                                
-                                return (
-                                  <TableRow key={item.studentId}>
-                                    <TableCell className="font-semibold text-gray-900">
-                                      #{index + 1}
-                                    </TableCell>
-                                    <TableCell className="font-medium text-gray-900">
-                                      {item.studentName}
-                                    </TableCell>
-                                    <TableCell>
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[item.priority]}`}>
-                                        {item.priority.toUpperCase()}
-                                      </span>
-                                    </TableCell>
-                                    <TableCell className="font-semibold">
-                                      {item.averagePercentage.toFixed(2)}%
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="flex flex-wrap gap-1">
-                                        {criticalSubjects.length > 0 && (
-                                          <span className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded border border-red-200">
-                                            {criticalSubjects.join(', ')}
-                                          </span>
-                                        )}
-                                        {warningSubjects.length > 0 && (
-                                          <span className="text-xs px-2 py-1 bg-yellow-50 text-yellow-700 rounded border border-yellow-200">
-                                            {warningSubjects.join(', ')}
-                                          </span>
-                                        )}
-                                        {criticalSubjects.length === 0 && warningSubjects.length === 0 && (
-                                          <span className="text-xs text-gray-500">All subjects performing well</span>
-                                        )}
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="text-sm text-gray-600 max-w-md">
-                                      <div className="space-y-1">
-                                        {item.reasons.slice(0, 2).map((reason, idx) => (
-                                          <div key={idx} className="text-xs">• {reason}</div>
-                                        ))}
-                                        {item.reasons.length > 2 && (
-                                          <div className="text-xs text-gray-400">+{item.reasons.length - 2} more</div>
-                                        )}
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                )
-                              })
-                            ) : (
-                              <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                                  No performance data available
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
+                    <div className="p-6">
+                      <div className="space-y-4">
+                        {attentionItems.length > 0 ? (
+                          attentionItems.map((item, idx) => (
+                            <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100 italic transition-transform hover:scale-[1.02]">
+                              <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5"></div>
+                              <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                                <span className="font-bold text-gray-900">{item.studentName}</span>: {item.reason}
+                              </p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-6 text-gray-400 italic text-xs uppercase tracking-widest font-bold">
+                            All students performing well
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+
+                  {/* High Performers Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-gray-100 bg-green-50/30">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <h4 className="text-xs font-bold text-green-700 uppercase tracking-wider">Top Performers</h4>
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <div className="space-y-4">
+                        {insights.filter(i => i.type === 'positive').map((insight, idx) => (
+                          <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100 transition-transform hover:scale-[1.02]">
+                            <svg className="w-4 h-4 text-green-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <p className="text-xs text-gray-600 leading-relaxed font-medium">{insight.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* General Insights Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-gray-100 bg-blue-50/30">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wider">Performance Insights</h4>
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <div className="space-y-4">
+                        {insights.filter(i => i.type !== 'positive').map((insight, idx) => (
+                          <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100 transition-transform hover:scale-[1.02]">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5"></div>
+                            <p className="text-xs text-gray-600 leading-relaxed font-medium">{insight.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </main>

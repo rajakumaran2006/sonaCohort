@@ -2,15 +2,17 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
-import { AdditionalClassService, AdditionalClassWithAttendance, AdditionalClassAttendanceRecord } from '@/lib/services/additionalClassService'
+import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
 import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
 import * as XLSX from 'xlsx'
+import { Plus, Trash2, FileDown, ChevronDown, CheckCircle, XCircle, Search, Calendar, User, FileText } from 'lucide-react'
 
 interface AdditionalClassesTabProps {
   peerTutorInfo: any
+  assignedStudents: any[]
 }
 
-export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClassesTabProps) {
+export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }: AdditionalClassesTabProps) {
   const { user } = useAuth()
   const [additionalClasses, setAdditionalClasses] = useState<AdditionalClassWithAttendance[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,24 +52,17 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
     }
   }
 
-  const loadStudents = async () => {
-    if (!peerTutorInfo?.id) return
-
-    try {
-      const students = await AttendanceService.getStudentsForAttendance(peerTutorInfo.id)
-      console.log('Loaded students for additional class:', students)
-      const attendanceRecords: AttendanceRecord[] = students.map(student => ({
+  useEffect(() => {
+    if (assignedStudents && assignedStudents.length > 0) {
+      const attendanceRecords: AttendanceRecord[] = assignedStudents.map(student => ({
         student_id: student.id,
         student_name: student.name,
         student_email: student.email,
         status: 'present' as const
       }))
-      console.log('Created attendance records:', attendanceRecords)
       setNewClass(prev => ({ ...prev, students: attendanceRecords }))
-    } catch (error) {
-      console.error('Error loading students:', error)
     }
-  }
+  }, [assignedStudents])
 
   const loadAvailableSubjects = async () => {
     if (!peerTutorInfo?.id) return
@@ -84,15 +79,24 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
   }
 
   const handleAddClass = () => {
+    if (assignedStudents.length === 0) {
+      alert("You need assigned students to create an additional class")
+      return
+    }
+
     setNewClass({
       subject: '',
       topic: '',
       date: '',
-      students: []
+      students: assignedStudents.map(student => ({
+        student_id: student.id,
+        student_name: student.name,
+        student_email: student.email,
+        status: 'present' as const
+      }))
     })
     setShowAddForm(true)
     loadAvailableSubjects()
-    loadStudents()
   }
 
   const handleSaveClass = async () => {
@@ -106,14 +110,6 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
       return
     }
 
-    console.log('Saving additional class with data:', {
-      peerTutorId: peerTutorInfo.id,
-      subject: newClass.subject,
-      topic: newClass.topic,
-      date: newClass.date,
-      students: newClass.students
-    })
-
     setSaving(true)
     try {
       const additionalClass = await AdditionalClassService.createAdditionalClass(
@@ -125,7 +121,6 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
       )
 
       if (additionalClass) {
-        // Reload the classes to get the updated list with attendance records
         await loadAdditionalClasses()
         setShowAddForm(false)
         setNewClass({
@@ -134,7 +129,6 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
           date: '',
           students: []
         })
-        alert('Additional class created successfully!')
       } else {
         alert('Error creating additional class. Please try again.')
       }
@@ -200,16 +194,12 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
       )
       
       await Promise.all(deletePromises)
-      
-      // Reload classes after deletion
       await loadAdditionalClasses()
       
-      // Reset delete mode and selections
       setDeleteMode(false)
       setSelectedClasses(new Set())
       setShowDeleteModal(false)
       
-      alert('Selected classes deleted successfully!')
     } catch (error) {
       console.error('Error deleting classes:', error)
       alert('Error deleting classes. Please try again.')
@@ -219,13 +209,9 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
   }
 
   const handleExportToExcel = () => {
-    if (additionalClasses.length === 0) {
-      alert('No classes to export')
-      return
-    }
+    if (additionalClasses.length === 0) return
 
     try {
-      // Group classes by subject
       const groupedBySubject = additionalClasses.reduce((acc, classItem) => {
         if (!acc[classItem.subject_name]) {
           acc[classItem.subject_name] = []
@@ -234,21 +220,17 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
         return acc
       }, {} as Record<string, AdditionalClassWithAttendance[]>)
 
-      // Prepare data for export
       const exportData: any[][] = []
       let totalClassesOverall = 0
       let totalPresentCountOverall = 0
       let totalStudentCountOverall = 0
 
-      // Add header
       exportData.push(['Peer Tutor Name', peerTutorInfo?.name || 'N/A'])
-      exportData.push([]) // Empty row
+      exportData.push([])
 
-      // Process each subject
       Object.keys(groupedBySubject).forEach((subject) => {
         const classes = groupedBySubject[subject]
         
-        // Subject header
         exportData.push(['Subject', subject])
         exportData.push(['Date', 'Topic', 'Students Present', 'Students Absent', 'Total Students'])
         
@@ -256,7 +238,6 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
         let subjectTotalPresent = 0
         let subjectTotalStudents = 0
 
-        // Add class details
         classes.forEach((classItem) => {
           const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
           const absentCount = classItem.attendance_records.filter(r => r.status === 'absent').length
@@ -275,202 +256,158 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
           subjectTotalStudents += totalCount
         })
 
-        // Subject summary
-        exportData.push([]) // Empty row
+        exportData.push([])
         exportData.push(['Total Classes Taken', subjectTotalClasses])
         exportData.push(['Total Students Present', subjectTotalPresent])
-        exportData.push([]) // Empty row after each subject
+        exportData.push([])
 
         totalClassesOverall += subjectTotalClasses
         totalPresentCountOverall += subjectTotalPresent
         totalStudentCountOverall += subjectTotalStudents
       })
 
-      // Overall summary
-      exportData.push([]) // Empty row
+      exportData.push([])
       exportData.push(['OVERALL SUMMARY'])
       exportData.push(['Total Classes Taken (All Subjects)', totalClassesOverall])
       exportData.push(['Total Students Present Count', totalPresentCountOverall])
       
-      // Calculate attendance percentage
       const attendancePercentage = totalStudentCountOverall > 0 
         ? ((totalPresentCountOverall / totalStudentCountOverall) * 100).toFixed(2)
         : '0.00'
       exportData.push(['Student Attendance Percentage', `${attendancePercentage}%`])
 
-      // Create workbook and worksheet
       const workbook = XLSX.utils.book_new()
       const worksheet = XLSX.utils.aoa_to_sheet(exportData)
-
-      // Apply formatting
-      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
-      
-      // Make headers bold
-      for (let row = 0; row <= range.e.r; row++) {
-        for (let col = 0; col <= range.e.c; col++) {
-          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
-          if (worksheet[cellAddress]) {
-            const cell = worksheet[cellAddress]
-            
-            // Bold headers and subject names
-            if (row === 2 || (worksheet[cellAddress]?.v && typeof worksheet[cellAddress].v === 'string' && worksheet[cellAddress].v.includes('Subject'))) {
-              if (!cell.s) cell.s = {}
-              if (!cell.s.font) cell.s.font = {}
-              cell.s.font.bold = true
-            }
-            
-            // Bold overall summary
-            if (cell.v && typeof cell.v === 'string' && cell.v.includes('OVERALL SUMMARY')) {
-              if (!cell.s) cell.s = {}
-              if (!cell.s.font) cell.s.font = {}
-              cell.s.font.bold = true
-              cell.s.font.size = 12
-            }
-          }
-        }
-      }
-
-      // Set column widths
-      worksheet['!cols'] = [
-        { wch: 25 }, // Date column
-        { wch: 30 }, // Topic column
-        { wch: 18 }, // Present column
-        { wch: 18 }, // Absent column
-        { wch: 15 }  // Total column
-      ]
-
-      // Add worksheet to workbook
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Additional Classes Report')
-
-      // Generate filename
       const fileName = `Additional_Classes_${peerTutorInfo?.name?.replace(/\s+/g, '_') || 'Report'}_${new Date().toISOString().split('T')[0]}.xlsx`
-
-      // Save file
       XLSX.writeFile(workbook, fileName)
     } catch (error) {
       console.error('Error exporting to Excel:', error)
-      alert('Error exporting to Excel. Please try again.')
     }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center py-20">
+         <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      
+      {/* Top Header & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl shadow-sm border border-gray-200">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Additional Classes</h2>
-          <p className="text-gray-600 mt-1">Add extra classes and mark attendance for additional topics</p>
+          <h2 className="text-lg font-bold text-gray-900 uppercase tracking-tight">Additional Classes</h2>
+          <p className="text-xs font-medium text-gray-500 mt-1">Manage extra sessions and attendance</p>
         </div>
-        <button
-          onClick={handleAddClass}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          <span>Add Class</span>
-        </button>
+        <div className="flex items-center gap-3">
+            {assignedStudents.length > 0 && (
+            <button
+               onClick={handleAddClass}
+               className="flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+            >
+               <Plus size={14} strokeWidth={3} />
+               <span>Add Class</span>
+            </button>
+            )}
+        </div>
       </div>
 
       {/* Add Class Form */}
       {showAddForm && (
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Additional Class</h3>
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 animate-in slide-in-from-top-4 duration-300">
+          <div className="flex justify-between items-center mb-6">
+             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">New Class Entry</h3>
+             <button onClick={() => setShowAddForm(false)} className="text-gray-400 hover:text-gray-600"><XCircle size={20} /></button>
+          </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Subject Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Subject *
-              </label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Subject</label>
               {loadingSubjects ? (
-                <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                  <span className="text-gray-500">Loading subjects...</span>
-                </div>
+                 <div className="h-10 w-full bg-gray-50 rounded-lg animate-pulse"></div>
               ) : (
-                <select
-                  value={newClass.subject}
-                  onChange={(e) => setNewClass(prev => ({ ...prev, subject: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select a subject</option>
-                  {availableSubjects.map((subject) => (
-                    <option key={subject} value={subject}>
-                      {subject}
-                    </option>
-                  ))}
-                </select>
+                 <div className="relative">
+                    <select
+                      value={newClass.subject}
+                      onChange={(e) => setNewClass(prev => ({ ...prev, subject: e.target.value }))}
+                      className="w-full appearance-none pl-4 pr-10 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl text-sm font-medium transition-all outline-none"
+                    >
+                      <option value="">Select Subject</option>
+                      {availableSubjects.map((subject) => (
+                        <option key={subject} value={subject}>{subject}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 text-gray-400 pointer-events-none" size={16} />
+                 </div>
               )}
             </div>
 
-            {/* Topic Input */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Topic *
-              </label>
-              <input
-                type="text"
-                value={newClass.topic}
-                onChange={(e) => setNewClass(prev => ({ ...prev, topic: e.target.value }))}
-                placeholder="Enter topic name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Topic</label>
+              <div className="relative">
+                 <input
+                   type="text"
+                   value={newClass.topic}
+                   onChange={(e) => setNewClass(prev => ({ ...prev, topic: e.target.value }))}
+                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl text-sm font-medium transition-all outline-none"
+                   placeholder="Enter topic name"
+                 />
+                 <FileText className="absolute left-3.5 top-3 text-gray-400 pointer-events-none" size={16} />
+              </div>
             </div>
 
-            {/* Date Input */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date *
-              </label>
-              <input
-                type="date"
-                value={newClass.date}
-                onChange={(e) => setNewClass(prev => ({ ...prev, date: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Date</label>
+              <div className="relative">
+                 <input
+                   type="date"
+                   value={newClass.date}
+                   onChange={(e) => setNewClass(prev => ({ ...prev, date: e.target.value }))}
+                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl text-sm font-medium transition-all outline-none"
+                 />
+                 <Calendar className="absolute left-3.5 top-3 text-gray-400 pointer-events-none" size={16} />
+              </div>
             </div>
           </div>
 
-          {/* Attendance Section */}
           {newClass.students.length > 0 && (
-            <div className="mt-6">
-              <h4 className="text-md font-medium text-gray-900 mb-3">Mark Attendance</h4>
-              <div className="space-y-2">
+            <div className="bg-gray-50 rounded-xl border border-gray-100 p-5">
+              <div className="flex justify-between items-center mb-4">
+                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Attendance Sheet</h4>
+                 <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="text-green-600">Present</span>
+                    <span className="text-gray-300">/</span>
+                    <span className="text-red-600">Absent</span>
+                 </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {newClass.students.map((student) => (
-                  <div key={student.student_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">{student.student_name}</span>
-                      <span className="text-gray-500 ml-2">({student.student_email})</span>
+                  <div key={student.student_id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                       <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold">
+                          {student.student_name.substring(0,2).toUpperCase()}
+                       </div>
+                       <div>
+                          <p className="text-xs font-bold text-gray-900">{student.student_name}</p>
+                          <p className="text-[10px] text-gray-400 truncate max-w-[100px]">{student.student_email}</p>
+                       </div>
                     </div>
-                    <div className="flex space-x-2">
+                    <div className="flex bg-gray-100 rounded-lg p-1">
                       <button
                         onClick={() => handleStudentStatusChange(student.student_id, 'present')}
-                        className={`px-3 py-1 rounded-md text-sm font-medium ${
-                          student.status === 'present'
-                            ? 'bg-green-100 text-green-800 border border-green-200'
-                            : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-green-50'
-                        }`}
+                        className={`p-1 rounded ${student.status === 'present' ? 'bg-white shadow-sm text-green-600' : 'text-gray-400 hover:text-gray-600'}`}
                       >
-                        Present
+                         <CheckCircle size={16} />
                       </button>
                       <button
                         onClick={() => handleStudentStatusChange(student.student_id, 'absent')}
-                        className={`px-3 py-1 rounded-md text-sm font-medium ${
-                          student.status === 'absent'
-                            ? 'bg-red-100 text-red-800 border border-red-200'
-                            : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-red-50'
-                        }`}
+                        className={`p-1 rounded ${student.status === 'absent' ? 'bg-white shadow-sm text-red-600' : 'text-gray-400 hover:text-gray-600'}`}
                       >
-                        Absent
+                         <XCircle size={16} />
                       </button>
                     </div>
                   </div>
@@ -479,281 +416,199 @@ export default function AdditionalClassesTab({ peerTutorInfo }: AdditionalClasse
             </div>
           )}
 
-          {/* Form Actions */}
-          <div className="flex justify-end space-x-3 mt-6">
+          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100">
             <button
               onClick={() => setShowAddForm(false)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-500 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveClass}
               disabled={saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center space-x-2"
+              className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold uppercase tracking-wider shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>Save Class</span>
-                </>
-              )}
+              {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <CheckCircle size={16} />}
+              <span>Save Class</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Additional Classes List */}
-      <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900">Additional Classes (<span className="text-black">{additionalClasses.length}</span>)</h3>
-          <div className="flex items-center space-x-3">
-            {!deleteMode && (
-              <button
-                onClick={handleExportToExcel}
-                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span>Export Excel</span>
-              </button>
-            )}
-            <button
-              onClick={toggleDeleteMode}
-              className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 transition-colors ${
-                deleteMode
-                  ? 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-500'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              <span>{deleteMode ? 'Cancel' : 'Delete'}</span>
-            </button>
-            {deleteMode && selectedClasses.size > 0 && (
-              <button
-                onClick={handleDeleteClick}
-                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                <span>Delete Selected ({selectedClasses.size})</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {additionalClasses.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  {deleteMode && (
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                      <input
-                        type="checkbox"
-                        checked={selectedClasses.size === additionalClasses.length && additionalClasses.length > 0}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedClasses(new Set(additionalClasses.map(c => c.id)))
-                          } else {
-                            setSelectedClasses(new Set())
-                          }
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
-                  )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Subject
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Topic
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Present
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Absent
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {additionalClasses.map((classItem) => {
-                  const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
-                  const absentCount = classItem.attendance_records.filter(r => r.status === 'absent').length
-                  const totalCount = classItem.attendance_records.length
-                  const isExpanded = expandedRows.has(classItem.id)
-                  const isSelected = selectedClasses.has(classItem.id)
-
-                  return (
-                    <React.Fragment key={classItem.id}>
-                      <tr className={`hover:bg-gray-50 ${isSelected && deleteMode ? 'bg-red-50' : ''}`}>
-                        {deleteMode && (
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleClassSelection(classItem.id)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                          </td>
-                        )}
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <button
-                            onClick={() => toggleRowExpand(classItem.id)}
-                            className="text-gray-400 hover:text-gray-600 transition-colors"
-                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                          >
-                            <svg
-                              className={`w-5 h-5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{classItem.subject_name}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{classItem.topic}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {new Date(classItem.class_date).toLocaleDateString('en-GB', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric'
-                            })}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            {presentCount}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            {absentCount}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {totalCount}
-                          </span>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={deleteMode ? 8 : 7} className="px-6 py-4 bg-gray-50">
-                            <div className="space-y-4">
-                              <div>
-                                <h4 className="text-sm font-semibold text-gray-900 mb-2">Topics Covered</h4>
-                                <p className="text-sm text-gray-700">{classItem.topic}</p>
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-semibold text-gray-900 mb-3">Students Attendance</h4>
-                                {classItem.attendance_records.length > 0 ? (
-                                  <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 border border-gray-300 rounded-lg">
-                                      <thead className="bg-gray-100">
-                                        <tr>
-                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                            Student Name
-                                          </th>
-                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                            Email
-                                          </th>
-                                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                            Status
-                                          </th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="bg-white divide-y divide-gray-200">
-                                        {classItem.attendance_records.map((record) => (
-                                          <tr key={record.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                              {record.student_name}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                                              {record.student_email || 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-center">
-                                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                record.status === 'present'
-                                                  ? 'bg-green-100 text-green-800'
-                                                  : 'bg-red-100 text-red-800'
-                                              }`}>
-                                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-gray-500">No attendance records available</p>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
+      {/* Main List */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div className="flex items-center gap-2">
+               <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">History ({additionalClasses.length})</h3>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No additional classes yet</h3>
-            <p className="text-gray-500">Add your first additional class to get started.</p>
-          </div>
-        )}
+            
+            <div className="flex items-center gap-3">
+               {!deleteMode && additionalClasses.length > 0 && (
+                   <button
+                     onClick={handleExportToExcel}
+                     className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-100 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+                   >
+                     <FileDown size={14} /> <span>Export</span>
+                   </button>
+               )}
+               
+               {additionalClasses.length > 0 && (
+                   <div className="flex items-center gap-2">
+                      <button
+                        onClick={toggleDeleteMode}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                           deleteMode 
+                              ? 'bg-gray-100 text-gray-600 border-gray-200' 
+                              : 'text-gray-400 hover:text-red-500 border-transparent hover:bg-red-50'
+                        }`}
+                      >
+                        <Trash2 size={14} /> <span>{deleteMode ? 'Cancel' : 'Delete'}</span>
+                      </button>
+                      
+                      {deleteMode && selectedClasses.size > 0 && (
+                         <button
+                           onClick={handleDeleteClick}
+                           className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+                         >
+                            <span>Delete ({selectedClasses.size})</span>
+                         </button>
+                      )}
+                   </div>
+               )}
+            </div>
+         </div>
+
+         {additionalClasses.length > 0 ? (
+            <div className="overflow-x-auto">
+               <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                     <tr>
+                        {deleteMode && <th className="px-6 py-3 w-10"></th>}
+                        <th className="px-6 py-3 w-10"></th>
+                        <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</th>
+                        <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Topic</th>
+                        <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
+                        <th className="px-6 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Attendance</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                     {additionalClasses.map((classItem) => {
+                        const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
+                        const totalCount = classItem.attendance_records.length
+                        const isExpanded = expandedRows.has(classItem.id)
+                        const isSelected = selectedClasses.has(classItem.id)
+
+                        return (
+                           <React.Fragment key={classItem.id}>
+                              <tr className={`hover:bg-gray-50/80 transition-colors group ${isSelected ? 'bg-blue-50/30' : ''}`}>
+                                 {deleteMode && (
+                                    <td className="px-6 py-4 text-center">
+                                       <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => toggleClassSelection(classItem.id)}
+                                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                                       />
+                                    </td>
+                                 )}
+                                 <td className="px-6 py-4">
+                                    <button
+                                       onClick={() => toggleRowExpand(classItem.id)}
+                                       className={`p-1.5 rounded-lg border transition-all ${
+                                          isExpanded 
+                                             ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                                             : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300'
+                                       }`}
+                                    >  
+                                       <ChevronDown size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                    </button>
+                                 </td>
+                                 <td className="px-6 py-4">
+                                    <p className="text-sm font-bold text-gray-900">{classItem.subject_name}</p>
+                                 </td>
+                                 <td className="px-6 py-4">
+                                    <p className="text-sm font-medium text-gray-600">{classItem.topic}</p>
+                                 </td>
+                                 <td className="px-6 py-4">
+                                    <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
+                                       {new Date(classItem.class_date).toLocaleDateString()}
+                                    </span>
+                                 </td>
+                                 <td className="px-6 py-4">
+                                    <div className="flex items-center justify-center gap-2">
+                                       <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100">{presentCount}</span>
+                                       <span className="text-[10px] font-medium text-gray-400 uppercase">of</span>
+                                       <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{totalCount}</span>
+                                    </div>
+                                 </td>
+                              </tr>
+                              {isExpanded && (
+                                 <tr className="bg-gray-50/50 shadow-inner">
+                                    <td colSpan={deleteMode ? 6 : 5} className="px-6 py-6 ring-2 ring-transparent">
+                                       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm max-w-4xl mx-auto">
+                                          <div className="flex items-center gap-2 mb-4">
+                                             <User size={16} className="text-gray-400" />
+                                             <h4 className="text-xs font-bold text-gray-900 uppercase tracking-widest">Student Attendance Detail</h4>
+                                          </div>
+                                          
+                                          {classItem.attendance_records.length > 0 ? (
+                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                {classItem.attendance_records.map((record) => (
+                                                   <div key={record.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-sm transition-all">
+                                                      <div className="overflow-hidden">
+                                                         <p className="text-xs font-bold text-gray-900 truncate">{record.student_name}</p>
+                                                         <p className="text-[10px] text-gray-400 truncate">{record.student_email}</p>
+                                                      </div>
+                                                      <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded ${
+                                                         record.status === 'present' 
+                                                            ? 'bg-green-100 text-green-700' 
+                                                            : 'bg-red-100 text-red-700'
+                                                      }`}>
+                                                         {record.status}
+                                                      </span>
+                                                   </div>
+                                                ))}
+                                             </div>
+                                          ) : (
+                                             <p className="text-sm text-gray-400 italic">No attendance records found.</p>
+                                          )}
+                                       </div>
+                                    </td>
+                                 </tr>
+                              )}
+                           </React.Fragment>
+                        )
+                     })}
+                  </tbody>
+               </table>
+            </div>
+         ) : (
+            <div className="py-20 flex flex-col items-center justify-center text-center">
+               <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
+                  <img src="/icons/search.png" alt="search" />
+               </div>
+               <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">No Additional Classes</h3>
+               <p className="text-xs text-gray-400 mt-2 max-w-xs block">
+                  {assignedStudents.length > 0
+                    ? "You haven't added any extra classes yet. Click \"Add Class\" to get started." 
+                    : "You currently don't have any students assigned to you."}
+               </p>
+            </div>
+         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
         isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false)
-        }}
+        onClose={() => setShowDeleteModal(false)}
         onConfirm={confirmDelete}
-        title="Confirm Delete Additional Classes"
+        title="Delete Selected Classes"
         itemsToDelete={Array.from(selectedClasses).map(classId => {
-          const classItem = additionalClasses.find(c => c.id === classId)
+          const item = additionalClasses.find(c => c.id === classId)
           return {
-            name: `${classItem?.subject_name || 'Unknown'} - ${classItem?.topic || 'Unknown'}`,
-            email: new Date(classItem?.class_date || '').toLocaleDateString(),
-            additionalInfo: `Date: ${new Date(classItem?.class_date || '').toLocaleDateString()}`
+             name: item?.subject_name || 'Unknown Subject',
+             email: item?.topic || 'Unknown Topic',
+             additionalInfo: new Date(item?.class_date || '').toLocaleDateString()
           }
         })}
         type="all"

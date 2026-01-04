@@ -853,4 +853,79 @@ export class ClassService {
       return false
     }
   }
+
+  /**
+   * Create a class for ALL sections in a department and year
+   * This is used when a faculty wants to add a subject to the entire year at once
+   */
+  static async createClassForAllSections(
+    subjectName: string, 
+    dept: string, 
+    year: string, 
+    departmentId: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // 1. Get all unique sections for this dept and year
+      const sections = await this.getSectionsForYear(dept, year)
+      
+      if (sections.length === 0) {
+        return { 
+          success: false, 
+          message: `No sections found for ${dept} - Year ${year}. Please ensure students are added first.` 
+        }
+      }
+
+      let createdCount = 0
+      let alreadyExistedCount = 0
+      let failedCount = 0
+
+      // 2. Process each section
+      await Promise.all(sections.map(async (section) => {
+        try {
+          // Check if class already exists for this section
+          const exists = await this.classExists(dept, year, section, subjectName)
+          
+          if (exists) {
+            alreadyExistedCount++
+            return
+          }
+
+          // Create the class for this section
+          const success = await this.createClass({
+            subject_name: subjectName,
+            dept,
+            year,
+            section,
+            faculty_id: departmentId
+          })
+
+          if (success) {
+            createdCount++
+          } else {
+            failedCount++
+          }
+        } catch (err) {
+          console.error(`Error creating class for section ${section}:`, err)
+          failedCount++
+        }
+      }))
+
+      // 3. Construct response message
+      let message = `Successfully processed ${sections.length} sections.`
+      if (createdCount > 0) message += ` Created ${createdCount} new classes.`
+      if (alreadyExistedCount > 0) message += ` ${alreadyExistedCount} classes already existed.`
+      if (failedCount > 0) message += ` Failed to create classes for ${failedCount} sections.`
+
+      return {
+        success: failedCount === 0 || createdCount > 0,
+        message
+      }
+    } catch (error) {
+      console.error('Error in createClassForAllSections:', error)
+      return { 
+        success: false, 
+        message: 'An unexpected error occurred while creating classes for all sections.' 
+      }
+    }
+  }
 }

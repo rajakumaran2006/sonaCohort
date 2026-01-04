@@ -62,7 +62,7 @@ export default function FacultyProtectedRoute({ children }: FacultyProtectedRout
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              <h1 className="text-xl font-semibold text-gray-800">Faculty Dashboard</h1>
+              <h1 className="h-8"></h1>
               <div className="w-6"></div>
             </div>
           </header>

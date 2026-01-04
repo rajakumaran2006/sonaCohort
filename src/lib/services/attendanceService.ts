@@ -199,7 +199,7 @@ export class AttendanceService {
         .eq('class_id', classId)
 
       if (scheduledError) {
-        console.error('Error getting scheduled classes:', scheduledError)
+        console.error('Error getting scheduled classes:', JSON.stringify(scheduledError, null, 2))
         return []
       }
 

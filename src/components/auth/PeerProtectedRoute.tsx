@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -32,15 +32,19 @@ export default function PeerProtectedRoute({ children }: PeerProtectedRouteProps
   })
 
   // Handle redirects based on query state
-  if (!loading && !isVerifying) {
-    if (!user) {
-      router.push('/login')
-      return null
+  useEffect(() => {
+    if (!loading && !isVerifying) {
+      if (!user) {
+        router.push('/login')
+      } else if (error || !isPeerTutor) {
+        console.log('PeerProtectedRoute: No peer tutor access found for user:', user?.email)
+        router.push('/login?error=peer_access_denied')
+      }
     }
+  }, [loading, isVerifying, user, error, isPeerTutor, router])
 
-    if (error || !isPeerTutor) {
-      console.log('PeerProtectedRoute: No peer tutor access found for user:', user.email)
-      router.push('/login?error=peer_access_denied')
+  if (!loading && !isVerifying) {
+    if (!user || error || !isPeerTutor) {
       return null
     }
   }

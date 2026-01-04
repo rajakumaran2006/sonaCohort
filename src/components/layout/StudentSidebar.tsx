@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui'
 import { LayoutGrid, Users, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
 
@@ -50,10 +51,7 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
     { name: 'Students', href: '/student/students', Icon: Users },
   ] as const
 
-  const handleNavigation = (href: string) => {
-    router.push(href)
-    onClose()
-  }
+
 
   const handleSignOut = async () => {
     setIsLoggingOut(true)
@@ -109,9 +107,10 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
               const isActive = pathname === item.href
               const Icon = item.Icon
               return (
-                <button
+                <Link
                   key={item.name}
-                  onClick={() => handleNavigation(item.href)}
+                  href={item.href}
+                  onClick={onClose}
                   className={`
                     w-full flex items-center rounded-lg transition-all duration-200 group relative
                     ${isCollapsed ? 'justify-center py-4' : 'px-4 py-3 text-left'}
@@ -127,8 +126,9 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
                   )}
                   <Icon className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'} ${isActive ? 'text-[#bef264]' : 'text-gray-400 group-hover:text-white'}`} />
                   {!isCollapsed && <span className="font-medium">{item.name}</span>}
-                </button>
+                </Link>
               )
+
             })}
           </div>
 
@@ -144,42 +144,37 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
         </nav>
 
         {/* Profile Section */}
-        <div className="border-t border-gray-800 flex-shrink-0 p-4">
-          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-            <div className="flex-shrink-0 relative">
-              <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden ring-2 ring-[#bef264] ring-offset-2 ring-offset-[#0f291e]">
-                <User className="h-6 w-6 text-gray-300" />
+        <div className="border-t border-gray-800 p-4">
+          <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between'}`}>
+            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 min-w-0'}`}>
+              <div className="relative flex-shrink-0">
+                <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden ring-2 ring-[#bef264] ring-offset-2 ring-offset-[#0f291e]">
+                  <User className="h-6 w-6 text-gray-300" />
+                </div>
+                <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
               </div>
-              <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
+              
+              {!isCollapsed && (
+                <div className="flex flex-col min-w-0 mr-2">
+                  <p className="text-sm font-medium text-white truncate">
+                    {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Student'}
+                  </p>
+                </div>
+              )}
             </div>
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
-                  {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Student'}
-                </p>
-                <p className="text-xs text-gray-400 truncate">
-                  {user?.email}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Logout Button */}
-        <div className="p-4 flex-shrink-0">
-          <button
-            onClick={handleSignOut}
-            disabled={isLoggingOut}
-            className={`
-              w-full flex items-center rounded-lg transition-colors group
-              ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3 text-left hover:bg-white/5'}
-              text-red-400 hover:text-red-300
-            `}
-            title={isCollapsed ? 'Sign Out' : undefined}
-          >
-            <LogOut className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'}`} />
-            {!isCollapsed && <span className="font-medium">{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>}
-          </button>
+            <button
+              onClick={handleSignOut}
+              disabled={isLoggingOut}
+              className={`
+                text-gray-400 hover:text-white transition-colors flex-shrink-0
+                ${isCollapsed ? '' : 'p-2 rounded-lg hover:bg-white/10'}
+              `}
+              title="Sign Out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </>

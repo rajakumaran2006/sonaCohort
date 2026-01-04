@@ -14,6 +14,8 @@ import PageHeader from '@/components/layout/PageHeader'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui/Table'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Eye } from 'lucide-react'
+import FilterDropdown from '@/components/ui/FilterDropdown'
+import ExportButton from '@/components/ui/ExportButton'
 
 interface ClassWithAttendance extends ScheduledClassWithDetails {
   peerTutorAttendance: 'present' | 'absent'
@@ -643,6 +645,7 @@ function FacultyAttendanceContent() {
         {/* Top Header */}
         <PageHeader
           title="ATTENDANCE STATUS"
+          tagline="Class Completion & Peer Tutor Tracking"
           lastRefresh={lastRefresh}
           onRefresh={handleManualRefresh}
           isRefreshing={isRefreshing}
@@ -665,19 +668,14 @@ function FacultyAttendanceContent() {
         {/* Stats Cards */}
         {facultyDepartment ? (
           <>
+            {/* Stats Cards - Clean White Design */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Total Peer Tutors</p>
-                    <p className="text-2xl font-semibold text-gray-900">
+              {/* Total Peer Tutors Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Peer Tutors</p>
+                    <p className="text-3xl font-bold text-gray-900 tracking-tight">
                       {(() => {
                         const allClasses = [...classStatus.completed, ...classStatus.pending]
                         const uniquePeerTutors = new Set(
@@ -689,250 +687,144 @@ function FacultyAttendanceContent() {
                       })()}
                     </p>
                   </div>
+                  <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                    </svg>
+                    Across Department
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
+              {/* Completed Classes Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Completed Classes</p>
+                    <p className="text-3xl font-bold text-gray-900 tracking-tight">{classStatus.completed.length}</p>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Completed Classes</p>
-                    <p className="text-2xl font-semibold text-gray-900">
-                      {(() => {
-                        return classStatus.completed.length
-                      })()}
-                    </p>
+                  <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                  <p className="text-[9px] font-bold text-green-600 uppercase tracking-widest flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Marked Verified
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
+              {/* Pending Classes Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Pending Classes</p>
+                    <p className="text-3xl font-bold text-gray-900 tracking-tight">{classStatus.pending.length}</p>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Pending Classes</p>
-                    <p className="text-2xl font-semibold text-gray-900">
-                      {(() => {
-                        return classStatus.pending.length
-                      })()}
-                    </p>
+                  <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
+                  <p className="text-[9px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Action Required
+                  </p>
                 </div>
               </div>
             </div>
 
         {/* Peer Tutors Table View */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            {/* Header with Title and Export Button */}
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900">
-                    ATTENDANCE STATUS OVERVIEW
-                    {!loadingPeerTutors && peerTutors.length > 0 && (() => {
-                      // Filter peer tutors based on search query
-                      const filteredPeerTutorsList = peerTutors.filter(peerTutor => {
-                        if (!searchQuery) return true
-                        const query = searchQuery.toLowerCase()
-                        return (
-                          peerTutor.name.toLowerCase().includes(query) ||
-                          peerTutor.email.toLowerCase().includes(query) ||
-                          (Array.from(peerTutor.years) as string[]).some((y: string) => y.toLowerCase().includes(query)) ||
-                          ((peerTutor as any).actualSection || '').toLowerCase().includes(query)
-                        )
-                      })
-
-                      // Apply subject filter if selected
-                      const subjectFilteredList = filters.subject 
-                        ? filteredPeerTutorsList.filter(peerTutor => 
-                            peerTutor.classes.some((cls: ClassWithAttendance) => 
-                              cls.class?.subject_name === filters.subject
-                            )
-                          )
-                        : filteredPeerTutorsList
-
-                      return (
-                        <span className="ml-2 text-base font-normal text-gray-500">
-                          ({subjectFilteredList.length} of {peerTutors.length})
-                        </span>
-                      )
-                    })()}
-                  </h3>
-                </div>
-                {(() => {
-                  // Calculate filtered count to determine if export button should be shown
-                  if (loadingPeerTutors || !peerTutors || peerTutors.length === 0) {
-                    return null
-                  }
-
-                  // Filter peer tutors based on search query
-                  const filteredPeerTutorsList = peerTutors.filter(peerTutor => {
-                    if (!searchQuery) return true
-                    const query = searchQuery.toLowerCase()
-                    return (
-                      peerTutor.name.toLowerCase().includes(query) ||
-                      peerTutor.email.toLowerCase().includes(query) ||
-                      (Array.from(peerTutor.years) as string[]).some((y: string) => y.toLowerCase().includes(query)) ||
-                      ((peerTutor as any).actualSection || '').toLowerCase().includes(query)
-                    )
-                  })
-
-                  // Apply subject filter if selected
-                  const subjectFilteredList = filters.subject 
-                    ? filteredPeerTutorsList.filter(peerTutor => 
-                        peerTutor.classes.some((cls: ClassWithAttendance) => 
-                          cls.class?.subject_name === filters.subject
-                        )
-                      )
-                    : filteredPeerTutorsList
-
-                  // Only show export button if there's at least one record
-                  if (subjectFilteredList.length === 0) {
-                    return null
-                  }
-
-                  return (
-                    <button
-                      onClick={handleExportData}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Export
-                    </button>
-                  )
-                })()}
-              </div>
-            </div>
-            {/* Filters Section with Labels Above */}
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-end gap-4">
-                {/* Search Field */}
-                <div className="flex-1 max-w-md">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Search
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search"
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          {/* Peer Tutors Table View - Clean White Design */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                  Attendance Status ({peerTutors.length})
+                </h3>
+                
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="w-40">
+                    <FilterDropdown
+                      value={filters.year}
+                      onChange={(value) => handleFilterChange('year', value)}
+                      options={years.map(year => ({ label: year.name, value: year.name }))}
+                      placeholder="All Years"
                     />
                   </div>
-                </div>
 
-                {/* Year Filter */}
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Year
-                  </label>
-                  <select
-                    value={filters.year}
-                    onChange={(e) => handleFilterChange('year', e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">All Years</option>
-                    {years.map((year) => (
-                      <option key={year.id} value={year.name}>{year.name}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="w-40">
+                    <FilterDropdown
+                      value={filters.section}
+                      onChange={(value) => handleFilterChange('section', value)}
+                      options={sections.map(section => ({ label: section.name, value: section.name }))}
+                      placeholder="All Sections"
+                      disabled={!filters.year}
+                    />
+                  </div>
 
-                {/* Section Filter */}
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Section
-                  </label>
-                  <select
-                    value={filters.section}
-                    onChange={(e) => handleFilterChange('section', e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    disabled={!filters.year}
-                  >
-                    <option value="">All Sections</option>
-                    {sections.map((section) => (
-                      <option key={section.id} value={section.name}>{section.name}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="w-40">
+                    <FilterDropdown
+                      value={filters.subject || ''}
+                      onChange={(value) => handleFilterChange('subject', value)}
+                      options={subjects.map(subject => ({ label: subject.name, value: subject.name }))}
+                      placeholder="All Subjects"
+                    />
+                  </div>
 
-                {/* Status Filter (replacing Subject) */}
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Subject
-                  </label>
-                  <select
-                    value={filters.subject || ''}
-                    onChange={(e) => handleFilterChange('subject', e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">All Subjects</option>
-                    {subjects.map((subject) => (
-                      <option key={subject.id} value={subject.name}>{subject.name}</option>
-                    ))}
-                  </select>
-                </div>
+                  <ExportButton 
+                    onClick={handleExportData}
+                    disabled={peerTutors.length === 0}
+                  />
 
-                {/* Clear Button */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 opacity-0">
-                    Clear
-                  </label>
-                  <button
-                    onClick={resetFilters}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-                  >
-                    Clear
-                  </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
             {/* Table Header - Static */}
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="pl-6">
-                      <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">NAME</span>
+                  <TableRow className="bg-white">
+                    <TableHead className="pl-6 py-4">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Name</span>
                     </TableHead>
-                    <TableHead className="text-center">
-                      <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">YEAR & SECTION</span>
+                    <TableHead className="text-center py-4">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year & Section</span>
                     </TableHead>
-                    <TableHead className="text-center">
-                      <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">TOTAL CLASSES ALLOCATED</span>
+                    <TableHead className="text-center py-4">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Allocated</span>
                     </TableHead>
-                    <TableHead className="text-center">
-                      <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">CLASSES COMPLETED</span>
+                    <TableHead className="text-center py-4">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Completed</span>
                     </TableHead>
-                    <TableHead className="text-center">
-                      <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">ADDITIONAL CLASSES</span>
+                    <TableHead className="text-center py-4">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Additional</span>
                     </TableHead>
-                    <TableHead className="text-center">
-                      <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">ATTENDANCE %</span>
+                    <TableHead className="text-center py-4">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Attendance %</span>
                     </TableHead>
-                    <TableHead className="text-center">
-                      <span className="text-xs font-medium text-gray-900 uppercase tracking-wider">ACTIONS</span>
+                    <TableHead className="text-right pr-6 py-4">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -998,44 +890,47 @@ function FacultyAttendanceContent() {
                       
                       return (
                       <React.Fragment key={peerTutor.id}>
-                        <TableRow className="hover:bg-gray-50 border-b border-gray-200">
-                          <TableCell className="pl-6">
-                            <div className="text-sm font-medium text-gray-900">
-                              {peerTutor.name}
+                        <TableRow className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100">
+                          <TableCell className="pl-6 py-4">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+                                <span className="text-xs font-bold text-gray-400 uppercase">
+                                  {peerTutor.name.substring(0, 2)}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-gray-900 mb-0.5">{peerTutor.name}</p>
+                                <p className="text-[10px] text-gray-400 font-medium">{peerTutor.email}</p>
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">
+                          <TableCell className="text-center py-4">
+                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
                               {year ? `${year} - ${actualSection}` : 'N/A'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center py-4">
+                            <span className="text-sm font-bold text-gray-900">{peerTutor.totalClasses}</span>
+                          </TableCell>
+                          <TableCell className="text-center py-4">
+                            <span className="text-sm font-bold text-gray-900">{peerTutor.completedClasses - peerTutor.additionalClasses}</span>
+                          </TableCell>
+                          <TableCell className="text-center py-4">
+                            <span className="text-sm font-bold text-blue-600">{peerTutor.additionalClasses}</span>
+                          </TableCell>
+                          <TableCell className="text-center py-4">
+                            <div className="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100">
+                              <span className="text-xs font-bold text-gray-900">
+                                {peerTutor.totalClasses > 0 ? Math.round((peerTutor.completedClasses / peerTutor.totalClasses) * 100) : 0}%
+                              </span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">
-                              {peerTutor.totalClasses}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">
-                              {peerTutor.completedClasses - peerTutor.additionalClasses}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">
-                              {peerTutor.additionalClasses}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="text-sm text-gray-900">
-                              {peerTutor.totalClasses > 0 ? Math.round((peerTutor.completedClasses / peerTutor.totalClasses) * 100) : 0}%
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-right pr-6 py-4">
                             <button
                               onClick={() => togglePeerTutorExpansion(peerTutor.id)}
-                              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                              className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                             >
-                              <Eye className="h-4 w-4 mr-1.5" />
-                              View
+                              {expandedPeerTutors.has(peerTutor.id) ? 'CLOSE' : 'VIEW'}
                             </button>
                           </TableCell>
                         </TableRow>
@@ -1048,114 +943,80 @@ function FacultyAttendanceContent() {
                                 <h4 className="text-lg font-semibold text-gray-900 mb-4">Class Details</h4>
                                 <div className="space-y-4">
                                   {peerTutor.classes.map((cls: ClassWithAttendance) => (
-                                <div key={cls.id} className="bg-white rounded-lg p-4 border border-gray-200">
-                                  <div className="flex items-start justify-between mb-3">
+                                <div key={cls.id} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm relative group overflow-hidden">
+                                  <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-50">
                                     <div>
-                                          <h5 className="font-semibold text-gray-900">{cls.class.subject_name}</h5>
-                                      <div className="text-sm text-gray-600 mt-1">
-                                        <div className="flex items-center space-x-2">
-                                          <span>Date: {formatDate(cls.scheduled_date)}</span>
-                                          <span className={`text-xs px-2 py-1 rounded-full ${getDateStatus(cls.scheduled_date).color} bg-gray-100`}>
-                                            {getDateStatus(cls.scheduled_date).label}
-                                          </span>
+                                      <h5 className="text-sm font-bold text-gray-900 mb-1">{cls.class.subject_name}</h5>
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 rounded text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                          </svg>
+                                          {formatDate(cls.scheduled_date)}
                                         </div>
-                                        <p>{cls.dept} - {cls.year} - {cls.section}</p>
+                                        <div className={`text-[9px] font-black uppercase tracking-[0.2em] ${getDateStatus(cls.scheduled_date).color}`}>
+                                          {getDateStatus(cls.scheduled_date).label}
+                                        </div>
                                       </div>
-                                      {cls.topics && (
-                                        <p className="text-sm text-gray-600 mt-2">
-                                          <span className="font-medium">Topics:</span> {cls.topics}
-                                        </p>
-                                      )}
                                     </div>
-                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                    <div className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
                                       cls.peerTutorAttendance === 'present' 
-                                        ? 'bg-green-100 text-green-800' 
-                                        : 'bg-red-100 text-red-800'
+                                        ? 'bg-green-50 text-green-600 border border-green-100' 
+                                        : 'bg-red-50 text-red-600 border border-red-100'
                                     }`}>
                                       {cls.peerTutorAttendance === 'present' ? 'Present' : 'Absent'}
-                                    </span>
+                                    </div>
                                   </div>
                                   
-                                  {/* Student Attendance Summary - Only show when peer tutor is present */}
+                                  {/* Student Attendance Summary */}
                                   {cls.peerTutorAttendance === 'present' ? (
-                                    <div className="border-t border-gray-200 pt-4">
-                                      <div className="flex items-center justify-between mb-3">
-                                        <h6 className="text-sm font-medium text-gray-900">Student Attendance Summary</h6>
-                                        {cls.attendanceSummary.total > 0 && (
-                                          <span className="text-xs text-gray-500">
-                                            {Math.round((cls.attendanceSummary.present / cls.attendanceSummary.total) * 100)}% attendance rate
-                                          </span>
-                                        )}
+                                    <div>
+                                      <div className="grid grid-cols-3 gap-4 mb-5">
+                                        <div className="p-4 bg-white border border-gray-100 rounded-xl text-center group-hover:border-green-100 transition-colors">
+                                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Present</p>
+                                          <p className="text-xl font-bold text-green-600">{cls.attendanceSummary.present}</p>
+                                        </div>
+                                        <div className="p-4 bg-white border border-gray-100 rounded-xl text-center group-hover:border-red-100 transition-colors">
+                                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Absent</p>
+                                          <p className="text-xl font-bold text-red-600">{cls.attendanceSummary.absent}</p>
+                                        </div>
+                                        <div className="p-4 bg-white border border-gray-100 rounded-xl text-center group-hover:border-blue-100 transition-colors">
+                                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total</p>
+                                          <p className="text-xl font-bold text-blue-600">{cls.attendanceSummary.total}</p>
+                                        </div>
                                       </div>
                                       
-                                      {cls.studentAttendance.length > 0 ? (
-                                        <div className="space-y-3">
-                                          {/* Attendance Stats Cards */}
-                                          <div className="grid grid-cols-3 gap-3">
-                                            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                                              <div className="text-2xl font-bold text-green-600">{cls.attendanceSummary.present}</div>
-                                              <div className="text-xs text-green-700 font-medium">Present</div>
-                                            </div>
-                                            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-                                              <div className="text-2xl font-bold text-red-600">{cls.attendanceSummary.absent}</div>
-                                              <div className="text-xs text-red-700 font-medium">Absent</div>
-                                            </div>
-                                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-                                              <div className="text-2xl font-bold text-gray-600">{cls.attendanceSummary.total}</div>
-                                              <div className="text-xs text-gray-700 font-medium">Total</div>
-                                            </div>
-                                          </div>
-                                          
-                                          {/* Individual Student Details */}
-                                          <div className="mt-4">
-                                            <h6 className="text-xs font-medium text-gray-700 mb-2">Individual Records:</h6>
-                                            <div className="space-y-1 max-h-32 overflow-y-auto">
-                                              {cls.studentAttendance.map((student: AttendanceRecord) => (
-                                                <div key={student.student_id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
-                                                  <span className="text-gray-900 font-medium">{student.student_name}</span>
-                                                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                                    student.status === 'present' 
-                                                      ? 'bg-green-100 text-green-800' 
-                                                      : 'bg-red-100 text-red-800'
-                                                  }`}>
-                                                    {student.status === 'present' ? 'Present' : 'Absent'}
+                                      {cls.studentAttendance.length > 0 && (
+                                        <div className="space-y-2 mt-4 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Student Records</p>
+                                          {cls.studentAttendance.map((student: AttendanceRecord) => (
+                                            <div key={student.student_id} className="flex items-center justify-between p-3 bg-gray-50/50 rounded-lg hover:bg-gray-50 transition-colors">
+                                              <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                                  <span className="text-[10px] font-bold text-black uppercase">
+                                                    {student.student_name.substring(0, 2)}
                                                   </span>
                                                 </div>
-                                              ))}
+                                                <span className="text-xs font-bold text-gray-700">{student.student_name}</span>
+                                              </div>
+                                              <span className={`text-[10px] font-black uppercase ${
+                                                student.status === 'present' ? 'text-green-600' : 'text-red-600'
+                                              }`}>
+                                                {student.status}
+                                              </span>
                                             </div>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="text-center py-4">
-                                          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                                            </svg>
-                                          </div>
-                                          <div className="text-sm text-gray-500 italic">
-                                            No students assigned to this class
-                                          </div>
+                                          ))}
                                         </div>
                                       )}
                                     </div>
                                   ) : (
-                                    <div className="border-t border-gray-200 pt-4">
-                                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                                        <div className="flex items-start">
-                                          <div className="flex-shrink-0">
-                                            <svg className="w-5 h-5 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                            </svg>
-                                          </div>
-                                          <div className="ml-3 flex-1">
-                                            <h6 className="text-sm font-medium text-amber-800 mb-1">
-                                              Student Attendance Not Available
-                                            </h6>
-                                            <p className="text-sm text-amber-700">
-                                              Student attendance records are only available when the peer tutor is present for the class.
-                                            </p>
-                                          </div>
-                                        </div>
+                                    <div className="bg-orange-50/30 border border-orange-100 rounded-xl p-4 flex gap-3">
+                                      <svg className="w-5 h-5 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                      <div>
+                                        <p className="text-xs font-bold text-orange-800 mb-1">No Records Available</p>
+                                        <p className="text-[10px] text-orange-700 font-medium">Detailed student attendance is only recorded when the peer tutor is present for the session.</p>
                                       </div>
                                     </div>
                                   )}

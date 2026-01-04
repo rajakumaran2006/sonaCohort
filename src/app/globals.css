@@ -4,6 +4,7 @@
   --background: #ffffff;
   --foreground: #000000;
 }
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -42,4 +43,48 @@ body {
   font-family: var(--font-roboto-condensed), sans-serif;
   font-weight: 400;
   letter-spacing: -0.01em;
+}
+
+@keyframes wavy-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+.animate-wavy {
+  animation: wavy-pulse 2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.delay-1 {
+  animation-delay: 0.4s;
+}
+
+.delay-2 {
+  animation-delay: 0.8s;
+}
+
+.delay-3 {
+  animation-delay: 1.2s;
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
 }

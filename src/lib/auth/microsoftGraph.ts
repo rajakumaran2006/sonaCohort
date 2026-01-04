@@ -79,20 +79,36 @@ export class MicrosoftGraphService {
         return []
       }
 
-      // Use a simpler query that's more likely to work
-      const response = await fetch(
-        `https://graph.microsoft.com/v1.0/users?$filter=startsWith(displayName,'${query}')&$select=id,displayName,mail,userPrincipalName&$top=10`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      )
+      // Sanitize the query to prevent OData injection and handle special characters
+      const sanitizedQuery = query.trim().replace(/'/g, "''")
+      
+      // Construct the URL with proper encoding using URLSearchParams
+      const url = new URL('https://graph.microsoft.com/v1.0/users')
+      const params = new URLSearchParams()
+      
+      // Advanced query to search by name or email
+      // Note: Advanced queries with OR usually require ConsistencyLevel: eventual and $count=true
+      const filterQuery = `startsWith(displayName,'${sanitizedQuery}') or startsWith(mail,'${sanitizedQuery}') or startsWith(userPrincipalName,'${sanitizedQuery}')`
+      
+      params.append('$filter', filterQuery)
+      params.append('$select', 'id,displayName,mail,userPrincipalName')
+      params.append('$top', '10')
+      params.append('$count', 'true')
+      
+      url.search = params.toString()
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'ConsistencyLevel': 'eventual',
+        },
+      })
 
       if (!response.ok) {
         const errorText = await response.text()
         console.error(`Graph API error ${response.status}:`, errorText)
+        console.error('Request URL:', url.toString())
         
         // If it's an authentication error, handle token expiration
         if (response.status === 401 || response.status === 403) {

@@ -8,11 +8,29 @@ import ClassDetailsModal from '@/components/features/classes/ClassDetailsModal'
 import AdditionalClassesTab from '@/components/features/classes/AdditionalClassesTab'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { ClassService, Class } from '@/lib/services/classService'
+import { AssignmentService } from '@/lib/services/assignmentService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 import { ReportService } from '@/lib/services/reportService'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import FilterDropdown from '@/components/ui/FilterDropdown'
+import ExportButton from '@/components/ui/ExportButton'
+import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
+import { 
+  CheckCircle, 
+  Clock, 
+  Calendar, 
+  Search, 
+  Filter, 
+  MoreHorizontal,
+  Lock,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Users
+} from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 export default function PeerClassesPage() {
   return (
@@ -32,7 +50,7 @@ interface ClassWithStatus extends Class {
 function PeerClassesContent() {
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [classes, setClasses] = useState<ClassWithStatus[]>([])
+
   const [peerTutorInfo, setPeerTutorInfo] = useState<any>(null)
   const [selectedClass, setSelectedClass] = useState<Class | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -63,6 +81,18 @@ function PeerClassesContent() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
+  // Fetch assigned students
+  const { data: assignedStudents, isLoading: studentsLoading, refresh: refreshStudents } = useCachedData({
+    queryKey: ['assigned-students', tutorInfoData?.id],
+    queryFn: async () => {
+       if (!tutorInfoData?.id) return []
+       return await AssignmentService.getStudentsByPeerTutor(tutorInfoData.id)
+    },
+    enabled: !!tutorInfoData?.id,
+    initialData: [],
+    staleTime: 5 * 60 * 1000,
+  })
+
   // Fetch scheduled classes with caching
   const { data: scheduledClassesData, isLoading: scheduledLoading, refresh: refreshScheduled, isRefreshing: isScheduledRefreshing } = useCachedData({
     queryKey: ['scheduled-classes-by-peer', tutorInfoData?.dept, tutorInfoData?.year, tutorInfoData?.section],
@@ -79,18 +109,16 @@ function PeerClassesContent() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
-  const loading = tutorLoading || scheduledLoading
+  const loading = tutorLoading || scheduledLoading || studentsLoading
 
   // Process scheduled classes data using useMemo to prevent infinite loops
-  const processedClasses = useMemo(() => {
-    if (!scheduledClassesData || scheduledClassesData.length === 0) {
-      return []
-    }
+  const classes = useMemo(() => {
+    const classesToProcess = scheduledClassesData ? [...scheduledClassesData] : []
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const classesWithStatus = scheduledClassesData.map((scheduledClass) => {
+    const classesWithStatus = classesToProcess.map((scheduledClass) => {
       const completion = scheduledClass.completion_status || 'not_started'
       const scheduledDate = new Date(scheduledClass.scheduled_date)
       scheduledDate.setHours(0, 0, 0, 0)
@@ -133,18 +161,7 @@ function PeerClassesContent() {
     return classesWithStatus
   }, [scheduledClassesData])
 
-  // Use ref to track previous processed classes to prevent unnecessary updates
-  const prevProcessedClassesRef = useRef<string>('')
-  
-  // Update classes state only when processedClasses actually changes
-  useEffect(() => {
-    // Serialize to compare - only update if content actually changed
-    const currentSerialized = JSON.stringify(processedClasses)
-    if (prevProcessedClassesRef.current !== currentSerialized) {
-      prevProcessedClassesRef.current = currentSerialized
-      setClasses(processedClasses)
-    }
-  }, [processedClasses])
+
 
   // Set peer tutor info when data is available
   useEffect(() => {
@@ -153,7 +170,7 @@ function PeerClassesContent() {
     }
   }, [tutorInfoData])
 
-  // Filter classes based on search and filter criteria
+  // Filter classes
   const filteredClasses = useMemo(() => {
     let filtered = classes
 
@@ -167,37 +184,23 @@ function PeerClassesContent() {
       )
     }
 
-    // Apply year filter
-    if (filterYear) {
-      filtered = filtered.filter(classItem => classItem.year === filterYear)
-    }
-
-    // Apply section filter
-    if (filterSection) {
-      filtered = filtered.filter(classItem => classItem.section === filterSection)
-    }
-
-    // Apply subject filter
-    if (filterSubject) {
-      filtered = filtered.filter(classItem => classItem.subject_name === filterSubject)
-    }
+    // Apply filters
+    if (filterYear) filtered = filtered.filter(classItem => classItem.year === filterYear)
+    if (filterSection) filtered = filtered.filter(classItem => classItem.section === filterSection)
+    if (filterSubject) filtered = filtered.filter(classItem => classItem.subject_name === filterSubject)
 
     return filtered
   }, [classes, searchTerm, filterYear, filterSection, filterSubject])
 
   // Get unique values for filter dropdowns
-  const getUniqueYears = () => [...new Set(classes.map(c => c.year))].sort()
-  const getUniqueSections = () => [...new Set(classes.map(c => c.section))].sort()
-  const getUniqueSubjects = () => [...new Set(classes.map(c => c.subject_name))].sort()
-
+  const getUniqueYears = () => [...new Set(classes.map(c => c.year))].sort().map(y => ({ label: `Year ${y}`, value: y }))
+  const getUniqueSections = () => [...new Set(classes.map(c => c.section))].sort().map(s => ({ label: `Section ${s}`, value: s }))
+  const getUniqueSubjects = () => [...new Set(classes.map(c => c.subject_name))].sort().map(s => ({ label: s, value: s }))
 
   const handleClassClick = (classItem: ClassWithStatus) => {
     if (!classItem.isEditable) {
       const scheduledDate = new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
+        weekday: 'long', week: 'numeric', month: 'long', day: 'numeric'
       })
       alert(`You can only manage this class on ${scheduledDate}. Today is not the scheduled day.`)
       return
@@ -210,21 +213,30 @@ function PeerClassesContent() {
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setSelectedClass(null)
-    // Refresh classes to update completion status
     refreshScheduled()
   }
 
-  // Handle refresh
   const handleRefresh = async () => {
-    await Promise.all([refreshTutor(), refreshScheduled()])
+    await Promise.all([refreshTutor(), refreshScheduled(), refreshStudents()])
     setLastRefresh(new Date())
   }
-
-  const resetFilters = () => {
-    setSearchTerm('')
-    setFilterYear('')
-    setFilterSection('')
-    setFilterSubject('')
+  
+  const handleExportData = () => {
+     if (filteredClasses.length === 0) return
+     
+     const exportData = filteredClasses.map(c => ({
+        'Subject': c.subject_name,
+        'Date': c.scheduled_date,
+        'Department': c.dept, 
+        'Year': c.year,
+        'Section': c.section,
+        'Status': c.completionStatus || 'N/A'
+     }))
+     
+     const ws = XLSX.utils.json_to_sheet(exportData)
+     const wb = XLSX.utils.book_new()
+     XLSX.utils.book_append_sheet(wb, ws, "Classes")
+     XLSX.writeFile(wb, `Classes_Export_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   const loadClassDetails = async (classItem: ClassWithStatus) => {
@@ -261,7 +273,6 @@ function PeerClassesContent() {
       newExpandedRows.delete(classId)
     } else {
       newExpandedRows.add(classId)
-      // Load class details if not already loaded
       if (!classDetails.has(classId)) {
         loadClassDetails(classItem)
       }
@@ -270,486 +281,374 @@ function PeerClassesContent() {
     setExpandedRows(newExpandedRows)
   }
 
-
-  const getStatusBadge = (status: 'completed' | 'pending' | 'not_started' | 'upcoming') => {
-    const statusText = {
-      'completed': 'Completed',
-      'pending': 'Pending',
-      'upcoming': 'Upcoming',
-      'not_started': 'Not Started'
-    }[status] || 'Not Started'
-    
-    return (
-      <span className="text-sm font-medium text-gray-900">
-        {statusText}
-      </span>
-    )
-  }
-
-  // Calculate statistics
-  const getClassStats = () => {
+  const stats = useMemo(() => {
     const completed = classes.filter(c => c.completionStatus === 'completed').length
     const pending = classes.filter(c => c.completionStatus === 'pending').length
-    const upcoming = classes.filter(c => c.completionStatus === 'upcoming').length
     const total = classes.length
+    return { completed, pending, total }
+  }, [classes])
 
-    return { completed, pending, upcoming, total }
-  }
+  // Logic to determining visibility
+  const hasHistory = useMemo(() => {
+     return classes.some(c => c.completionStatus === 'completed')
+  }, [classes])
 
-  const stats = getClassStats()
+  const shouldShowClasses = (assignedStudents && assignedStudents.length > 0) || hasHistory
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
       <PeerSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      {/* Main Content */}
-      <div className="transition-all duration-300 lg:ml-64 min-h-screen flex flex-col overflow-hidden">
-        {/* Top Header */}
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
         <PageHeader
-          title={activeTab === 'scheduled' ? "SCHEDULED CLASSES" : "ADDITIONAL CLASSES"}
+          title={activeTab === 'scheduled' ? "My Classes" : "Additional Classes"}
+          subtitle="Manage your scheduled sessions and attendance"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
           isRefreshing={isScheduledRefreshing}
           onToggleSidebar={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
         >
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-            <button
-              onClick={() => setActiveTab('scheduled')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'scheduled'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Scheduled Classes
-            </button>
-            <button
-              onClick={() => setActiveTab('additional')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'additional'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Additional Classes
-            </button>
-          </div>
+          {true && (
+             <div className="flex bg-gray-100/80 p-1 rounded-xl">
+               <button
+                 onClick={() => setActiveTab('scheduled')}
+                 className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ${
+                   activeTab === 'scheduled'
+                     ? 'bg-white text-blue-600 shadow-sm'
+                     : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                 }`}
+               >
+                 Scheduled Classes
+               </button>
+               <button
+                 onClick={() => setActiveTab('additional')}
+                 className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ${
+                   activeTab === 'additional'
+                     ? 'bg-white text-blue-600 shadow-sm'
+                     : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                 }`}
+               >
+                 Additional Classes
+               </button>
+             </div>
+          )}
         </PageHeader>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
-            <div className="space-y-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="max-w-[1600px] mx-auto space-y-8">
             {loading ? (
-              <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading your classes...</p>
-                </div>
+              <div className="flex flex-col items-center justify-center h-96">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+                <p className="text-gray-500 font-medium">Loading classes...</p>
               </div>
             ) : activeTab === 'scheduled' ? (
               <>
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-500">Completed Classes</p>
-                        <p className="text-2xl font-semibold text-gray-900">{stats.completed}</p>
-                      </div>
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Completed Classes */}
+                  <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm relative overflow-hidden group">
+                    <div className="flex justify-between items-start mb-4">
+                       <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Completed</p>
+                          <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.completed}</p>
+                       </div>
+                       <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-green-50 transition-colors">
+                          <CheckCircle className="w-4 h-4 text-gray-400 group-hover:text-green-500 transition-colors" />
+                       </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-gray-50">
+                       <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                          <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Marked Verified</span>
+                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-500">Pending Classes</p>
-                        <p className="text-2xl font-semibold text-gray-900">{stats.pending}</p>
-                      </div>
+                  {/* Pending Classes */}
+                  <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm relative overflow-hidden group">
+                    <div className="flex justify-between items-start mb-4">
+                       <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Pending</p>
+                          <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.pending}</p>
+                       </div>
+                       <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-amber-50 transition-colors">
+                          <Clock className="w-4 h-4 text-gray-400 group-hover:text-amber-500 transition-colors" />
+                       </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-gray-50">
+                       <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Action Required</span>
+                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-500">Total Classes</p>
-                        <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
-                      </div>
+                  {/* Total Classes */}
+                  <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm relative overflow-hidden group">
+                    <div className="flex justify-between items-start mb-4">
+                       <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total</p>
+                          <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.total}</p>
+                       </div>
+                       <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-blue-50 transition-colors">
+                          <Calendar className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                       </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-gray-50">
+                       <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">All Scheduled</span>
+                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Classes List */}
-                <div className="bg-white rounded-xl shadow-lg border border-gray-200">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="mb-4">
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900">Scheduled Classes</h3>
-                        <p className="text-sm text-gray-500">
-                          {loading ? 'Loading...' : `Showing ${filteredClasses.length} of ${classes.length} classes`}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {/* Filter Controls */}
-                    <div className="flex items-center gap-4">
-                      {/* Search Bar */}
-                      <div className="flex-1 max-w-xl">
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                          </div>
-                          <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Search"
-                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                          />
+                {/* Filters & Table Section */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-5 border-b border-gray-100 bg-gray-50/30">
+                    <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
+                        <div className="relative w-full xl:max-w-sm">
+                           <input
+                             type="text"
+                             value={searchTerm}
+                             onChange={(e) => setSearchTerm(e.target.value)}
+                             placeholder="Search classes, subjects..."
+                             className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 focus:border-blue-400 rounded-xl text-sm transition-all outline-none shadow-sm"
+                           />
+                           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                         </div>
-                      </div>
-
-                      {/* Year Filter */}
-                      <div className="w-32">
-                        <select
-                          value={filterYear}
-                          onChange={(e) => setFilterYear(e.target.value)}
-                          className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">All Years</option>
-                          {getUniqueYears().map(year => (
-                            <option key={year} value={year}>{year}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Section Filter */}
-                      <div className="w-36">
-                        <select
-                          value={filterSection}
-                          onChange={(e) => setFilterSection(e.target.value)}
-                          className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">All Sections</option>
-                          {getUniqueSections().map(section => (
-                            <option key={section} value={section}>{section}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Subject Filter */}
-                      <div className="w-40">
-                        <select
-                          value={filterSubject}
-                          onChange={(e) => setFilterSubject(e.target.value)}
-                          className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">All Subjects</option>
-                          {getUniqueSubjects().map(subject => (
-                            <option key={subject} value={subject}>{subject}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Spacer to push buttons to the right */}
-                      <div className="flex-1"></div>
-
-                      {/* Clear Filters Button */}
-                      <div className="flex space-x-3">
-                        <button
-                          onClick={resetFilters}
-                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow-sm"
-                        >
-                          Clear All Filters
-                        </button>
-                      </div>
+                        
+                        <div className="flex flex-wrap gap-3 w-full xl:w-auto">
+                           <div className="w-full sm:w-auto sm:min-w-[140px]">
+                             <FilterDropdown
+                                value={filterYear}
+                                onChange={setFilterYear}
+                                options={getUniqueYears()}
+                                placeholder="Year"
+                             />
+                           </div>
+                           <div className="w-full sm:w-auto sm:min-w-[140px]">
+                             <FilterDropdown
+                                value={filterSection}
+                                onChange={setFilterSection}
+                                options={getUniqueSections()}
+                                placeholder="Section"
+                             />
+                           </div>
+                           <div className="w-full sm:w-auto sm:min-w-[160px]">
+                             <FilterDropdown
+                                value={filterSubject}
+                                onChange={setFilterSubject}
+                                options={getUniqueSubjects()}
+                                placeholder="Subject"
+                             />
+                           </div>
+                           
+                           <div className="w-full sm:w-auto flex flex-row gap-2">
+                             <div className="flex-1 sm:flex-none">
+                               <ExportButton onClick={handleExportData} disabled={filteredClasses.length === 0} />
+                             </div>
+                             
+                             {(filterYear || filterSection || filterSubject || searchTerm) && (
+                                <button 
+                                  onClick={() => {
+                                     setFilterYear('')
+                                     setFilterSection('')
+                                     setFilterSubject('')
+                                     setSearchTerm('')
+                                  }}
+                                  className="px-4 py-2.5 text-xs font-bold text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors uppercase tracking-wider h-[42px]"
+                                >
+                                   Clear
+                                </button>
+                             )}
+                           </div>
+                        </div>
                     </div>
                   </div>
-                  
-                  <div className="p-6">
-                    {filteredClasses.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Subject
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Scheduled Date
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Department
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Year & Section
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Status
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Actions
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredClasses.map((classItem) => (
-                              <>
-                                <tr 
-                                  key={classItem.id} 
-                                  className="hover:bg-blue-50 transition-colors duration-200"
-                                >
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-gray-900">
-                                      {classItem.subject_name}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-900">
-                                      {classItem.scheduled_date ? new Date(classItem.scheduled_date).toLocaleDateString('en-GB', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric'
-                                      }) : 'Not scheduled'}
-                                    </div>
-                                    {classItem.scheduled_date && (
-                                      <div className="text-xs text-gray-500">
-                                        {new Date(classItem.scheduled_date).toLocaleDateString('en-US', {
-                                          weekday: 'short'
-                                        })}
-                                      </div>
-                                    )}
-                                    {classItem.isEditable && (
-                                      <div className="text-xs text-green-600 font-medium flex items-center mt-1">
-                                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                        </svg>
-                                        Can Manage Today
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-900">{classItem.dept}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-900">{classItem.year} - {classItem.section}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    {getStatusBadge(classItem.completionStatus || 'not_started')}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center space-x-2">
+
+                  <div className="overflow-x-auto rounded-xl border border-gray-100">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                          <TableHead className="py-4 pl-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</TableHead>
+                          <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</TableHead>
+                          <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</TableHead>
+                          <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Class</TableHead>
+                          <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</TableHead>
+                          <TableHead className="py-4 pr-6 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredClasses.length > 0 ? (
+                          filteredClasses.map((classItem) => (
+                             <>
+                             <TableRow key={classItem.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                                <TableCell className="py-4 pl-6">
+                                   <p className="text-xs font-bold text-gray-900 leading-tight">{classItem.subject_name}</p>
+                                </TableCell>
+                                <TableCell className="py-4 text-center">
+                                   <p className="text-xs font-bold text-gray-900">
+                                      {new Date(classItem.scheduled_date || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                   </p>
+                                   <p className="text-[10px] text-gray-400 font-medium uppercase mt-0.5">
+                                      {new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'short' })}
+                                   </p>
+                                </TableCell>
+                                <TableCell className="py-4 text-center">
+                                   <span className="px-2 py-1 rounded-md bg-gray-50 text-[10px] font-bold text-gray-600 uppercase tracking-wider border border-gray-100">
+                                      {classItem.dept}
+                                   </span>
+                                </TableCell>
+                                <TableCell className="py-4 text-center">
+                                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                      {classItem.year} - {classItem.section}
+                                   </span>
+                                </TableCell>
+                                <TableCell className="py-4 text-center">
+                                   <StatusBadge status={classItem.completionStatus || 'not_started'} />
+                                </TableCell>
+                                <TableCell className="py-4 pr-6 text-right">
+                                   <div className="flex items-center justify-end gap-2">
                                       {classItem.isEditable ? (
-                                        <button
-                                          onClick={() => handleClassClick(classItem)}
-                                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                                        >
-                                          <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                          </svg>
-                                          Manage
-                                        </button>
+                                         <button
+                                            onClick={() => handleClassClick(classItem)}
+                                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all"
+                                         >
+                                            Manage
+                                         </button>
                                       ) : (
-                                        <button
-                                          onClick={() => handleClassClick(classItem)}
-                                          disabled
-                                          className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed"
-                                          title={`You can only manage this class on ${new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', {
-                                            weekday: 'long',
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric'
-                                          })}`}
-                                        >
-                                          <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                          </svg>
-                                          Locked
-                                        </button>
+                                         <button
+                                            disabled
+                                            className="px-3 py-1.5 rounded-lg bg-gray-50 text-gray-400 text-[10px] font-bold uppercase tracking-wider cursor-not-allowed flex items-center gap-1 ml-auto border border-gray-100"
+                                         >
+                                            <Lock size={10} /> Locked
+                                         </button>
                                       )}
-                                      {classItem.completionStatus === 'completed' ? (
-                                        <button
-                                          onClick={() => toggleRowExpansion(classItem.id, classItem)}
-                                          className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 focus:ring-offset-1 transition-all duration-150"
-                                          aria-label={expandedRows.has(classItem.id) ? "Collapse details" : "Expand details"}
-                                        >
-                                          {loadingClassDetails.has(classItem.id) ? (
-                                            <svg className="w-4 h-4 text-gray-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
-                                          ) : expandedRows.has(classItem.id) ? (
-                                            <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                                            </svg>
-                                          ) : (
-                                            <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                          )}
-                                        </button>
-                                      ) : (
-                                        <button
-                                          disabled
-                                          className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 bg-gray-50 cursor-not-allowed"
-                                          aria-label="View details unavailable"
-                                        >
-                                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                          </svg>
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                                {expandedRows.has(classItem.id) && classItem.completionStatus === 'completed' && (
-                                  <tr key={`${classItem.id}-expanded`} className="bg-gray-50">
-                                    <td colSpan={6} className="px-6 py-4">
-                                      <div className="bg-white rounded-lg border border-gray-200 p-4">
-                                        {loadingClassDetails.has(classItem.id) ? (
-                                          <div className="flex items-center justify-center py-4">
-                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                                            <span className="ml-2 text-sm text-gray-600">Loading class details...</span>
-                                          </div>
-                                        ) : (
-                                          <>
-                                            {/* Topics Section */}
-                                            {classDetails.has(classItem.id) && classDetails.get(classItem.id)?.topics && (
-                                              <div className="mb-4">
-                                                <h4 className="text-lg font-medium text-gray-900 mb-2 flex items-center">
-                                                  <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                                  </svg>
-                                                  Topics Covered
-                                                </h4>
-                                                <p className="text-sm text-gray-700 bg-gray-50 rounded-md p-3">
-                                                  {classDetails.get(classItem.id)?.topics || 'No topics recorded'}
-                                                </p>
-                                              </div>
+                                      
+                                      {classItem.completionStatus === 'completed' && (
+                                         <button
+                                            onClick={() => toggleRowExpansion(classItem.id, classItem)}
+                                            className={`p-1.5 rounded-lg border transition-colors ${
+                                               expandedRows.has(classItem.id) 
+                                                  ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                                                  : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                                            }`}
+                                         >  
+                                            {loadingClassDetails.has(classItem.id) ? (
+                                              <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                                            ) : (
+                                              <ChevronDown size={16} className={`transition-transform duration-200 ${expandedRows.has(classItem.id) ? 'rotate-180' : ''}`} />
                                             )}
-                                            
-                                            {/* Attendance Section */}
-                                            {classDetails.has(classItem.id) && classDetails.get(classItem.id)?.attendance && (
-                                              <div>
-                                                <h4 className="text-lg font-medium text-gray-900 mb-3 flex items-center">
-                                                  <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                  </svg>
-                                                  Student Attendance
-                                                </h4>
-                                                {classDetails.get(classItem.id)?.attendance && classDetails.get(classItem.id)!.attendance.length > 0 ? (
-                                                  <div className="space-y-2">
-                                                    {classDetails.get(classItem.id)!.attendance.map((record, idx) => (
-                                                      <div key={idx} className={`flex items-center justify-between p-2 rounded-md ${record.status === 'present' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                                                        <div className="flex items-center">
-                                                          <div className={`w-2 h-2 rounded-full mr-3 ${record.status === 'present' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                                          <div>
-                                                            <p className="text-sm font-medium text-gray-900">{record.student_name || record.student_id}</p>
-                                                            {record.student_email && (
-                                                              <p className="text-xs text-gray-500">{record.student_email}</p>
-                                                            )}
-                                                          </div>
+                                         </button>
+                                      )}
+                                   </div>
+                                </TableCell>
+                             </TableRow>
+                             {expandedRows.has(classItem.id) && (
+                                <TableRow className="bg-gray-50/30 hover:bg-gray-50/30">
+                                   <TableCell colSpan={6} className="p-4 sm:p-6">
+                                      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                                         <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-4">Class Details</h4>
+                                         
+                                         {classDetails.get(classItem.id)?.topics && (
+                                            <div className="mb-6">
+                                               <p className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Topics Covered</p>
+                                               <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                                  {classDetails.get(classItem.id)?.topics}
+                                               </p>
+                                            </div>
+                                         )}
+                                         
+                                         {classDetails.get(classItem.id)?.attendance && classDetails.get(classItem.id)!.attendance.length > 0 ? (
+                                            <div>
+                                               <div className="flex items-center justify-between mb-3">
+                                                  <p className="text-xs font-bold text-gray-900 uppercase tracking-wide">Attendance List</p>
+                                                  <div className="flex gap-4">
+                                                     <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Present ({classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'present').length})</span>
+                                                     </div>
+                                                     <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Absent ({classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'absent').length})</span>
+                                                     </div>
+                                                  </div>
+                                               </div>
+                                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                  {classDetails.get(classItem.id)!.attendance.map((record, idx) => (
+                                                     <div 
+                                                        key={idx} 
+                                                        className={`flex items-center justify-between p-3 rounded-lg border ${
+                                                           record.status === 'present' 
+                                                              ? 'bg-green-50/50 border-green-100' 
+                                                              : 'bg-red-50/50 border-red-100'
+                                                        }`}
+                                                     >
+                                                        <div>
+                                                           <p className="text-xs font-bold text-gray-900">{record.student_name || record.student_id}</p>
+                                                           {record.student_email && <p className="text-[10px] text-gray-500">{record.student_email}</p>}
                                                         </div>
-                                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.status === 'present' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                                          {record.status === 'present' ? 'Present' : 'Absent'}
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                                                           record.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                        }`}>
+                                                           {record.status}
                                                         </span>
-                                                      </div>
-                                                    ))}
-                                                    <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between text-sm">
-                                                      <span className="text-gray-600">
-                                                        Present: <span className="font-medium text-green-600">{classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'present').length}</span>
-                                                      </span>
-                                                      <span className="text-gray-600">
-                                                        Absent: <span className="font-medium text-red-600">{classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'absent').length}</span>
-                                                      </span>
-                                                      <span className="text-gray-600">
-                                                        Total: <span className="font-medium text-gray-900">{classDetails.get(classItem.id)!.attendance.length}</span>
-                                                      </span>
-                                                    </div>
-                                                  </div>
-                                                ) : (
-                                                  <div className="text-center py-4">
-                                                    <p className="text-sm text-gray-500">No attendance records found</p>
-                                                  </div>
-                                                )}
-                                              </div>
-                                            )}
-                                          </>
-                                        )}
+                                                     </div>
+                                                  ))}
+                                               </div>
+                                            </div>
+                                         ) : (
+                                            <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No attendance records found</p>
+                                            </div>
+                                         )}
                                       </div>
-                                    </td>
-                                  </tr>
+                                   </TableCell>
+                                </TableRow>
+                             )}
+                             </>
+                          ))
+                        ) : (
+                          <TableRow>
+                             <TableCell colSpan={6} className="px-6 py-12 text-center">
+                                {!shouldShowClasses ? (
+                                   <div className="flex flex-col items-center justify-center">
+                                      <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
+                                         <img src="/icons/search.png" alt="No Students" className="w-12 h-12 opacity-40" />
+                                      </div>
+                                      <h3 className="text-lg font-black text-gray-900 uppercase tracking-widest mb-2">
+                                         No Students Assigned
+                                      </h3>
+                                      <p className="text-sm text-gray-500 max-w-md font-medium">
+                                         You currently don't have any students assigned to you. Once students are allocated, your class schedule will appear here.
+                                      </p>
+                                   </div>
+                                ) : (
+                                   <div className="flex flex-col items-center justify-center">
+                                      <div className="w-12 h-12 bg-gray-50 rounded-[2rem] flex items-center justify-center mb-3">
+                                         <Search className="w-5 h-5 text-gray-300" />
+                                      </div>
+                                      <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">No classes found</p>
+                                      <p className="text-[10px] text-gray-400 mt-1">Try adjusting your filters or search terms</p>
+                                   </div>
                                 )}
-                              </>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                          </svg>
-                        </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">
-                          {classes.length === 0 ? 'No classes scheduled' : 'No classes match your filters'}
-                        </h3>
-                        <p className="text-gray-500 mb-6">
-                          {classes.length === 0 
-                            ? "There are no classes scheduled for your year and section yet. Check back later!"
-                            : "Try adjusting your search criteria or filters to see more results."
-                          }
-                        </p>
-                        {classes.length > 0 && (
-                          <button
-                            onClick={resetFilters}
-                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            Clear Filters
-                          </button>
+                             </TableCell>
+                          </TableRow>
                         )}
-                      </div>
-                    )}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               </>
             ) : (
-              <AdditionalClassesTab peerTutorInfo={peerTutorInfo} />
+              <AdditionalClassesTab peerTutorInfo={peerTutorInfo} assignedStudents={assignedStudents || []} />
             )}
-            </div>
           </div>
         </main>
       </div>
 
-      {/* Class Details Modal */}
       <ClassDetailsModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
@@ -760,3 +659,24 @@ function PeerClassesContent() {
   )
 }
 
+function StatusBadge({ status }: { status: string }) {
+   const styles = {
+      completed: "bg-green-100 text-green-700",
+      pending: "bg-amber-100 text-amber-700",
+      upcoming: "bg-blue-100 text-blue-700", 
+      not_started: "bg-gray-100 text-gray-600"
+   }
+   
+   const labels = {
+      completed: "Completed",
+      pending: "Pending",
+      upcoming: "Upcoming",
+      not_started: "Not Started"
+   }
+
+   return (
+      <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${styles[status as keyof typeof styles]}`}>
+         {labels[status as keyof typeof labels]}
+      </span>
+   )
+}

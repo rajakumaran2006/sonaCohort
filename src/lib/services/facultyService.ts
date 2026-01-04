@@ -7,6 +7,7 @@ export interface FacultyDepartment {
   faculty_name: string
   faculty_email: string
   created_at: string
+  admin_email?: string
 }
 
 export class FacultyService {

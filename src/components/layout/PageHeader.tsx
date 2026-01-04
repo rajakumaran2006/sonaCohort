@@ -1,11 +1,14 @@
 'use client'
 
 import React from 'react'
-import { Menu, RotateCw } from 'lucide-react'
+import { Menu } from 'lucide-react'
+import { AnimatedRefreshButton } from '../ui/AnimatedRefreshButton'
 
 interface PageHeaderProps {
   title: string
-  subtitle?: string
+  context?: string
+  tagline?: string
+  subtitle?: string // Deprecated, use tagline instead
   lastRefresh?: Date
   onRefresh?: () => void | Promise<void>
   isRefreshing?: boolean
@@ -17,7 +20,9 @@ interface PageHeaderProps {
 
 export default function PageHeader({
   title,
-  subtitle,
+  context,
+  tagline,
+  subtitle, // Deprecated
   lastRefresh,
   onRefresh,
   isRefreshing = false,
@@ -26,46 +31,45 @@ export default function PageHeader({
   isSidebarCollapsed = false,
   onToggleSidebar,
 }: PageHeaderProps) {
+  // Use tagline if provided, otherwise fall back to subtitle for backward compatibility
+  const displayTagline = tagline || subtitle
+
   return (
-    <header className="bg-white shadow-md w-full">
-      <div className={`flex items-center justify-between w-full h-16 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
-        <div className="flex items-center flex-1">
+    <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 h-20 flex items-center px-8">
+      <div className="flex justify-between items-center w-full">
+        <div>
           {onToggleSidebar && (
             <button
               onClick={onToggleSidebar}
-              className="lg:hidden p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 mr-2"
+              className="lg:hidden p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 mr-2 absolute left-2"
             >
               <Menu className="w-6 h-6" />
             </button>
           )}
-          <div className="flex-1">
-            <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-            {subtitle && (
-              <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          {children}
-          
-          {showRefresh && onRefresh && (
-            <>
-              {lastRefresh && (
-                <div className="text-sm text-gray-500 hidden sm:block">
-                  Last updated: {lastRefresh.toLocaleTimeString()}
-                </div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-black text-gray-900 uppercase tracking-tight">
+              {title}
+              {context && (
+                <>
+                  <span className="text-gray-300 mx-2">/</span>
+                  {context}
+                </>
               )}
-              <button
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Refresh data"
-              >
-                <RotateCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
-              </button>
-            </>
+            </h1>
+          </div>
+          {displayTagline && (
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">
+              {displayTagline}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          {children}
+          {showRefresh && onRefresh && (
+            <AnimatedRefreshButton 
+              onRefresh={onRefresh}
+              isRefreshing={isRefreshing}
+            />
           )}
         </div>
       </div>

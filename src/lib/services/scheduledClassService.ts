@@ -12,6 +12,7 @@ export interface ScheduledClass {
   created_at: string
   updated_at: string
   topics?: string
+  image_link?: string
   completion_status?: 'not_started' | 'pending' | 'completed'
   attendance_completed?: boolean
   topics_completed?: boolean
@@ -26,6 +27,7 @@ export interface CreateScheduledClassData {
   section: string
   faculty_id: string
   topics?: string
+  image_link?: string
 }
 
 export interface ScheduledClassWithDetails extends ScheduledClass {
@@ -606,6 +608,33 @@ export class ScheduledClassService {
       return true
     } catch (error) {
       console.error('Error in updateScheduledClassTopics:', error)
+      return false
+    }
+  }
+
+  /**
+   * Update image link for a scheduled class
+   */
+  static async updateScheduledClassImageLink(scheduledClassId: string, imageLink: string): Promise<boolean> {
+    try {
+      const supabase = createClient()
+      
+      const { error } = await supabase
+        .from('scheduled_classes')
+        .update({ 
+          image_link: imageLink,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', scheduledClassId)
+
+      if (error) {
+        console.error('Error updating scheduled class image link:', error)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error in updateScheduledClassImageLink:', error)
       return false
     }
   }

@@ -24,8 +24,10 @@ import FeedbackFormModal from '@/components/forms/FeedbackFormModal'
 import FeedbackResponsesModal from '@/components/forms/FeedbackResponsesModal'
 import FeedbackAnalyticsPage from '@/components/forms/FeedbackAnalyticsPage'
 import ExcelExportModal from '@/components/forms/ExcelExportModal'
+import PeerTutorImportModal from '@/components/forms/PeerTutorImportModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { UserCheck, Clock, Users, UserMinus, ClipboardList, MessageSquare, Banknote, Eye, Edit } from 'lucide-react'
+import ExportButton from '@/components/ui/ExportButton'
 
 export default function FacultyPeerTutorPage() {
   return (
@@ -104,6 +106,7 @@ function FacultyPeerTutorContent() {
   
   // Delete modes for Students and Peer Tutors
   const [isStudentDeleteMode, setIsStudentDeleteMode] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [isPeerTutorDeleteMode, setIsPeerTutorDeleteMode] = useState(false)
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set())
   const [selectedPeerTutorIds, setSelectedPeerTutorIds] = useState<Set<string>>(new Set())
@@ -134,6 +137,7 @@ function FacultyPeerTutorContent() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [reportFilterYear, setReportFilterYear] = useState<string>('all')
   const [reportFilterSection, setReportFilterSection] = useState<string>('all')
+  const [reportFilterSubject, setReportFilterSubject] = useState<string>('all')
   const [showReportFilter, setShowReportFilter] = useState(false)
   const reportFilterRef = useRef<HTMLDivElement>(null)
   
@@ -1117,6 +1121,36 @@ function FacultyPeerTutorContent() {
     }
   }
 
+  // Toggle feedback form status (open/close)
+  const handleToggleFormStatus = async (formId: string, currentStatus: boolean) => {
+    try {
+      console.log('Toggling form status:', { formId, currentStatus, newStatus: !currentStatus })
+      
+      const result = await FeedbackService.updateFeedbackForm(formId, {
+        is_active: !currentStatus
+      })
+      
+      console.log('Update result:', result)
+      
+      if (result.success) {
+        // Refresh the feedback forms list
+        loadFeedbackForms()
+      } else {
+        console.error('Update failed with result:', result)
+        console.error('Strategy:', result.strategy)
+        alert('Failed to update form status. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error toggling form status:', error)
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      })
+      alert('An error occurred while updating the form status. Please check the console for details.')
+    }
+  }
+
+
   // Handle feedback form creation success
   const handleFeedbackFormSuccess = () => {
     loadFeedbackForms()
@@ -1190,21 +1224,30 @@ function FacultyPeerTutorContent() {
       filtered = filtered.filter(report => report.section === reportFilterSection)
     }
 
+    if (reportFilterSubject !== 'all') {
+      filtered = filtered.map(report => ({
+        ...report,
+        subjects: report.subjects.filter(s => s.subject_name === reportFilterSubject)
+      })).filter(report => report.subjects.length > 0)
+    }
+
     setFilteredPeerTutorReports(filtered)
-  }, [peerTutorReports, reportFilterYear, reportFilterSection])
+  }, [peerTutorReports, reportFilterYear, reportFilterSection, reportFilterSubject])
 
   // Clear report filters
   const clearReportFilters = () => {
     setReportFilterYear('all')
     setReportFilterSection('all')
+    setReportFilterSubject('all')
   }
 
   // Check if report filters are active
-  const hasActiveReportFilters = reportFilterYear !== 'all' || reportFilterSection !== 'all'
+  const hasActiveReportFilters = reportFilterYear !== 'all' || reportFilterSection !== 'all' || reportFilterSubject !== 'all'
 
-  // Get available years and sections for reports
+  // Get available years, sections and subjects for reports
   const availableReportYears = [...new Set(peerTutorReports.map(r => r.year))].sort()
   const availableReportSections = [...new Set(peerTutorReports.map(r => r.section))].sort()
+  const availableReportSubjects = [...new Set(peerTutorReports.flatMap(r => r.subjects.map(s => s.subject_name)))].sort()
 
   // Handle export of filtered reports
   const handleExportFilteredReports = async () => {
@@ -1480,7 +1523,8 @@ function FacultyPeerTutorContent() {
       <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
         {/* Top Header */}
         <PageHeader
-          title="STUDENT & PEER TUTOR MANAGEMENT"
+          title="STUDENT MANAGEMENT"
+          tagline="Peer Tutors, Students & Feedback Oversight"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
           isRefreshing={loading}
@@ -1489,71 +1533,29 @@ function FacultyPeerTutorContent() {
         />
 
         {/* Tab Navigation */}
-        <div className="bg-white border-b border-gray-200 w-full">
-          <div className={`max-w-full mx-auto w-full ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
-            <nav className="flex space-x-8">
+        <div className="bg-white border-b border-gray-100 flex items-center h-16 w-full sticky top-0 z-10 px-4 sm:px-6 lg:px-8">
+          <nav className="flex space-x-2 overflow-x-auto no-scrollbar" aria-label="Tabs">
+            {[
+              { id: 'tutors', label: 'PEER TUTORS' },
+              { id: 'students', label: 'STUDENTS' },
+              { id: 'feedback', label: 'FEEDBACK' },
+              { id: 'renumeration', label: 'RENUMERATION MANAGEMENT' },
+              { id: 'reports', label: 'REPORTS' },
+              { id: 'leaderboard', label: 'LEADERBOARD' }
+            ].map((tab) => (
               <button
-                onClick={() => setActiveTab('tutors')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'tutors'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105' 
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                Peer Tutors
+                {tab.label}
               </button>
-              <button
-                onClick={() => setActiveTab('students')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'students'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Students
-              </button>
-              <button
-                onClick={() => setActiveTab('feedback')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'feedback'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Feedback
-              </button>
-              <button
-                onClick={() => setActiveTab('renumeration')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'renumeration'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Renumeration Management
-              </button>
-              <button
-                onClick={() => setActiveTab('reports')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'reports'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Reports
-              </button>
-              <button
-                onClick={() => setActiveTab('leaderboard')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'leaderboard'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Leaderboard
-              </button>
-            </nav>
-          </div>
+            ))}
+          </nav>
         </div>
 
         {/* Main Content */}
@@ -1565,75 +1567,142 @@ function FacultyPeerTutorContent() {
               </div>
             ) : activeTab === 'tutors' ? (
               <>
-                {/* Stats Overview */}
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-2 mb-6">
-                  <div className="bg-white overflow-hidden shadow rounded-lg">
+                {/* Stats Overview - Clean White Design with 4 Cards */}
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+                  {/* Tutors / Students Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                            <UserCheck className="w-5 h-5 text-green-600" />
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Tutors / Students
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-gray-500 truncate">Assigned Peer Tutors</dt>
-                            <dd className="text-lg font-medium text-gray-900">{assignedCount}</dd>
-                          </dl>
-                        </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12M8 12h12m-12 5h12" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {assignedCount} / {peerTutors.length}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-green-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="font-semibold uppercase">Allocated</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white overflow-hidden shadow rounded-lg">
+                  {/* Total Classes Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-orange-100 rounded-md flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-orange-600" />
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Total Classes
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-gray-500 truncate">Unassigned Peer Tutors</dt>
-                            <dd className="text-lg font-medium text-gray-900">{unassignedCount}</dd>
-                          </dl>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {peerTutorsWithStats.reduce((sum, t) => sum + t.classStats.totalClasses, 0)}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-blue-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                        <span className="font-semibold uppercase">Scheduled</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pending Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Pending
                         </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {peerTutorsWithStats.reduce((sum, t) => sum + t.classStats.pendingClasses, 0)}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-orange-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                        <span className="font-semibold uppercase">Remaining</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Additional Classes Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Additional Classes
+                        </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {peerTutorsWithStats.reduce((sum, t) => sum + (t.additionalClassesCount || 0), 0)}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-blue-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                        <span className="font-semibold uppercase">Total Classes</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Peer Tutors Table */}
-                <div className="bg-white shadow rounded-lg">
+                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+                  {/* Header with Title and Actions */}
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        All Peer Tutors ({filteredPeerTutors.length} of {peerTutors.length})
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
+                        Peer Tutors ({filteredPeerTutors.length})
                         {hasActiveFilters && (
-                          <span className="ml-2 text-sm text-blue-600">
+                          <span className="ml-2 text-sm text-blue-600 normal-case">
                             (Filtered)
                           </span>
                         )}
                       </h3>
-                      <div className="flex items-center space-x-3">
-                        {/* Filter and Sort Controls */}
+                      
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {/* Search Icon */}
+                        <button
+                          className="p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors duration-200"
+                          title="Search"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        </button>
+
+                        {/* Filter Button */}
                         {!isPeerTutorDeleteMode && filteredPeerTutors.length > 0 && (
-                          <div className="flex items-center space-x-2">
-                            <div className="relative" ref={filterRef}>
-                              <button
-                                onClick={() => setShowFilterPopup(!showFilterPopup)}
-                                className={`p-2 rounded-md transition-colors duration-200 ${
-                                  hasActiveFilters
-                                    ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                                }`}
-                                title="Filter peer tutors"
-                              >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                                </svg>
-                              </button>
+                          <div className="relative" ref={filterRef}>
+                            <button
+                              onClick={() => setShowFilterPopup(!showFilterPopup)}
+                              className={`p-2.5 rounded-lg transition-colors duration-200 ${
+                                hasActiveFilters
+                                  ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                              }`}
+                              title="Filter peer tutors"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                              </svg>
+                            </button>
 
                             {/* Filter Popup */}
                             {showFilterPopup && (
@@ -1687,59 +1756,60 @@ function FacultyPeerTutorContent() {
                               </div>
                             )}
                           </div>
-                        </div>
                         )}
 
                         {/* Action Buttons */}
-                        <div className="flex space-x-3">
-                          {!isPeerTutorDeleteMode ? (
-                            <>
-                              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-                                Add Peer Tutor
-                              </button>
-                              {peerTutors.length > 0 && (
-                                <button
-                                  onClick={handlePeerTutorDeleteModeToggle}
-                                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                                >
-                                  Delete
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={handleBulkDeletePeerTutors}
-                                disabled={selectedPeerTutorIds.size === 0}
-                                className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                              >
-                                Delete Selected ({selectedPeerTutorIds.size})
-                              </button>
+                        {!isPeerTutorDeleteMode ? (
+                          <>
+                            {peerTutors.length > 0 && (
                               <button
                                 onClick={handlePeerTutorDeleteModeToggle}
-                                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                                className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                                title="Delete"
                               >
-                                Cancel
-                              </button>
-                            </>
-                          )}
-                                                        <button
-                                onClick={exportPeerTutors}
-                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
-                                <span>Export</span>
                               </button>
-                        </div>
+                            )}
+
+                            <button 
+                              onClick={() => setShowImportModal(true)}
+                              className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              IMPORT
+                            </button>
+
+                            <ExportButton onClick={exportPeerTutors} />
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={handleBulkDeletePeerTutors}
+                              disabled={selectedPeerTutorIds.size === 0}
+                              className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors duration-200"
+                            >
+                              Delete Selected ({selectedPeerTutorIds.size})
+                            </button>
+                            <button
+                              onClick={handlePeerTutorDeleteModeToggle}
+                              className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="overflow-hidden">
+                  {/* Table */}
+                  <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-white">
                         <tr>
                           {isPeerTutorDeleteMode && (
                             <th className="px-6 py-3 text-left">
@@ -1751,26 +1821,26 @@ function FacultyPeerTutorContent() {
                               />
                             </th>
                           )}
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Peer Tutor
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Year & Section
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Total Classes Allocated
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            Classes Allocated
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Completed Classes
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            Completed
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Pending Classes
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            Pending
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Additional Classes
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            Additional
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Students Assigned
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            Students
                           </th>
                         </tr>
                       </thead>
@@ -1803,7 +1873,7 @@ function FacultyPeerTutorContent() {
                           </tr>
                         ) : (
                           peerTutorsWithStats.map((tutor) => (
-                            <tr key={tutor.id} className="hover:bg-gray-50">
+                            <tr key={tutor.id} className="hover:bg-gray-50 transition-colors duration-150">
                               {isPeerTutorDeleteMode && (
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <input
@@ -1817,9 +1887,9 @@ function FacultyPeerTutorContent() {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
-                                    <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                      <span className="text-blue-600 font-medium text-sm">
-                                        {tutor.name.split(' ').map(n => n[0]).join('')}
+                                    <div className="h-10 w-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
+                                      <span className="text-gray-400 font-bold text-sm tracking-tighter">
+                                        {tutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                       </span>
                                     </div>
                                   </div>
@@ -1841,30 +1911,30 @@ function FacultyPeerTutorContent() {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="text-sm text-gray-900">{tutor.year} - {tutor.section}</div>
+                                <div className="text-sm font-medium text-gray-900">{tutor.year.replace('Year', '').trim()} - {tutor.section.replace('Section', '').trim()}</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="text-sm font-semibold text-gray-900">
+                                <div className="text-sm font-bold text-gray-900">
                                   {tutor.classStats.totalClasses}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="text-sm font-semibold text-gray-900">
+                                <div className="text-sm font-bold text-gray-900">
                                   {tutor.classStats.completedClasses}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="text-sm font-semibold text-gray-900">
+                                <div className="text-sm font-bold text-gray-900">
                                   {tutor.classStats.pendingClasses}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="text-sm font-semibold text-gray-900">
+                                <div className="text-sm font-bold text-gray-900">
                                   {tutor.additionalClassesCount || 0}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="text-sm font-semibold text-gray-900">
+                                <div className="text-sm font-bold text-gray-900">
                                   {peerTutorStudentCounts[tutor.id] || 0}
                                 </div>
                               </td>
@@ -1878,74 +1948,142 @@ function FacultyPeerTutorContent() {
               </>
             ) : activeTab === 'students' ? (
               <>
-                {/* Student Stats Overview */}
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-2 mb-6">
-                  <div className="bg-white overflow-hidden shadow rounded-lg">
+                {/* Student Stats Overview - Clean White Design */}
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+                  {/* Students Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                            <Users className="w-5 h-5 text-green-600" />
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Students
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-gray-500 truncate">Assigned Students</dt>
-                            <dd className="text-lg font-medium text-gray-900">{assignedStudentCount}</dd>
-                          </dl>
-                        </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13.5 9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {students.length}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-blue-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                        <span className="font-semibold uppercase">Total</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white overflow-hidden shadow rounded-lg">
+                  {/* Assigned Students Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-orange-100 rounded-md flex items-center justify-center">
-                            <UserMinus className="w-5 h-5 text-orange-600" />
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Assigned
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-gray-500 truncate">Unassigned Students</dt>
-                            <dd className="text-lg font-medium text-gray-900">{unassignedStudentCount}</dd>
-                          </dl>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {assignedStudentCount}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-green-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="font-semibold uppercase">With Tutors</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Unassigned Students Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Unassigned
                         </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {unassignedStudentCount}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-orange-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-semibold uppercase">Pending</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Years Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Years
+                        </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {availableStudentYears.length}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-blue-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                        <span className="font-semibold uppercase">Active</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Students Table */}
-                <div className="bg-white shadow rounded-lg">
+                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+                  {/* Header with Title and Actions */}
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        All Students ({filteredStudents.length} of {students.length})
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
+                        Students ({filteredStudents.length})
                         {hasActiveStudentFilters && (
-                          <span className="ml-2 text-sm text-blue-600">
+                          <span className="ml-2 text-sm text-blue-600 normal-case">
                             (Filtered)
                           </span>
                         )}
                       </h3>
-        <div className="flex items-center space-x-3">
-          {/* Filter Button */}
-          {!isStudentDeleteMode && (
-            <div className="relative" ref={studentFilterRef}>
-              <button
-                onClick={() => setShowStudentFilterPopup(!showStudentFilterPopup)}
-                className={`p-2 rounded-md transition-colors duration-200 ${
-                  hasActiveStudentFilters
-                    ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                }`}
-                title="Filter students"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                </svg>
-              </button>
+                      
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {/* Search Icon */}
+                        <button
+                          className="p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors duration-200"
+                          title="Search"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        </button>
+
+                        {/* Filter Button */}
+                        {!isStudentDeleteMode && (
+                          <div className="relative" ref={studentFilterRef}>
+                            <button
+                              onClick={() => setShowStudentFilterPopup(!showStudentFilterPopup)}
+                              className={`p-2.5 rounded-lg transition-colors duration-200 ${
+                                hasActiveStudentFilters
+                                  ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                              }`}
+                              title="Filter students"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                              </svg>
+                            </button>
 
                           {/* Filter Popup */}
                           {showStudentFilterPopup && (
@@ -2014,58 +2152,80 @@ function FacultyPeerTutorContent() {
                           )}
                         </div>
                         )}
+
                         {/* Action Buttons */}
-                        <div className="flex space-x-3">
-                          {!isStudentDeleteMode ? (
-                            <>
-                              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
-                                Add Student
-                              </button>
-                              {students.length > 0 && (
-                                <button
-                                  onClick={handleStudentDeleteModeToggle}
-                                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                                >
-                                  Delete
-                                </button>
-                              )}
-                              {filteredStudents.length > 0 && (
-                                <button
-                                  onClick={exportStudents}
-                                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                  <span>Export</span>
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={handleBulkDeleteStudents}
-                                disabled={selectedStudentIds.size === 0}
-                                className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                              >
-                                Delete Selected ({selectedStudentIds.size})
-                              </button>
+                        {!isStudentDeleteMode ? (
+                          <>
+                            <button className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              ADD
+                            </button>
+                            
+                            <button className="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                              ASSIGN
+                            </button>
+
+                            {students.length > 0 && (
                               <button
                                 onClick={handleStudentDeleteModeToggle}
-                                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                                className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                                title="Delete"
                               >
-                                Cancel
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
                               </button>
-                            </>
-                          )}
-                        </div>
+                            )}
+
+                            <button className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              IMPORT
+                            </button>
+
+                            {filteredStudents.length > 0 && (
+                              <button
+                                onClick={exportStudents}
+                                className="px-4 py-2.5 rounded-lg bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                                </svg>
+                                EXPORT
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={handleBulkDeleteStudents}
+                              disabled={selectedStudentIds.size === 0}
+                              className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors duration-200"
+                            >
+                              Delete Selected ({selectedStudentIds.size})
+                            </button>
+                            <button
+                              onClick={handleStudentDeleteModeToggle}
+                              className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="overflow-hidden">
+                  {/* Table */}
+                  <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-white">
                         <tr>
                           {isStudentDeleteMode && (
                             <th className="px-6 py-3 text-left">
@@ -2077,13 +2237,13 @@ function FacultyPeerTutorContent() {
                               />
                             </th>
                           )}
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Student
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Year & Section
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider pl-[50px]">
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Assigned Peer Tutor
                           </th>
                         </tr>
@@ -2094,7 +2254,7 @@ function FacultyPeerTutorContent() {
                             <td colSpan={isStudentDeleteMode ? 5 : 4} className="px-6 py-8 text-center text-gray-500">
                               <div className="flex flex-col items-center">
                                 <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13.5 9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                                 </svg>
                                 <p className="text-lg font-medium text-gray-900 mb-2">No students found</p>
                                 <p className="text-sm text-gray-500">
@@ -2108,7 +2268,7 @@ function FacultyPeerTutorContent() {
                           </tr>
                         ) : (
                           filteredStudents.map((student) => (
-                            <tr key={student.id} className="hover:bg-gray-50">
+                            <tr key={student.id} className="hover:bg-gray-50 transition-colors duration-150">
                               {isStudentDeleteMode && (
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <input
@@ -2122,9 +2282,9 @@ function FacultyPeerTutorContent() {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
-                                    <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                                      <span className="text-green-600 font-medium text-sm">
-                                        {student.name.split(' ').map(n => n[0]).join('')}
+                                    <div className="h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 shadow-sm">
+                                      <span className="text-slate-700 font-bold text-sm tracking-tighter">
+                                        {student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                       </span>
                                     </div>
                                   </div>
@@ -2137,15 +2297,15 @@ function FacultyPeerTutorContent() {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="text-sm text-gray-900">{student.year} - {student.section}</div>
+                                <div className="text-sm font-medium text-gray-900">{student.year.replace('Year', '').trim()} - {student.section.replace('Section', '').trim()}</div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-center pl-[50px]">
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
                                 {student.assigned_peer_tutor ? (
-                                  <div className="text-sm text-gray-900">
+                                  <div className="text-sm font-medium text-gray-900">
                                     {student.assigned_peer_tutor.name}
                                   </div>
                                 ) : (
-                                  <div className="text-sm text-gray-500">
+                                  <div className="text-sm text-gray-500 italic">
                                     Not assigned
                                   </div>
                                 )}
@@ -2182,102 +2342,116 @@ function FacultyPeerTutorContent() {
                   </>
                 ) : (
                   <>
-                    {/* Feedback Stats Overview */}
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-6">
-                      <div className="bg-white overflow-hidden shadow rounded-lg">
+                    {/* Feedback Stats Overview - Clean White Design */}
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 lg:grid-cols-3 mb-6">
+                      {/* Total Forms Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                         <div className="p-5">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                              <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
-                                <ClipboardList className="w-5 h-5 text-blue-600" />
-                              </div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Total Forms
                             </div>
-                            <div className="ml-5 w-0 flex-1">
-                              <dl>
-                                <dt className="text-sm font-medium text-gray-500 truncate">Total Forms</dt>
-                                <dd className="text-lg font-medium text-gray-900">{feedbackForms.length}</dd>
-                              </dl>
-                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {feedbackForms.length}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-blue-600">
+                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="font-semibold uppercase">Created</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-white overflow-hidden shadow rounded-lg">
+                      {/* Active Forms Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                         <div className="p-5">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                              <div className="w-8 h-8 bg-yellow-100 rounded-md flex items-center justify-center">
-                                <Clock className="w-5 h-5 text-yellow-600" />
-                              </div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Active Forms
                             </div>
-                            <div className="ml-5 w-0 flex-1">
-                              <dl>
-                                <dt className="text-sm font-medium text-gray-500 truncate">Pending Response</dt>
-                                <dd className="text-lg font-medium text-gray-900">
-                                  {feedbackForms.filter(form => form.is_active).length}
-                                </dd>
-                              </dl>
-                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {feedbackForms.filter(form => form.is_active).length}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-yellow-600">
+                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="font-semibold uppercase">Pending</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-white overflow-hidden shadow rounded-lg">
+                      {/* Total Responses Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                         <div className="p-5">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                              <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                                <MessageSquare className="w-5 h-5 text-green-600" />
-                              </div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Total Responses
                             </div>
-                            <div className="ml-5 w-0 flex-1">
-                              <dl>
-                                <dt className="text-sm font-medium text-gray-500 truncate">Total Response</dt>
-                                <dd className="text-lg font-medium text-gray-900">
-                                  {feedbackForms.reduce((total, form) => total + (form as any).responseCount || 0, 0)}
-                                </dd>
-                              </dl>
-                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {feedbackForms.reduce((total, form) => total + (form as any).responseCount || 0, 0)}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-green-600">
+                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="font-semibold uppercase">Received</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
                 {/* Feedback Forms Table */}
-                <div className="bg-white shadow rounded-lg">
+                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-gray-900">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
                         Feedback Forms ({feedbackForms.length})
                       </h3>
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                       <button
                               onClick={() => {
                                 setSelectedFeedbackForm(null)
                                 setShowFeedbackModal(true)
                               }}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                              className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
                             >
-                              Create
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              CREATE
                             </button>
                         {isFeedbackDeleteMode && (
                           <>
                             <button
                               onClick={handleCancelFeedbackDeleteMode}
-                              className="inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm"
+                              className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
                             >
                               Cancel
                             </button>
                             <button
                               onClick={handleDeleteSelectedFeedbackForms}
                               disabled={selectedFeedbackFormIds.size === 0}
-                              className={`inline-flex items-center px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all duration-200 shadow-sm ${
+                              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
                                 selectedFeedbackFormIds.size > 0
-                                  ? 'bg-red-600 hover:bg-red-700 cursor-pointer'
-                                  : 'bg-gray-400 cursor-not-allowed'
+                                  ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                                  : 'bg-gray-400 text-white cursor-not-allowed'
                               }`}
                             >
-                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
                               Delete Selected {selectedFeedbackFormIds.size > 0 && `(${selectedFeedbackFormIds.size})`}
@@ -2289,12 +2463,12 @@ function FacultyPeerTutorContent() {
                             {feedbackForms.length > 0 && (
                               <button
                                 onClick={handleToggleFeedbackDeleteMode}
-                                className="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all duration-200 shadow-sm"
+                                className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                                title="Delete"
                               >
-                                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
-                                Delete
                               </button>
                             )}
                           </>
@@ -2303,25 +2477,25 @@ function FacultyPeerTutorContent() {
                     </div>
                   </div>
 
-                  <div className="overflow-hidden">
+                  <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-white">
                         <tr>
                           {isFeedbackDeleteMode && (
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-left">
                               <input
                                 type="checkbox"
                                 checked={selectedFeedbackFormIds.size === feedbackForms.length && feedbackForms.length > 0}
                                 onChange={(e) => handleSelectAllFeedbackForms(e.target.checked)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
                               />
                             </th>
                           )}
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Form Name
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                             No of Fields
                           </th>
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -2333,6 +2507,9 @@ function FacultyPeerTutorContent() {
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Delta Score
                           </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
                           {!isFeedbackDeleteMode && (
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Actions
@@ -2343,7 +2520,7 @@ function FacultyPeerTutorContent() {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {feedbackLoading ? (
                           <tr>
-                            <td colSpan={isFeedbackDeleteMode ? 7 : 6} className="px-6 py-8 text-center text-gray-500">
+                            <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
                               <div className="flex items-center justify-center">
                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
                                 Loading feedback forms...
@@ -2352,7 +2529,7 @@ function FacultyPeerTutorContent() {
                           </tr>
                         ) : feedbackForms.length === 0 ? (
                           <tr>
-                            <td colSpan={isFeedbackDeleteMode ? 7 : 6} className="px-6 py-8 text-center text-gray-500">
+                            <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
                               <div className="flex flex-col items-center">
                                 <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -2413,15 +2590,23 @@ function FacultyPeerTutorContent() {
                                     <span className="text-gray-400">N/A</span>
                                   )}
                                 </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                    form.is_active
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {form.is_active ? 'OPEN' : 'CLOSED'}
+                                  </span>
+                                </td>
                                 {!isFeedbackDeleteMode && (
                                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                     <div className="flex items-center justify-center space-x-2">
                                       <button
                                         onClick={() => handleViewAnalytics(form)}
-                                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                                       >
-                                        <Eye className="h-4 w-4 mr-1.5 text-gray-600" />
-                                        View
+                                        VIEW
                                       </button>
                                       <button
                                         onClick={() => {
@@ -2436,6 +2621,31 @@ function FacultyPeerTutorContent() {
                                       >
                                         <Edit className="h-4 w-4 mr-1.5 text-gray-600" />
                                         Edit
+                                      </button>
+                                      <button
+                                        onClick={() => handleToggleFormStatus(form.id, form.is_active)}
+                                        className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                                          form.is_active
+                                            ? 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                                            : 'text-white bg-green-600 hover:bg-green-700 border border-green-600'
+                                        }`}
+                                        title={form.is_active ? 'Close form' : 'Open form'}
+                                      >
+                                        {form.is_active ? (
+                                          <>
+                                            <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                            </svg>
+                                            Close
+                                          </>
+                                        ) : (
+                                          <>
+                                            <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Open
+                                          </>
+                                        )}
                                       </button>
                                     </div>
                                   </td>
@@ -2479,83 +2689,88 @@ function FacultyPeerTutorContent() {
                       </h2>
                     </div>
 
-                    {/* Stats Overview */}
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 lg:grid-cols-3">
-                      <div className="bg-white overflow-hidden shadow rounded-lg">
+                    {/* Stats Overview - Clean White Design */}
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 lg:grid-cols-3 mb-6">
+                      {/* Total Classes Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                         <div className="p-5">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                              <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
-                                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                              </div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Total Classes
                             </div>
-                            <div className="ml-5 w-0 flex-1">
-                              <dl>
-                                <dt className="text-sm font-medium text-gray-500 truncate">Total Classes</dt>
-                                <dd className="text-lg font-medium text-gray-900">{reportScheduledClasses.length}</dd>
-                              </dl>
-                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {reportScheduledClasses.length}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-blue-600">
+                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="font-semibold uppercase">Scheduled</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-white overflow-hidden shadow rounded-lg">
+                      {/* Completed Classes Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                         <div className="p-5">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                              <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                                <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Completed Classes
                             </div>
-                            <div className="ml-5 w-0 flex-1">
-                              <dl>
-                                <dt className="text-sm font-medium text-gray-500 truncate">Completed Classes</dt>
-                                <dd className="text-lg font-medium text-gray-900">
-                                  {reportScheduledClasses.filter(cls => 
-                                    cls.completion_status === 'completed' || 
-                                    (cls.attendance_completed && cls.topics_completed)
-                                  ).length}
-                                </dd>
-                              </dl>
-                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {reportScheduledClasses.filter(cls => 
+                              cls.completion_status === 'completed' || 
+                              (cls.attendance_completed && cls.topics_completed)
+                            ).length}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-green-600">
+                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="font-semibold uppercase">Finished</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-white overflow-hidden shadow rounded-lg">
+                      {/* Pending Classes Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                         <div className="p-5">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                              <div className="w-8 h-8 bg-yellow-100 rounded-md flex items-center justify-center">
-                                <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Pending Classes
                             </div>
-                            <div className="ml-5 w-0 flex-1">
-                              <dl>
-                                <dt className="text-sm font-medium text-gray-500 truncate">Pending Classes</dt>
-                                <dd className="text-lg font-medium text-gray-900">
-                                  {reportScheduledClasses.filter(cls => 
-                                    cls.completion_status !== 'completed' && 
-                                    !(cls.attendance_completed && cls.topics_completed)
-                                  ).length}
-                                </dd>
-                              </dl>
-                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {reportScheduledClasses.filter(cls => 
+                              cls.completion_status !== 'completed' && 
+                              !(cls.attendance_completed && cls.topics_completed)
+                            ).length}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-yellow-600">
+                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="font-semibold uppercase">Pending</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Scheduled Classes Table */}
-                    <div className="bg-white shadow rounded-lg">
-                      <div className="px-6 py-4 border-b border-gray-200">
-                        <h3 className="text-lg font-medium text-gray-900">
+                    <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+                      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                        <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
                           Scheduled Classes ({reportScheduledClasses.length})
                         </h3>
                       </div>
@@ -2578,18 +2793,18 @@ function FacultyPeerTutorContent() {
                         ) : (
                           <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
+                              <thead className="bg-white">
                                 <tr>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                                     Subject
                                   </th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                                     Assigned Date
                                   </th>
-                                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                     Attendance
                                   </th>
-                                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                     Actions
                                   </th>
                                 </tr>
@@ -2636,8 +2851,7 @@ function FacultyPeerTutorContent() {
                                               : 'text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed opacity-50'
                                           }`}
                                         >
-                                          <Eye className={`h-4 w-4 mr-1.5 ${isPresent ? 'text-gray-600' : 'text-gray-400'}`} />
-                                          View
+                                          <Eye className={`h-4 w-4 ${isPresent ? 'text-gray-600' : 'text-gray-400'}`} />
                                         </button>
                                       </td>
                                     </tr>
@@ -2661,94 +2875,101 @@ function FacultyPeerTutorContent() {
                     </div>
 
                 {/* Peer Tutor Reports */}
-                <div className="bg-white shadow rounded-lg">
-                  <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <div className="flex items-center">
-                      <h3 className="text-lg font-medium text-gray-900">
+                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
                         Peer Tutor Reports ({filteredPeerTutorReports.length})
                       </h3>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {/* Filter Button */}
-                      <div className="relative" ref={reportFilterRef}>
-                        <button
-                          onClick={() => setShowReportFilter(!showReportFilter)}
-                          className={`p-2 rounded-md transition-colors duration-200 ${
-                            hasActiveReportFilters
-                              ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                          }`}
-                          title="Filter reports"
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                          </svg>
-                        </button>
-
-                        {/* Filter Popup */}
-                        {showReportFilter && (
-                          <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                            <div className="p-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <h4 className="text-sm font-medium text-gray-900">Filter Reports</h4>
-                                {hasActiveReportFilters && (
-                                  <button
-                                    onClick={clearReportFilters}
-                                    className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
-                                  >
-                                    Clear
-                                  </button>
-                                )}
-                              </div>
-                              
-                              <div className="space-y-3">
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-700 mb-1">Year</label>
-                                  <select
-                                    value={reportFilterYear}
-                                    onChange={(e) => setReportFilterYear(e.target.value)}
-                                    className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                  >
-                                    <option value="all">All Years</option>
-                                    {availableReportYears.map(year => (
-                                      <option key={year} value={year}>{year}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-700 mb-1">Section</label>
-                                  <select
-                                    value={reportFilterSection}
-                                    onChange={(e) => setReportFilterSection(e.target.value)}
-                                    disabled={reportFilterYear === 'all'}
-                                    className={`block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
-                                      reportFilterYear === 'all' ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''
-                                    }`}
-                                  >
-                                    <option value="all">All Sections</option>
-                                    {availableReportSections.map(section => (
-                                      <option key={section} value={section}>{section}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {/* Filter Bar Redesign */}
+                        <div className="flex items-center gap-2">
+                          {/* Year Dropdown */}
+                          <div className="relative">
+                            <select
+                              value={reportFilterYear}
+                              onChange={(e) => setReportFilterYear(e.target.value)}
+                              className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                                reportFilterYear !== 'all' 
+                                  ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm' 
+                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                              }`}
+                            >
+                              <option value="all">All Years</option>
+                              {availableReportYears.map(year => (
+                                <option key={year} value={year}>{year}</option>
+                              ))}
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
                             </div>
                           </div>
+
+                          {/* Section Dropdown */}
+                          <div className="relative">
+                            <select
+                              value={reportFilterSection}
+                              onChange={(e) => setReportFilterSection(e.target.value)}
+                              disabled={reportFilterYear === 'all'}
+                              className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                                reportFilterYear === 'all'
+                                  ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                                  : reportFilterSection !== 'all'
+                                    ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                              }`}
+                            >
+                              <option value="all">All Sections</option>
+                              {availableReportSections.map(section => (
+                                <option key={section} value={section}>{section}</option>
+                              ))}
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </div>
+
+                          {/* Subject Dropdown */}
+                          <div className="relative">
+                            <select
+                              value={reportFilterSubject}
+                              onChange={(e) => setReportFilterSubject(e.target.value)}
+                              className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                                reportFilterSubject !== 'all'
+                                  ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm'
+                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                              }`}
+                            >
+                              <option value="all">All Subjects</option>
+                              {availableReportSubjects.map(subject => (
+                                <option key={subject} value={subject}>{subject}</option>
+                              ))}
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reset Filters - shown as a clear text button if filters are active */}
+                        {hasActiveReportFilters && (
+                          <button
+                            onClick={clearReportFilters}
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors px-2"
+                          >
+                            CLEAR FILTERS
+                          </button>
                         )}
                       </div>
                       {/* Export Button - Only show if there are records */}
                       {filteredPeerTutorReports.length > 0 && (
-                        <button
-                          onClick={handleExportFilteredReports}
-                          className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
-                          title="Export to Excel"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span>Export</span>
-                        </button>
+                        <ExportButton onClick={handleExportFilteredReports} />
                       )}
                     </div>
                   </div>
@@ -2771,33 +2992,33 @@ function FacultyPeerTutorContent() {
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
+                          <thead className="bg-white">
                             <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
                                 Peer Tutor Name
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
                                 Email
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                Year / Section
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
+                                Year/Section
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Subject
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Total Classes
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Completed Classes
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Pending Classes
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Additional Classes
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Actions
                               </th>
                             </tr>
@@ -2871,8 +3092,7 @@ function FacultyPeerTutorContent() {
                                       onClick={() => handleViewReport(report.peer_tutor_id, subject.class_id, report.peer_tutor_name, subject.subject_name)}
                                       className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                                     >
-                                      <Eye className="h-4 w-4 mr-1.5 text-gray-600" />
-                                      View
+                                      <Eye className="h-4 w-4 text-gray-600" />
                                     </button>
                                   </td>
                                 </tr>
@@ -3012,9 +3232,9 @@ function FacultyPeerTutorContent() {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       <div className="flex items-center">
                                         <div className="flex-shrink-0 h-10 w-10">
-                                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                            <span className="text-blue-600 font-medium text-sm">
-                                              {tutor.name.split(' ').map(n => n[0]).join('')}
+                                          <div className="h-10 w-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
+                                            <span className="text-gray-400 font-bold text-sm tracking-tighter">
+                                              {tutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                             </span>
                                           </div>
                                         </div>
@@ -3072,107 +3292,116 @@ function FacultyPeerTutorContent() {
                   </div>
                 </div>
 
-                {/* Renumeration Stats */}
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 -mt-4">
-                  <div className="bg-white overflow-hidden shadow rounded-lg">
+                {/* Renumeration Stats - Clean White Design */}
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 lg:grid-cols-3 mb-6">
+                  {/* Total Templates/Submissions Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
-                            <Banknote className="w-5 h-5 text-blue-600" />
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          {renumerationView === 'submissions' ? 'Submissions' : 'Total Templates'}
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-gray-500 truncate">
-                              {renumerationView === 'submissions' ? 'Submissions' : 'Total Templates'}
-                            </dt>
-                            <dd className="text-lg font-medium text-gray-900">
-                              {renumerationView === 'submissions' ? filteredAndSortedSubmissions.length : renumerationTemplates.length}
-                            </dd>
-                          </dl>
-                        </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {renumerationView === 'submissions' ? filteredAndSortedSubmissions.length : renumerationTemplates.length}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-blue-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-semibold uppercase">Information</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white overflow-hidden shadow rounded-lg">
+                  {/* Pending Review Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-yellow-100 rounded-md flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-yellow-600" />
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Pending Review
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-gray-500 truncate">Pending Review</dt>
-                            <dd className="text-lg font-medium text-gray-900">
-                              {renumerationView === 'submissions' 
-                                ? filteredAndSortedSubmissions.filter(s => !!s.submitted_at).length
-                                : renumerationSubmissions.filter(s => !!s.submitted_at).length
-                              }
-                            </dd>
-                          </dl>
-                        </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {renumerationView === 'submissions' 
+                          ? filteredAndSortedSubmissions.filter(s => !!s.submitted_at).length
+                          : renumerationSubmissions.filter(s => !!s.submitted_at).length
+                        }
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-yellow-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-semibold uppercase">Pending</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white overflow-hidden shadow rounded-lg">
+                  {/* Total Response Card */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                            <MessageSquare className="w-5 h-5 text-green-600" />
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Total Response
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-gray-500 truncate">Total Response</dt>
-                            <dd className="text-lg font-medium text-gray-900">
-                              {renumerationView === 'submissions' 
-                                ? filteredAndSortedSubmissions.length
-                                : renumerationTemplates.reduce((total, template) => {
-                                    const submissionCount = renumerationSubmissions.filter(
-                                      (submission: any) => submission.template_id === template.id
-                                    ).length
-                                    return total + submissionCount
-                                  }, 0)
-                              }
-                            </dd>
-                          </dl>
-                        </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                        </svg>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {renumerationView === 'submissions' 
+                          ? filteredAndSortedSubmissions.length
+                          : renumerationTemplates.reduce((total, template) => {
+                              const submissionCount = renumerationSubmissions.filter(
+                                (submission: any) => submission.template_id === template.id
+                              ).length
+                              return total + submissionCount
+                            }, 0)
+                        }
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-green-600">
+                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="font-semibold uppercase">Collected</span>
                       </div>
                     </div>
                   </div>
-
                 </div>
 
                 {/* Templates View */}
                 {renumerationView === 'templates' && (
-                  <div className="bg-white shadow rounded-lg">
+                  <div className="bg-white shadow-sm rounded-lg border border-gray-200">
                     <div className="px-6 py-4 border-b border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-medium text-gray-900">
+                      <div className="flex items-center justify-between flex-wrap gap-4">
+                        <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
                           Renumeration Templates ({renumerationTemplates.length})
                         </h3>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <button
                             onClick={() => setShowRenumerationModal(true)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                            className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
                           >
-                            Create
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            CREATE
                           </button>
                           {renumerationTemplates.length > 0 && (
                             <button
                               onClick={handleToggleDeleteMode}
-                              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 inline-flex items-center"
+                              className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                              title="Delete"
                             >
-                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
-                              Delete
                             </button>
                           )}
                         </div>
@@ -3197,24 +3426,24 @@ function FacultyPeerTutorContent() {
                       ) : (
                         <div className="overflow-hidden">
                           <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                            <thead className="bg-white">
                               <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                                   Template Name
                                 </th>
-                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                   No of Fields
                                 </th>
-                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                   Total Responses
                                 </th>
-                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                   Status
                                 </th>
-                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                   Created Date
                                 </th>
-                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                   Actions
                                 </th>
                               </tr>
@@ -3266,10 +3495,9 @@ function FacultyPeerTutorContent() {
                                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                       <button
                                         onClick={() => handleTemplateClick(template)}
-                                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                                       >
-                                        <Eye className="h-4 w-4 mr-1.5 text-gray-600" />
-                                        View
+                                        VIEW
                                       </button>
                                     </td>
                                   </tr>
@@ -3285,23 +3513,40 @@ function FacultyPeerTutorContent() {
 
                 {/* Template Submissions View */}
                 {renumerationView === 'submissions' && (
-                  <div className="bg-white shadow rounded-lg">
+                  <div className="bg-white shadow-sm rounded-lg border border-gray-200">
                     <div className="px-6 py-4 border-b border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-medium text-gray-900">
+                      <div className="flex items-center justify-between flex-wrap gap-4">
+                        <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
                           {selectedTemplate?.name} Submissions ({filteredAndSortedSubmissions.length})
                         </h3>
-                        <div className="flex items-center space-x-2">
-                          {/* Filter icon button */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {/* Filter button */}
                           <button
                             onClick={() => setShowSubmissionFilter(s => !s)}
-                            className="p-2 rounded-md border hover:bg-gray-50"
+                            className={`p-2.5 rounded-lg border transition-colors duration-200 ${
+                              showSubmissionFilter ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                            }`}
                             title="Filter submissions"
                           >
-                            <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6l-5.2 7.28a2 2 0 00-.4 1.2V19l-4 2v-6.92a2 2 0 00-.4-1.2L3.2 4.6A1 1 0 013 4z" />
                             </svg>
                           </button>
+
+                          {filteredAndSortedSubmissions.length > 0 && (
+                            <button
+                              onClick={exportToExcel}
+                              className="px-4 py-2.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              EXPORT
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
                           {/* Popup */}
                           {showSubmissionFilter && (
@@ -3355,21 +3600,6 @@ function FacultyPeerTutorContent() {
                             </div>
                           )}
 
-                          {filteredAndSortedSubmissions.length > 0 && (
-                            <button
-                              onClick={exportToExcel}
-                              className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              <span>Export to Excel</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
                     <div className="overflow-x-auto">
                       {renumerationLoading ? (
                         <div className="flex items-center justify-center py-12">
@@ -3377,18 +3607,18 @@ function FacultyPeerTutorContent() {
                         </div>
                       ) : filteredAndSortedSubmissions.length > 0 ? (
                         <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
+                          <thead className="bg-white">
                             <tr>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Peer Tutor
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Status
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Submitted
                               </th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Actions
                               </th>
                             </tr>
@@ -3437,10 +3667,9 @@ function FacultyPeerTutorContent() {
                                         setSelectedSubmission(submission)
                                         setShowDetailsModal(true)
                                       }}
-                                      className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                      className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                                     >
-                                      <Eye className="h-4 w-4 mr-1.5 text-gray-600" />
-                                      View
+                                      VIEW
                                     </button>
                                   </div>
                                 </td>
@@ -3734,6 +3963,19 @@ function FacultyPeerTutorContent() {
             </div>
           </div>
         </div>
+      )}
+      {/* Peer Tutor Import Modal */}
+      {showImportModal && (
+        <PeerTutorImportModal
+          dept={user?.dept || 'AIDS'}
+          year={selectedYear !== 'all' ? selectedYear : ''}
+          section={selectedSection !== 'all' ? selectedSection : ''}
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            handleRefresh()
+            setShowImportModal(false)
+          }}
+        />
       )}
     </div>
   )

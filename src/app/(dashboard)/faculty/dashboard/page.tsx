@@ -13,6 +13,8 @@ import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
+import { FeedbackService } from '@/lib/services/feedbackService'
+import { RenumerationService } from '@/lib/services/renumerationService'
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@/components/ui'
 import { FacultyDashboardSkeleton } from '@/components/skeletons/FacultyDashboardSkeleton'
 import { 
@@ -24,7 +26,11 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   ChevronRight,
-  GraduationCap
+  GraduationCap,
+  Users,
+  Banknote,
+  MessageSquare,
+  Clock
 } from 'lucide-react'
 
 // --- Types ---
@@ -44,7 +50,9 @@ interface DashboardStats {
   totalAdditionalClasses: number
   totalPeerTutors: number
   totalStudents: number
-  todaysClasses: any[]
+  todaysClasses: any
+  newFeedbackCount: number
+  newRenumerationCount: number
 }
 
 // Default empty stats to use while loading or on error
@@ -63,7 +71,9 @@ const initialStats: DashboardStats = {
   totalAdditionalClasses: 0,
   totalPeerTutors: 0,
   totalStudents: 0,
-  todaysClasses: []
+  todaysClasses: { classes: [], total: 0, completed: 0, percentage: 0 },
+  newFeedbackCount: 0,
+  newRenumerationCount: 0
 }
 
 export default function FacultyDashboardPage() {
@@ -132,28 +142,54 @@ function FacultyDashboardContent() {
     enabled: !!user?.email
   })
 
-  // 2. Main Dashboard Data Query
+      // 2. Main Dashboard Data Query
   const { data: stats = initialStats, isLoading: isStatsLoading } = useQuery({
-    queryKey: ['dashboardStats', department?.name],
+    queryKey: ['dashboardStats', department?.name, user?.id],
     queryFn: async () => {
-      if (!department?.name) return initialStats
+      if (!department?.name || !user?.id) return initialStats
 
       // Fetch all data in parallel
       const [
         { completed, pending },
         additionalClasses,
         allPeerTutors,
-        allStudents
+        allStudents,
+        feedbackForms,
+        renumerationSubmissions
       ] = await Promise.all([
         ScheduledClassService.getAllClassesForDepartment(department.name),
         AdditionalClassService.getAllAdditionalClassesForDepartment(department.name),
         PeerTutorService.getPeerTutorsByDepartment(department.name),
-        StudentService.getStudentsByDepartment(department.name)
+        StudentService.getStudentsByDepartment(department.name),
+        FeedbackService.getFeedbackFormsByFaculty(user.id),
+        RenumerationService.getRenumerationSubmissions(user.id)
       ])
 
       const allClasses = [...completed, ...pending].sort((a, b) => 
         new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime()
       )
+
+      // --- New Submissions Logic ---
+      const lastVisitedFeedback = parseInt(localStorage.getItem('last_visited_feedback') || '0')
+      const lastVisitedRenumeration = parseInt(localStorage.getItem('last_visited_renumeration') || '0')
+
+      let newFeedbackCount = 0
+      // For feedback, we need to check responses for each form
+      const feedbackResponsesPromises = feedbackForms.map(form => FeedbackService.getFeedbackResponses(form.id))
+      const allFeedbackResponses = await Promise.all(feedbackResponsesPromises)
+      
+      allFeedbackResponses.flat().forEach(resp => {
+        if (new Date(resp.submitted_at).getTime() > lastVisitedFeedback) {
+          newFeedbackCount++
+        }
+      })
+
+      let newRenumerationCount = 0
+      renumerationSubmissions.forEach(sub => {
+        if (sub.submitted_at && new Date(sub.submitted_at).getTime() > lastVisitedRenumeration) {
+          newRenumerationCount++
+        }
+      })
 
       // --- Process Stats ---
       const totalClasses = allClasses.length
@@ -162,14 +198,13 @@ function FacultyDashboardContent() {
       const inProgressCount = pending.filter(c => c.completion_status === 'pending').length
       
       const attendanceRate = totalClasses > 0 ? Math.round((completedCount / totalClasses) * 100) : 0
-      const inProgressRate = totalClasses > 0 ? Math.round((inProgressCount / totalClasses) * 100) : 0
-      const pendingRate = totalClasses > 0 ? 100 - attendanceRate - inProgressRate : 0
 
       // Additional Classes Logic
       const totalAdditionalClasses = additionalClasses.length
       const addClassCounts: Record<string, number> = { '2': 0, '3': 0, '4': 0 }
-      additionalClasses.forEach(cls => {
-           let y = cls.year ? cls.year.toString() : ''
+      additionalClasses.forEach((cls: any) => {
+           let y = cls.year || (cls.peer_tutors ? cls.peer_tutors.year : '')
+           y = y.toString()
            if (y.includes('2')) y = '2'
            else if (y.includes('3')) y = '3'
            else if (y.includes('4')) y = '4'
@@ -201,31 +236,26 @@ function FacultyDashboardContent() {
       const weeklyActivityMap = new Array(7).fill(0)
       let currentWeekTotal = 0
       let lastWeekTotal = 0
-      const completedThisWeek = new Set<string>()
-      const completedLastWeek = new Set<string>()
+      
+      // Combine scheduled and additional classes for weekly activity
+      const allCompletedClasses = [
+        ...completed.filter(c => c.completion_status === 'completed' || (c.attendance_completed && c.topics_completed)),
+        ...additionalClasses
+      ]
 
-      const completedClassesList = completed.filter(c => 
-         c.completion_status === 'completed' || (c.attendance_completed && c.topics_completed)
-      )
-
-      completedClassesList.forEach(cls => {
-        const d = new Date(cls.scheduled_date)
+      allCompletedClasses.forEach(cls => {
+        const dateStr = 'scheduled_date' in cls ? cls.scheduled_date : cls.class_date
+        const d = new Date(dateStr)
         d.setHours(0, 0, 0, 0)
         const endOfThisWeek = new Date(startOfThisWeek)
         endOfThisWeek.setDate(endOfThisWeek.getDate() + 7)
         
         if (d.getTime() >= startOfThisWeek.getTime() && d.getTime() < endOfThisWeek.getTime()) {
-           if (!completedThisWeek.has(cls.id)) {
-              completedThisWeek.add(cls.id)
-              weeklyActivityMap[d.getDay()]++
-              currentWeekTotal++
-           }
+          weeklyActivityMap[d.getDay()]++
+          currentWeekTotal++
         }
         if (d.getTime() >= startOfLastWeek.getTime() && d.getTime() <= endOfLastWeek.getTime()) {
-           if (!completedLastWeek.has(cls.id)) {
-              completedLastWeek.add(cls.id)
-              lastWeekTotal++
-           }
+          lastWeekTotal++
         }
       })
 
@@ -248,10 +278,16 @@ function FacultyDashboardContent() {
       }
       
       allClasses.forEach(cls => {
-        if (yearCounts[cls.year] !== undefined) {
-          yearCounts[cls.year].total++
+        const yStr = cls.year?.toString() || ''
+        let normalizedYear = ''
+        if (yStr.includes('2')) normalizedYear = '2'
+        else if (yStr.includes('3')) normalizedYear = '3'
+        else if (yStr.includes('4')) normalizedYear = '4'
+        
+        if (normalizedYear && yearCounts[normalizedYear] !== undefined) {
+          yearCounts[normalizedYear].total++
           if (cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)) {
-            yearCounts[cls.year].completed++
+            yearCounts[normalizedYear].completed++
           }
         }
       })
@@ -274,47 +310,23 @@ function FacultyDashboardContent() {
         },
       ]
 
-      // Recent Classes - Filter to show only last 2 previous sessions (excluding today)
+      // Recent Classes - show only last 3 previous individual sessions (excluding today)
       const todayDate = new Date()
       todayDate.setHours(0, 0, 0, 0)
       
-      const groupedClasses: Record<string, any> = {}
-      allClasses.forEach(cls => {
-        const classDate = new Date(cls.scheduled_date)
-        classDate.setHours(0, 0, 0, 0)
-        
-        // Only include classes from before today
-        if (classDate.getTime() < todayDate.getTime()) {
-          const key = `${cls.class?.subject_name}-${cls.year}`
-          if (!groupedClasses[key]) {
-            groupedClasses[key] = {
-              subject_name: cls.class?.subject_name,
-              year: cls.year,
-              total: 0,
-              completed: 0,
-              scheduled_date: cls.scheduled_date
-            }
-          }
-          groupedClasses[key].total++
-          if (cls.completion_status === 'completed') {
-            groupedClasses[key].completed += 1
-          } else {
-             if (cls.attendance_completed) groupedClasses[key].completed += 0.5
-             if (cls.topics_completed) groupedClasses[key].completed += 0.5
-          }
-          if (new Date(cls.scheduled_date) > new Date(groupedClasses[key].scheduled_date)) {
-            groupedClasses[key].scheduled_date = cls.scheduled_date
-          }
-        }
-      })
-
-      const recentClasses = Object.values(groupedClasses)
-        .map(group => ({
-          ...group,
-          percentage: Math.round((group.completed / group.total) * 100)
+      const recentClasses = allClasses
+        .filter(cls => {
+          const d = new Date(cls.scheduled_date)
+          d.setHours(0,0,0,0)
+          return d.getTime() < todayDate.getTime()
+        })
+        .map(cls => ({
+          subject_name: cls.class?.subject_name || cls.subject_name || 'Individual Session',
+          year: cls.year,
+          scheduled_date: cls.scheduled_date,
+          percentage: cls.completion_status === 'completed' ? 100 : (cls.attendance_completed || cls.topics_completed ? 50 : 0)
         }))
-        .sort((a, b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime())
-        .slice(0, 2) // Only show last 2 sessions
+        .slice(0, 3)
 
       const attendanceBreakdown = [
         { name: 'Completed', value: attendanceRate, color: '#10B981' },
@@ -337,6 +349,8 @@ function FacultyDashboardContent() {
         totalAdditionalClasses,
         totalPeerTutors,
         totalStudents,
+        newFeedbackCount,
+        newRenumerationCount,
         todaysClasses: (() => {
           const todayClasses = allClasses.filter(c => {
             const d = new Date(c.scheduled_date)
@@ -346,7 +360,6 @@ function FacultyDashboardContent() {
             return d.getTime() === t.getTime()
           })
           
-          // Calculate total and completed count
           let totalCount = todayClasses.length
           let completedCount = 0
           
@@ -365,7 +378,7 @@ function FacultyDashboardContent() {
         })()
       }
     },
-    enabled: !!department?.name
+    enabled: !!department?.name && !!user?.id
   })
 
   // Combined Loading State
@@ -382,6 +395,15 @@ function FacultyDashboardContent() {
     if (department?.id) {
       router.push(`/faculty/department/${department.id}/year/${yearId}`)
     }
+  }
+
+  const handleNav = (path: string, type?: 'feedback' | 'renumeration') => {
+    if (type === 'feedback') {
+      localStorage.setItem('last_visited_feedback', Date.now().toString())
+    } else if (type === 'renumeration') {
+      localStorage.setItem('last_visited_renumeration', Date.now().toString())
+    }
+    router.push(path)
   }
 
   // --- UI ---
@@ -403,6 +425,7 @@ function FacultyDashboardContent() {
             {/* Header */}
             <PageHeader
               title="DASHBOARD"
+              tagline="Department Overview & Performance Metrics"
               lastRefresh={lastRefresh}
               onRefresh={handleRefresh}
               isRefreshing={isRefreshing}
@@ -411,307 +434,404 @@ function FacultyDashboardContent() {
             />
 
             {/* Dashboard Content */}
-            <main className="flex-1 p-6 overflow-y-auto">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
+            <main className="flex-1 p-6 overflow-y-auto bg-gray-50/50">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 max-w-[1600px] mx-auto w-full">
                   
                   {/* --- LEFT COLUMN --- */}
-                  <div className="lg:col-span-4 md:contents lg:block space-y-6">
+                  <div className="lg:col-span-4 flex flex-col gap-6">
                     
                     {/* Update Card */}
-                    <div className="bg-[#1C2434] text-white rounded-2xl p-6 relative overflow-hidden shadow-lg md:col-span-2 lg:col-span-auto">
+                    <div className="bg-gradient-to-br from-[#1C2434] to-[#2D3748] text-white rounded-[2rem] p-8 relative overflow-hidden shadow-2xl border border-white/10 group">
                       <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-4">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                          <span className="text-sm font-medium text-gray-300">UPDATE</span>
+                        <div className="flex items-center gap-2 mb-6">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]"></span>
+                          <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">Department Overview</span>
                         </div>
-                        <p className="text-xs text-gray-400 mb-2">
-                          {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        <p className="text-sm text-gray-400 font-medium mb-1">
+                          {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                         </p>
-                        <h3 className="text-2xl font-semibold mb-2">
+                        <h3 className="text-3xl font-bold tracking-tight mb-4 leading-tight">
                          DEPT ALLOCATED<br/>
-                          <span className="text-[#10B981]">{department?.name}</span>
+                          <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">{department?.name}</span>
                         </h3>
+                        <div className="flex items-center gap-4 mt-8">
+                             <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/5">
+                                 <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Total Classes</p>
+                                 <p className="text-xl font-bold">{stats.totalClasses}</p>
+                             </div>
+                             <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/5">
+                                 <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Attendance</p>
+                                 <p className="text-xl font-bold">{stats.attendanceRate}%</p>
+                             </div>
+                        </div>
                       </div>
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
-                      <div className="absolute bottom-0 right-10 w-24 h-24 bg-[#10B981] opacity-10 rounded-full blur-xl"></div>
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-20 -mt-20 group-hover:bg-emerald-500/20 transition-all duration-700"></div>
+                      <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl -ml-20 -mb-20 transition-all duration-700"></div>
                     </div>
                     
                     {/* Stats Row */}
-                    <div className="grid grid-cols-2 gap-4 md:col-span-2 lg:col-span-auto">
-                      <Card className="rounded-2xl shadow-sm border-none p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-sm text-gray-500 font-medium">TUTORS / STUDENTS</span>
-                          <MoreHorizontal className="w-4 h-4 text-gray-300" />
+                    <div className="grid grid-cols-2 gap-6">
+                      <Card className="rounded-[2rem] shadow-sm border-none p-7 bg-white hover:shadow-md transition-all duration-300">
+                        <div className="flex justify-between items-start mb-6">
+                          <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Tutors / Students</div>
+                          <div className="p-1.5 bg-gray-50 rounded-lg">
+                             <Users className="w-3.5 h-3.5 text-gray-400" />
+                          </div>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900 mb-1">{stats.totalPeerTutors} / {stats.totalStudents}</div>
-                        <div className="flex items-center text-xs text-green-500 font-medium"><ArrowUpRight className="w-3 h-3 mr-1" /><span>ALLOCATED</span></div>
+                        <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{stats.totalPeerTutors} / {stats.totalStudents}</div>
+                        <div className="flex items-center text-[10px] text-emerald-600 font-black tracking-widest bg-emerald-50 w-fit px-3 py-1.5 rounded-xl border border-emerald-100/50">
+                          <ArrowUpRight className="w-3 h-3 mr-1.5" />
+                          <span>ALLOCATED</span>
+                        </div>
                       </Card>
 
-                      <Card className="rounded-2xl shadow-sm border-none p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-sm text-gray-500 font-medium">ADDITIONAL CLASSES</span>
-                          <MoreHorizontal className="w-4 h-4 text-gray-300" />
+                      <Card className="rounded-[2rem] shadow-sm border-none p-7 bg-white hover:shadow-md transition-all duration-300">
+                        <div className="flex justify-between items-start mb-6">
+                          <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Additional Classes</div>
+                          <div className="p-1.5 bg-gray-50 rounded-lg">
+                             <GraduationCap className="w-3.5 h-3.5 text-gray-400" />
+                          </div>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900 mb-1">{stats.totalAdditionalClasses}</div>
-                        <div className="flex items-center text-xs text-blue-500 font-medium"><ArrowUpRight className="w-3 h-3 mr-1" /><span>TOTAL CLASSES</span></div>
+                        <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{stats.totalAdditionalClasses}</div>
+                        <div className="flex items-center text-[10px] text-blue-600 font-black tracking-widest bg-blue-50 w-fit px-3 py-1.5 rounded-xl border border-blue-100/50">
+                          <ArrowUpRight className="w-3 h-3 mr-1.5" />
+                          <span>CUMULATIVE</span>
+                        </div>
                       </Card>
                     </div>
 
 
                     {/* Weekly Activity */}
-                    <Card className="rounded-2xl shadow-sm border-none md:col-span-1 lg:col-span-auto">
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7">
+                      <div className="flex flex-row items-center justify-between mb-8">
                         <div>
-                          <CardTitle className="text-lg font-semibold">WEEKLY ACTIVITY</CardTitle>
-                          <div className="flex items-center gap-4 mt-2">
-                            <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#1C2434]"></span><span className="text-xs text-gray-500">ClASSES</span></div>
+                          <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none mb-2">Weekly Activity</h4>
+                          <div className="flex items-center gap-2">
+                             <span className="text-2xl font-black text-gray-900">{stats.currentWeekTotal}</span>
+                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center ${stats.weeklyChange >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                               {stats.weeklyChange >= 0 ? <ArrowUpRight size={10} className="mr-0.5"/> : <ArrowDownRight size={10} className="mr-0.5"/>} 
+                               {Math.abs(stats.weeklyChange)}%
+                             </span>
                           </div>
                         </div>
-                        <div className="text-right">
-                           <p className="text-xl font-bold text-gray-900">{stats.currentWeekTotal}</p>
-                           <span className={`text-xs flex justify-end items-center ${stats.weeklyChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                             {stats.weeklyChange >= 0 ? <ArrowUpRight size={12} className="mr-1"/> : <ArrowDownRight size={12} className="mr-1"/>} 
-                             {stats.weeklyChange > 0 ? '+' : ''}{stats.weeklyChange}%
-                           </span>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="h-[200px] w-full mt-4">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.weeklyActivity} barSize={12}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9CA3AF'}} dy={10} />
-                              <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}} />
-                              <Bar dataKey="classes" fill="#1C2434" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </CardContent>
+                        <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#1C2434]"></span><span className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">Classes Taken</span></div>
+                      </div>
+                      <div className="w-full h-[160px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={stats.weeklyActivity} barSize={16}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                            <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94A3B8', fontWeight: 600}} dy={10} />
+                            <RechartsTooltip cursor={{fill: '#F8FAFC', radius: 4}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', padding: '8px 12px'}} itemStyle={{fontSize: '12px', fontWeight: 'bold'}} />
+                            <Bar dataKey="classes" fill="#1C2434" radius={[4, 4, 4, 4]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     </Card>
 
+                    {/* Spacer for alignment */}
+                    <div className="flex-1 min-h-[1px]"></div>
                   </div>
 
                   {/* --- MIDDLE COLUMN --- */}
-                  <div className="lg:col-span-5 md:contents lg:block space-y-6">
-                                        {/* Year Overview */}
-                    <Card className="rounded-2xl shadow-sm border-none md:col-span-2 lg:col-span-auto">
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-lg font-semibold">YEAR OVERVIEW</CardTitle>
+                  <div className="lg:col-span-4 flex flex-col gap-6">
+                    {/* Year Overview */}
+                    <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 overflow-hidden relative">
+                      <div className="flex flex-row items-center justify-between mb-8 relative z-10">
+                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Year Overview</h4>
                         <MoreHorizontal className="w-5 h-5 text-gray-400 cursor-pointer" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-6 mt-2">
-                          {stats.yearStats.map((yearStat) => (
-                            <div key={yearStat.year} className="group cursor-pointer" onClick={() => handleYearClick(yearStat.year)}>
-                               <div className="flex justify-between items-center mb-1">
-                                 <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors">Year {yearStat.year}</span>
-                                 <span className="text-xs text-gray-500">{yearStat.count} Classes</span>
+                      </div>
+                      <div className="space-y-8 mt-2 relative z-10">
+                        {stats.yearStats.map((yearStat) => (
+                          <div key={yearStat.year} className="group cursor-pointer" onClick={() => handleYearClick(yearStat.year)}>
+                             <div className="flex justify-between items-end mb-0">
+                               <div>
+                                  <span className="text-base font-bold text-gray-800 group-hover:text-blue-600 transition-colors">YEAR {yearStat.year}</span>
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{yearStat.count} Total Classes Allocated</p>
                                </div>
-                               <div className="relative w-full h-3">
-                                 <svg width="100%" height="100%" viewBox="0 0 100 10" preserveAspectRatio="none" className="overflow-visible">
-                                   <path d="M0 5 Q 12.5 0, 25 5 T 50 5 T 75 5 T 100 5" fill="none" stroke="#F1F5F9" strokeWidth="6" strokeLinecap="round" />
-                                   <path d="M0 5 Q 12.5 0, 25 5 T 50 5 T 75 5 T 100 5" fill="none" stroke="#84CC16" strokeWidth="6" strokeLinecap="round"
-                                     pathLength="100" strokeDasharray="100" strokeDashoffset={100 - Math.max(yearStat.percentage, 0)}
-                                     className="transition-all duration-1000 ease-out group-hover:stroke-blue-500" />
-                                 </svg>
-                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
+                               <span className="text-sm font-bold text-gray-900">{Math.round(yearStat.percentage)}%</span>
+                             </div>
+                             <div className="relative w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-1000 ease-out group-hover:from-blue-400 group-hover:to-blue-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                  style={{ width: `${yearStat.percentage}%` }}
+                                ></div>
+                             </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-gray-50 rounded-full opacity-50"></div>
                     </Card>
 
                     
                     {/* Recent Sessions */}
-                    <Card className="rounded-2xl shadow-sm border-none overflow-hidden md:col-span-2 lg:col-span-auto">
-                      <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-gray-50">
-                        <CardTitle className="text-xl font-semibold text-gray-900">RECENT SESSIONS</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        <div className="divide-y divide-gray-50">
-                          {stats.recentClasses.length > 0 ? (
-                            stats.recentClasses.map((cls, i) => {
-                              let color = '#EF4444' // Red
-                              if (cls.percentage === 100) color = '#10B981' // Green
-                              else if (cls.percentage >= 50) color = '#F59E0B' // Yellow
-                              const radius = 18
-                              const circumference = 2 * Math.PI * radius
-                              const offset = circumference - (cls.percentage / 100) * circumference
+                    <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 overflow-hidden">
+                       <div className="flex flex-row items-center justify-between pb-4 border-b border-gray-50">
+                          <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest">Recent Sessions</h4>
+                          <span className="text-[10px] font-black text-gray-400 px-2.5 py-1 bg-gray-50 rounded-lg uppercase tracking-widest border border-gray-100">Last 3</span>
+                       </div>
+                      <div className="space-y-4">
+                        {stats.recentClasses.length > 0 ? (
+                          stats.recentClasses.map((cls, i) => {
+                            let statusColor = 'bg-emerald-500'
+                            let statusText = 'Completed'
+                            let bgColor = 'bg-gray-100' // Changed to gray
+                            if (cls.percentage < 100) {
+                                statusColor = 'bg-amber-500'
+                                statusText = 'In Progress'
+                            }
+                            if (cls.percentage === 0) {
+                                statusColor = 'bg-red-500'
+                                statusText = 'Pending'
+                            }
 
-                              return (
-                                <div key={i} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors duration-150">
-                                  <div className="flex items-center gap-4">
-                                    <div className="relative w-12 h-12 flex items-center justify-center flex-shrink-0">
-                                      <svg className="transform -rotate-90 w-12 h-12">
-                                        <circle cx="24" cy="24" r={radius} stroke="#F3F4F6" strokeWidth="4" fill="transparent" />
-                                        <circle cx="24" cy="24" r={radius} stroke={color} strokeWidth="4" fill="transparent"
-                                          strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
-                                          className="transition-all duration-1000 ease-out" />
-                                      </svg>
-                                      <span className="absolute text-[10px] font-bold text-gray-700">{cls.percentage}%</span>
-                                    </div>
-                                    <div>
-                                      <h4 className="text-sm font-semibold text-gray-900 leading-none mb-1.5">{cls.subject_name}</h4>
-                                      <p className="text-xs text-gray-500 font-medium flex items-center"><span className="opacity-70 mr-1">YEAR - {cls.year}</span></p>
-                                    </div>
+                            return (
+                              <div key={i} className="flex items-center justify-between p-4 rounded-2xl hover:bg-gray-50/80 transition-all duration-200 border border-transparent hover:border-gray-100 group">
+                                <div className="flex items-center gap-4">
+                                  <div className={`w-12 h-12 rounded-xl ${bgColor} flex items-center justify-center font-bold text-black relative`}>
+                                     {cls.year}
+                                     <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${statusColor}`}></div>
                                   </div>
-                                  <div className="text-xs font-medium text-gray-400">
-                                    {new Date(cls.scheduled_date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}
+                                  <div>
+                                    <h5 className="text-sm font-bold text-gray-900 mb-0.5 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{cls.subject_name}</h5>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                        {new Date(cls.scheduled_date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+                                    </p>
                                   </div>
                                 </div>
-                              )
-                            })
-                          ) : (
-                            <div className="p-8 text-center text-sm text-gray-500">No previous sessions available</div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Additional Classes */}
-                    <Card className="rounded-2xl shadow-sm border-none overflow-hidden md:col-span-2 lg:col-span-auto">
-                       <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-gray-100">
-                          <CardTitle className="text-lg font-semibold">Additional Classes</CardTitle>
-                          <MoreHorizontal className="w-5 h-5 text-gray-400 cursor-pointer" />
-                       </CardHeader>
-                       <CardContent className="pt-6">
-                          <div className="flex flex-row items-end justify-between">
-                            <div className="flex flex-col justify-end">
-                              <span className="text-5xl font-bold text-[#1C2434] italic leading-none mb-1">
-                                {stats.totalAdditionalClasses < 10 ? `0${stats.totalAdditionalClasses}` : stats.totalAdditionalClasses}
-                              </span>
-                            </div>
-                            <div className="flex flex-row items-end justify-end gap-3 sm:gap-6 h-[70px] pb-1">
-                               {stats.additionalClassesByYear.map((item, index) => {
-                                 const maxCount = Math.max(...stats.additionalClassesByYear.map(i => i.count), 1);
-                                 const heightPx = (item.count / maxCount) * 50;
-                                 return (
-                                   <div key={index} className="flex flex-col items-center gap-2 group min-w-[30px]">
-                                      <div className="w-5 sm:w-6 bg-[#8B5CF6] rounded-t-full transition-all duration-500 group-hover:bg-[#7C3AED]" style={{ height: `${Math.max(heightPx, 4)}px` }}></div>
-                                      <div className="text-center leading-none">
-                                        <span className="text-xs text-gray-900 font-bold block mb-1">{item.count}</span>
-                                        <span className="text-xs text-gray-400 font-medium whitespace-nowrap">Year {item.year}</span>
-                                      </div>
-                                   </div>
-                                 )
-                               })}
-                            </div>
+                                 <div className="text-right">
+                                   <p className="text-xs font-black text-gray-900 mb-0.5">{cls.percentage}%</p>
+                                   <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">{statusText}</p>
+                                </div>
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <div className="py-12 flex flex-col items-center justify-center text-center">
+                             <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center mb-4">
+                               <Clock className="text-gray-300 w-8 h-8" />
+                             </div>
+                             <p className="text-sm font-black text-gray-900 uppercase tracking-tight">No Sessions</p>
                           </div>
-                       </CardContent>
+                        )}
+                      </div>
                     </Card>
 
+                    {/* Additional Classes by Year */}
+                    <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7">
+                       <div className="flex flex-row items-center justify-between mb-8">
+                          <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest">Additional Classes</h4>
+                          <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full uppercase">By Year</span>
+                       </div>
+                       <div className="flex flex-row items-end justify-between gap-4 h-[120px]">
+                          {stats.additionalClassesByYear.map((item, index) => {
+                            const maxCount = Math.max(...stats.additionalClassesByYear.map(i => i.count), 1);
+                            const heightPercent = (item.count / maxCount) * 100;
+                            return (
+                              <div key={index} className="flex-1 flex flex-col items-center justify-end group">
+                                 <div className="text-sm font-black text-gray-900 mb-2 opacity-0 group-hover:opacity-100 transition-opacity">{item.count}</div>
+                                 <div 
+                                    className="w-full bg-gradient-to-t from-purple-500 to-purple-400 rounded-xl transition-all duration-500 cursor-pointer shadow-lg group-hover:shadow-purple-500/20 group-hover:-translate-y-1" 
+                                    style={{ height: `${Math.max(heightPercent, 15)}%` }}
+                                 ></div>
+                                 <div className="mt-4 text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Year {item.year}</div>
+                              </div>
+                            )
+                          })}
+                       </div>
+                    </Card>
+
+                    {/* Spacer for alignment */}
+                    <div className="flex-1 min-h-[1px]"></div>
                   </div>
 
 
                   {/* --- RIGHT COLUMN --- */}
-                  <div className="lg:col-span-3 md:contents lg:block space-y-6">
+                  <div className="lg:col-span-4 flex flex-col gap-6">
                     
-                    {/* Class Status */}
-                    <Card className="rounded-2xl shadow-sm border-none md:col-span-1 lg:col-span-auto flex flex-col">
-                      <CardHeader className="pb-2 border-b border-gray-100 mb-0 relative z-10 bg-white rounded-t-2xl">
-                        <CardTitle className="text-lg font-semibold text-left">CLASS STATUS </CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex-1 flex flex-col items-center justify-start pb-6 pt-0">
-                        <div className="relative w-full h-[180px] -mt-12">
+                    {/* Class Status Chart Card */}
+                    <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 relative overflow-hidden group">
+                       <div className="flex flex-row items-center justify-between mb-8 border-b border-gray-50 pb-4">
+                        <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest">Performance</h4>
+                        <div className="flex gap-1">
+                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                             <div className="w-1.5 h-1.5 rounded-full bg-gray-200"></div>
+                             <div className="w-1.5 h-1.5 rounded-full bg-gray-200"></div>
+                        </div>
+                      </div>
+                      
+                      <div className="relative flex flex-col items-center justify-center py-2">
+                        <div className="relative w-full h-[160px]">
                           <ResponsiveContainer width="100%" height="100%">
-                            <PieChart margin={{ top: 0, left: 0, right: 0, bottom: 0 }}>
-                              <defs>
-                                 <pattern id="stripePattern" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
-                                   <rect width="3" height="6" transform="translate(0,0)" fill="#9CA3AF" opacity="0.4" />
-                                 </pattern>
-                              </defs>
-                              <Pie data={[{ value: 100 }]} cx="50%" cy="100%" startAngle={180} endAngle={0} innerRadius="65%" outerRadius="90%" paddingAngle={0} dataKey="value" stroke="none" isAnimationActive={false}>
-                                 <Cell fill="url(#stripePattern)" />
+                            <PieChart>
+                              <Pie 
+                                data={[{ value: 100 }]} 
+                                cx="50%" cy="100%" startAngle={180} endAngle={0} 
+                                innerRadius="65%" outerRadius="90%" paddingAngle={0} 
+                                dataKey="value" stroke="none" isAnimationActive={false}
+                              >
+                                 <Cell fill="#F1F5F9" />
                               </Pie>
-                              <Pie data={[{ value: stats.attendanceRate + (stats.inProgressClasses > 0 ? (stats.inProgressClasses / stats.totalClasses * 100) : 0) }, { value: 100 - (stats.attendanceRate + (stats.inProgressClasses > 0 ? (stats.inProgressClasses / stats.totalClasses * 100) : 0)) }]} cx="50%" cy="100%" startAngle={180} endAngle={0} innerRadius="65%" outerRadius="90%" paddingAngle={0} dataKey="value" stroke="none" cornerRadius={10}>
-                                <Cell fill="#14532d" />
-                                <Cell fill="transparent" />
-                              </Pie>
-                              <Pie data={[{ value: stats.attendanceRate }, { value: 100 - stats.attendanceRate }]} cx="50%" cy="100%" startAngle={180} endAngle={0} innerRadius="65%" outerRadius="90%" paddingAngle={0} dataKey="value" stroke="none" cornerRadius={10}>
-                                <Cell fill="#15803d" />
+                              <Pie 
+                                data={[{ value: stats.attendanceRate }, { value: 100 - stats.attendanceRate }]} 
+                                cx="50%" cy="100%" startAngle={180} endAngle={0} 
+                                innerRadius="65%" outerRadius="90%" paddingAngle={0} 
+                                dataKey="value" stroke="none" cornerRadius={10}
+                                className="drop-shadow-xl"
+                              >
+                                <Cell fill="#10B981" />
                                 <Cell fill="transparent" />
                               </Pie>
                             </PieChart>
                           </ResponsiveContainer>
-                          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center justify-end">
-                            <span className="text-3xl font-bold text-gray-900 tracking-tight">{stats.attendanceRate}%</span>
-                            <span className="text-xs text-gray-500 font-medium mt-1">CLASSES</span>
+                          <div className="absolute inset-x-0 bottom-2 flex flex-col items-center justify-center">
+                            <span className="text-4xl font-black text-gray-900 tracking-tighter leading-none">{stats.attendanceRate}%</span>
+                            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">Overall Progress</span>
                           </div>
                         </div>
-                        <div className="w-full mt-6 flex justify-center items-center gap-6 text-xs">
-                           <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-[#15803d]"></span><span className="text-gray-700 font-medium">Completed</span></div>
-                           <div className="flex items-center gap-2">
-                              <span className="w-3 h-3 rounded-full bg-gray-300 bg-opacity-50 border border-gray-300 overflow-hidden relative">
-                                 <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iMiIgaGVpZ2h0PSI0IiBmaWxsPSIjOUNBM0FGIiBvcGFjaXR5PSIwLjMiLz4KPC9zdmc+')]"></div>
-                              </span>
-                              <span className="text-gray-400">Pending</span>
+                        <div className="w-full mt-4 flex justify-center items-center gap-8">
+                           <div className="flex flex-col items-center">
+                               <div className="flex items-center gap-1.5 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></span><span className="text-xs font-bold text-gray-800">Done</span></div>
+                               <span className="text-[10px] text-gray-400 font-bold uppercase">{stats.completedClasses} Classes</span>
+                           </div>
+                           <div className="flex flex-col items-center">
+                               <div className="flex items-center gap-1.5 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-200"></span><span className="text-xs font-bold text-gray-400">Todo</span></div>
+                               <span className="text-[10px] text-gray-400 font-bold uppercase">{stats.totalClasses - stats.completedClasses} Classes</span>
                            </div>
                         </div>
-                      </CardContent>
+                      </div>
                     </Card>
 
-                    {/* Guides */}
-                    <Card className="rounded-2xl shadow-sm border-none md:col-span-1 lg:col-span-auto">
-                       <CardContent className="pt-6">
-                          <Button variant="outline" className="w-full justify-between group hover:border-blue-500 hover:text-blue-600" onClick={() => router.push('/faculty/renumeration')}>
-                            Renumeration <ChevronRight size={16} className="text-gray-400 group-hover:text-blue-600" />
-                          </Button>
-                          <Button variant="outline" className="w-full justify-between mt-3 group hover:border-blue-500 hover:text-blue-600" onClick={() => router.push('/faculty/analytics')}>
-                            Analytics & Reports <ChevronRight size={16} className="text-gray-400 group-hover:text-blue-600" />
-                          </Button>
-                       </CardContent>
-                    </Card>
+                    {/* Renumeration & Feedback Link Card */}
+                    <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 overflow-hidden">
+                       <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Reports & Feedback</h4>
+                       <div className="grid grid-cols-2 gap-4">
+                          <button 
+                             className="bg-gray-50/80 hover:bg-white p-5 rounded-2xl flex flex-col items-start justify-between group transition-all duration-300 border border-transparent hover:border-emerald-100 hover:shadow-lg hover:shadow-emerald-500/5 h-[110px]" 
+                             onClick={() => handleNav('/faculty/peer-tutor?tab=renumeration', 'renumeration')}
+                          >
+                             <div className="text-left w-full">
+                                <p className="text-sm font-black text-gray-900 mb-1 leading-tight group-hover:text-emerald-600 transition-colors">Renumeration</p>
+                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Payments</p>
+                             </div>
+                             <div className="flex items-center justify-between w-full">
+                                {stats.newRenumerationCount > 0 ? (
+                                   <span className="bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full">
+                                     {stats.newRenumerationCount} NEW
+                                   </span>
+                                ) : (
+                                   <div className="w-6 h-6 rounded-lg bg-white shadow-sm flex items-center justify-center">
+                                      <Banknote className="w-3 h-3 text-gray-400" />
+                                   </div>
+                                )}
+                                <ChevronRight size={14} className="text-gray-300 group-hover:text-emerald-500 transform group-hover:translate-x-1 transition-all" />
+                             </div>
+                          </button>
 
-                    {/* Today's Classes */}
-                    <Card className="rounded-2xl shadow-sm border-none md:col-span-1 lg:col-span-auto flex flex-col overflow-hidden">
-                       <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-gray-100">
-                          <CardTitle className="text-lg font-semibold">TODAY'S CLASSES</CardTitle>
-                          <div className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            {new Date().toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
-                          </div>
-                       </CardHeader>
-                       <CardContent className="pt-6">
-                          {stats.todaysClasses.total > 0 ? (
-                            <div className="flex flex-row items-end justify-between">
-                              <div className="flex flex-col justify-end">
-                                <span className="text-5xl font-bold text-[#1C2434] italic leading-none mb-1">
-                                  {stats.todaysClasses.total < 10 ? `0${stats.todaysClasses.total}` : stats.todaysClasses.total}
-                                </span>
-                                <span className="text-xs text-gray-500 font-medium">Total Classes</span>
-                              </div>
-                              <div className="flex flex-col items-end justify-end gap-2 h-[70px] pb-1">
-                                <div className="relative w-16 h-16 flex items-center justify-center flex-shrink-0">
-                                  <svg className="transform -rotate-90 w-16 h-16">
-                                    <circle cx="32" cy="32" r="24" stroke="#F3F4F6" strokeWidth="5" fill="transparent" />
-                                    <circle cx="32" cy="32" r="24" stroke="#10B981" strokeWidth="5" fill="transparent"
-                                      strokeDasharray={2 * Math.PI * 24} 
-                                      strokeDashoffset={2 * Math.PI * 24 * (1 - stats.todaysClasses.percentage / 100)} 
-                                      strokeLinecap="round"
-                                      className="transition-all duration-1000 ease-out" />
-                                  </svg>
-                                  <span className="absolute text-xs font-bold text-gray-700">{stats.todaysClasses.percentage}%</span>
+                          <button 
+                             className="bg-gray-50/80 hover:bg-white p-5 rounded-2xl flex flex-col items-start justify-between group transition-all duration-300 border border-transparent hover:border-blue-100 hover:shadow-lg hover:shadow-blue-500/5 h-[110px]" 
+                             onClick={() => handleNav('/faculty/peer-tutor?tab=feedback', 'feedback')}
+                          >
+                             <div className="text-left w-full">
+                                <p className="text-sm font-black text-gray-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors">Feedback</p>
+                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Insights</p>
+                             </div>
+                             <div className="flex items-center justify-between w-full">
+                                {stats.newFeedbackCount > 0 ? (
+                                   <span className="bg-blue-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full">
+                                     {stats.newFeedbackCount} NEW
+                                   </span>
+                                ) : (
+                                   <div className="w-6 h-6 rounded-lg bg-white shadow-sm flex items-center justify-center">
+                                      <MessageSquare className="w-3 h-3 text-gray-400" />
+                                   </div>
+                                )}
+                                <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-500 transform group-hover:translate-x-1 transition-all" />
+                             </div>
+                          </button>
+
+                          <button 
+                             className="bg-[#1C2434] hover:bg-black p-5 rounded-2xl flex flex-col items-start justify-between group transition-all duration-300 shadow-xl shadow-gray-900/10 h-[110px] col-span-2 relative overflow-hidden" 
+                             onClick={() => router.push('/faculty/analytics')}
+                          >
+                             <div className="relative z-10 w-full">
+                                <p className="text-sm font-black text-white mb-1 leading-none">Analytics & Reports</p>
+                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Performance Monitoring</p>
+                             </div>
+                             <div className="relative z-10 flex items-center justify-between w-full">
+                                <div className="flex items-center gap-2">
+                                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                                   <span className="text-[10px] font-bold text-gray-300">Live Dashboard</span>
                                 </div>
-                                <span className="text-xs text-gray-400 font-medium">Completed</span>
+                                <ArrowUpRight size={16} className="text-gray-400 group-hover:text-white transform group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
+                             </div>
+                             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-all duration-700"></div>
+                          </button>
+                       </div>
+                    </Card>
+
+                    {/* Today's Classes Scrollable List */}
+                    <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 flex flex-col overflow-hidden max-h-[380px]">
+                       <div className="flex flex-row items-center justify-between mb-6 border-b border-gray-50 pb-4">
+                          <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Today's Timeline</h4>
+                          <span className="bg-gray-100 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-sm">
+                            {new Date().toLocaleDateString('en-US', { weekday: 'short' })}
+                          </span>
+                       </div>
+                       
+                       <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3">
+                          {stats.todaysClasses.total > 0 ? (
+                            stats.todaysClasses.classes.map((cls: any, i: number) => (
+                              <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-white transition-all duration-300 group">
+                                 <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-bold text-gray-700 group-hover:scale-110 transition-transform">
+                                    {cls.year}
+                                 </div>
+                                 <div className="flex-1">
+                                    <h6 className="text-[12px] font-black text-gray-900 uppercase leading-tight mb-0.5">{cls.class?.subject_name}</h6>
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1"><Clock className="w-3 h-3 text-gray-400"/><span className="text-[10px] text-gray-500 font-bold">Allocated</span></div>
+                                        <div className={`w-1.5 h-1.5 rounded-full ${cls.completion_status === 'completed' ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                                    </div>
+                                 </div>
+                                 <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
                               </div>
-                            </div>
+                            ))
                           ) : (
-                            <div className="h-[70px] flex flex-col items-center justify-center text-center">
-                               <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-2">
-                                 <GraduationCap className="text-gray-300 w-6 h-6" />
+                            <div className="py-12 flex flex-col items-center justify-center text-center">
+                               <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center mb-4 transition-all duration-700 hover:rotate-12">
+                                 <GraduationCap className="text-gray-300 w-8 h-8" />
                                </div>
-                               <p className="text-sm font-medium text-gray-900">No Classes Today</p>
-                               <p className="text-xs text-gray-500 mt-1 max-w-[150px]">Relax! There are no peer tutor sessions scheduled for today.</p>
+                               <p className="text-sm font-black text-gray-900 uppercase tracking-tight">No Classes Today</p>
+                               <p className="text-xs text-gray-400 mt-2 max-w-[180px] font-medium leading-relaxed">Relax! There are no peer tutor sessions scheduled for today.</p>
                             </div>
                           )}
-                       </CardContent>
+                       </div>
                     </Card>
 
+                    {/* Spacer for alignment */}
+                    <div className="flex-1 min-h-[1px]"></div>
                   </div>
                 </div>
             </main>
+            
+            <style jsx global>{`
+              .custom-scrollbar::-webkit-scrollbar {
+                width: 4px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: #E2E8F0;
+                border-radius: 10px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: #CBD5E1;
+              }
+            `}</style>
           </>
         )}
       </div>
     </div>
   )
 }
+

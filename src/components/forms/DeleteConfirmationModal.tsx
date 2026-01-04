@@ -12,7 +12,8 @@ interface DeleteConfirmationModalProps {
     email?: string
     additionalInfo?: string
   }[]
-  type: 'peer-tutors' | 'students' | 'all'
+  type?: string
+  isLoading?: boolean
 }
 
 export default function DeleteConfirmationModal({
@@ -21,7 +22,8 @@ export default function DeleteConfirmationModal({
   onConfirm,
   title,
   itemsToDelete,
-  type
+  type,
+  isLoading = false
 }: DeleteConfirmationModalProps) {
   const [confirmationCode, setConfirmationCode] = useState('')
   const [generatedCode, setGeneratedCode] = useState('')
@@ -41,7 +43,7 @@ export default function DeleteConfirmationModal({
   const handleConfirm = () => {
     if (inputCode === generatedCode) {
       onConfirm()
-      onClose()
+      // Do not close immediately, let the parent handle it
     } else {
       setError('Incorrect confirmation code. Please try again.')
     }
@@ -69,11 +71,6 @@ export default function DeleteConfirmationModal({
         <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col relative z-10">
           <div className="p-6 flex-1 overflow-y-auto">
             <div className="sm:flex sm:items-start">
-            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-              <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
             <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left flex-1">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
                 {title}
@@ -84,33 +81,46 @@ export default function DeleteConfirmationModal({
                 </p>
                 
                 {/* List of items to delete */}
-                <div className="max-h-60 overflow-y-auto bg-gray-50 rounded-md p-4 mb-4 border border-gray-200">
-                  <ul className="space-y-2">
-                    {itemsToDelete.map((item, index) => (
-                      <li key={index} className="text-sm border-b border-gray-200 pb-2 last:border-b-0">
-                        <div className="font-medium text-gray-900">{item.name}</div>
-                        {item.email && (
-                          <div className="text-gray-500">{item.email}</div>
-                        )}
-                        {item.additionalInfo && (
-                          <div className="text-gray-400 text-xs mt-1">{item.additionalInfo}</div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6 shadow-sm">
+                  {/* Table Header */}
+                  <div className="grid grid-cols-[1.5fr_2fr] gap-4 bg-gray-50/80 border-b border-gray-200 px-4 py-2">
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Name</div>
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Details</div>
+                  </div>
+                  
+                  {/* Scrollable List */}
+                  <div className="max-h-60 overflow-y-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    {itemsToDelete.length > 0 ? (
+                      itemsToDelete.map((item, index) => (
+                        <div key={index} className="grid grid-cols-[1.5fr_2fr] gap-4 px-4 py-3 border-b border-gray-100 last:border-0 items-center hover:bg-gray-50 transition-colors">
+                          <div className="font-medium text-gray-900 text-sm truncate" title={item.name}>{item.name}</div>
+                          <div className="flex flex-col min-w-0">
+                            {item.email && (
+                              <div className="text-gray-500 text-sm truncate" title={item.email}>{item.email}</div>
+                            )}
+                            {item.additionalInfo && (
+                              <div className="text-gray-400 text-xs mt-0.5 truncate" title={item.additionalInfo}>{item.additionalInfo}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-sm text-gray-500">No items available</div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Warning message */}
                 <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
                   <p className="text-sm text-red-800">
-                    <strong>Warning:</strong> This action cannot be undone. All associated data including assignments, attendance records, and class schedules will also be deleted.
+                    <strong>WARNING:</strong> This action cannot be undone. All associated data  will also be deleted.
                   </p>
                 </div>
 
                 {/* Confirmation code */}
                 <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
                   <p className="text-sm text-gray-700 mb-2">
-                    To confirm deletion, please type the following code:
+                    CONFIRMATION CODE
                   </p>
                   <div className="bg-white border-2 border-yellow-400 rounded-md p-3 text-center">
                     <span className="text-2xl font-bold text-gray-900 tracking-wider font-mono">
@@ -157,14 +167,24 @@ export default function DeleteConfirmationModal({
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={inputCode.length !== 6}
+              disabled={inputCode.length !== 6 || isLoading}
               className={`inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-sm font-medium text-white transition-colors ${
-                inputCode.length === 6
+                inputCode.length === 6 && !isLoading
                   ? 'bg-red-600 hover:bg-red-700 focus:ring-2 focus:ring-offset-2 focus:ring-red-500'
                   : 'bg-gray-400 cursor-not-allowed'
               }`}
             >
-              Delete Permanently
+              {isLoading ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Deleting...
+                </span>
+              ) : (
+                'DELETE'
+              )}
             </button>
           </div>
         </div>

@@ -7,6 +7,7 @@ export interface AdditionalClass {
   subject_name: string
   topic: string
   class_date: string
+  year?: string
   created_at: string
   updated_at: string
 }
@@ -319,7 +320,7 @@ export class AdditionalClassService {
         .from('additional_classes')
         .select(`
           *,
-          peer_tutors!inner(dept)
+          peer_tutors!inner(dept, year)
         `)
         .eq('peer_tutors.dept', dept)
         .order('class_date', { ascending: false })

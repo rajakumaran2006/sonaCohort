@@ -29,6 +29,8 @@ export const metadata: Metadata = {
   description: "Sign in to your PeerTutors account",
 };
 
+import { Toaster } from 'sonner';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -102,6 +104,7 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthProvider>
+            <Toaster position="top-right" expand={false} richColors />
             {children}
           </AuthProvider>
         </QueryProvider>

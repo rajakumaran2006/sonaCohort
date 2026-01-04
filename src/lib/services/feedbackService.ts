@@ -327,7 +327,44 @@ export class FeedbackService {
     questions?: Omit<FeedbackQuestion, 'id' | 'feedback_form_id' | 'created_at'>[]
   ): Promise<{ success: boolean; strategy: FormEditStrategy; newVersion?: FeedbackFormVersion }> {
     try {
-      // Check if versioning is available
+      const supabase = createClient()
+      
+      // If only updating is_active (status toggle), bypass versioning completely
+      if (updates.is_active !== undefined && !updates.name && !updates.description && !questions) {
+        console.log('Performing simple status update without versioning')
+        const { error } = await supabase
+          .from('feedback_forms')
+          .update({
+            is_active: updates.is_active,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', formId)
+
+        if (error) {
+          console.error('Error updating feedback form status:', error)
+          return { 
+            success: false, 
+            strategy: {
+              type: 'require_confirmation',
+              reason: 'Error during status update',
+              canProceed: false,
+              warnings: ['An error occurred during the status update']
+            }
+          }
+        }
+
+        return { 
+          success: true, 
+          strategy: {
+            type: 'update_current',
+            reason: 'Simple status toggle',
+            canProceed: true,
+            warnings: []
+          }
+        }
+      }
+      
+      // Check if versioning is available for other updates
       try {
         // Determine edit strategy
         const strategy = await FeedbackVersioningService.getEditStrategy(formId, {
@@ -374,7 +411,6 @@ export class FeedbackService {
       }
 
       // Fallback to legacy update method
-      const supabase = createClient()
       const { error } = await supabase
         .from('feedback_forms')
         .update({

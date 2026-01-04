@@ -10,6 +10,7 @@ import { StudentService, Student } from '@/lib/services/studentService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { RenumerationService, PeerTutorRenumeration } from '@/lib/services/renumerationService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { Eye } from 'lucide-react'
 
 export default function PeerTutorProfilePage() {
   return (
@@ -223,9 +224,9 @@ function PeerTutorProfileContent() {
             </div>
             <div className="p-6">
               <div className="flex items-center space-x-6">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-2xl font-bold text-blue-600">
-                    {peerTutor.name.charAt(0).toUpperCase()}
+                <div className="w-16 h-16 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-2 ring-gray-900 shadow-xl">
+                  <span className="text-2xl font-bold text-gray-400 tracking-tighter">
+                    {peerTutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                   </span>
                 </div>
                 <div className="flex-1">
@@ -383,9 +384,9 @@ function PeerTutorProfileContent() {
                               // View details
                               console.log('View renumeration details:', renumeration)
                             }}
-                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                           >
-                            View Details
+                            VIEW
                           </button>
                         </div>
                       </div>
@@ -419,10 +420,10 @@ function PeerTutorProfileContent() {
                 {assignedStudents.length > 0 ? (
                   <div className="space-y-3">
                     {assignedStudents.map((student) => (
-                      <div key={student.id} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-medium text-blue-600">
-                            {student.name.charAt(0).toUpperCase()}
+                      <div key={student.id} className="flex items-center space-x-4 p-3.5 bg-gray-50/50 border border-gray-100 rounded-xl hover:bg-white hover:shadow-sm transition-all duration-200">
+                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 shadow-sm">
+                          <span className="text-slate-700 font-bold text-sm tracking-tighter">
+                            {student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                           </span>
                         </div>
                         <div className="flex-1">

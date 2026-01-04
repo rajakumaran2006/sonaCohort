@@ -9,9 +9,23 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 import { ExamService, Exam } from '@/lib/services/examService'
-import { Card, CardHeader, CardTitle, CardContent, LoadingOverlay } from '@/components/ui'
+import { AssignmentService } from '@/lib/services/assignmentService'
+import { ExamMarksService } from '@/lib/services/examMarksService'
+import { ExamSubjectService } from '@/lib/services/examSubjectService'
+import { Card, LoadingOverlay } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { FileText, Calendar } from 'lucide-react'
+import { 
+  FileText, 
+  Calendar, 
+  Users, 
+  CheckCircle, 
+  Clock, 
+  ChevronRight, 
+  ArrowUpRight,
+  TrendingUp,
+  BrainCircuit
+} from 'lucide-react'
+import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 export default function PeerExamsPage() {
   return (
@@ -29,6 +43,17 @@ function PeerExamsContent() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [peerTutorYear, setPeerTutorYear] = useState<string | null>(null)
+  
+  // Stats state
+  const [stats, setStats] = useState({
+    totalExams: 0,
+    totalStudents: 0,
+    completedExams: 0,
+    overallCompletion: 0,
+    pendingExams: 0
+  })
+
+  const [examProgress, setExamProgress] = useState<Record<string, number>>({})
 
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
@@ -50,7 +75,7 @@ function PeerExamsContent() {
   }, [peerTutorInfo])
 
   // Fetch exams for peer tutor's year
-  const { data: exams, isLoading: isExamsLoading, refetch: refetchExams } = useQuery({
+  const { data: exams, isLoading: isExamsLoading } = useQuery({
     queryKey: ['peer-exams', peerTutorYear],
     queryFn: async () => {
       if (!peerTutorYear) return []
@@ -59,6 +84,76 @@ function PeerExamsContent() {
     enabled: !!peerTutorYear,
     staleTime: 5 * 60 * 1000,
   })
+
+  // Calculate detailed stats
+  useEffect(() => {
+    const calculateStats = async () => {
+      if (!peerTutorInfo?.id || !exams) return
+
+      try {
+        // 1. Get assigned students count
+        const students = await AssignmentService.getStudentsByPeerTutor(peerTutorInfo.id)
+        const totalStudents = students.length
+
+        // 2. Calculate progress for each exam
+        let totalProgressSum = 0
+        let completedCount = 0
+        const progressMap: Record<string, number> = {}
+
+        for (const exam of exams) {
+          const subjects = await ExamSubjectService.getExamSubjects(exam.id)
+          const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutorInfo.id, exam.id)
+          
+          let formattedMarksCount = 0
+          const totalPossibleMarks = students.length * subjects.length
+
+          marks.forEach(mark => {
+             // Iterate through subjects to verify mark exists for specific subject
+             subjects.forEach(subject => {
+                 if (mark.exam_subject_id === subject.id && mark.marks && mark.marks.marks) {
+                     formattedMarksCount++
+                 }
+             })
+          })
+
+          // We need a more accurate count based on unique student-subject pairs
+          // But for now, let's look at the fetch logic. getExamMarksByPeerTutorAndExam returns one record per student-exam-subject?
+          // Looking at the service: it returns ExamMark[] which has student_id and exam_subject_id.
+          // So length is the count of entries.
+          
+          const entryCount = marks.length
+          
+          const progress = totalPossibleMarks > 0 
+            ? Math.round((entryCount / totalPossibleMarks) * 100)
+            : 0
+          
+          progressMap[exam.id] = Math.min(progress, 100)
+          totalProgressSum += Math.min(progress, 100)
+          
+          if (progress >= 100) completedCount++
+        }
+
+        const overallCompletion = exams.length > 0 
+          ? Math.round(totalProgressSum / exams.length) 
+          : 0
+
+        setExamProgress(progressMap)
+        setStats({
+          totalExams: exams.length,
+          totalStudents,
+          completedExams: completedCount,
+          overallCompletion,
+          pendingExams: exams.length - completedCount
+        })
+
+      } catch (error) {
+        console.error("Error calculating stats:", error)
+      }
+    }
+
+    calculateStats()
+  }, [peerTutorInfo, exams])
+
 
   const loading = isTutorLoading || isExamsLoading
 
@@ -75,27 +170,17 @@ function PeerExamsContent() {
     }
   }
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-[#F8F9FA]">
       <PeerSidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      {/* Main Content */}
-      <div className="transition-all duration-300 lg:ml-64 min-h-screen flex flex-col overflow-hidden">
-        {/* Top Header */}
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col`}>
         <PageHeader
           title="EXAMS"
+          tagline="Marks Entry & Performance Tracking"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
@@ -103,63 +188,174 @@ function PeerExamsContent() {
           isSidebarCollapsed={isSidebarCollapsed}
         />
 
-        {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          {loading ? (
-            <LoadingOverlay className="h-96" size="xl">
-              Loading exams...
-            </LoadingOverlay>
-          ) : (
-            <div className="w-full py-8 px-4 sm:px-6 lg:px-8">
-              {exams && exams.length > 0 ? (
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {exams.map((exam) => (
-                    <Card
-                      key={exam.id}
-                      className="hover:shadow-lg transition-shadow duration-200 cursor-pointer"
-                      onClick={() => router.push(`/peer/exams/${exam.id}`)}
-                    >
-                      <CardContent className="p-6">
-                        <div className="flex items-start space-x-4">
-                          <div className="flex-shrink-0">
-                            <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                              <FileText className="h-6 w-6 text-blue-600" />
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2 truncate">
-                              {exam.name}
-                            </h3>
-                            <div className="flex items-center text-sm text-gray-500 mb-3">
-                              <Calendar className="h-4 w-4 mr-1.5" />
-                              <span>{formatDate(exam.created_at)}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {peerTutorYear === '2' ? '2nd Year' : peerTutorYear === '3' ? '3rd Year' : peerTutorYear === '4' ? '4th Year' : peerTutorYear}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="py-12">
-                    <div className="text-center">
-                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Exams Available</h3>
-                      <p className="text-sm text-gray-500">
-                        There are no exams assigned to your year at this time.
-                      </p>
+          <div className="w-full py-8 px-4 sm:px-6 lg:px-8">
+            {loading ? (
+               <LoadingOverlay className="h-96" size="xl">Loading exams...</LoadingOverlay>
+            ) : (
+              <div className="space-y-6">
+                
+                {/* Stats Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Exams</p>
+                        <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalExams}</p>
+                      </div>
+                      <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                        <FileText className="w-4 h-4 text-gray-400" />
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
+                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                           Assigned for Year {peerTutorYear}
+                        </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Completed Exams</p>
+                        <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.completedExams}</p>
+                      </div>
+                      <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                        <CheckCircle className="w-4 h-4 text-gray-400" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                        <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
+                           Finished
+                        </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Pending Exams</p>
+                        <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.pendingExams}</p>
+                      </div>
+                      <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                        <Clock className="w-4 h-4 text-gray-400" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                        <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
+                           Remaining
+                        </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Exams Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-5 border-b border-gray-100">
+                    <div className="flex items-center justify-between mb-0">
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Available Exams</h3>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {loading ? 'Loading...' : `${exams?.length || 0} exam(s) assigned`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    {!exams || exams.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <FileText className="w-8 h-8 text-blue-600" />
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No exams found</h3>
+                        <p className="text-gray-500">There are currently no exams assigned to your year.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-white">
+                            <tr>
+                              <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                Exam Name
+                              </th>
+                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                Date
+                              </th>
+                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                Year
+                              </th>
+                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                Progress
+                              </th>
+                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                Status
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {exams.map((exam) => {
+                               const progress = examProgress[exam.id] || 0
+                               const isCompleted = progress === 100
+
+                              return (
+                                <tr 
+                                  key={exam.id} 
+                                  className="hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => router.push(`/peer/exams/${exam.id}`)}
+                                >
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className="text-sm font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors">
+                                      {exam.name}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                                    <div className="text-sm font-bold text-gray-700">
+                                      {new Date(exam.created_at).toLocaleDateString()}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                                    <div className="text-sm font-bold text-gray-700">
+                                      Year {peerTutorYear}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                                    <div className="flex items-center justify-center">
+                                      <div className="w-24 bg-gray-100 rounded-full h-1.5 mr-2">
+                                        <div 
+                                          className={`h-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                                          style={{ width: `${progress}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className={`text-xs font-bold ${isCompleted ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                        {progress}%
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                                     <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-widest border ${
+                                        isCompleted 
+                                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                          : 'bg-blue-50 text-blue-600 border-blue-100'
+                                     }`}>
+                                        {isCompleted ? 'Completed' : 'In Progress'}
+                                     </span>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </main>
       </div>
     </div>

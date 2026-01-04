@@ -352,14 +352,13 @@ function SubjectReportsContent() {
                                         }
                                       }}
                                       disabled={!isPresent}
-                                      className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                      className={`px-3 py-1.5 border rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all shadow-sm ${
                                         isPresent
-                                          ? 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer'
-                                          : 'text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed opacity-50'
+                                          ? 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                                          : 'bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed'
                                       }`}
                                     >
-                                      <Eye className={`h-4 w-4 mr-1.5 ${isPresent ? 'text-gray-600' : 'text-gray-400'}`} />
-                                      View
+                                      VIEW
                                     </button>
                                   </td>
                                 </tr>

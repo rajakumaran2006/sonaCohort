@@ -259,10 +259,7 @@ export default function StudentImportModal({
         return
       }
       
-      NotificationService.showNotification(
-        `SUCCESSFULLY IMPORTED ${validStudents.length} STUDENT(S)!`,
-        'success'
-      )
+      alert(`Successfully imported ${validStudents.length} student(s)!`)
       
       onSuccess()
       onClose()

@@ -19,6 +19,7 @@ import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import CreateExamModal from '@/components/forms/CreateExamModal'
 import { FileText, Plus, Trash2, Eye, Download } from 'lucide-react'
+import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
 import { calculatePeerTutorAscendScore } from '@/lib/utils/ascendScore'
 
@@ -67,7 +68,14 @@ function FacultyExamsContent() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const loading = isDepartmentLoading || isExamsLoading
+  // Fetch all peer tutors (across all years)
+  const { data: allPeerTutors, isLoading: isPeerTutorsLoading } = useQuery({
+    queryKey: ['all-peer-tutors'],
+    queryFn: async () => await PeerTutorService.getAllPeerTutors(),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const loading = isDepartmentLoading || isExamsLoading || isPeerTutorsLoading
 
   // Calculate exam statistics
   useEffect(() => {
@@ -428,6 +436,7 @@ function FacultyExamsContent() {
         {/* Top Header */}
         <PageHeader
           title="EXAM MANAGEMENT"
+          tagline="Marks Entry & Performance Tracking"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
@@ -436,6 +445,7 @@ function FacultyExamsContent() {
         />
 
         {/* Main Content */}
+        {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           {loading ? (
             <LoadingOverlay className="h-96" size="xl">
@@ -443,117 +453,232 @@ function FacultyExamsContent() {
             </LoadingOverlay>
           ) : (
             <div className={`max-w-full mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
-              {/* Exams List */}
-              <Card className="mb-6">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
+              
+              {/* Stats Cards - Clean White Design */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                {/* Total Exams Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                  <div className="flex justify-between items-start mb-4">
                     <div>
-                      <CardTitle className="text-xl">Exams</CardTitle>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Manage and create exams for peer tutors
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Exams</p>
+                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{exams?.length || 0}</p>
+                    </div>
+                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                      <FileText className="w-4 h-4 text-gray-400" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                      Current Academic Year
+                    </p>
+                  </div>
+                </div>
+
+                {/* Total Peer Tutors Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Peer Tutors</p>
+                      <p className="text-3xl font-bold text-gray-900 tracking-tight">
+                        {allPeerTutors?.length || 0}
                       </p>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                      Across All Years
+                    </p>
+                  </div>
+                </div>
+
+                {/* Completed Entries Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Completed</p>
+                      <p className="text-3xl font-bold text-gray-900 tracking-tight">
+                        {Object.values(examStats).reduce((acc, curr) => acc + curr.completed, 0)}
+                      </p>
+                    </div>
+                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                      <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                    <p className="text-[9px] font-bold text-green-600 uppercase tracking-widest flex items-center gap-1.5">
+                      100% Marks Entered
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pending Entries Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Pending</p>
+                      <p className="text-3xl font-bold text-gray-900 tracking-tight">
+                        {Object.values(examStats).reduce((acc, curr) => acc + curr.pending + curr.ongoing, 0)}
+                      </p>
+                    </div>
+                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                      <svg className="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
+                    <p className="text-[9px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
+                      Action Required
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Exams list View - Clean White Design */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-100">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                        Exam Schedules ({exams?.length || 0})
+                      </h3>
+                      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest mt-1">
+                        Manage and track exam performance
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
                       <Button
                         onClick={() => setIsCreateModalOpen(true)}
-                        size="lg"
+                        className="bg-black hover:bg-gray-900 text-white border-2 border-transparent px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
                       >
-                        <Plus className="h-5 w-5 mr-2" />
+                        <Plus className="h-4 w-4 mr-2" />
                         Create Exam
                       </Button>
+                      
                       {exams && exams.length > 0 && (
-                        <Button
-                          variant="outline"
+                        <ExportButton 
                           onClick={handleExportAllExams}
-                          size="lg"
-                          className="inline-flex items-center bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
                           disabled={isExporting}
-                        >
-                          <Download className="h-5 w-5 mr-2" />
-                          {isExporting ? 'Exporting...' : 'Export'}
-                        </Button>
+                          isLoading={isExporting}
+                          text="EXPORT"
+                        />
                       )}
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  {exams && exams.length > 0 ? (
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Exam Name</TableHead>
-                            <TableHead className="text-center">Years</TableHead>
-                            <TableHead className="text-center">Created</TableHead>
-                            <TableHead className="text-center">Peer Tutors</TableHead>
-                            <TableHead className="text-center">Completed</TableHead>
-                            <TableHead className="text-center">Pending</TableHead>
-                            <TableHead className="text-center">Ongoing</TableHead>
-                            <TableHead className="text-center">Actions</TableHead>
+                </div>
+                {exams && exams.length > 0 ? (
+                  <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-white border-b border-gray-100">
+                        <TableHead className="pl-6 py-4">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Exam Name</span>
+                        </TableHead>
+                        <TableHead className="text-center py-4">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Years</span>
+                        </TableHead>
+                        <TableHead className="text-center py-4">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date Created</span>
+                        </TableHead>
+                        <TableHead className="text-center py-4">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tutors</span>
+                        </TableHead>
+                        <TableHead className="text-center py-4">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Done</span>
+                        </TableHead>
+                        <TableHead className="text-center py-4">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pending</span>
+                        </TableHead>
+                        <TableHead className="text-center pr-6 py-4">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {exams.map((exam) => {
+                        const stats = examStats[exam.id] || { total: 0, completed: 0, pending: 0, ongoing: 0 }
+                        return (
+                          <TableRow 
+                            key={exam.id} 
+                            onClick={() => handleExamClick(exam)}
+                            className="hover:bg-gray-50/50 transition-colors group border-b border-gray-50 cursor-pointer"
+                          >
+                            <TableCell className="pl-6 py-5">
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+                                  <FileText className="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900 mb-0.5">{exam.name}</p>
+                                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                                    {exam.id.substring(0, 8)}...
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center py-5">
+                              <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                                {formatYears(exam.years)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center py-5">
+                              <span className="text-xs font-medium text-gray-500">
+                                {new Date(exam.created_at).toLocaleDateString()}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center py-5">
+                              <span className="text-sm font-bold text-gray-900">
+                                {stats.total}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center py-5">
+                              <span className="text-sm font-bold text-gray-900">
+                                {stats.completed}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center py-5">
+                              <span className="text-sm font-bold text-gray-900">
+                                {stats.pending + stats.ongoing}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center pr-6 py-5">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleExamClick(exam);
+                                  }}
+                                  className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
+                                >
+                                  VIEW
+                                </button>
+                                <button
+                                  onClick={(e) => handleDeleteExam(exam.id, e)}
+                                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                  title="Delete Exam"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {exams.map((exam) => {
-                            const stats = examStats[exam.id] || { total: 0, completed: 0, pending: 0, ongoing: 0 }
-                            return (
-                              <TableRow key={exam.id} className="hover:bg-gray-50">
-                                <TableCell className="font-medium text-gray-900">
-                                  <span>{exam.name}</span>
-                                </TableCell>
-                                <TableCell className="text-center text-gray-600">
-                                  {formatYears(exam.years)}
-                                </TableCell>
-                                <TableCell className="text-center text-gray-600">
-                                  {new Date(exam.created_at).toLocaleDateString()}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="font-medium text-gray-900">
-                                    {isLoadingStats ? '...' : stats.total}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="font-medium text-gray-900">
-                                    {isLoadingStats ? '...' : stats.completed}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="font-medium text-gray-900">
-                                    {isLoadingStats ? '...' : stats.pending}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="font-medium text-gray-900">
-                                    {isLoadingStats ? '...' : stats.ongoing}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <div className="flex items-center justify-center space-x-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleExamClick(exam)}
-                                      className="inline-flex items-center"
-                                    >
-                                      <Eye className="h-4 w-4 mr-1.5" />
-                                      View
-                                    </Button>
-                                    <Button
-                                      variant="danger"
-                                      size="sm"
-                                      onClick={(e) => handleDeleteExam(exam.id, e)}
-                                      className="inline-flex items-center"
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-1.5" />
-                                      Delete
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
                   ) : (
                     <div className="flex items-center justify-center min-h-[400px] py-12">
                       <div className="text-center">
@@ -569,9 +694,8 @@ function FacultyExamsContent() {
                       </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </div>
           )}
         </main>
       </div>

@@ -3,8 +3,9 @@
 import React, { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { LayoutGrid, Users, GraduationCap, ClipboardList, FileText, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutGrid, Users, GraduationCap, ClipboardList, FileText, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface FacultySidebarProps {
   isOpen: boolean
@@ -52,12 +53,10 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
     { name: 'CLASSES', href: '/faculty/classes', Icon: GraduationCap },
     { name: 'ATTENDANCE', href: '/faculty/attendance', Icon: ClipboardList },
     { name: 'EXAMS', href: '/faculty/exams', Icon: FileText },
+    { name: 'ANALYTICS', href: '/faculty/analytics', Icon: BarChart3 },
   ]
 
-  const handleNavigation = (href: string) => {
-    router.push(href)
-    onClose()
-  }
+
 
   const handleSignOut = async () => {
     setIsLoggingOut(true)
@@ -91,15 +90,13 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
         data-sidebar-collapsed={isCollapsed}
       >
         {/* Logo Header */}
-        <div className="flex items-center h-18 flex-shrink-0 px-6 pt-6 mb-6">
-          <div className="flex items-center gap-3">
-             {!isCollapsed && (
-               <img 
-                 src="/logo.png" 
-                 alt="Peer Tutor Logo" 
-                 className="h-auto w-96 object-contain"
-               />
-             )}
+        <div className={`flex items-center h-20 flex-shrink-0 ${isCollapsed ? 'px-4' : 'pl-4 pr-10'} pt-6 mb-6 transition-all duration-300`}>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center w-full' : 'w-full'}`}>
+            <img 
+              src="/peers.png" 
+              alt="Peers Logo" 
+              className={`h-auto object-contain transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-full'}`}
+            />
           </div>
         </div>
 
@@ -113,11 +110,13 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
           <div className="space-y-2">
             {navigation.map((item) => {
               const isActive = pathname === item.href
+              // Trigger rebuild
               const Icon = item.Icon
               return (
-                <button
+                <Link
                   key={item.name}
-                  onClick={() => handleNavigation(item.href)}
+                  href={item.href}
+                  onClick={onClose}
                   className={`
                     w-full flex items-center rounded-lg transition-all duration-200 group relative
                     ${isCollapsed ? 'justify-center py-4' : 'px-4 py-3 text-left'}
@@ -133,7 +132,8 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
                   )}
                   <Icon className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'} ${isActive ? 'text-[#bef264]' : 'text-gray-400 group-hover:text-white'}`} />
                   {!isCollapsed && <span className="font-medium">{item.name}</span>}
-                </button>
+                </Link>
+
               )
             })}
           </div>
@@ -152,47 +152,57 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
 
 
 
-        {/* Profile Section */}
+        {/* Profile Section with Sign Out */}
         <div className="border-t border-gray-800 flex-shrink-0 p-4">
-          <button 
-            onClick={() => router.push('/faculty/settings')}
-            className={`flex items-center w-full text-left hover:bg-white/5 rounded-lg transition-colors p-2 ${isCollapsed ? 'justify-center' : 'gap-3'}`}
-            title="Settings"
-          >
-            <div className="flex-shrink-0 relative">
-              <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden ring-2 ring-[#bef264] ring-offset-2 ring-offset-[#0f291e]">
-                <User className="h-6 w-6 text-gray-300" />
+          <div className={`flex items-center w-full rounded-lg p-2 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+            {/* Profile Info */}
+            <Link 
+              href="/faculty/settings"
+              onClick={onClose}
+              className={`flex items-center ${isCollapsed ? '' : 'gap-3 flex-1 min-w-0'} hover:bg-white/5 rounded-lg p-2 transition-colors`}
+              title={isCollapsed ? 'Settings' : undefined}
+            >
+              <div className="flex-shrink-0 relative">
+                <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden ring-2 ring-[#bef264] ring-offset-2 ring-offset-[#0f291e]">
+                  <User className="h-6 w-6 text-gray-300" />
+                </div>
+                <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
               </div>
-              <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
-            </div>
+              {!isCollapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'}
+                  </p>
+                </div>
+              )}
+            </Link>
+            
+            {/* Sign Out Icon */}
             {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
-                  {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'}
-                </p>
-                <p className="text-xs text-gray-400 truncate">
-                  {user?.email}
-                </p>
-              </div>
+              <button
+                onClick={handleSignOut}
+                disabled={isLoggingOut}
+                className="flex-shrink-0 p-2 rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-red-400"
+                title="Sign Out"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
             )}
-          </button>
-        </div>
-
-        {/* Logout Button */}
-        <div className="p-4 flex-shrink-0">
-          <button
-            onClick={handleSignOut}
-            disabled={isLoggingOut}
-            className={`
-              w-full flex items-center rounded-lg transition-colors group
-              ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3 text-left hover:bg-white/5'}
-              text-red-400 hover:text-red-300
-            `}
-            title={isCollapsed ? 'Sign Out' : undefined}
-          >
-            <LogOut className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'}`} />
-            {!isCollapsed && <span className="font-medium">{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>}
-          </button>
+          </div>
+          
+          {/* Sign Out for Collapsed State */}
+          {isCollapsed && (
+            <div className="mt-2">
+              <button
+                onClick={handleSignOut}
+                disabled={isLoggingOut}
+                className="w-full flex justify-center py-3 rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-red-400"
+                title="Sign Out"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -4,8 +4,19 @@ import { useState, useEffect } from 'react'
 import { Class } from '@/lib/services/classService'
 import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
-import { ClassService } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  X, 
+  Check, 
+  ChevronRight, 
+  ArrowRight, 
+  Link as LinkIcon, 
+  Camera, 
+  Users, 
+  BookOpen, 
+  Trophy 
+} from 'lucide-react'
 
 interface ClassDetailsModalProps {
   isOpen: boolean
@@ -14,96 +25,77 @@ interface ClassDetailsModalProps {
   userEmail: string
 }
 
-// Helper function to get initials from name
-const getInitials = (name: string): string => {
-  return name
-    .split(' ')
-    .map(word => word.charAt(0))
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
+const getInitials = (name: string): string => name.split(' ').map(word => word.charAt(0)).join('').toUpperCase().slice(0, 2)
 
-// Helper function to get avatar color based on name
 const getAvatarColor = (name: string): string => {
-  const colors = [
-    'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 
-    'bg-indigo-500', 'bg-yellow-500', 'bg-red-500', 'bg-teal-500'
-  ]
-  const index = name.length % colors.length
-  return colors[index]
+  const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-yellow-500', 'bg-red-500', 'bg-teal-500']
+  return colors[name.length % colors.length]
 }
 
 export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmail }: ClassDetailsModalProps) {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
   const [topics, setTopics] = useState<string>('')
+  const [imageLink, setImageLink] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [currentStep, setCurrentStep] = useState<'topics' | 'attendance' | 'completed'>('topics')
+  const [currentStep, setCurrentStep] = useState<'topics' | 'proof' | 'attendance' | 'completed'>('topics')
   const [peerTutorId, setPeerTutorId] = useState<string>('')
-  const [completionStatus, setCompletionStatus] = useState<any>(null)
-  const [isEditable, setIsEditable] = useState(true)
   const [scheduledClassId, setScheduledClassId] = useState<string>('')
 
+  // Load Initial Data
   useEffect(() => {
     if (isOpen && classItem && userEmail) {
       loadClassDetails()
-      checkCompletionStatus()
-      setCurrentStep('topics') // Always start with topics
+      setCurrentStep('topics')
     }
   }, [isOpen, classItem, userEmail])
 
   const loadClassDetails = async () => {
     if (!classItem) return
-
     setLoading(true)
+
+    // Special handling for dummy test class
+    if (classItem.id === 'dummy-test-class-today') {
+        setAttendanceRecords([
+            { student_id: 's1', student_name: 'SRISAKTHIPRIYA R', student_email: '37494366-ab4d-4f12-a784-39e37c50351a', status: 'present' },
+            { student_id: 's2', student_name: 'SRI HARI HARAN L', student_email: 'f30c40da-55df-4649-b45e-b91873a4642b', status: 'absent' },
+            { student_id: 's3', student_name: 'SRI RAM K B', student_email: '2184504f-b85b-4446-8093-fe91a07bbe74', status: 'present' }
+        ])
+        setTopics('Test Topics for Debugging')
+        setLoading(false)
+        return
+    }
+
     try {
-      // Get peer tutor info
       const tutorInfo = await PeerTutorAuthService.getPeerTutorByEmail(userEmail)
       if (!tutorInfo) return
-
       setPeerTutorId(tutorInfo.id)
 
-      // Get students assigned to this peer tutor
+      // Fetch Students & Attendance
       const students = await AttendanceService.getStudentsForAttendance(tutorInfo.id)
-      
-      // Get existing attendance for this class
-      const existingAttendance = await AttendanceService.getAttendanceByClass(classItem.id)
-      
-      // Get scheduled class info and topics
-      console.log('Loading class details for:', classItem)
-      
-      let scheduledClass = null
-      if (classItem.scheduled_class_id) {
-        scheduledClass = await ScheduledClassService.getScheduledClassById(classItem.scheduled_class_id)
-      } else {
-        // If no scheduled_class_id, try to find it by class_id and other criteria
-        console.log('No scheduled_class_id found, trying to find scheduled class by class_id')
-        scheduledClass = await ScheduledClassService.getScheduledClassByClassId(classItem.id)
-      }
-      
+      const existingAttendance = classItem.scheduled_class_id
+        ? await AttendanceService.getAttendanceByScheduledClass(classItem.scheduled_class_id)
+        : await AttendanceService.getAttendanceByClass(classItem.id)
+
+      // Fetch Scheduled Class Details
+      let scheduledClass = classItem.scheduled_class_id 
+        ? await ScheduledClassService.getScheduledClassById(classItem.scheduled_class_id)
+        : await ScheduledClassService.getScheduledClassByClassId(classItem.id)
+
       if (scheduledClass) {
-        console.log('Found scheduled class:', scheduledClass)
         setScheduledClassId(scheduledClass.id)
         setTopics(scheduledClass.topics || '')
-      } else {
-        console.warn('No scheduled class found for class:', classItem.id)
-        setScheduledClassId('')
-        setTopics('')
+        setImageLink(scheduledClass.image_link || '')
       }
 
-      // Merge students with existing attendance
-      const attendanceData = students.map(student => {
-        const existing = existingAttendance.find(att => att.student_id === student.id)
-        return {
-          student_id: student.id,
-          student_name: student.name,
-          student_email: student.email,
-          status: existing?.status || 'present' as 'present' | 'absent'
-        }
-      })
+      // Merge Attendance
+      setAttendanceRecords(students.map(student => ({
+        student_id: student.id,
+        student_name: student.name,
+        student_email: student.email,
+        status: existingAttendance.find(att => att.student_id === student.id)?.status || 'present'
+      })))
 
-      setAttendanceRecords(attendanceData)
     } catch (error) {
       console.error('Error loading class details:', error)
     } finally {
@@ -111,363 +103,261 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
     }
   }
 
-  const checkCompletionStatus = async () => {
-    if (!scheduledClassId) return
-
-    try {
-      const completion = await ScheduledClassService.getScheduledClassCompletion(scheduledClassId)
-      setCompletionStatus(completion)
-      
-      // Check if class is still editable (only on the same day)
-      const today = new Date()
-      const classDay = classItem?.class_date ? new Date(classItem.class_date) : new Date(classItem?.created_at || '')
-      
-      today.setHours(0, 0, 0, 0)
-      classDay.setHours(0, 0, 0, 0)
-      
-      const editable = today.getTime() === classDay.getTime()
-      setIsEditable(editable)
-    } catch (error) {
-      console.error('Error checking completion status:', error)
-    }
-  }
-
-
-
-  const handleProceedToAttendance = async () => {
-    if (!topics.trim()) {
-      alert('Please add topics before proceeding to attendance.')
-      return
-    }
-    
-    setCurrentStep('attendance')
-  }
-
-  const handleAttendanceChange = (studentId: string, status: 'present' | 'absent') => {
-    setAttendanceRecords(prev => 
-      prev.map(record => 
-        record.student_id === studentId 
-          ? { ...record, status }
-          : record
-      )
-    )
-  }
-
-  const handleSaveAttendance = async () => {
-    if (!classItem || !peerTutorId || !isEditable || !scheduledClassId) {
-      console.error('Cannot save attendance:', { classItem: !!classItem, peerTutorId, isEditable, scheduledClassId })
-      alert('Cannot save attendance. Please check if the class is editable.')
-      return
-    }
-
-    // Validate attendance records
-    if (!attendanceRecords || attendanceRecords.length === 0) {
-      alert('No students found to mark attendance for.')
-      return
-    }
-
-    // Check if all students have attendance marked
-    const hasUnmarkedStudents = attendanceRecords.some(record => !record.status)
-    if (hasUnmarkedStudents) {
-      alert('Please mark attendance for all students before saving.')
-      return
-    }
-
-    setSaving(true)
-    try {
-      console.log('Saving attendance for class:', classItem.id)
-      console.log('Attendance records to save:', attendanceRecords)
-      
-      await AttendanceService.markAttendanceForScheduledClass(scheduledClassId, peerTutorId, attendanceRecords)
-      
-      console.log('Attendance saved successfully, updating completion status...')
-      
-      // Check if topics exist for completion status
-      const hasTopics = topics.trim().length > 0
-      
-      // Update completion status
-      const completionSuccess = await ScheduledClassService.updateScheduledClassCompletion(
-        scheduledClassId,
-        true, // attendance completed
-        hasTopics  // topics completed only if topics exist
-      )
-      
-      if (completionSuccess) {
-        console.log('Completion status updated successfully')
-        
-        // Only show completed step if both attendance and topics are done
-        if (hasTopics) {
-          setCurrentStep('completed')
-        } else {
-          // If no topics, just close the modal
-          onClose()
-        }
-      } else {
-        console.error('Failed to update completion status')
-        alert('Attendance saved, but failed to update completion status.')
+  // Steps Logic
+  const handleNextStep = async () => {
+    if (currentStep === 'topics') {
+      if (!topics.trim()) return alert('Please add topics first.')
+       // Save Topics immediately for safety (skip for dummy class)
+       if (scheduledClassId && classItem?.id !== 'dummy-test-class-today') {
+           await ScheduledClassService.updateScheduledClassTopics(scheduledClassId, topics)
+       }
+      setCurrentStep('proof')
+    } else if (currentStep === 'proof') {
+      // Image link is optional now
+      // Save Link if provided (skip for dummy class)
+      if (scheduledClassId && imageLink.trim() && classItem?.id !== 'dummy-test-class-today') {
+          await ScheduledClassService.updateScheduledClassImageLink(scheduledClassId, imageLink)
       }
-    } catch (error) {
-      console.error('Failed to save attendance:', error)
-      alert('Failed to save attendance. Please check the console for details.')
-    } finally {
-      setSaving(false)
+      setCurrentStep('attendance')
     }
   }
 
   const handleCompleteClass = async () => {
+    // Special handling for dummy test class
+    if (classItem?.id === 'dummy-test-class-today') {
+        setSaving(true)
+        // Simulate network delay
+        setTimeout(() => {
+            setCurrentStep('completed')
+            setSaving(false)
+        }, 1000)
+        return
+    }
+
     if (!scheduledClassId || !peerTutorId) {
-      alert('Cannot complete class. Missing required information.')
-      return
-    }
-
-    if (!topics.trim()) {
-      alert('Please add topics before completing the class.')
-      return
-    }
-
-    if (attendanceRecords.length === 0) {
-      alert('Please mark attendance for all students before completing the class.')
-      return
+        console.error('Missing IDs:', { scheduledClassId, peerTutorId })
+        alert('Error: Missing class or tutor information. Cannot complete class. Please verify your data.')
+        return
     }
 
     setSaving(true)
     try {
-      // Save topics first
-      const topicsSuccess = await ScheduledClassService.updateScheduledClassTopics(scheduledClassId, topics)
-      if (!topicsSuccess) {
-        alert('Failed to save topics. Please try again.')
-        return
-      }
-
-      // Save attendance
-      const attendanceSuccess = await AttendanceService.markAttendanceForScheduledClass(scheduledClassId, peerTutorId, attendanceRecords)
-      if (!attendanceSuccess) {
-        alert('Failed to save attendance. Please try again.')
-        return
-      }
-
-      // Update completion status
-      const completionSuccess = await ScheduledClassService.updateScheduledClassCompletion(
-        scheduledClassId,
-        true, // attendance completed
-        true  // topics completed
-      )
-
-      if (completionSuccess) {
-        alert('Class completed successfully!')
-        onClose()
-      } else {
-        alert('Failed to update completion status. Please try again.')
-      }
+        console.log('Completing class...', { scheduledClassId, peerTutorId })
+        
+        // 1. Save Attendance
+        const attendanceSuccess = await AttendanceService.markAttendanceForScheduledClass(scheduledClassId, peerTutorId, attendanceRecords)
+        if (!attendanceSuccess) throw new Error('Failed to save attendance records')
+        
+        // 2. Mark Complete
+        const completionSuccess = await ScheduledClassService.updateScheduledClassCompletion(scheduledClassId, true, true)
+        if (!completionSuccess) throw new Error('Failed to update class completion status')
+        
+        setCurrentStep('completed')
     } catch (error) {
-      console.error('Error completing class:', error)
-      alert('An error occurred while completing the class. Please try again.')
+        console.error('Complete class error:', error)
+        alert('Failed to complete class. Check console for details.')
     } finally {
-      setSaving(false)
+        setSaving(false)
     }
-  }
-
-  const handleRetakeAttendance = () => {
-    setCurrentStep('attendance')
   }
 
   if (!isOpen || !classItem) return null
 
+  // Animation Variants
+  const variants = {
+    enter: { x: 50, opacity: 0 },
+    center: { x: 0, opacity: 1 },
+    exit: { x: -50, opacity: 0 }
+  }
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">{classItem.subject_name}</h3>
-              <p className="text-sm text-gray-500">
-                {classItem.class_date ? new Date(classItem.class_date).toLocaleDateString('en-GB', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric'
-                }) : 'Not scheduled'}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Progress Steps */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-center space-x-8">
-            <div className={`flex items-center ${currentStep === 'topics' ? 'text-blue-600' : currentStep === 'attendance' || currentStep === 'completed' ? 'text-green-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                currentStep === 'topics' ? 'bg-blue-100 text-blue-600' : 
-                currentStep === 'attendance' || currentStep === 'completed' ? 'bg-green-100 text-green-600' : 
-                'bg-gray-100 text-gray-400'
-              }`}>
-                1
-              </div>
-              <span className="ml-2 text-sm font-medium">Topics</span>
-            </div>
-            <div className={`flex-1 h-0.5 ${currentStep === 'attendance' || currentStep === 'completed' ? 'bg-green-600' : 'bg-gray-200'}`}></div>
-            <div className={`flex items-center ${currentStep === 'attendance' ? 'text-blue-600' : currentStep === 'completed' ? 'text-green-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                currentStep === 'attendance' ? 'bg-blue-100 text-blue-600' : 
-                currentStep === 'completed' ? 'bg-green-100 text-green-600' : 
-                'bg-gray-100 text-gray-400'
-              }`}>
-                2
-              </div>
-              <span className="ml-2 text-sm font-medium">Attendance</span>
-            </div>
-            <div className={`flex-1 h-0.5 ${currentStep === 'completed' ? 'bg-green-600' : 'bg-gray-200'}`}></div>
-            <div className={`flex items-center ${currentStep === 'completed' ? 'text-green-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                currentStep === 'completed' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-              }`}>
-                ✓
-              </div>
-              <span className="ml-2 text-sm font-medium">Complete</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          ) : (
-            <>
-              {currentStep === 'topics' && (
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <h4 className="text-lg font-medium text-gray-900 mb-2">Step 1: Add Topics Covered</h4>
-                    <p className="text-sm text-gray-600">Add the topics you covered in this class (separate multiple topics with commas)</p>
-                  </div>
-                  
-                  {/* Topics Text Area */}
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                    <div className="space-y-3">
-                      <textarea
-                        placeholder="Enter topics covered in this class (e.g., Introduction to React, State Management, Component Lifecycle)"
-                        value={topics}
-                        onChange={(e) => setTopics(e.target.value)}
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-500">
-                          {topics.trim().length > 0 ? `${topics.split(',').filter(t => t.trim()).length} topic(s) added` : 'No topics added yet'}
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+            className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-8 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4">
+                    <button onClick={onClose} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="relative z-10">
+                    <h2 className="text-2xl font-bold mb-1">{classItem.subject_name}</h2>
+                    <p className="text-gray-400 text-sm flex items-center gap-2">
+                        <span>{new Date(classItem.class_date || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                        <span className="w-1 h-1 bg-gray-500 rounded-full"/>
+                        <span className="uppercase tracking-wider text-xs font-bold bg-white/10 px-2 py-0.5 rounded">
+                            {currentStep === 'completed' ? 'Completed' : `Step ${currentStep === 'topics' ? '1' : currentStep === 'proof' ? '2' : '3'} of 3`}
                         </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Proceed Button */}
-                  <div className="flex justify-center pt-4">
-                    <button
-                      onClick={handleProceedToAttendance}
-                      disabled={!topics.trim() || saving}
-                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                      {saving && (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      )}
-                      {saving ? 'Saving...' : 'Proceed to Attendance →'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {currentStep === 'attendance' && (
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <h4 className="text-lg font-medium text-gray-900 mb-2">Step 2: Mark Attendance</h4>
-                    <p className="text-sm text-gray-600">Mark attendance for your assigned students</p>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {attendanceRecords.map((record) => (
-                      <div key={record.student_id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center">
-                          <div className={`w-10 h-10 ${getAvatarColor(record.student_name)} rounded-full flex items-center justify-center text-white font-medium text-sm mr-3`}>
-                            {getInitials(record.student_name)}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{record.student_name}</p>
-                            <p className="text-sm text-gray-500">{record.student_email}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <label className="flex items-center">
-                            <input
-                              type="radio"
-                              name={`attendance-${record.student_id}`}
-                              checked={record.status === 'present'}
-                              onChange={() => handleAttendanceChange(record.student_id, 'present')}
-                              className="mr-2 text-green-600"
-                            />
-                            <span className="text-green-600 font-medium">Present</span>
-                          </label>
-                          <label className="flex items-center">
-                            <input
-                              type="radio"
-                              name={`attendance-${record.student_id}`}
-                              checked={record.status === 'absent'}
-                              onChange={() => handleAttendanceChange(record.student_id, 'absent')}
-                              className="mr-2 text-red-600"
-                            />
-                            <span className="text-red-600 font-medium">Absent</span>
-                          </label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Save Button */}
-                  <div className="flex justify-center pt-4">
-                    <button
-                      onClick={handleSaveAttendance}
-                      disabled={saving}
-                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      {saving ? 'Saving...' : 'Complete Class'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {currentStep === 'completed' && (
-                <div className="text-center space-y-6">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                    <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-2">Class Completed Successfully!</h4>
-                    <p className="text-sm text-gray-600">
-                      You have successfully added topics and marked attendance for this class.
                     </p>
-                  </div>
-                  <button
-                    onClick={handleCompleteClass}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Close
-                  </button>
                 </div>
-              )}
-            </>
-          )}
+                {/* Progress Bar */}
+                <div className="absolute bottom-0 left-0 h-1 bg-white/10 w-full">
+                    <motion.div 
+                        className="h-full bg-blue-500"
+                        initial={{ width: 0 }}
+                        animate={{ width: currentStep === 'topics' ? '33%' : currentStep === 'proof' ? '66%' : '100%' }}
+                        transition={{ duration: 0.5 }}
+                    />
+                </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="p-8 overflow-y-auto flex-1 bg-gray-50/50">
+             {loading ? (
+                 <div className="flex justify-center items-center h-48">
+                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"/>
+                 </div>
+             ) : (
+                <AnimatePresence mode="wait">
+                    
+                    {/* Step 1: Topics */}
+                    {currentStep === 'topics' && (
+                        <motion.div key="topics" variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3 }}>
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <div className="flex items-center gap-3 mb-4 text-blue-600">
+                                    <h3 className="text-lg font-bold text-gray-900">What did you teach?</h3>
+                                </div>
+                                <textarea
+                                    value={topics}
+                                    onChange={(e) => setTopics(e.target.value)}
+                                    placeholder="e.g. Introduction to React components, props vs state, hooks..."
+                                    className="w-full h-40 p-4 bg-gray-50 rounded-xl border-2 border-transparent focus:border-blue-500 focus:bg-white focus:outline-none transition-all resize-none text-gray-700 placeholder-gray-400"
+                                    autoFocus
+                                />
+                                <div className="mt-4 flex justify-end">
+                                    <button 
+                                        onClick={handleNextStep}
+                                        disabled={!topics.trim()}
+                                        className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100"
+                                    >
+                                        Next Step <ArrowRight size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* Step 2: Proof (Link) */}
+                    {currentStep === 'proof' && (
+                        <motion.div key="proof" variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3 }}>
+                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+                                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-500">
+                                    <Camera size={32} />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Class Evidence (Optional)</h3>
+                                <p className="text-gray-500 mb-8 max-w-sm mx-auto text-sm">You can provide a link to the class screenshot or photo as proof of conduction.</p>
+                                
+                                <div className="relative max-w-md mx-auto mb-8">
+                                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                                    <input 
+                                        type="url"
+                                        value={imageLink}
+                                        onChange={(e) => setImageLink(e.target.value)}
+                                        placeholder="https://imgur.com/..."
+                                        className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-xl border-2 border-transparent focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <button 
+                                    onClick={handleNextStep}
+                                    className="w-full max-w-md mx-auto flex items-center justify-center gap-2 bg-black text-white px-6 py-4 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100"
+                                >
+                                    Proceed to Attendance <ArrowRight size={18} />
+                                </button>
+                             </div>
+                        </motion.div>
+                    )}
+
+                    {/* Step 3: Attendance */}
+                    {currentStep === 'attendance' && (
+                        <motion.div key="attendance" variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3 }}>
+                             <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                    <Users className="text-blue-500"/> Mark Attendance
+                                </h3>
+                                <span className="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">{attendanceRecords.length} Students</span>
+                             </div>
+
+                             <div className="space-y-3 mb-8">
+                                {attendanceRecords.map((record) => (
+                                    <div key={record.student_id} className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:border-blue-100 transition-colors">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 ${getAvatarColor(record.student_name)} rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md`}>
+                                                {getInitials(record.student_name)}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-gray-900">{record.student_name}</p>
+                                                <p className="text-xs text-gray-400">{record.student_id}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                                            <button 
+                                                onClick={() => setAttendanceRecords(prev => prev.map(p => p.student_id === record.student_id ? {...p, status: 'present'} : p))}
+                                                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${record.status === 'present' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                            >
+                                                Present
+                                            </button>
+                                            <button 
+                                                 onClick={() => setAttendanceRecords(prev => prev.map(p => p.student_id === record.student_id ? {...p, status: 'absent'} : p))}
+                                                 className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${record.status === 'absent' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                            >
+                                                Absent
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                             </div>
+
+                             <div className="flex justify-end pt-4 border-t border-gray-100">
+                                <button 
+                                    onClick={handleCompleteClass}
+                                    disabled={saving}
+                                    className="flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-green-500/20 hover:shadow-green-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                                >
+                                    {saving ? 'Completing...' : 'Finish Class'} <Check size={18} />
+                                </button>
+                             </div>
+                        </motion.div>
+                    )}
+
+                    {/* Step 4: Completed */}
+                    {currentStep === 'completed' && (
+                        <motion.div key="completed" variants={variants} initial="enter" animate="center" exit="exit" className="text-center py-10">
+                            <motion.div 
+                                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                                className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600"
+                            >
+                                <Trophy size={48} />
+                            </motion.div>
+                            <h2 className="text-3xl font-black text-gray-900 mb-2">Class Completed!</h2>
+                            <p className="text-gray-500 mb-8">Great job! Your teaching records have been updated successfully.</p>
+                            <button onClick={onClose} className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-800 transition-colors">
+                                Close Window
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+             )}
+            </div>
+          </motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   )
 }

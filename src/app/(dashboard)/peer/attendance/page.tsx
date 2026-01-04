@@ -11,6 +11,8 @@ import { AttendanceService } from '@/lib/services/attendanceService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 import { useRouter } from 'next/navigation'
+import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
+import FilterDropdown from '@/components/ui/FilterDropdown'
 
 export default function PeerAttendancePage() {
   return (
@@ -190,7 +192,8 @@ function PeerAttendanceContent() {
       <div className="transition-all duration-300 lg:ml-64 min-h-screen flex flex-col overflow-hidden">
         {/* Top Header */}
         <PageHeader
-          title="ATTENDANCE MANAGEMENT"
+          title="ATTENDANCE STATUS"
+          tagline="Class Completion & Peer Tutor Tracking"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
           isRefreshing={isScheduledRefreshing}
@@ -212,51 +215,60 @@ function PeerAttendanceContent() {
             <div className="space-y-6">
               {/* Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
-                      </div>
+                {/* Total Classes Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Classes</p>
+                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.totalClasses}</p>
                     </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-500">Total Classes</p>
-                      <p className="text-2xl font-semibold text-gray-900">{summary.totalClasses}</p>
+                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                     <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Scheduled Sessions</span>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
+                {/* Present Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Present</p>
+                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.presentCount}</p>
                     </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-500">Present</p>
-                      <p className="text-2xl font-semibold text-gray-900">{summary.presentCount}</p>
+                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                     <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                     <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Confirmed Attendance</span>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </div>
+                {/* Attendance Rate Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Attendance Rate</p>
+                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.attendanceRate}%</p>
                     </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-500">Attendance Rate</p>
-                      <p className="text-2xl font-semibold text-gray-900">{summary.attendanceRate}%</p>
+                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                     <div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
+                     <span className="text-[10px] font-bold text-yellow-600 uppercase tracking-widest">Overall Performance</span>
                   </div>
                 </div>
               </div>
@@ -265,220 +277,219 @@ function PeerAttendanceContent() {
               <div className="bg-white rounded-xl shadow-lg border border-gray-200">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <div className="mb-4">
-                    <h3 className="text-lg font-medium text-gray-900">Attendance History</h3>
+                    <h3 className="text-lg font-bold text-gray-700 uppercase tracking-wider">Attendance History</h3>
                     <p className="text-sm text-gray-500">
                       {loading ? 'Loading...' : `Showing ${filteredHistory.length} of ${attendanceHistory.length} records`}
                     </p>
                   </div>
                   
                   {/* Filter Controls */}
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center p-5 border-b border-gray-100 bg-gray-50/30">
                     {/* Search Bar */}
-                    <div className="flex-1 max-w-xl">
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                        </div>
-                        <input
-                          type="text"
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          placeholder="Search by student name, email, subject..."
-                          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    <div className="relative w-full xl:max-w-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search student, subject..."
+                        className="block w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 shadow-sm transition-all duration-200"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap xl:flex-nowrap gap-3 w-full xl:w-auto items-center">
+                      {/* Scheduled Class Filter */}
+                      <div className="w-full sm:w-[240px] xl:w-64">
+                        <FilterDropdown
+                          value={selectedScheduledClass}
+                          onChange={(value) => setSelectedScheduledClass(value)}
+                          options={scheduledClasses.map(sc => ({
+                            label: `${sc.class.subject_name} (${new Date(sc.scheduled_date).toLocaleDateString('en-GB')})`,
+                            value: sc.id
+                          }))}
+                          placeholder="All Classes"
                         />
                       </div>
+
+                      <div className="flex gap-3 w-full sm:w-auto flex-1 sm:flex-none">
+                        {/* Start Date Filter */}
+                        <div className="relative min-w-[130px] flex-1 sm:flex-none">
+                          <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="block w-full px-3 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 shadow-sm transition-all duration-200"
+                          />
+                        </div>
+
+                        {/* End Date Filter */}
+                        <div className="relative min-w-[130px] flex-1 sm:flex-none">
+                          <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="block w-full px-3 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 shadow-sm transition-all duration-200"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Status Filter */}
+                      <div className="w-full sm:w-40">
+                        <FilterDropdown
+                          value={statusFilter}
+                          onChange={(value) => setStatusFilter(value)}
+                          options={[
+                            { label: 'Present', value: 'present' },
+                            { label: 'Absent', value: 'absent' }
+                          ]}
+                          placeholder="Status"
+                        />
+                      </div>
+
+                      {/* Clear Filters Button */}
+                      {(selectedScheduledClass || startDate || endDate || statusFilter || searchTerm) && (
+                        <button
+                          onClick={clearFilters}
+                          className="px-4 py-2.5 text-xs font-bold text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl transition-colors uppercase tracking-wider w-full sm:w-auto"
+                        >
+                          Clear
+                        </button>
+                      )}
                     </div>
-
-                    {/* Scheduled Class Filter */}
-                    <div className="w-48">
-                      <select
-                        value={selectedScheduledClass}
-                        onChange={(e) => setSelectedScheduledClass(e.target.value)}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">All Classes</option>
-                        {scheduledClasses.map((scheduledClass) => (
-                          <option key={scheduledClass.id} value={scheduledClass.id}>
-                            {scheduledClass.class.subject_name} - {new Date(scheduledClass.scheduled_date).toLocaleDateString('en-GB')}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Start Date Filter */}
-                    <div className="w-40">
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-
-                    {/* End Date Filter */}
-                    <div className="w-40">
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-
-                    {/* Status Filter */}
-                    <div className="w-32">
-                      <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">All Status</option>
-                        <option value="present">Present</option>
-                        <option value="absent">Absent</option>
-                      </select>
-                    </div>
-
-                    {/* Spacer to push buttons to the right */}
-                    <div className="flex-1"></div>
-
-                    {/* Clear Filters Button */}
-                    <button
-                      onClick={clearFilters}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow-sm"
-                    >
-                      Clear Filters
-                    </button>
                   </div>
                 </div>
                 
                 <div className="p-6">
                   {filteredHistory.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+
+                    <div className="overflow-x-auto rounded-xl border border-gray-100">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                            <TableHead className="py-4 pl-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                               Student
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            </TableHead>
+                            <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                               Class
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            </TableHead>
+                            <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                               Date
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            </TableHead>
+                            <TableHead className="py-4 pr-6 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                               Status
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {filteredHistory.map((record) => (
-                            <tr key={record.id} className="hover:bg-blue-50 transition-colors duration-200">
-                              <td className="px-6 py-4 whitespace-nowrap">
+                            <TableRow key={record.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                              <TableCell className="py-4 pl-6">
                                 <button
                                   onClick={() => {
                                     router.push(`/peer/attendance/${record.peer_students.id}`)
                                   }}
-                                  className="flex items-center text-left hover:text-blue-600 transition-colors"
+                                  className="flex items-center text-left group/btn"
                                 >
-                                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                                    <span className="text-sm font-medium text-blue-600">
-                                      {record.peer_students.name.charAt(0).toUpperCase()}
-                                    </span>
+                                  <div className="mr-3 transition-transform group-hover/btn:scale-105">
+                                    <img 
+                                      src="/icons/student.png" 
+                                      alt="Student" 
+                                      className="w-8 h-8 rounded-lg object-cover shadow-sm"
+                                    />
                                   </div>
                                   <div>
-                                    <div className="text-sm font-medium text-gray-900">
+                                    <div className="text-xs font-bold text-gray-900 group-hover/btn:text-blue-600 transition-colors">
                                       {record.peer_students.name}
                                     </div>
-                                    <div className="text-sm text-gray-500">
+                                    <div className="text-[10px] text-gray-400 font-medium">
                                       {record.peer_students.email}
                                     </div>
                                   </div>
                                 </button>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              </TableCell>
+                              <TableCell className="py-4 text-center">
                                 {record.classes ? (
                                   <>
-                                    <div className="text-sm font-medium text-gray-900">
+                                    <div className="text-xs font-bold text-gray-900">
                                       {record.classes.subject_name}
                                     </div>
-                                    <div className="text-sm text-gray-500">
+                                    <div className="text-[10px] text-gray-500 font-medium mt-0.5">
                                       {record.classes.dept} - {record.classes.year} - {record.classes.section}
                                     </div>
                                   </>
                                 ) : (
-                                  <div className="text-sm text-gray-500">Class details not available</div>
+                                  <div className="text-[10px] text-gray-400 italic">No Details</div>
                                 )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
+                              </TableCell>
+                              <TableCell className="py-4 text-center">
+                                <div className="text-xs font-bold text-gray-900">
                                   {record.scheduled_classes?.scheduled_date
                                     ? new Date(record.scheduled_classes.scheduled_date).toLocaleDateString('en-GB', {
                                         day: '2-digit',
-                                        month: '2-digit',
+                                        month: 'short',
                                         year: 'numeric'
                                       })
                                     : record.classes?.created_at
                                       ? new Date(record.classes.created_at).toLocaleDateString('en-GB', {
                                           day: '2-digit',
-                                          month: '2-digit',
+                                          month: 'short',
                                           year: 'numeric'
                                         })
-                                      : 'Date not available'
+                                      : 'N/A'
                                   }
                                 </div>
                                 {record.scheduled_classes?.scheduled_date && (
-                                  <div className="text-xs text-gray-500">
+                                  <div className="text-[10px] text-gray-400 font-medium uppercase mt-0.5">
                                     {new Date(record.scheduled_classes.scheduled_date).toLocaleDateString('en-US', {
                                       weekday: 'short'
                                     })}
                                   </div>
                                 )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              </TableCell>
+                              <TableCell className="py-4 pr-6 text-right">
                                 <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
                                     record.status === 'present'
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-red-100 text-red-800'
+                                      ? 'bg-green-50 text-green-600 border-green-100'
+                                      : 'bg-red-50 text-red-600 border-red-100'
                                   }`}>
                                   {record.status === 'present' ? (
                                     <>
-                                      <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                      <svg className="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                       </svg>
                                       Present
                                     </>
                                   ) : (
                                     <>
-                                      <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                      <svg className="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                                       </svg>
                                       Absent
                                     </>
                                   )}
                                 </span>
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
                   ) : (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">
-                        {attendanceHistory.length === 0 ? 'No attendance records found' : 'No records match your filters'}
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+             <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
+                  <img src="/icons/search.png" alt="search" />
+               </div>
+                      <h3 className="text-lg font-black text-gray-900 uppercase tracking-widest mb-2">
+                        {attendanceHistory.length === 0 ? 'No records found' : 'No records match your filters'}
                       </h3>
-                      <p className="text-gray-500 mb-6">
+                      <p className="text-sm text-gray-500 max-w-md font-medium mb-6">
                         {attendanceHistory.length === 0 
-                          ? "You haven't recorded any attendance yet. Start by managing classes in the Classes tab."
+                          ? "No attendance records found."
                           : "Try adjusting your search criteria or filters to see more results."
                         }
                       </p>

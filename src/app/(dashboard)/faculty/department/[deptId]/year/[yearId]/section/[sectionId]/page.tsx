@@ -38,6 +38,8 @@ import AttendanceTabSkeleton from '@/components/skeletons/AttendanceTabSkeleton'
 import ImportExportTabSkeleton from '@/components/skeletons/ImportExportTabSkeleton'
 import TransferModal from '@/components/common/TransferModal'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
+import { BackButton } from '@/components/ui/BackButton'
 
 // Helper to build an XLSX worksheet with a common header block and ordered columns
 function createSheetWithHeader(
@@ -818,8 +820,10 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
                   <td className="px-6 py-4 whitespace-nowrap">
                      <div className="flex items-center cursor-pointer" onClick={() => onPeerTutorClick(tutor.id)}>
                         <div className="flex-shrink-0 h-10 w-10">
-                           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold text-sm">
-                                       {tutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                           <div className="w-10 h-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
+                                       <span className="text-gray-400 font-bold text-sm tracking-tighter">
+                                         {tutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                       </span>
                                      </div>
                         </div>
                         <div className="ml-4">
@@ -1486,11 +1490,13 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
                       </div>
                       <div className="flex-1">
                         {assignedPeerTutor ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-gray-100 text-black border border-gray-200 uppercase tracking-wider">
                             {assignedPeerTutor.name}
                           </span>
                         ) : (
-                          <span className="text-sm text-gray-500">Not assigned</span>
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-white text-gray-400 border border-gray-100 uppercase tracking-wider">
+                            Not assigned
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1556,8 +1562,10 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold text-sm">
-                              {student.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 shadow-sm">
+                              <span className="text-slate-700 font-bold text-sm tracking-tighter">
+                                {student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                              </span>
                             </div>
                           </div>
                           <div className="ml-4">
@@ -1570,11 +1578,11 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
                       {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {assignedPeerTutor ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                          <span className="inline-flex items-center px-3 py-1 rounded-md text-[10px] font-bold bg-gray-100 text-black border border-gray-200 uppercase tracking-widest shadow-sm">
                             Assigned
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                          <span className="inline-flex items-center px-3 py-1 rounded-md text-[10px] font-medium bg-white text-gray-400 border border-gray-100 uppercase tracking-widest">
                             Unassigned
                           </span>
                         )}
@@ -2106,14 +2114,13 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                       <button
-                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                         onClick={() => {
                           setSelectedPeerTutor(row.peerTutorId)
                           setSelectedPeerTutorName(row.peerTutorName)
                         }}
                       >
-                        <Eye className="h-4 w-4 mr-1.5 text-gray-600" />
-                        View
+                        VIEW
                       </button>
                     </td>
                   </tr>
@@ -5543,7 +5550,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
               onClick={handleExportAllAttendance}
               className="h-10 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
             >
-              EXPORT ALL
+              EXPORT
             </button>
           )}
         </div>
@@ -5614,7 +5621,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mr-3">
+                              <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mr-3">
                                 <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                 </svg>
@@ -6615,19 +6622,8 @@ function SectionContent() {
                 </div>
               </div>
               <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                className={`p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all ${isRefreshing ? 'animate-spin text-blue-600' : ''}`}
-              >
-                <ArrowUpRight className={`w-5 h-5 ${isRefreshing ? 'rotate-45' : ''}`} />
-              </button>
-                <button
-                  onClick={() => router.back()}
-                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                BACK
-              </button>
+                <AnimatedRefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+                <BackButton />
               </div>
             </div>
           </div>

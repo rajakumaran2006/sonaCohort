@@ -269,7 +269,7 @@ export default function Home() {
                   <div className="bg-white border border-gray-200 rounded-lg p-4 text-center hover:shadow-md transition-shadow">
                     <div className="w-12 h-12 rounded-full overflow-hidden mx-auto mb-3 border-2 border-gray-200">
                       <Image
-                        src="/mentor2.png"
+                        src="/mentor.png"
                         alt="Ms. P. Kruthika"
                         width={48}
                         height={48}

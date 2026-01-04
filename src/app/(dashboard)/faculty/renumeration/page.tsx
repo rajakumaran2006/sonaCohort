@@ -177,7 +177,7 @@ function FacultyRenumerationContent() {
       <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
         <PageHeader
           title="RENUMERATION MANAGEMENT"
-          subtitle="Manage renumeration templates and submissions"
+          tagline="Templates & Submission Processing"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
           isRefreshing={isTemplatesRefreshing || isSubmissionsRefreshing}
@@ -495,10 +495,9 @@ function FacultyRenumerationContent() {
                                     setSelectedTemplateForView(template)
                                     setShowViewModal(true)
                                   }}
-                                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                  className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                                 >
-                                  <Eye className="h-4 w-4 mr-1.5 text-gray-600" />
-                                  View
+                                  VIEW
                                 </button>
                                 <button
                                   onClick={() => handleSingleDelete(template.id)}

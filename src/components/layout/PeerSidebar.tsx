@@ -1,8 +1,11 @@
 'use client'
 
+import Image from 'next/image'
+
 import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui'
 import { useQuery } from '@tanstack/react-query'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
@@ -46,24 +49,32 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
     refetchOnMount: false, // Don't refetch on mount if data exists
   })
 
+  // Base navigation items (excluding Reports which we want last)
   const baseNavigation = [
     { name: 'Dashboard', href: '/peer/dashboard', Icon: LayoutGrid },
     { name: 'Classes', href: '/peer/classes', Icon: GraduationCap },
     { name: 'Attendance', href: '/peer/attendance', Icon: ClipboardList },
-    { name: 'Reports', href: '/peer/reports', Icon: FileBarChart },
   ]
 
   const examNavItem = { name: 'Exams', href: '/peer/exams', Icon: FileText }
+  const reportsNavItem = { name: 'Reports', href: '/peer/reports', Icon: FileBarChart }
 
   // Memoize navigation to prevent recreation on every render
   const navigation = useMemo(() => {
-    return hasExamAccess ? [...baseNavigation, examNavItem] : baseNavigation
+    const items = [...baseNavigation]
+    
+    // Add Exams if access is allowed
+    if (hasExamAccess) {
+      items.push(examNavItem)
+    }
+
+    // Always add Reports at the end
+    items.push(reportsNavItem)
+
+    return items
   }, [hasExamAccess])
 
-  const handleNavigation = (href: string) => {
-    router.push(href)
-    onClose()
-  }
+
 
   const handleSignOut = async () => {
     setIsLoggingOut(true)
@@ -93,11 +104,16 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo */}
-        <div className="flex items-center h-20 flex-shrink-0 px-6 pt-4 mb-6">
-          <div className="flex items-center gap-3">
-             <h1 className="font-bold text-white text-xl tracking-wide">
-               PEER PORTAL
-             </h1>
+        {/* Logo */}
+        <div className="flex items-center justify-center h-24 flex-shrink-0 px-4 pt-6 mb-6">
+          <div className="relative w-full h-full">
+            <Image
+              src="/logo.png"
+              alt="Peer Portal Logo"
+              fill
+              className="object-contain rounded-xl"
+              priority
+            />
           </div>
         </div>
 
@@ -111,9 +127,10 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
               const isActive = pathname === item.href
               const Icon = item.Icon
               return (
-                <button
+                <Link
                   key={item.name}
-                  onClick={() => handleNavigation(item.href)}
+                  href={item.href}
+                  onClick={onClose}
                   className={`
                     w-full flex items-center px-4 py-3 text-left rounded-lg transition-all duration-200 group relative
                     ${isActive 
@@ -127,45 +144,43 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
                   )}
                   <Icon className={`w-5 h-5 mr-3 ${isActive ? 'text-[#bef264]' : 'text-gray-400 group-hover:text-white'}`} />
                   <span className="font-medium">{item.name}</span>
-                </button>
+                </Link>
               )
             })}
           </div>
         </nav>
 
-        {/* Profile Section */}
+        {/* Profile Section with Sign Out */}
         <div className="border-t border-gray-800 flex-shrink-0 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 relative">
-              <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden ring-2 ring-[#bef264] ring-offset-2 ring-offset-[#0f291e]">
-                <User className="h-6 w-6 text-gray-300" />
+          <div className="flex items-center w-full rounded-lg p-2 justify-between">
+            {/* Profile Info */}
+            <div className="flex items-center gap-3 flex-1 min-w-0 hover:bg-white/5 rounded-lg p-2 transition-colors">
+              <div className="flex-shrink-0 relative">
+                <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden ring-2 ring-[#bef264] ring-offset-2 ring-offset-[#0f291e]">
+                  <User className="h-6 w-6 text-gray-300" />
+                </div>
+                <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
               </div>
-              <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">
+                  {peerTutor?.name || user?.user_metadata?.full_name || 'Peer Tutor'}
+                </p>
+                <p className="text-xs text-gray-400 truncate">
+                  {user?.email}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">
-                {peerTutor?.name || user?.user_metadata?.full_name || 'Peer Tutor'}
-              </p>
-              <p className="text-xs text-gray-400 truncate">
-                {user?.email}
-              </p>
-            </div>
+            
+            {/* Sign Out Icon */}
+            <button
+              onClick={handleSignOut}
+              disabled={isLoggingOut}
+              className="flex-shrink-0 p-2 rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-red-400"
+              title="Sign Out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
-        </div>
-
-        {/* Logout Button */}
-        <div className="p-4 flex-shrink-0">
-          <button
-            onClick={handleSignOut}
-            disabled={isLoggingOut}
-            className={`
-              w-full flex items-center px-4 py-3 text-left rounded-lg transition-colors hover:bg-white/5
-              text-red-400 hover:text-red-300
-            `}
-          >
-            <LogOut className="w-5 h-5 mr-3" />
-            <span className="font-medium">{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>
-          </button>
         </div>
       </div>
     </>

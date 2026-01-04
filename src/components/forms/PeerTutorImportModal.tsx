@@ -56,26 +56,44 @@ export default function PeerTutorImportModal({
     try {
       setIsProcessing(true)
       
-      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      let peerTutors: PeerTutor[] = []
+      if (dept && year && section) {
+        peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      } else {
+        peerTutors = await PeerTutorService.getAllPeerTutors()
+        if (dept) {
+          peerTutors = peerTutors.filter(pt => pt.dept === dept)
+        }
+      }
       
       const exportData = [
-        ['Peer Tutor Name', 'Peer Tutor Email']
+        ['Peer Tutor Name', 'Peer Tutor Email', 'Year', 'Section']
       ]
       
       peerTutors.forEach(pt => {
-        exportData.push([pt.name, pt.email])
+        exportData.push([pt.name, pt.email, pt.year, pt.section])
       })
+      
+      // If we are exporting a blank template because no data exists, add an example row
+      if (peerTutors.length === 0) {
+        exportData.push(['Example Name', 'example@sonatech.ac.in', '2', 'A'])
+      }
       
       const wb = XLSX.utils.book_new()
       const ws = XLSX.utils.aoa_to_sheet(exportData)
       
       ws['!cols'] = [
         { wch: 30 },
-        { wch: 35 }
+        { wch: 35 },
+        { wch: 10 },
+        { wch: 10 }
       ]
       
       XLSX.utils.book_append_sheet(wb, ws, 'Peer Tutors')
-      XLSX.writeFile(wb, `peer_tutors_${dept}_${year}_${section}.xlsx`)
+      const fileName = year && section 
+        ? `peer_tutors_${dept}_${year}_${section}.xlsx`
+        : `peer_tutors_${dept}_template.xlsx`
+      XLSX.writeFile(wb, fileName)
       
     } catch (error) {
       console.error('Error exporting peer tutors:', error)
@@ -99,7 +117,7 @@ export default function PeerTutorImportModal({
       
       const rows = jsonData.slice(1)
       
-      const existingPeerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      const existingPeerTutors = await PeerTutorService.getAllPeerTutors()
       
       const processed: ProcessedPeerTutor[] = []
       
@@ -108,18 +126,30 @@ export default function PeerTutorImportModal({
         
         const name = row[0]?.toString().trim() || ''
         const email = row[1]?.toString().trim() || ''
+        const rowYear = row[2]?.toString().trim() || year || ''
+        const rowSection = row[3]?.toString().trim() || section || ''
         
         if (!name && !email) continue
         
-        const result = await findPeerTutor(name, email, existingPeerTutors)
+        // Use the year and section from the row, or fallback to props
+        const targetYear = rowYear
+        const targetSection = rowSection
+        
+        if (!targetYear || !targetSection) {
+          console.warn(`Missing year or section for ${name || email}`)
+        }
+        
+        const result = await findPeerTutor(name, email, existingPeerTutors, targetYear, targetSection)
         
         processed.push({
           peerTutor: result.tutor,
           name: result.tutor?.name || name || 'Unknown',
           email: result.tutor?.email || email,
           foundIn: result.foundIn,
-          status: result.foundIn === 'allocated' ? 'allocated' : (result.tutor ? 'valid' : 'missing')
-        })
+          status: result.foundIn === 'allocated' ? 'allocated' : (result.tutor ? 'valid' : 'missing'),
+          year: targetYear,
+          section: targetSection
+        } as any)
       }
       
       setProcessedData(processed)
@@ -139,7 +169,9 @@ export default function PeerTutorImportModal({
   const findPeerTutor = async (
     name?: string,
     email?: string,
-    tutors: PeerTutor[]
+    tutors: PeerTutor[],
+    targetYear?: string,
+    targetSection?: string
   ): Promise<{ tutor: PeerTutor | null, foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated' }> => {
     if (!name && !email) {
       return { tutor: null, foundIn: 'not_found' }
@@ -174,14 +206,22 @@ export default function PeerTutorImportModal({
       }
     }
 
-    // Search local database for peer tutors
+    // Search local database for peer tutors - Filter by year and section if provided
     if (name) {
-      const match = tutors.find(pt => pt.name.toLowerCase().trim() === name.toLowerCase().trim())
+      const match = tutors.find(pt => 
+        pt.name.toLowerCase().trim() === name.toLowerCase().trim() &&
+        (!targetYear || pt.year === targetYear) &&
+        (!targetSection || pt.section === targetSection)
+      )
       if (match) return { tutor: match, foundIn: 'local' }
     }
     
     if (email) {
-      const match = tutors.find(pt => pt.email.toLowerCase().trim() === email.toLowerCase().trim())
+      const match = tutors.find(pt => 
+        pt.email.toLowerCase().trim() === email.toLowerCase().trim() &&
+        (!targetYear || pt.year === targetYear) &&
+        (!targetSection || pt.section === targetSection)
+      )
       if (match) return { tutor: match, foundIn: 'local' }
     }
     
@@ -194,8 +234,8 @@ export default function PeerTutorImportModal({
           microsoftUser,
           user.id,
           dept,
-          year,
-          section
+          targetYear || year || '',
+          targetSection || section || ''
         )
         
         if (newTutor) {
@@ -217,9 +257,6 @@ export default function PeerTutorImportModal({
          if (exactMatch.mail) {
             const supabase = createClient()
             
-            // Allow if checking for peer tutor and they are already a peer tutor (though local check should have caught this, this covers potential edge cases or sync issues)
-            // But main worry is if they are a student or faculty
-            
             const { data: studentExists } = await supabase
               .from('students')
               .select('id')
@@ -236,8 +273,8 @@ export default function PeerTutorImportModal({
           exactMatch,
           user.id,
           dept,
-          year,
-          section
+          targetYear || year || '',
+          targetSection || section || ''
         )
         
         if (newTutor) {
@@ -262,10 +299,7 @@ export default function PeerTutorImportModal({
         return
       }
       
-      NotificationService.showNotification(
-        `SUCCESSFULLY IMPORTED ${validTutors.length} PEER TUTOR(S)!`,
-        'success'
-      )
+      alert(`Successfully imported ${validTutors.length} peer tutor(s)!`)
       
       onSuccess()
       onClose()
@@ -334,27 +368,37 @@ export default function PeerTutorImportModal({
               {/* Excel Format Preview */}
               <div className="bg-gradient-to-br from-gray-50 to-gray-200 border-2 border-gray-200 rounded-xl p-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
-                  <h4 className="text-lg font-bold text-green-900">EXCEL FORMAT PREVIEW</h4>
+                  <h4 className="text-lg font-bold text-green-900 uppercase">Excel Template Preview</h4>
                 </div>
               
                 <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-md">
-                  <div className="grid grid-cols-2 bg-gray-600 text-white">
-                    <div className="px-4 py-3 border-r  uppercase border-gray-300 font-bold text-xs text-white">
+                  <div className="grid grid-cols-4 bg-gray-600 text-white">
+                    <div className="px-4 py-3 border-r uppercase border-gray-300 font-bold text-[10px] text-white">
                       Peer Tutor Name
                     </div>
-                    <div className="px-4 py-3 font-bold uppercase text-xs text-white">
+                    <div className="px-4 py-3 border-r font-bold uppercase text-[10px] text-white">
                       Peer Tutor Email
+                    </div>
+                    <div className="px-4 py-3 border-r font-bold uppercase text-[10px] text-white">
+                      Year
+                    </div>
+                    <div className="px-4 py-3 font-bold uppercase text-[10px] text-white">
+                      Section
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 border-b border-gray-200 bg-white hover:bg-gray-50 transition-colors">
-                    <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">RAM A</div>
-                    <div className="px-4 py-2.5 text-sm text-gray-600">ram.23ads@sonatech.ac.in</div>
+                  <div className="grid grid-cols-4 border-b border-gray-200 bg-white hover:bg-gray-50 transition-colors">
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-700">RAM A</div>
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-600">ram@sonatech.ac.in</div>
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-600 text-center">2</div>
+                    <div className="px-4 py-2.5 text-xs text-gray-600 text-center">A</div>
                   </div>
                   
-                  <div className="grid grid-cols-2 bg-white hover:bg-gray-50 transition-colors">
-                    <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">PRIYA M</div>
-                    <div className="px-4 py-2.5 text-sm text-gray-600">priya.23ads@sonatech.ac.in</div>
+                  <div className="grid grid-cols-4 bg-white hover:bg-gray-50 transition-colors">
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-700">PRIYA M</div>
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-600">priya@sonatech.ac.in</div>
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-600 text-center">3</div>
+                    <div className="px-4 py-2.5 text-xs text-gray-600 text-center">B</div>
                   </div>
                 </div>
               </div>
@@ -447,17 +491,25 @@ export default function PeerTutorImportModal({
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {processedData.map((pt, idx) => (
+                      {processedData.map((pt: any, idx) => (
                         <tr key={idx} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">{pt.name}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-600">{pt.email || '-'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="text-sm text-gray-600 font-bold">{pt.year || '-'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="text-sm text-gray-600 font-bold">{pt.section || '-'}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {pt.status === 'allocated' ? (

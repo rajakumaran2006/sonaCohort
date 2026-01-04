@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
@@ -69,14 +69,6 @@ export default function AssignmentImportModal({
   const [existingPeerTutors, setExistingPeerTutors] = useState<PeerTutor[]>([])
   const [existingStudents, setExistingStudents] = useState<Student[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Prevent background scrolling when modal is open
-  useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

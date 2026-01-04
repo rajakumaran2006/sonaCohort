@@ -19,6 +19,8 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui'
 import { Eye, ArrowLeft, RotateCw, Download } from 'lucide-react'
+import ExportButton from '@/components/ui/ExportButton'
+import FilterDropdown from '@/components/ui/FilterDropdown'
 import { useMemo, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 
@@ -605,141 +607,126 @@ function ExamDetailsContent() {
               <span className="text-gray-900 font-medium">{exam.name}</span>
             </nav>
 
-            {/* Exam Info Card */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="text-xl">{exam.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Years</p>
-                    <p className="text-base text-gray-900 mt-1">
-                      {exam.years.map(y => formatYear(y)).join(', ')}
-                    </p>
+            {/* Exam Info Card - Clean White Design */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 relative group overflow-hidden">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em]">Exam Information</p>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Created</p>
-                    <p className="text-base text-gray-900 mt-1">
-                      {new Date(exam.created_at).toLocaleDateString()}
-                    </p>
+                  <h3 className="text-2xl font-bold text-gray-900 tracking-tight mb-4">{exam.name}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Created On</p>
+                        <p className="text-sm font-bold text-gray-700">{new Date(exam.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Academic Years</p>
+                        <p className="text-sm font-bold text-gray-700">{exam.years.map(y => formatYear(y)).join(', ')}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="hidden sm:block">
+                  <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex flex-col items-center justify-center min-w-[120px]">
+                    <p className="text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1">Max Marks</p>
+                    <p className="text-2xl font-black text-blue-600">{exam.max_marks || 100}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Peer Tutors Table Card */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xl">
-                      PEER TUTORS
-                      {filteredPeerTutors.length > 0 && (
-                        <span className="ml-2 text-base font-normal text-gray-500">
-                          ({filteredPeerTutors.length} of {peerTutors?.length || 0})
-                        </span>
-                      )}
-                    </CardTitle>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleExportToExcel()}
-                    className="inline-flex items-center bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
-                    disabled={!filteredPeerTutors || filteredPeerTutors.length === 0}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Export
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Filters */}
-                <div className="mb-6 space-y-4">
-                  <div className="flex items-end space-x-4">
-                    <div className="flex-1 flex items-center space-x-4">
-                      {/* Year Filter */}
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Year
-                        </label>
-                        <select
-                          value={selectedYear}
-                          onChange={(e) => setSelectedYear(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="all">All Years</option>
-                          {uniqueYears.map(year => (
-                            <option key={year} value={year}>
-                              {formatYear(year)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Section Filter */}
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Section
-                        </label>
-                        <select
-                          value={selectedSection}
-                          onChange={(e) => setSelectedSection(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          disabled={selectedYear === 'all'}
-                        >
-                          <option value="all">All Sections</option>
-                          {uniqueSections.map(section => (
-                            <option key={section} value={section}>
-                              {section}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Status Filter */}
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Status
-                        </label>
-                        <select
-                          value={selectedStatus}
-                          onChange={(e) => setSelectedStatus(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="all">All Status</option>
-                          <option value="pending">Pending (0%)</option>
-                          <option value="ongoing">Ongoing (1-99%)</option>
-                          <option value="completed">Completed (100%)</option>
-                        </select>
-                      </div>
+            {/* Peer Tutors Table View - Clean White Design */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                    Peer Tutors ({filteredPeerTutors.length})
+                  </h3>
+                  
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="w-40">
+                      <FilterDropdown
+                        value={selectedYear}
+                        onChange={setSelectedYear}
+                        options={[
+                          { label: 'All Years', value: 'all' },
+                          ...uniqueYears.map(year => ({ label: formatYear(year), value: year }))
+                        ]}
+                      />
                     </div>
 
-                    <div className="ml-4">
-                      <Button
-                        variant="outline"
-                        onClick={clearFilters}
-                        disabled={!hasActiveFilters}
-                        className="inline-flex items-center"
-                      >
-                        Clear
-                      </Button>
+                    <div className="w-40">
+                      <FilterDropdown
+                        value={selectedSection}
+                        onChange={setSelectedSection}
+                        options={[
+                          { label: 'Sections', value: 'all' },
+                          ...uniqueSections.map(section => ({ label: section, value: section }))
+                        ]}
+                        disabled={selectedYear === 'all'}
+                      />
                     </div>
+
+                    <div className="w-40">
+                    <FilterDropdown
+                      value={selectedStatus}
+                      onChange={setSelectedStatus}
+                      options={[
+                        { label: 'All Status', value: 'all' },
+                        { label: '0%', value: 'pending' },
+                        { label: '1-99%', value: 'ongoing' },
+                        { label: '100%', value: 'completed' },
+                      ]}
+                    />
+                    </div>
+
+                    <div className="h-8 w-[1px] bg-gray-200 mx-1"></div>
+
+                    <ExportButton 
+                      onClick={() => handleExportToExcel()}
+                      disabled={!filteredPeerTutors || filteredPeerTutors.length === 0}
+                    />
                   </div>
                 </div>
+              </div>
 
-                {/* Table */}
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Year & Section</TableHead>
-                        <TableHead>Ascend Score</TableHead>
-                        <TableHead>Completed</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-white">
+                      <TableHead className="pl-6 py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Peer Tutor Name</span>
+                      </TableHead>
+                      <TableHead className="text-center py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year & Section</span>
+                      </TableHead>
+                      <TableHead className="text-center py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ascend Score</span>
+                      </TableHead>
+                      <TableHead className="text-center py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Completion</span>
+                      </TableHead>
+                      <TableHead className="text-right pr-6 py-4">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
                     <TableBody>
                       {filteredPeerTutors.length === 0 ? (
                         <EmptyTable
@@ -753,48 +740,58 @@ function ExamDetailsContent() {
                       ) : (
                         filteredPeerTutors.map((peerTutor) => {
                           const completion = completionPercentages[peerTutor.id] || 0
+                          const score = ascendScores[peerTutor.id] || 0
                           return (
-                            <TableRow key={peerTutor.id}>
-                              <TableCell className="font-medium text-gray-900">
-                                {peerTutor.name}
-                              </TableCell>
-                              <TableCell className="text-gray-600">
-                                {peerTutor.year} - {peerTutor.section}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center space-x-2">
-                                  <span className={`font-medium ${
-                                    ascendScores[peerTutor.id] >= 8 ? 'text-green-600' :
-                                    ascendScores[peerTutor.id] >= 6 ? 'text-yellow-600' :
-                                    ascendScores[peerTutor.id] > 0 ? 'text-orange-600' :
-                                    'text-gray-400'
-                                  }`}>
-                                    {ascendScores[peerTutor.id]?.toFixed(1) || '0.0'}
-                                  </span>
-                                  <span className="text-xs text-gray-500">/ 10</span>
+                            <TableRow key={peerTutor.id} className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100">
+                              <TableCell className="pl-6 py-4">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+                                    <span className="text-xs font-bold text-blue-600 uppercase">
+                                      {peerTutor.name.substring(0, 2)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold text-gray-900 mb-0.5">{peerTutor.name}</p>
+                                    <p className="text-[10px] text-gray-400 font-medium">{peerTutor.email}</p>
+                                  </div>
                                 </div>
                               </TableCell>
-                              <TableCell>
-                                <div className="flex items-center space-x-2">
-                                  <span className={`font-medium ${
+                              <TableCell className="text-center py-4">
+                                <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                                  {formatYear(peerTutor.year)} - {peerTutor.section}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-center py-4">
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100">
+                                  <span className={`text-sm font-bold ${
+                                    score >= 8 ? 'text-green-600' :
+                                    score >= 6 ? 'text-yellow-600' :
+                                    score > 0 ? 'text-orange-600' :
+                                    'text-gray-400'
+                                  }`}>
+                                    {score.toFixed(1)}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-bold">/ 10</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center py-4">
+                                <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50/50 border border-blue-100">
+                                  <span className={`text-xs font-bold ${
                                     completion === 100 ? 'text-green-600' :
-                                    completion > 0 ? 'text-yellow-600' :
+                                    completion > 0 ? 'text-blue-600' :
                                     'text-gray-400'
                                   }`}>
                                     {completion}%
                                   </span>
                                 </div>
                               </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
+                              <TableCell className="text-right pr-6 py-4">
+                                <button
                                   onClick={() => handleView(peerTutor)}
-                                  className="inline-flex items-center"
+                                  className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                                 >
-                                  <Eye className="h-4 w-4 mr-1.5" />
-                                  View
-                                </Button>
+                                  VIEW
+                                </button>
                               </TableCell>
                             </TableRow>
                           )
@@ -803,8 +800,7 @@ function ExamDetailsContent() {
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
           </div>
         </main>
       </div>
