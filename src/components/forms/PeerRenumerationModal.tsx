@@ -95,7 +95,8 @@ export default function PeerRenumerationModal({
   }
 
   const renderField = (field: RenumerationField) => {
-    const value = formData[field.field_name] || ''
+    const rawValue = formData[field.field_name]
+    const value = (typeof rawValue === 'string' || typeof rawValue === 'number') ? rawValue : ''
     const isFormClosed = !renumeration.template?.is_active
     const isReadOnly = isFormClosed || renumeration.status === 'approved' || renumeration.status === 'rejected'
 
@@ -305,7 +306,7 @@ export default function PeerRenumerationModal({
               {(renumeration.status === 'pending' || renumeration.status === 'submitted') && renumeration.template?.is_active && (
                 <button
                   onClick={handleSubmit}
-                  disabled={loading || renumeration.status === 'approved' || renumeration.status === 'rejected'}
+                  disabled={loading}
                   className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
                   {loading ? 'Saving...' : renumeration.status === 'submitted' ? 'Update Response' : 'Submit Response'}

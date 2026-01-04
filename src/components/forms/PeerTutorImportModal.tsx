@@ -137,7 +137,7 @@ export default function PeerTutorImportModal({
           console.warn(`Missing year or section for ${name || email}`)
         }
         
-        const result = await findPeerTutor(name, email, existingPeerTutors, targetYear, targetSection)
+        const result = await findPeerTutor(existingPeerTutors, name, email, targetYear, targetSection)
         
         processed.push({
           peerTutor: result.tutor,
@@ -165,9 +165,9 @@ export default function PeerTutorImportModal({
   }
 
   const findPeerTutor = async (
+    tutors: PeerTutor[],
     name?: string,
     email?: string,
-    tutors: PeerTutor[],
     targetYear?: string,
     targetSection?: string
   ): Promise<{ tutor: PeerTutor | null, foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated' }> => {

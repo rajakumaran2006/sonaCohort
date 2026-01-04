@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { AttendanceService } from '@/lib/services/attendanceService'
+import { AttendanceService, AttendanceHistoryRecord } from '@/lib/services/attendanceService'
 
 interface StudentAttendanceModalProps {
   isOpen: boolean
@@ -14,36 +14,13 @@ interface StudentAttendanceModalProps {
   peerTutorId: string
 }
 
-interface StudentAttendanceRecord {
-  id: string
-  class_id: string
-  scheduled_class_id?: string
-  student_id: string
-  status: 'present' | 'absent'
-  created_at: string
-  updated_at: string
-  classes: {
-    id: string
-    subject_name: string
-    created_at: string
-    dept: string
-    year: string
-    section: string
-  }
-  scheduled_classes?: {
-    id: string
-    scheduled_date: string
-    class_id: string
-  }
-}
-
 export default function StudentAttendanceModal({
   isOpen,
   onClose,
   student,
   peerTutorId
 }: StudentAttendanceModalProps) {
-  const [attendanceRecords, setAttendanceRecords] = useState<StudentAttendanceRecord[]>([])
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceHistoryRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [summary, setSummary] = useState({
     totalClasses: 0,
@@ -52,15 +29,9 @@ export default function StudentAttendanceModal({
     attendanceRate: 0
   })
 
-  useEffect(() => {
-    if (isOpen && student) {
-      loadStudentAttendance()
-    }
-  }, [isOpen, student, peerTutorId, loadStudentAttendance])
-
   const loadStudentAttendance = useCallback(async () => {
     if (!student) return
-
+    
     setLoading(true)
     try {
       // Get all attendance records for this specific student
@@ -85,6 +56,12 @@ export default function StudentAttendanceModal({
       setLoading(false)
     }
   }, [student, peerTutorId])
+
+  useEffect(() => {
+    if (isOpen && student) {
+      loadStudentAttendance()
+    }
+  }, [isOpen, student, peerTutorId, loadStudentAttendance])
 
   if (!isOpen || !student) return null
 
@@ -216,10 +193,10 @@ export default function StudentAttendanceModal({
                           <tr key={record.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900">
-                                {record.classes.subject_name}
+                                {record.classes?.subject_name || 'Unknown Subject'}
                               </div>
                               <div className="text-sm text-gray-500">
-                                {record.classes.dept} - {record.classes.year} - {record.classes.section}
+                                {record.classes?.dept || '-'} - {record.classes?.year || '-'} - {record.classes?.section || '-'}
                               </div>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
@@ -231,12 +208,13 @@ export default function StudentAttendanceModal({
                                       month: 'short',
                                       day: 'numeric'
                                     })
-                                  : new Date(record.classes.created_at).toLocaleDateString('en-US', {
+                                  : record.classes?.created_at ? new Date(record.classes.created_at).toLocaleDateString('en-US', {
                                       weekday: 'short',
                                       year: 'numeric',
                                       month: 'short',
                                       day: 'numeric'
                                     })
+                                  : '-'
                                 }
                               </div>
                             </td>

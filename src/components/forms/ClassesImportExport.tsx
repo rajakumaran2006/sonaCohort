@@ -363,8 +363,8 @@ export default function ClassesImportExport({
       
       // Validate section is not 'ALL' before processing
       if (!section || section.trim().toUpperCase() === 'ALL') {
-        setError('Cannot import classes with section "ALL". Please navigate to a specific section page.')
-        setImporting(false)
+        alert('Cannot import classes with section "ALL". Please navigate to a specific section page.')
+        setIsImporting(false)
         return
       }
 

@@ -30,13 +30,6 @@ export default function DateAssignmentModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (isOpen) {
-      loadSubjects()
-      loadOccupiedDates()
-    }
-  }, [isOpen, dept, year, section, loadSubjects, loadOccupiedDates])
-
   const loadSubjects = useCallback(async () => {
     try {
       // Get subjects from all sections of the same year, not just current section
@@ -71,6 +64,13 @@ export default function DateAssignmentModal({
       console.error('Error loading occupied dates:', error)
     }
   }, [dept, year, section])
+
+  useEffect(() => {
+    if (isOpen) {
+      loadSubjects()
+      loadOccupiedDates()
+    }
+  }, [isOpen, dept, year, section, loadSubjects, loadOccupiedDates])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

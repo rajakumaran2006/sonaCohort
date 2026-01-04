@@ -6,7 +6,7 @@ import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services
 import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
 import { AttendanceService } from '@/lib/services/attendanceService'
 import { FeedbackService } from '@/lib/services/feedbackService'
-import { PeerStudent } from '@/lib/services/studentService'
+import { Student } from '@/lib/services/studentService'
 
 // 1. Peer Tutor Info Hook
 export function usePeerTutorInfo(email: string | null | undefined) {
@@ -62,7 +62,7 @@ export function useClassStats(peerTutorId: string | undefined) {
 }
 
 // 5. Student Attendance Stats Hook (Complex)
-export function useStudentAttendanceStats(students: PeerStudent[] | undefined, peerTutorId: string | undefined) {
+export function useStudentAttendanceStats(students: Student[] | undefined, peerTutorId: string | undefined) {
   return useQuery({
     queryKey: ['studentAttendance', peerTutorId, students?.length],
     queryFn: async () => {

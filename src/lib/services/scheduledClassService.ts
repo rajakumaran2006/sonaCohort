@@ -588,6 +588,31 @@ export class ScheduledClassService {
   }
 
   /**
+   * Get all scheduled classes for a specific class ID
+   */
+  static async getAllScheduledClassesByClassId(classId: string): Promise<ScheduledClass[]> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('scheduled_classes')
+        .select('*')
+        .eq('class_id', classId)
+        .order('scheduled_date', { ascending: true })
+
+      if (error) {
+        console.error('Error getting all scheduled classes by class_id:', error)
+        return []
+      }
+
+      return data || []
+    } catch (error) {
+      console.error('Error in getAllScheduledClassesByClassId:', error)
+      return []
+    }
+  }
+
+  /**
    * Update topics for a scheduled class
    */
   static async updateScheduledClassTopics(scheduledClassId: string, topics: string): Promise<boolean> {

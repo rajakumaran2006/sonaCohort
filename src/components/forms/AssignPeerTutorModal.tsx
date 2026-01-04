@@ -80,8 +80,11 @@ export default function AssignPeerTutorModal({
     try {
       const assignments: PeerTutorAssignment[] = Array.from(selectedStudents).map(emailKey => {
         const student = selectedStudentObjects.get(emailKey)
+        if (!student) {
+          throw new Error(`Student object not found for email: ${emailKey}`)
+        }
         return {
-          name: student.displayName || student.name || 'Unknown',
+          name: student.displayName || 'Unknown',
           email: emailKey, // Use the key we stored, which is the best available email identifier
           faculty_id: user.id,
           dept,
@@ -119,7 +122,7 @@ export default function AssignPeerTutorModal({
 
   // Toggle selection for a single student
   const handleToggleStudent = (student: MicrosoftUser) => {
-    const email = student.mail || student.email || student.userPrincipalName
+    const email = student.mail || student.userPrincipalName
     if (!email) return
 
     const newSelected = new Set(selectedStudents)
@@ -143,7 +146,7 @@ export default function AssignPeerTutorModal({
     const newObjects = new Map(selectedStudentObjects)
 
     searchResults.forEach(student => {
-      const email = student.mail || student.email || student.userPrincipalName
+      const email = student.mail || student.userPrincipalName
       if (!email) return
 
       if (isChecked) {
@@ -163,7 +166,7 @@ export default function AssignPeerTutorModal({
   const areAllSelected = useMemo(() => {
     if (searchResults.length === 0) return false
     return searchResults.every(student => {
-      const email = student.mail || student.email || student.userPrincipalName
+      const email = student.mail || student.userPrincipalName
       return selectedStudents.has(email)
     })
   }, [searchResults, selectedStudents])
@@ -308,7 +311,7 @@ export default function AssignPeerTutorModal({
                   style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 >
                   {getDisplayedStudents().map((student, index) => {
-                    const email = student.mail || student.email || student.userPrincipalName
+                    const email = student.mail || student.userPrincipalName
                     const isSelected = selectedStudents.has(email)
                     return (
                       <div
@@ -336,7 +339,7 @@ export default function AssignPeerTutorModal({
                              <User className="w-4 h-4" />
                           </div>
                           <span className={cn("font-medium text-sm", isSelected ? "text-black" : "text-gray-900")}>
-                            {student.displayName || student.name || 'Unknown Name'}
+                            {student.displayName || 'Unknown Name'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-sm">

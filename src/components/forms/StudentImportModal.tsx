@@ -106,7 +106,7 @@ export default function StudentImportModal({
         
         if (!name && !email) continue
         
-        const result = await findStudent(name, email, existingStudents)
+        const result = await findStudent(existingStudents, name, email)
         
         processed.push({
           student: result.student,
@@ -132,9 +132,9 @@ export default function StudentImportModal({
   }
 
   const findStudent = async (
+    students: Student[],
     name?: string,
-    email?: string,
-    students: Student[]
+    email?: string
   ): Promise<{ student: Student | null, foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated' }> => {
     if (!name && !email) {
       return { student: null, foundIn: 'not_found' }

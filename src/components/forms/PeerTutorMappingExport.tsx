@@ -74,7 +74,7 @@ export default function PeerTutorMappingExport({
         const ws = XLSX.utils.aoa_to_sheet(worksheetData)
         
         // Apply styling and formatting
-        applyWorksheetFormatting(ws, worksheetData.length)
+        applyWorksheetFormatting(ws)
         
         // Create sheet name (Excel has a 31 character limit for sheet names)
         const sheetName = `Year ${group.year} - Sec ${group.section}`.substring(0, 31)
@@ -276,7 +276,7 @@ export default function PeerTutorMappingExport({
       { s: { r: 3, c: 0 }, e: { r: 3, c: 4 } }
     ]
     
-    ws['!merges'] = merges
+    ws['!merges'] = merges as XLSX.Range[]
     
     // Apply styling to header rows (rows 1-4)
     for (let row = 0; row < 4; row++) {

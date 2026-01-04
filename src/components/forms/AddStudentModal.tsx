@@ -6,6 +6,7 @@ import { StudentService, StudentAssignment } from '@/lib/services/studentService
 import { useAuth } from '@/lib/auth/AuthContext'
 import { Search, X, Loader2, User, Mail, AlertCircle, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MicrosoftUser } from '@/lib/types'
 
 interface AddStudentModalProps {
   isOpen: boolean
@@ -18,15 +19,6 @@ interface AddStudentModalProps {
 
 type ViewMode = 'all' | 'selected'
 
-interface SearchResultStudent {
-  displayName?: string
-  name?: string
-  mail?: string
-  email?: string
-  userPrincipalName?: string
-  [key: string]: unknown
-}
-
 export default function AddStudentModal({
   isOpen,
   onClose,
@@ -38,11 +30,11 @@ export default function AddStudentModal({
   const { user } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<SearchResultStudent[]>([])
+  const [searchResults, setSearchResults] = useState<MicrosoftUser[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set()) // Store emails of selected students
   // We need to keep track of the full student objects for the selected emails
-  const [selectedStudentObjects, setSelectedStudentObjects] = useState<Map<string, SearchResultStudent>>(new Map())
+  const [selectedStudentObjects, setSelectedStudentObjects] = useState<Map<string, MicrosoftUser>>(new Map())
 
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,9 +79,9 @@ export default function AddStudentModal({
 
     try {
       const students: StudentAssignment[] = Array.from(selectedStudents).map(emailKey => {
-        const student = selectedStudentObjects.get(emailKey)
+        const student = selectedStudentObjects.get(emailKey) as MicrosoftUser
         return {
-          name: student.displayName || student.name || 'Unknown',
+          name: student.displayName || 'Unknown',
           email: emailKey,
           dept,
           year,
@@ -126,8 +118,8 @@ export default function AddStudentModal({
   }
 
   // Toggle selection for a single student
-  const handleToggleStudent = (student: SearchResultStudent) => {
-    const email = student.mail || student.email || student.userPrincipalName
+  const handleToggleStudent = (student: MicrosoftUser) => {
+    const email = student.mail || student.userPrincipalName
     if (!email) return
 
     const newSelected = new Set(selectedStudents)
@@ -151,7 +143,7 @@ export default function AddStudentModal({
     const newObjects = new Map(selectedStudentObjects)
 
     searchResults.forEach(student => {
-      const email = student.mail || student.email || student.userPrincipalName
+      const email = student.mail || student.userPrincipalName
       if (!email) return
 
       if (isChecked) {
@@ -171,7 +163,7 @@ export default function AddStudentModal({
   const areAllSelected = useMemo(() => {
     if (searchResults.length === 0) return false
     return searchResults.every(student => {
-      const email = student.mail || student.email || student.userPrincipalName
+      const email = student.mail || student.userPrincipalName
       return selectedStudents.has(email)
     })
   }, [searchResults, selectedStudents])
@@ -313,7 +305,7 @@ export default function AddStudentModal({
                 {/* Table Body (Scrollable) */}
                 <div className="overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                   {getDisplayedStudents().map((student, index) => {
-                    const email = student.mail || student.email || student.userPrincipalName
+                    const email = student.mail || student.userPrincipalName
                     const isSelected = selectedStudents.has(email)
                     return (
                       <div
@@ -341,7 +333,7 @@ export default function AddStudentModal({
                              <User className="w-4 h-4" />
                           </div>
                           <span className={cn("font-medium text-sm", isSelected ? "text-black" : "text-gray-900")}>
-                            {student.displayName || student.name || 'Unknown Name'}
+                            {student.displayName || 'Unknown Name'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-sm">

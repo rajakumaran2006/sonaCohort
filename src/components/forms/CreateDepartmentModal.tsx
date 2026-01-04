@@ -20,14 +20,6 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
   const [isLoading, setIsLoading] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
 
-  useEffect(() => {
-    if (facultySearch.length >= 2) {
-      searchFaculty()
-    } else {
-      setSearchResults([])
-    }
-  }, [facultySearch, searchFaculty])
-
   const searchFaculty = useCallback(async () => {
     if (facultySearch.length < 2) return
     
@@ -46,6 +38,14 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
       setIsSearching(false)
     }
   }, [facultySearch])
+
+  useEffect(() => {
+    if (facultySearch.length >= 2) {
+      searchFaculty()
+    } else {
+      setSearchResults([])
+    }
+  }, [facultySearch, searchFaculty])
 
   const handleFacultySelect = (faculty: MicrosoftUser) => {
     setSelectedFaculty(faculty)

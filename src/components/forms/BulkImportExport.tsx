@@ -2,8 +2,8 @@
 
 import { useState, useRef } from 'react'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
-import { StudentService } from '@/lib/services/studentService'
+import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { StudentService, Student } from '@/lib/services/studentService'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
 import * as XLSX from 'xlsx'
@@ -162,8 +162,8 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
       if (!peerTutorEmail || !studentEmail) continue
       
-      let peerTutor: PeerTutor | undefined = existingPeerTutors.find(pt => pt.email.toLowerCase() === peerTutorEmail.toLowerCase())
-      let student: Student | undefined = existingStudents.find(s => s.email.toLowerCase() === studentEmail.toLowerCase())
+      let peerTutor: PeerTutor | undefined | null = existingPeerTutors.find(pt => pt.email.toLowerCase() === peerTutorEmail.toLowerCase())
+      let student: Student | undefined | null = existingStudents.find(s => s.email.toLowerCase() === studentEmail.toLowerCase())
       
       // If peer tutor not found locally, check Microsoft Graph and create if exists
       if (!peerTutor) {

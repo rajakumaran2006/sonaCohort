@@ -455,7 +455,6 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
         onClose={() => setShowPreview(false)}
         numHeaders={numHeaders}
         extraHeaders={extraHeaders}
-        sampleData={[]}
       />
     </div>
   )

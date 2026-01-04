@@ -10,6 +10,37 @@ export interface Exam {
   updated_at: string
 }
 
+export interface ExamMark {
+  id: string
+  exam_id: string
+  peer_tutor_id: string
+  student_id: string
+  marks: { [key: string]: number | string }
+  created_at: string
+  updated_at: string
+  student?: {
+    name: string
+  }
+  class?: {
+    subject_name: string
+  }
+}
+
+export interface ExamMarkWithDetails extends ExamMark {
+  student_name?: string
+  subject_name?: string
+}
+
+export interface ExamAssignment {
+  id: string
+  exam_id: string
+  peer_tutor_id: string
+  peer_tutor?: {
+    name: string
+    email: string
+  }
+}
+
 export interface CreateExamData {
   name: string
   years: string[]
@@ -149,6 +180,69 @@ export class ExamService {
     } catch (error) {
       console.error('Error in deleteExam:', error)
       return false
+    }
+  }
+
+  /**
+   * Get exam marks for a peer tutor assignment (compatibility method)
+   */
+  static async getExamMarks(peerTutorId: string): Promise<ExamMark[]> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('exam_marks')
+        .select(`
+          *,
+          student:peer_students(name),
+          class:classes(subject_name)
+        `)
+        .eq('peer_tutor_id', peerTutorId)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error getting exam marks:', error)
+        return []
+      }
+
+      return (data || []) as ExamMark[]
+    } catch (error) {
+      console.error('Error in getExamMarks:', error)
+      return []
+    }
+  }
+
+  /**
+   * Get peer tutor marks (compatibility method)
+   */
+  static async getPeerTutorMarks(peerTutorId: string): Promise<ExamMarkWithDetails[]> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('exam_marks')
+        .select(`
+          *,
+          student:peer_students(name),
+          subject:exam_subjects(subject_name)
+        `)
+        .eq('peer_tutor_id', peerTutorId)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error getting peer tutor marks:', error)
+        return []
+      }
+
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      return (data || []).map((mark: any) => ({
+        ...mark,
+        student_name: mark.student?.name,
+        subject_name: mark.subject?.subject_name
+      })) as ExamMarkWithDetails[]
+    } catch (error) {
+      console.error('Error in getPeerTutorMarks:', error)
+      return []
     }
   }
 }

@@ -18,12 +18,6 @@ export default function PeerTutorMarksModal({
   const [marks, setMarks] = useState<ExamMark[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (isOpen && examAssignment) {
-      loadMarks()
-    }
-  }, [isOpen, examAssignment, loadMarks])
-
   const loadMarks = useCallback(async () => {
     setLoading(true)
     try {
@@ -35,6 +29,12 @@ export default function PeerTutorMarksModal({
       setLoading(false)
     }
   }, [examAssignment])
+
+  useEffect(() => {
+    if (isOpen && examAssignment) {
+      loadMarks()
+    }
+  }, [isOpen, examAssignment, loadMarks])
 
   // Group marks by subject
   const marksBySubject = marks.reduce((acc, mark) => {
@@ -89,7 +89,7 @@ export default function PeerTutorMarksModal({
                             {mark.student?.name || 'Unknown Student'}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {mark.marks || '-'}
+                            {mark.marks ? Object.values(mark.marks).join(', ') : '-'}
                           </td>
                         </tr>
                       ))}

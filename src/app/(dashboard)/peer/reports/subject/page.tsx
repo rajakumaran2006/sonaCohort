@@ -3,7 +3,7 @@
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { ReportService, ClassAttendanceReport } from '@/lib/services/reportService'
@@ -16,7 +16,14 @@ import { ArrowLeft, CheckCircle, AlertCircle, Calendar, Eye } from 'lucide-react
 export default function PeerSubjectDetailsPage() {
   return (
     <PeerProtectedRoute>
-      <PeerSubjectDetailsContent />
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center py-32 bg-[#F8F9FA]">
+          <LoadingSpinner size="lg" className="mr-3" />
+          <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Loading...</span>
+        </div>
+      }>
+        <PeerSubjectDetailsContent />
+      </Suspense>
     </PeerProtectedRoute>
   )
 }

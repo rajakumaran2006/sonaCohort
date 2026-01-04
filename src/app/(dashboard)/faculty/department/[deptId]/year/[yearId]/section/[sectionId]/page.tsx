@@ -5,7 +5,7 @@ import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
-import { useState, useEffect, useRef, Fragment, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, Fragment, useMemo, useCallback, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import Image from 'next/image'
@@ -5840,7 +5840,9 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
 export default function SectionPage() {
   return (
     <FacultyProtectedRoute>
-      <SectionContent />
+      <Suspense fallback={<SectionPageSkeleton />}>
+        <SectionContent />
+      </Suspense>
     </FacultyProtectedRoute>
   )
 }

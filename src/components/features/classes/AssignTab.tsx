@@ -50,10 +50,6 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
   const [showImportModal, setShowImportModal] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
 
-  useEffect(() => {
-    loadData()
-  }, [dept, year, section, loadData])
-
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
@@ -74,6 +70,10 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
       setLoading(false)
     }
   }, [dept, year, section])
+
+  useEffect(() => {
+    loadData()
+  }, [dept, year, section, loadData])
 
   const handleAutoAssign = async () => {
     setAutoAssigning(true)

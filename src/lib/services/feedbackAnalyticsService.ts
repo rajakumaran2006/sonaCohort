@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/client'
-import { FeedbackForm, FeedbackResponseWithDetails, FeedbackQuestion } from './feedbackService'
+import { FeedbackForm, FeedbackResponseWithDetails, FeedbackAnswerWithDetails } from './feedbackService'
 
 export interface ResponseAnalytics {
   totalResponses: number
@@ -261,7 +261,8 @@ export class FeedbackAnalyticsService {
     // Calculate question analytics
     // If a questionId filter is present, limit analytics to that question; otherwise all
     const filteredQuestions = filters.questionId
-      ? (questions || []).filter((q: FeedbackQuestion) => q.id === filters.questionId)
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      ? (questions as any[]).filter(q => q.id === filters.questionId)
       : questions
 
     const questionAnalytics = this.calculateQuestionAnalytics(filteredQuestions, filteredResponses)
@@ -286,7 +287,8 @@ export class FeedbackAnalyticsService {
    * Only calculates if ALL questions are star_rating type
    */
   private static calculateSatisfactionMetrics(
-    questions: FeedbackQuestion[],
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    questions: any[],
     responses: FeedbackResponseWithDetails[]
   ): { averageScore: number; delta: number } {
     // Only calculate satisfaction if ALL questions are star_rating
@@ -332,7 +334,8 @@ export class FeedbackAnalyticsService {
    * Calculate analytics for each question
    */
   private static calculateQuestionAnalytics(
-    questions: FeedbackQuestion[],
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    questions: any[],
     responses: FeedbackResponseWithDetails[]
   ): QuestionAnalytics[] {
     return questions.map(question => {
@@ -350,7 +353,7 @@ export class FeedbackAnalyticsService {
       if (question.question_type === 'star_rating') {
         const ratings = questionResponses
           .map((answer: FeedbackAnswerWithDetails) => answer.star_rating)
-          .filter((rating: number) => rating !== null && rating !== undefined)
+          .filter((rating): rating is number => rating !== null && rating !== undefined)
 
         if (ratings.length > 0) {
           analytics.averageRating = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
@@ -394,7 +397,7 @@ export class FeedbackAnalyticsService {
       } else if (question.question_type === 'text') {
         analytics.textResponses = questionResponses
           .map((answer: FeedbackAnswerWithDetails) => answer.answer_text)
-          .filter((text: string) => text !== null && text !== undefined && text.trim() !== '')
+          .filter((text): text is string => text !== null && text !== undefined && text.trim() !== '')
 
         if (analytics.textResponses && analytics.textResponses.length > 0) {
           analytics.topKeywords = this.extractTopKeywords(analytics.textResponses, 5)
@@ -411,7 +414,8 @@ export class FeedbackAnalyticsService {
    */
   private static calculateStudentResponseAnalytics(
     responses: FeedbackResponseWithDetails[],
-    questions: FeedbackQuestion[]
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    questions: any[]
   ): StudentResponseAnalytics[] {
     // Only calculate satisfaction if ALL questions are star_rating
     const allStarRating = questions.length > 0 && questions.every(q => q.question_type === 'star_rating')

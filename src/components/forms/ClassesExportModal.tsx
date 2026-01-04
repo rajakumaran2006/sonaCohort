@@ -65,7 +65,7 @@ export default function ClassesExportModal({
         { wch: 30 }  // Topics
       ]
 
-      ws['!merges'] = dynamicMerges
+      ws['!merges'] = dynamicMerges as XLSX.Range[]
       
       // Add worksheet to workbook
       XLSX.utils.book_append_sheet(wb, ws, 'Scheduled Classes')
@@ -85,9 +85,9 @@ export default function ClassesExportModal({
     }
   }
 
-  const createWorksheetData = async (): Promise<{ data: unknown[][], merges: unknown[] }> => {
+  const createWorksheetData = async (): Promise<{ data: unknown[][], merges: XLSX.Range[] }> => {
     const data: unknown[][] = []
-    const merges: unknown[] = []
+    const merges: XLSX.Range[] = []
     
     // Auto-detect department if not set manually
     const deptHeader = header.department === 'DEPARTMENT OF INFORMATION TECHNOLOGY' && filteredClasses.length > 0 

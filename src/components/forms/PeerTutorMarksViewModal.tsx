@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Modal, { ModalHeader, ModalContent, ModalFooter } from '@/components/ui/Modal'
-import Button from '@/components/ui/Button'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui'
+import { Button } from '@/components/ui'
 import { ExamService, ExamMarkWithDetails } from '@/lib/services/examService'
 import { LoadingOverlay, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 
@@ -20,12 +20,6 @@ export default function PeerTutorMarksViewModal({
   const [marks, setMarks] = useState<ExamMarkWithDetails[]>([])
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (isOpen && examAssignmentId) {
-      loadMarks()
-    }
-  }, [isOpen, examAssignmentId, loadMarks])
-
   const loadMarks = useCallback(async () => {
     setLoading(true)
     try {
@@ -37,6 +31,12 @@ export default function PeerTutorMarksViewModal({
       setLoading(false)
     }
   }, [examAssignmentId])
+
+  useEffect(() => {
+    if (isOpen && examAssignmentId) {
+      loadMarks()
+    }
+  }, [isOpen, examAssignmentId, loadMarks])
 
   // Group marks by subject
   const marksBySubject = marks.reduce((acc, mark) => {
@@ -54,7 +54,7 @@ export default function PeerTutorMarksViewModal({
         <h2 className="text-xl font-semibold text-gray-900">Peer Tutor Marks</h2>
       </ModalHeader>
 
-      <ModalContent>
+      <ModalBody>
         {loading ? (
           <LoadingOverlay className="h-64" size="md">
             Loading marks...
@@ -87,7 +87,7 @@ export default function PeerTutorMarksViewModal({
                             {mark.subject_name || 'Unknown'}
                           </TableCell>
                           <TableCell className="font-semibold text-gray-900">
-                            {mark.marks || '-'}
+                            {mark.marks ? Object.values(mark.marks).join(', ') : '-'}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -98,7 +98,7 @@ export default function PeerTutorMarksViewModal({
             ))}
           </div>
         )}
-      </ModalContent>
+      </ModalBody>
 
       <ModalFooter>
         <Button variant="secondary" onClick={onClose}>

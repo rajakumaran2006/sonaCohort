@@ -44,23 +44,6 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
   const [sections, setSections] = useState<Array<{id: string, name: string}>>([])
   const filterDropdownRef = useRef<HTMLDivElement>(null)
 
-  // Close filter dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
-        setShowFilters(false)
-      }
-    }
-
-    if (showFilters) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showFilters])
-
   const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true)
@@ -100,6 +83,23 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
       console.error('Error loading years and sections:', err)
     }
   }, [])
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setShowFilters(false)
+      }
+    }
+
+    if (showFilters) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showFilters])
 
   useEffect(() => {
     loadAnalytics()

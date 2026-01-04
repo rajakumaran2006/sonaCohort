@@ -63,7 +63,6 @@ export default function AssignmentImportModal({
 }: AssignmentImportModalProps) {
   const { user } = useAuth()
   const [isProcessing, setIsProcessing] = useState(false)
-  const [importData, setImportData] = useState<ImportRow[]>([])
   const [processedData, setProcessedData] = useState<GroupedAssignment[]>([])
   const [showPreview, setShowPreview] = useState(false)
 
@@ -82,16 +81,15 @@ export default function AssignmentImportModal({
       const worksheet = workbook.Sheets[workbook.SheetNames[0]]
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet)
 
-      const rawRows = jsonData as unknown[]
       const rows: ImportRow[] = []
       let lastPeerTutorName: string | undefined
       let lastPeerTutorEmail: string | undefined
 
-      for (const row of rawRows) {
-        let peerTutorName = row['Peer Tutor Name']?.toString().trim() || undefined
-        let peerTutorEmail = row['Peer Tutor Email']?.toString().trim() || undefined
-        const studentName = row['Student Name']?.toString().trim() || undefined
-        const studentEmail = row['Student Email']?.toString().trim() || undefined
+      for (const row of jsonData) {
+        let peerTutorName = (row['Peer Tutor Name'] as string | undefined)?.toString().trim() || undefined
+        let peerTutorEmail = (row['Peer Tutor Email'] as string | undefined)?.toString().trim() || undefined
+        const studentName = (row['Student Name'] as string | undefined)?.toString().trim() || undefined
+        const studentEmail = (row['Student Email'] as string | undefined)?.toString().trim() || undefined
 
         // Handle merged cells (fill down)
         // If peer tutor info is missing but we have student info, use the last seen peer tutor
@@ -122,8 +120,6 @@ export default function AssignmentImportModal({
         return
       }
 
-      setImportData(rows)
-
       // Fetch existing data
       const [tutors, students] = await Promise.all([
         PeerTutorService.getAllPeerTutors(),
@@ -150,9 +146,9 @@ export default function AssignmentImportModal({
   }
 
   const findPeerTutor = async (
-    name?: string, 
-    email?: string, 
-    tutors: PeerTutor[]
+    tutors: PeerTutor[],
+    name?: string,
+    email?: string
   ): Promise<{ tutor: PeerTutor | null, foundIn: 'local' | 'microsoft' | 'not_found' }> => {
     // Must have at least one identifier
     if (!name && !email) {
@@ -234,9 +230,9 @@ export default function AssignmentImportModal({
   }
 
   const findStudent = async (
+    students: Student[],
     name?: string, 
-    email?: string, 
-    students: Student[]
+    email?: string
   ): Promise<{ student: Student | null, foundIn: 'local' | 'microsoft' | 'not_found' }> => {
     // Must have at least one identifier
     if (!name && !email) {
@@ -321,8 +317,8 @@ export default function AssignmentImportModal({
     const processed: ProcessedAssignment[] = []
 
     for (const row of rows) {
-      const peerTutorResult = await findPeerTutor(row.peerTutorName, row.peerTutorEmail, tutors)
-      const studentResult = await findStudent(row.studentName, row.studentEmail, students)
+      const peerTutorResult = await findPeerTutor(tutors, row.peerTutorName, row.peerTutorEmail)
+      const studentResult = await findStudent(students, row.studentName, row.studentEmail)
 
       // Determine display names (use actual data if found, otherwise use provided data)
       const peerTutorDisplayName = peerTutorResult.tutor?.name || row.peerTutorName || row.peerTutorEmail || 'Unknown'
@@ -397,53 +393,23 @@ export default function AssignmentImportModal({
     try {
       setIsProcessing(true)
 
-      // Add missing peer tutors
+      // Count missing entities
       const missingTutors = processedData.filter(g => g.status === 'missing')
-      for (const group of missingTutors) {
-        await PeerTutorService.addPeerTutor({
-          name: group.peerTutorName,
-          email: group.peerTutorEmail || `${group.peerTutorName.toLowerCase().replace(/\s+/g, '.')}@temp.com`,
-          dept,
-          year,
-          section
-        })
-      }
-
-      // Add missing students
       const allMissingStudents = processedData.flatMap(g => 
         g.students.filter(s => s.status === 'missing')
       )
-      
-      for (const studentData of allMissingStudents) {
-        await StudentService.addStudent({
-          name: studentData.studentName,
-          email: studentData.studentEmail || `${studentData.studentName.toLowerCase().replace(/\s+/g, '.')}@temp.com`,
-          dept,
-          year,
-          section,
-          peer_tutor: false
-        })
-      }
 
-      alert(`Added ${missingTutors.length} peer tutor(s) and ${allMissingStudents.length} student(s)`)
-
-      // Refresh data
-      const [tutors, students] = await Promise.all([
-        PeerTutorService.getAllPeerTutors(),
-        StudentService.getAllStudents()
-      ])
-
-      /*
-      setExistingPeerTutors(tutors)
-      setExistingStudents(students.filter(s => !s.peer_tutor))
-      */
-
-      // Reprocess
-      await processImportData(importData, tutors, students.filter(s => !s.peer_tutor))
+      // Alert user about missing entities - they need to be added manually or via Microsoft Graph
+      alert(
+        `Found ${missingTutors.length} missing peer tutor(s) and ${allMissingStudents.length} missing student(s).\n\n` +
+        `These users must be added via Microsoft Graph search or manually in the system before importing assignments.\n\n` +
+        `Missing Peer Tutors: ${missingTutors.map(t => t.peerTutorName).join(', ')}\n` +
+        `Missing Students: ${allMissingStudents.map(s => s.studentName).join(', ')}`
+      )
 
     } catch (error) {
-      console.error('Error adding missing entities:', error)
-      alert('Error adding missing entities. Please try again.')
+      console.error('Error checking missing entities:', error)
+      alert('Error checking missing entities.')
     } finally {
       setIsProcessing(false)
     }
