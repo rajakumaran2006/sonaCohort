@@ -29,7 +29,7 @@ export class ExamMarksService {
       const supabase = createClient()
       
       // Check if record exists (use maybeSingle to handle no results)
-      const { data: existing, error: checkError } = await supabase
+      const { data: existing } = await supabase
         .from('exam_marks')
         .select('id')
         .eq('exam_id', data.exam_id)
@@ -89,7 +89,7 @@ export class ExamMarksService {
    */
   static async saveExamMarksBatch(marksData: ExamMarkData[]): Promise<boolean> {
     try {
-      const supabase = createClient()
+      // const supabase = createClient()
       
       // For each mark, check if it exists and upsert
       const operations = marksData.map(async (data) => {

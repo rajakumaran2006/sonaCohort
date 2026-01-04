@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     
     // Test 1: Check if additional_classes table exists
     const { data: tableCheck, error: tableError } = await supabase
@@ -55,7 +55,7 @@ export async function GET() {
     }
 
     // Test 3: Try to query the additional_classes table (should return empty array if table exists)
-    const { data: testQuery, error: queryError } = await supabase
+    const { error: queryError } = await supabase
       .from('additional_classes')
       .select('id')
       .limit(1)

@@ -8,17 +8,17 @@ import { useRouter, useParams } from 'next/navigation'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
-import { ExamService, Exam } from '@/lib/services/examService'
+import { ExamService } from '@/lib/services/examService'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { calculatePeerTutorAscendScore } from '@/lib/utils/ascendScore'
-import { Card, CardHeader, CardTitle, CardContent, LoadingOverlay, Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
+import { Card, CardContent, LoadingOverlay, Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui'
-import { Eye, ArrowLeft, RotateCw, Download } from 'lucide-react'
+import { ArrowLeft, RotateCw, Download } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import { useMemo, useEffect } from 'react'
@@ -244,12 +244,6 @@ function ExamDetailsContent() {
 
   const hasActiveFilters = selectedYear !== 'all' || selectedSection !== 'all' || selectedStatus !== 'all'
 
-  const clearFilters = () => {
-    setSelectedYear('all')
-    setSelectedSection('all')
-    setSelectedStatus('all')
-  }
-
   // Excel export function - handles pending, ongoing, and completed statuses
   const handleExportToExcel = async (exportType?: 'student-details' | 'marks-details') => {
     if (!exam || !filteredPeerTutors || filteredPeerTutors.length === 0) return
@@ -266,11 +260,11 @@ function ExamDetailsContent() {
     try {
       // Handle PENDING status export - simple table with Peer Tutor and Status
       if (selectedStatus === 'pending') {
-        const exportData: any[][] = []
+        const exportData: (string | number)[][] = []
         
         // Add header rows following xlsx-rule.mdc format
         exportData.push(['Subjects Export Report'])
-        exportData.push(['Department:', (department as any)?.dept || department?.name || ''])
+        exportData.push(['Department:', (department as { dept?: string; name?: string })?.dept || (department as { dept?: string; name?: string })?.name || ''])
         const yearsText = Array.from(new Set(filteredPeerTutors.map(pt => formatYear(pt.year)))).join(', ')
         exportData.push(['Year:', yearsText])
         const sectionsText = Array.from(new Set(filteredPeerTutors.map(pt => pt.section))).length > 1 
@@ -305,11 +299,11 @@ function ExamDetailsContent() {
       
       // Handle ONGOING status - Student Details export
       if (selectedStatus === 'ongoing' && exportType === 'student-details') {
-        const exportData: any[][] = []
+        const exportData: (string | number)[][] = []
         
         // Add header rows following xlsx-rule.mdc format
         exportData.push(['Subjects Export Report'])
-        exportData.push(['Department:', (department as any)?.dept || department?.name || ''])
+        exportData.push(['Department:', (department as { dept?: string; name?: string })?.dept || (department as { dept?: string; name?: string })?.name || ''])
         const yearsText = Array.from(new Set(filteredPeerTutors.map(pt => formatYear(pt.year)))).join(', ')
         exportData.push(['Year:', yearsText])
         const sectionsText = Array.from(new Set(filteredPeerTutors.map(pt => pt.section))).length > 1 
@@ -328,7 +322,6 @@ function ExamDetailsContent() {
         
         // Add data rows
         filteredPeerTutors.forEach(peerTutor => {
-          const completion = completionPercentages[peerTutor.id] || 0
           exportData.push([peerTutor.name, 'Ongoing'])
         })
         
@@ -379,11 +372,11 @@ function ExamDetailsContent() {
         // Sort sections
         const sortedSections = Object.keys(tutorsBySection).sort()
         
-        const exportData: any[][] = []
+        const exportData: (string | number)[][] = []
         
         // Add header rows following xlsx-rule.mdc format
         exportData.push(['Subjects Export Report'])
-        exportData.push(['Department:', (department as any)?.dept || department?.name || ''])
+        exportData.push(['Department:', (department as { dept?: string; name?: string })?.dept || (department as { dept?: string; name?: string })?.name || ''])
         exportData.push(['Year:', formatYear(year)])
         exportData.push(['Section:', sortedSections.length > 1 ? 'ALL' : sortedSections[0] || 'ALL'])
         exportData.push(['Generated on:', new Date().toLocaleDateString('en-US', {

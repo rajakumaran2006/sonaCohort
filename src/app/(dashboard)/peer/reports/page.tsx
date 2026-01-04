@@ -6,7 +6,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { ReportService, PeerTutorReportData } from '@/lib/services/reportService'
+import { ReportService } from '@/lib/services/reportService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 import ExcelExportModal from '@/components/forms/ExcelExportModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
@@ -203,7 +203,7 @@ function PeerReportsContent() {
                           </svg>
                         </div>
                         <h3 className="text-lg font-medium text-gray-900 mb-2">No subjects assigned</h3>
-                        <p className="text-gray-500">You haven't been assigned to any subjects yet.</p>
+                        <p className="text-gray-500">You haven&apos;t been assigned to any subjects yet.</p>
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -317,8 +317,8 @@ function PeerReportsContent() {
         <ExcelExportModal
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
-          peerTutorInfo={peerTutorInfo}
-          reportData={reportData}
+          peerTutorInfo={peerTutorInfo ?? null}
+          reportData={reportData ?? null}
         />
       )}
     </div>

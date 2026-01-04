@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
 import Sidebar from '@/components/layout/Sidebar'
-import { useAuth } from '@/lib/auth/AuthContext'
 import { DepartmentService } from '@/lib/services/departmentService'
 import { PeerTutorService, PeerTutor as BasePeerTutor } from '@/lib/services/peerTutorService'
-import { StudentService, Student as BaseStudent } from '@/lib/services/studentService'
+import { Student as BaseStudent } from '@/lib/services/studentService'
 import { Department } from '@/lib/types'
 import { createClient } from '@/utils/supabase/client'
 
@@ -29,12 +28,10 @@ export default function AnalyticsPage() {
 }
 
 function AnalyticsContent() {
-  const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [departments, setDepartments] = useState<Department[]>([])
   const [peerTutors, setPeerTutors] = useState<PeerTutorWithDetails[]>([])
   const [filteredPeerTutors, setFilteredPeerTutors] = useState<PeerTutorWithDetails[]>([])
-  const [students, setStudents] = useState<StudentWithDetails[]>([])
   const [selectedPeerTutor, setSelectedPeerTutor] = useState<PeerTutorWithDetails | null>(null)
   const [assignedStudents, setAssignedStudents] = useState<StudentWithDetails[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -55,9 +52,7 @@ function AnalyticsContent() {
     loadData()
   }, [])
 
-  useEffect(() => {
-    applyFilters()
-  }, [selectedDepartment, selectedFaculty, selectedYear, selectedSection, searchQuery, peerTutors])
+
 
   const loadData = async () => {
     setIsLoading(true)
@@ -100,9 +95,8 @@ function AnalyticsContent() {
       const totalStudentCount = enrichedPeerTutors.reduce((sum, pt) => sum + pt.student_count, 0)
       setTotalStudents(totalStudentCount)
 
-      // Load all students
-      const allStudents = await StudentService.getAllStudents()
-      setStudents(allStudents)
+      // Load all students (if needed in the future)
+      // const allStudents = await StudentService.getAllStudents()
 
     } catch (error) {
       console.error('Error loading analytics data:', error)
@@ -111,7 +105,7 @@ function AnalyticsContent() {
     }
   }
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...peerTutors]
 
     if (selectedDepartment !== 'all') {
@@ -138,7 +132,11 @@ function AnalyticsContent() {
     }
 
     setFilteredPeerTutors(filtered)
-  }
+  }, [peerTutors, selectedDepartment, selectedFaculty, selectedYear, selectedSection, searchQuery])
+
+  useEffect(() => {
+    applyFilters()
+  }, [selectedDepartment, selectedFaculty, selectedYear, selectedSection, searchQuery, peerTutors, applyFilters])
 
   const handlePeerTutorClick = async (peerTutor: PeerTutorWithDetails) => {
     setSelectedPeerTutor(peerTutor)
@@ -181,7 +179,7 @@ function AnalyticsContent() {
       const supabase = createClient()
       
       // Prepare data for export
-      const exportData = []
+      const exportData: Record<string, unknown>[] = []
       
       for (const peerTutor of filteredPeerTutors) {
         // Get assigned students for this peer tutor
@@ -234,7 +232,7 @@ function AnalyticsContent() {
         headers.join(','),
         ...exportData.map(row => 
           headers.map(header => {
-            const value = row[header]
+            const value = (row as Record<string, unknown>)[header]
             // Escape commas and quotes
             return `"${String(value).replace(/"/g, '""')}"`
           }).join(',')
@@ -276,7 +274,7 @@ function AnalyticsContent() {
         headers.join(','),
         ...exportData.map(row => 
           headers.map(header => {
-            const value = row[header]
+            const value = (row as Record<string, unknown>)[header]
             return `"${String(value).replace(/"/g, '""')}"`
           }).join(',')
         )
@@ -303,7 +301,7 @@ function AnalyticsContent() {
       const supabase = createClient()
       
       // Prepare data for export
-      const exportData = []
+      const exportData: Record<string, unknown>[] = []
       
       for (const peerTutor of filteredPeerTutors) {
         // Get assigned students for this peer tutor
@@ -342,7 +340,7 @@ function AnalyticsContent() {
         headers.join(','),
         ...exportData.map(row => 
           headers.map(header => {
-            const value = row[header]
+            const value = (row as Record<string, unknown>)[header]
             return `"${String(value).replace(/"/g, '""')}"`
           }).join(',')
         )

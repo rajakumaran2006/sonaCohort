@@ -11,9 +11,8 @@ import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
-import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui/Table'
+import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Eye } from 'lucide-react'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import ExportButton from '@/components/ui/ExportButton'
 
@@ -39,6 +38,21 @@ interface FilterOptions {
   subject: string
 }
 
+interface PeerTutorSummary {
+  id: string
+  name: string
+  email: string
+  classes: ClassWithAttendance[]
+  totalClasses: number
+  completedClasses: number
+  pendingClasses: number
+  additionalClasses: number
+  overallStatus: 'present' | 'absent'
+  years: Set<string>
+  sections: Set<string>
+  actualSection: string
+}
+
 export default function FacultyAttendancePage() {
   return (
     <FacultyProtectedRoute>
@@ -57,8 +71,8 @@ function FacultyAttendanceContent() {
   const [tableLoading, setTableLoading] = useState(false)
   const [classStatus, setClassStatus] = useState<ClassStatus>({ completed: [], pending: [] })
   const [facultyDepartment, setFacultyDepartment] = useState<string>('')
-  const [years, setYears] = useState<any[]>([])
-  const [sections, setSections] = useState<any[]>([])
+  const [years, setYears] = useState<Array<{ id: string; name: string }>>([])
+  const [sections, setSections] = useState<Array<{ id: string; name: string }>>([])
   const [filters, setFilters] = useState<FilterOptions>({
     year: '',
     section: '',
@@ -67,27 +81,41 @@ function FacultyAttendanceContent() {
   })
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set())
   const [expandedPeerTutors, setExpandedPeerTutors] = useState<Set<string>>(new Set())
-  const [searchQuery, setSearchQuery] = useState('')
-  const [subjects, setSubjects] = useState<any[]>([])
-  const [peerTutors, setPeerTutors] = useState<any[]>([])
+  const [subjects, setSubjects] = useState<Array<{ id: string; name: string }>>([])
+  const [peerTutors, setPeerTutors] = useState<Array<{
+    id: string
+    name: string
+    email: string
+    classes: ClassWithAttendance[]
+    totalClasses: number
+    completedClasses: number
+    pendingClasses: number
+    additionalClasses: number
+    overallStatus: 'present' | 'absent'
+    years: Set<string>
+    sections: Set<string>
+    actualSection: string
+  }>>([])
   const [loadingPeerTutors, setLoadingPeerTutors] = useState(false)
 
   useEffect(() => {
     loadInitialData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (facultyDepartment) {
       loadClassStatus()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facultyDepartment, lastRefresh])
 
   useEffect(() => {
     if (facultyDepartment) {
       loadTableData()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facultyDepartment, filters])
 
   // Extract unique subjects from class status data
@@ -189,14 +217,14 @@ function FacultyAttendanceContent() {
         const status = await ScheduledClassService.getAllClassesForDepartment(facultyDepartment)
         
         // Convert to ClassWithAttendance format for stats display
-        const statsCompleted = status.completed.map(cls => ({
+        const statsCompleted = status.completed.map((cls: ScheduledClassWithDetails) => ({
           ...cls,
           peerTutorAttendance: 'present' as 'present' | 'absent',
           studentAttendance: [],
           attendanceSummary: { total: 0, present: 0, absent: 0 }
         }))
         
-        const statsPending = status.pending.map(cls => ({
+        const statsPending = status.pending.map((cls: ScheduledClassWithDetails) => ({
           ...cls,
           peerTutorAttendance: 'absent' as 'present' | 'absent',
           studentAttendance: [],
@@ -230,7 +258,7 @@ function FacultyAttendanceContent() {
         return
       }
 
-      let status
+      let status: { completed: ScheduledClassWithDetails[]; pending: ScheduledClassWithDetails[] }
       
       // Debug logging for filter combination
       console.log('Filter combination:', {
@@ -420,16 +448,7 @@ function FacultyAttendanceContent() {
     }))
   }
 
-  const resetFilters = () => {
-    setFilters({
-      year: '',
-      section: '',
-      date: '',
-      subject: ''
-    })
-    setSearchQuery('')
-    setClassStatus({ completed: [], pending: [] })
-  }
+
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true)
@@ -442,17 +461,7 @@ function FacultyAttendanceContent() {
     }
   }
 
-  const toggleClassExpansion = (classId: string) => {
-    setExpandedClasses(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(classId)) {
-        newSet.delete(classId)
-      } else {
-        newSet.add(classId)
-      }
-      return newSet
-    })
-  }
+
 
   const togglePeerTutorExpansion = (peerTutorId: string) => {
     setExpandedPeerTutors(prev => {
@@ -475,7 +484,7 @@ function FacultyAttendanceContent() {
         `"${peerTutor.name}"`,
         `"${peerTutor.email}"`,
         `"${Array.from(peerTutor.years).join(', ') || 'N/A'}"`,
-        `"${(peerTutor as any).actualSection || Array.from(peerTutor.sections).filter(s => s !== 'ALL').join(', ') || 'N/A'}"`,
+        `"${peerTutor.actualSection || Array.from(peerTutor.sections).filter(s => s !== 'ALL').join(', ') || 'N/A'}"`,
         peerTutor.completedClasses - peerTutor.additionalClasses,
         peerTutor.additionalClasses,
         peerTutor.totalClasses,
@@ -507,16 +516,7 @@ function FacultyAttendanceContent() {
   }
 
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800'
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -545,7 +545,7 @@ function FacultyAttendanceContent() {
   }
 
   // Group classes by peer tutor for simplified view
-  const groupClassesByPeerTutor = async (classes: ClassWithAttendance[]) => {
+  const groupClassesByPeerTutor = async (classes: ClassWithAttendance[]): Promise<PeerTutorSummary[]> => {
     const grouped = classes.reduce((acc, cls) => {
       const peerTutorId = cls.peer_tutor?.id || 'unknown'
       const peerTutorName = cls.peer_tutor?.name || 'Unknown Peer Tutor'
@@ -580,20 +580,7 @@ function FacultyAttendanceContent() {
       }
       
       return acc
-    }, {} as Record<string, {
-      id: string
-      name: string
-      email: string
-      classes: ClassWithAttendance[]
-      totalClasses: number
-      completedClasses: number
-      pendingClasses: number
-      additionalClasses: number
-      overallStatus: 'present' | 'absent'
-      years: Set<string>
-      sections: Set<string>
-      actualSection: string
-    }>)
+    }, {} as Record<string, PeerTutorSummary>)
     
     // Fetch peer tutor data to get their actual section and year
     await Promise.all(
@@ -681,7 +668,7 @@ function FacultyAttendanceContent() {
                         const uniquePeerTutors = new Set(
                           allClasses
                             .map(cls => cls.peer_tutor?.id)
-                            .filter(id => id !== undefined && id !== null)
+                            .filter((id): id is string => id !== undefined && id !== null)
                         )
                         return uniquePeerTutors.size
                       })()}
@@ -841,17 +828,7 @@ function FacultyAttendanceContent() {
                       </TableCell>
                     </TableRow>
                   ) : (() => {
-                    // Filter peer tutors based on search query
-                    const filteredPeerTutorsList = peerTutors.filter(peerTutor => {
-                      if (!searchQuery) return true
-                      const query = searchQuery.toLowerCase()
-                      return (
-                        peerTutor.name.toLowerCase().includes(query) ||
-                        peerTutor.email.toLowerCase().includes(query) ||
-                        (Array.from(peerTutor.years) as string[]).some((y: string) => y.toLowerCase().includes(query)) ||
-                        ((peerTutor as any).actualSection || '').toLowerCase().includes(query)
-                      )
-                    })
+                    const filteredPeerTutorsList = peerTutors
 
                     // Apply subject filter if selected
                     const subjectFilteredList = filters.subject 
@@ -884,9 +861,9 @@ function FacultyAttendanceContent() {
 
                     return subjectFilteredList.map((peerTutor) => {
                       // Get the actual section (prefer actualSection, otherwise use first non-ALL section, or 'ALL' as fallback)
-                      const actualSection = (peerTutor as any).actualSection || Array.from(peerTutor.sections).filter(s => s !== 'ALL')[0] || 'ALL'
+                      const actualSection = peerTutor.actualSection || Array.from(peerTutor.sections).filter(s => s !== 'ALL')[0] || 'ALL'
                       // Get the year (use first year from the set)
-                      const year = (Array.from(peerTutor.years) as string[])[0] || ''
+                      const year = Array.from(peerTutor.years)[0] || ''
                       
                       return (
                       <React.Fragment key={peerTutor.id}>

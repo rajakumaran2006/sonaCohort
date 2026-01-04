@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
@@ -18,25 +18,25 @@ export default function StudentAttendancePage() {
 
 interface StudentAttendanceRecord {
   id: string
-  class_id: string
+  class_id?: string
   scheduled_class_id?: string
   student_id: string
   status: 'present' | 'absent'
   created_at: string
   updated_at: string
-  classes: {
+  classes?: {
     id: string
     subject_name: string
     created_at: string
     dept: string
     year: string
     section: string
-  }
+  } | null
   scheduled_classes?: {
     id: string
     scheduled_date: string
     class_id: string
-  }
+  } | null
 }
 
 function StudentAttendanceContent() {
@@ -46,8 +46,14 @@ function StudentAttendanceContent() {
   const studentId = params.studentId as string
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [peerTutorInfo, setPeerTutorInfo] = useState<any>(null)
-  const [studentInfo, setStudentInfo] = useState<any>(null)
+  const [studentInfo, setStudentInfo] = useState<{
+    id: string
+    name: string
+    email: string
+    dept: string
+    year: string
+    section: string
+  } | null>(null)
   const [attendanceRecords, setAttendanceRecords] = useState<StudentAttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
@@ -58,13 +64,29 @@ function StudentAttendanceContent() {
     attendanceRate: 0
   })
 
-  useEffect(() => {
-    if (user && studentId) {
-      loadData()
-    }
-  }, [user, studentId])
+  const getStudentInfo = useCallback(async (studentId: string) => {
+    try {
+      const supabase = (await import('@/utils/supabase/client')).createClient()
+      
+      const { data, error } = await supabase
+        .from('peer_students')
+        .select('id, name, email, dept, year, section')
+        .eq('id', studentId)
+        .single()
 
-  const loadData = async () => {
+      if (error) {
+        console.error('Error getting student info:', error)
+        return null
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error in getStudentInfo:', error)
+      return null
+    }
+  }, [])
+
+  const loadData = useCallback(async () => {
     if (!user?.email || !studentId) return
 
     setLoading(true)
@@ -72,7 +94,6 @@ function StudentAttendanceContent() {
       // Get peer tutor information
       const tutorInfo = await PeerTutorAuthService.getPeerTutorByEmail(user.email)
       if (tutorInfo) {
-        setPeerTutorInfo(tutorInfo)
 
         // Get student information
         const studentData = await getStudentInfo(studentId)
@@ -107,29 +128,13 @@ function StudentAttendanceContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, studentId, getStudentInfo])
 
-  const getStudentInfo = async (studentId: string) => {
-    try {
-      const supabase = (await import('@/utils/supabase/client')).createClient()
-      
-      const { data, error } = await supabase
-        .from('peer_students')
-        .select('id, name, email, dept, year, section')
-        .eq('id', studentId)
-        .single()
-
-      if (error) {
-        console.error('Error getting student info:', error)
-        return null
-      }
-
-      return data
-    } catch (error) {
-      console.error('Error in getStudentInfo:', error)
-      return null
+  useEffect(() => {
+    if (user && studentId) {
+      loadData()
     }
-  }
+  }, [user, studentId, loadData])
 
   const handleBack = () => {
     router.push('/peer/attendance')
@@ -323,10 +328,10 @@ function StudentAttendanceContent() {
                       <tr key={record.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {record.classes.subject_name}
+                            {record.classes?.subject_name || 'N/A'}
                           </div>
                           <div className="text-sm text-gray-500">
-                            {record.classes.dept} - {record.classes.year} - {record.classes.section}
+                            {record.classes ? `${record.classes.dept} - ${record.classes.year} - ${record.classes.section}` : 'N/A'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -338,12 +343,14 @@ function StudentAttendanceContent() {
                                   month: 'short',
                                   day: 'numeric'
                                 })
-                              : new Date(record.classes.created_at).toLocaleDateString('en-US', {
-                                  weekday: 'short',
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                })
+                              : record.classes?.created_at 
+                                ? new Date(record.classes.created_at).toLocaleDateString('en-US', {
+                                    weekday: 'short',
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric'
+                                  })
+                                : 'N/A'
                             }
                           </div>
                         </td>

@@ -74,7 +74,7 @@ export class FeedbackVersioningService {
         }
       }
       return !error
-    } catch (error) {
+    } catch {
       return false
     }
   }
@@ -87,7 +87,7 @@ export class FeedbackVersioningService {
     proposedChanges: {
       name?: string
       description?: string
-      questions?: any[]
+      questions?: Omit<FeedbackQuestionVersion, 'id' | 'feedback_form_version_id' | 'created_at'>[]
     }
   ): Promise<FormEditStrategy> {
     try {
@@ -241,7 +241,7 @@ export class FeedbackVersioningService {
       const supabase = createClient()
       
       // Get next version number
-      const { data: versionData, error: versionError } = await supabase
+      const { data: versionData } = await supabase
         .from('feedback_form_versions')
         .select('version_number')
         .eq('feedback_form_id', formId)
@@ -342,7 +342,7 @@ export class FeedbackVersioningService {
    */
   private static analyzeQuestionChanges(
     currentQuestions: FeedbackQuestionVersion[],
-    proposedQuestions: any[]
+    proposedQuestions: Omit<FeedbackQuestionVersion, 'id' | 'feedback_form_version_id' | 'created_at'>[]
   ): { hasStructuralChanges: boolean; hasContentChanges: boolean } {
     const hasStructuralChanges = 
       currentQuestions.length !== proposedQuestions.length ||
@@ -393,7 +393,7 @@ export class FeedbackVersioningService {
           console.log('Versioning query failed, versioning tables may not exist. Error:', error)
           throw error
         }
-      } catch (versioningError) {
+      } catch {
         console.log('Versioning tables not available, creating fallback version data')
       }
 
@@ -430,7 +430,7 @@ export class FeedbackVersioningService {
           is_active: true,
           created_at: formData.created_at,
           updated_at: formData.updated_at,
-          questions: (formData.questions || []).map((q: any, index: number) => ({
+          questions: (formData.questions || []).map((q: { id: string; question_text: string; question_type: 'multiple_choice' | 'text' | 'star_rating'; is_required: boolean; options?: string[]; created_at: string; updated_at?: string }, index: number) => ({
             id: q.id,
             feedback_form_version_id: formData.id,
             original_question_id: q.id,
@@ -511,7 +511,7 @@ export class FeedbackVersioningService {
           totalResponses,
           responsesByVersion
         }
-      } catch (versioningError) {
+      } catch {
         console.log('Versioning not available, using legacy stats calculation')
       }
 

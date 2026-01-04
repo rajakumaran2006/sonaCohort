@@ -9,15 +9,10 @@ import { ClassService } from '@/lib/services/classService'
 import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { useRouter, useParams } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { 
-  MoreHorizontal, 
   ArrowUpRight, 
-  LayoutGrid, 
-  Users as UsersIcon, 
-  BookOpen, 
-  Clock,
-  ArrowLeft
+  LayoutGrid
 } from 'lucide-react'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { BackButton } from '@/components/ui/BackButton'
@@ -88,7 +83,7 @@ function YearContent() {
     }
   }, [])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       let facultyDeptName = 'Computer Science'
       if (user?.email) {
@@ -150,13 +145,13 @@ function YearContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, deptId, yearId])
 
   useEffect(() => {
     if (user) {
       loadData()
     }
-  }, [deptId, yearId, user])
+  }, [deptId, yearId, user, loadData])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)

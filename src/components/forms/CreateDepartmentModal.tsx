@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { DepartmentService } from '@/lib/services/departmentService'
 import { MicrosoftUser, CreateDepartmentData } from '@/lib/types'
@@ -26,9 +26,9 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
     } else {
       setSearchResults([])
     }
-  }, [facultySearch])
+  }, [facultySearch, searchFaculty])
 
-  const searchFaculty = async () => {
+  const searchFaculty = useCallback(async () => {
     if (facultySearch.length < 2) return
     
     setIsSearching(true)
@@ -45,7 +45,7 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
     } finally {
       setIsSearching(false)
     }
-  }
+  }, [facultySearch])
 
   const handleFacultySelect = (faculty: MicrosoftUser) => {
     setSelectedFaculty(faculty)

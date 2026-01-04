@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ClassService } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 
@@ -35,9 +35,9 @@ export default function DateAssignmentModal({
       loadSubjects()
       loadOccupiedDates()
     }
-  }, [isOpen, dept, year, section])
+  }, [isOpen, dept, year, section, loadSubjects, loadOccupiedDates])
 
-  const loadSubjects = async () => {
+  const loadSubjects = useCallback(async () => {
     try {
       // Get subjects from all sections of the same year, not just current section
       // This allows users to schedule classes for subjects that exist in other sections
@@ -57,20 +57,20 @@ export default function DateAssignmentModal({
       try {
         const uniqueSubjects = await ClassService.getUniqueSubjects(dept, year, section)
         setSubjects(uniqueSubjects)
-      } catch (fallbackError) {
+      } catch {
         setError('Failed to load subjects')
       }
     }
-  }
+  }, [dept, year, section])
 
-  const loadOccupiedDates = async () => {
+  const loadOccupiedDates = useCallback(async () => {
     try {
       const dates = await ScheduledClassService.getOccupiedDates(dept, year, section)
       setOccupiedDates(dates)
     } catch (error) {
       console.error('Error loading occupied dates:', error)
     }
-  }
+  }, [dept, year, section])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -448,7 +448,10 @@ export class ScheduledClassService {
       }
 
       // Get unique subject names
-      const uniqueSubjects = [...new Set(data.map((item: any) => item.class.subject_name))]
+      const uniqueSubjects = [...new Set(data.map((item: { class: { subject_name: string } | { subject_name: string }[] }) => {
+        const classData = Array.isArray(item.class) ? item.class[0] : item.class
+        return classData?.subject_name
+      }))].filter(Boolean)
       return uniqueSubjects
     } catch (error) {
       console.error('Error in getUniqueSubjectsWithSchedules:', error)
@@ -858,7 +861,7 @@ export class ScheduledClassService {
       const normalizedSection = section.trim()
       
       // Get all scheduled classes for the specified filters
-      let query = supabase
+      const query = supabase
         .from('scheduled_classes')
         .select(`
           *,
@@ -932,7 +935,7 @@ export class ScheduledClassService {
       const supabase = createClient()
       
       // Get all scheduled classes for the specified year
-      let query = supabase
+      const query = supabase
         .from('scheduled_classes')
         .select(`
           *,
@@ -1017,7 +1020,7 @@ export class ScheduledClassService {
       })
       
       // Get all scheduled classes for the specified year and date
-      let query = supabase
+      const query = supabase
         .from('scheduled_classes')
         .select(`
           *,
@@ -1362,11 +1365,14 @@ export class ScheduledClassService {
       }
 
       // Extract unique peer tutors
-      const peerTutors = (scheduledClasses || []).map((sc: any) => sc.peer_tutor).filter(Boolean)
+      // Extract unique peer tutors
+      const peerTutors = (scheduledClasses || []).map((sc: { peer_tutor: { id: string, name: string, email: string } | { id: string, name: string, email: string }[] }) => {
+        return Array.isArray(sc.peer_tutor) ? sc.peer_tutor[0] : sc.peer_tutor
+      }).filter(Boolean)
       
       // Remove duplicates based on ID
-      const uniquePeerTutors = peerTutors.filter((tutor: any, index: number, self: any[]) => 
-        index === self.findIndex((t: any) => t.id === tutor.id)
+      const uniquePeerTutors = peerTutors.filter((tutor: { id: string }, index: number, self: { id: string }[]) => 
+        index === self.findIndex((t) => t.id === tutor.id)
       )
 
       return uniquePeerTutors

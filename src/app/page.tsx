@@ -317,8 +317,8 @@ export default function Home() {
               GET IN TOUCH
             </h2>
                 <p className="text-gray-600">
-                  Have questions, suggestions, or just want to say hello? We'd love to hear from you. 
-                  Drop us a line and we'll get back to you as soon as possible.
+                  Have questions, suggestions, or just want to say hello? We&apos;d love to hear from you. 
+                  Drop us a line and we&apos;ll get back to you as soon as possible.
             </p>
           </div>
 

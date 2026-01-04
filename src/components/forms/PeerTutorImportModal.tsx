@@ -6,8 +6,7 @@ import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
 import { X, Upload, AlertCircle, CheckCircle, Download } from 'lucide-react'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { StudentService } from '@/lib/services/studentService'
-import { FacultyService } from '@/lib/services/facultyService'
+
 import { createClient } from '@/utils/supabase/client'
 
 interface PeerTutorImportModalProps {
@@ -18,10 +17,7 @@ interface PeerTutorImportModalProps {
   onSuccess: () => void
 }
 
-interface ImportRow {
-  name?: string
-  email?: string
-}
+
 
 interface ProcessedPeerTutor {
   peerTutor: PeerTutor | null
@@ -29,6 +25,8 @@ interface ProcessedPeerTutor {
   email?: string
   foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated'
   status: 'valid' | 'missing' | 'allocated'
+  year?: string
+  section?: string
 }
 
 export default function PeerTutorImportModal({
@@ -149,7 +147,7 @@ export default function PeerTutorImportModal({
           status: result.foundIn === 'allocated' ? 'allocated' : (result.tutor ? 'valid' : 'missing'),
           year: targetYear,
           section: targetSection
-        } as any)
+        })
       }
       
       setProcessedData(processed)
@@ -497,7 +495,7 @@ export default function PeerTutorImportModal({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {processedData.map((pt: any, idx) => (
+                      {processedData.map((pt: ProcessedPeerTutor, idx) => (
                         <tr key={idx} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">{pt.name}</div>

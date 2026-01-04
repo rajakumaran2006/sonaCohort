@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/client'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
+import { MicrosoftUser } from '@/lib/types'
 
 export interface PeerTutor {
   id: string
@@ -28,7 +29,7 @@ export class PeerTutorService {
    * Create a peer tutor from Microsoft Graph user data
    */
   static async createFromMicrosoftUser(
-    microsoftUser: any,
+    microsoftUser: MicrosoftUser,
     facultyId: string,
     dept: string,
     year: string,
@@ -407,7 +408,7 @@ export class PeerTutorService {
   /**
    * Search for students using Microsoft Graph (excluding existing peer tutors and students)
    */
-  static async searchAvailableStudents(query: string): Promise<any[]> {
+  static async searchAvailableStudents(query: string): Promise<MicrosoftUser[]> {
     try {
       // Get all existing peer tutor emails to exclude them
       const existingPeerTutors = await this.getAllPeerTutors()
@@ -514,12 +515,10 @@ export class PeerTutorService {
       const supabase = createClient()
 
       let newPeerTutor: { id: string; created_at?: string } | null = null
-      let tutorCreatedAt: string
 
       // If peer tutor ID and created_at are provided, use them; otherwise fetch the newest one
       if (peerTutorId && peerTutorCreatedAt) {
         newPeerTutor = { id: peerTutorId }
-        tutorCreatedAt = peerTutorCreatedAt
       } else {
         // Get the newly created peer tutor
         const { data: fetchedPeerTutor, error: tutorError } = await supabase
@@ -538,7 +537,6 @@ export class PeerTutorService {
         }
 
         newPeerTutor = fetchedPeerTutor
-        tutorCreatedAt = fetchedPeerTutor.created_at || new Date().toISOString()
       }
 
       // Calculate tomorrow (next day from today)
@@ -711,6 +709,27 @@ export class PeerTutorService {
         section,
         message: 'Failed to assign new peer tutor to future classes'
       })
+      return false
+    }
+  }
+
+  static async transferPeerTutors(ids: string[], newSection: string): Promise<boolean> {
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase
+        .from('peer_tutors')
+        .update({ section: newSection })
+        .in('id', ids)
+
+      if (error) {
+        console.error('Error transferring peer tutors:', error)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error in transferPeerTutors:', error)
       return false
     }
   }

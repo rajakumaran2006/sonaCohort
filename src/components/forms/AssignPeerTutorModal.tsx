@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import Image from 'next/image'
 import { PeerTutorService, PeerTutorAssignment } from '@/lib/services/peerTutorService'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { Search, X, Loader2, User, Mail, Check, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MicrosoftUser } from '@/lib/types'
 
 interface AssignPeerTutorModalProps {
   isOpen: boolean
@@ -28,17 +30,17 @@ export default function AssignPeerTutorModal({
   const { user } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<MicrosoftUser[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set()) // Store emails of selected students
   // We need to keep track of the full student objects for the selected emails
-  const [selectedStudentObjects, setSelectedStudentObjects] = useState<Map<string, any>>(new Map())
+  const [selectedStudentObjects, setSelectedStudentObjects] = useState<Map<string, MicrosoftUser>>(new Map())
 
   const [isAssigning, setIsAssigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Search for available students
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return
 
     setIsSearching(true)
@@ -47,13 +49,13 @@ export default function AssignPeerTutorModal({
     try {
       const results = await PeerTutorService.searchAvailableStudents(searchQuery)
       setSearchResults(results)
-    } catch (err) {
+    } catch {
       setError('Failed to search for students. Please try again.')
       setSearchResults([])
     } finally {
       setIsSearching(false)
     }
-  }
+  }, [searchQuery])
 
   // Handle search input change with debouncing
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function AssignPeerTutorModal({
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [searchQuery])
+  }, [searchQuery, handleSearch])
 
   // Assign selected students as peer tutors
   const handleAssign = async () => {
@@ -108,7 +110,7 @@ export default function AssignPeerTutorModal({
       } else {
         setError('Failed to assign any peer tutors. Please try again.')
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred while assigning the peer tutors.')
     } finally {
       setIsAssigning(false)
@@ -116,7 +118,7 @@ export default function AssignPeerTutorModal({
   }
 
   // Toggle selection for a single student
-  const handleToggleStudent = (student: any) => {
+  const handleToggleStudent = (student: MicrosoftUser) => {
     const email = student.mail || student.email || student.userPrincipalName
     if (!email) return
 
@@ -353,13 +355,13 @@ export default function AssignPeerTutorModal({
                   {viewMode === 'all' ? (
                     searchQuery ? (
                       <>
-                        <img src="/icons/search.png" alt="No students found" className="mx-auto h-24 w-24 opacity-60 grayscale" />
+                        <Image src="/icons/search.png" alt="No students found" width={96} height={96} className="mx-auto opacity-60 grayscale" />
                         <p className="text-black font-semibold">NO STUDENTS FOUND</p>
                         <p className="text-sm mt-1">Try searching with a different name or email</p>
                       </>
                     ) : (
                       <>
-                        <img src="/icons/student.png" alt="search for students" className="w-16 h-16 mb-4" />
+                        <Image src="/icons/student.png" alt="search for students" width={64} height={64} className="mb-4" />
                         <p className="text-gray-900 font-semibold text-lg">SEARCH FOR STUDENTS</p>
                         <p className="text-sm mt-1 max-w-xs mx-auto text-gray-500">
                            Enter a name or email
@@ -373,7 +375,7 @@ export default function AssignPeerTutorModal({
                       </div>
                       <p className="text-gray-900 font-semibold text-lg">NO STUDENTS SELECTED</p>
                       <p className="text-sm mt-1 max-w-xs mx-auto text-gray-500">
-                         Select students from the "All Students" tab to see them here
+                         Select students from the &quot;All Students&quot; tab to see them here
                       </p>
                     </>
                   )}

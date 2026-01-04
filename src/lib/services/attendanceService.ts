@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/client'
-import { ScheduledClassService, ScheduledClassWithDetails } from './scheduledClassService'
+import { ScheduledClassService } from './scheduledClassService'
 
 export interface Attendance {
   id: string
@@ -21,6 +21,8 @@ export interface ClassTopic {
   created_at: string
 }
 
+import { Student } from './studentService'
+
 export interface AttendanceRecord {
   student_id: string
   student_name: string
@@ -31,11 +33,34 @@ export interface AttendanceRecord {
   created_at?: string
 }
 
+export interface AttendanceHistoryRecord extends Attendance {
+  classes?: {
+    id: string
+    subject_name: string
+    created_at: string
+    dept: string
+    year: string
+    section: string
+  } | null
+  
+  scheduled_classes?: {
+    id: string
+    scheduled_date: string
+    class_id: string
+  } | null
+  
+  peer_students?: {
+    id: string
+    name: string
+    email: string
+  } | null
+}
+
 export class AttendanceService {
   /**
    * Get students assigned to a peer tutor for attendance
    */
-  static async getStudentsForAttendance(peerTutorId: string): Promise<any[]> {
+  static async getStudentsForAttendance(peerTutorId: string): Promise<Pick<Student, 'id' | 'name' | 'email'>[]> {
     try {
       const supabase = createClient()
       
@@ -245,8 +270,8 @@ export class AttendanceService {
 
       return data.map(item => ({
         student_id: item.student_id,
-        student_name: (item.peer_students as any)?.name || 'Unknown',
-        student_email: (item.peer_students as any)?.email || 'Unknown',
+        student_name: (Array.isArray(item.peer_students) ? item.peer_students[0] : item.peer_students)?.name || 'Unknown',
+        student_email: (Array.isArray(item.peer_students) ? item.peer_students[0] : item.peer_students)?.email || 'Unknown',
         status: item.status
       }))
     } catch (error) {
@@ -531,7 +556,7 @@ export class AttendanceService {
     startDate?: string, 
     endDate?: string, 
     scheduledClassId?: string
-  ): Promise<any[]> {
+  ): Promise<AttendanceHistoryRecord[]> {
     try {
       const supabase = createClient()
       
@@ -543,6 +568,7 @@ export class AttendanceService {
           class_id,
           scheduled_class_id,
           student_id,
+          peer_tutor_id,
           status,
           created_at,
           updated_at,
@@ -613,27 +639,22 @@ export class AttendanceService {
             return null
           }
 
-          // Check if classes data exists before accessing properties
-          if (!record.classes) {
-            console.warn('No classes data found for attendance record:', record.id)
+          // Normalize nested objects
+          const classRecord = Array.isArray(record.classes) ? record.classes[0] : record.classes
+          const peerStudent = Array.isArray(record.peer_students) ? record.peer_students[0] : record.peer_students
+
+          // Check if classes data exists
+          if (!record.classes || !classRecord) {
+            console.warn('No class record found for attendance record:', record.id)
             return {
               ...record,
+              classes: null,
+              peer_students: peerStudent,
               scheduled_classes: null
-            }
+            } as AttendanceHistoryRecord
           }
 
           try {
-            // Get the first class record (should be only one)
-            const classRecord = Array.isArray(record.classes) ? record.classes[0] : record.classes
-            
-            if (!classRecord) {
-              console.warn('No class record found for attendance record:', record.id)
-              return {
-                ...record,
-                scheduled_classes: null
-              }
-            }
-
             // Try to find the scheduled class for this attendance record
             const scheduledClasses = await ScheduledClassService.getScheduledClassesByDate(
               classRecord.dept,
@@ -644,27 +665,31 @@ export class AttendanceService {
             const matchingScheduledClass = scheduledClasses.find(
               sc => sc.class_id === record.class_id
             )
-            
+
             return {
               ...record,
+              classes: classRecord,
+              peer_students: peerStudent,
               scheduled_classes: matchingScheduledClass ? {
                 id: matchingScheduledClass.id,
                 scheduled_date: matchingScheduledClass.scheduled_date,
                 class_id: matchingScheduledClass.class_id
               } : null
-            }
+            } as AttendanceHistoryRecord
           } catch (error) {
             console.error('Error fetching scheduled classes for record:', record.id, error)
             return {
               ...record,
+              classes: classRecord,
+              peer_students: peerStudent,
               scheduled_classes: null
-            }
+            } as AttendanceHistoryRecord
           }
         })
       )
 
       // Filter out any null records that couldn't be processed
-      return enrichedData.filter(record => record !== null)
+      return enrichedData.filter((record): record is AttendanceHistoryRecord => record !== null)
     } catch (error) {
       console.error('Error in getAttendanceHistory:', error)
       return []
@@ -860,7 +885,7 @@ export class AttendanceService {
   /**
    * Get attendance history for a specific student
    */
-  static async getStudentAttendanceHistory(studentId: string, peerTutorId: string): Promise<any[]> {
+  static async getStudentAttendanceHistory(studentId: string, peerTutorId: string): Promise<AttendanceHistoryRecord[]> {
     try {
       const supabase = createClient()
       
@@ -871,6 +896,7 @@ export class AttendanceService {
           class_id,
           scheduled_class_id,
           student_id,
+          peer_tutor_id,
           status,
           created_at,
           updated_at,
@@ -897,7 +923,11 @@ export class AttendanceService {
         return []
       }
 
-      return data || []
+      return (data || []).map(record => ({
+        ...record,
+        classes: Array.isArray(record.classes) ? record.classes[0] : record.classes,
+        scheduled_classes: Array.isArray(record.scheduled_classes) ? record.scheduled_classes[0] : record.scheduled_classes
+      }))
     } catch (error) {
       console.error('Error in getStudentAttendanceHistory:', error)
       return []

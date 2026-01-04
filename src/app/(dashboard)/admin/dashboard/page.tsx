@@ -25,7 +25,7 @@ interface DepartmentWithCounts extends Department {
 }
 
 function AdminDashboardContent() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [departments, setDepartments] = useState<DepartmentWithCounts[]>([])
   const [isLoading, setIsLoading] = useState(true)

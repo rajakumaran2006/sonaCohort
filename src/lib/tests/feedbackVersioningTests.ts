@@ -221,7 +221,7 @@ export class FeedbackVersioningTests {
     const versions = await FeedbackVersioningService.getFormVersions(formId)
     
     console.log('📋 Form versions:', versions.length)
-    versions.forEach((version, index) => {
+    versions.forEach((version) => {
       console.log(`  Version ${version.version_number}: ${version.name} (${version.is_active ? 'Active' : 'Inactive'})`)
     })
 

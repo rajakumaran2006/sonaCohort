@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Class } from '@/lib/services/classService'
 import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
@@ -9,12 +9,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   X, 
   Check, 
-  ChevronRight, 
   ArrowRight, 
   Link as LinkIcon, 
   Camera, 
   Users, 
-  BookOpen, 
   Trophy 
 } from 'lucide-react'
 
@@ -42,29 +40,9 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
   const [peerTutorId, setPeerTutorId] = useState<string>('')
   const [scheduledClassId, setScheduledClassId] = useState<string>('')
 
-  // Load Initial Data
-  useEffect(() => {
-    if (isOpen && classItem && userEmail) {
-      loadClassDetails()
-      setCurrentStep('topics')
-    }
-  }, [isOpen, classItem, userEmail])
-
-  const loadClassDetails = async () => {
+  const loadClassDetails = useCallback(async () => {
     if (!classItem) return
     setLoading(true)
-
-    // Special handling for dummy test class
-    if (classItem.id === 'dummy-test-class-today') {
-        setAttendanceRecords([
-            { student_id: 's1', student_name: 'SRISAKTHIPRIYA R', student_email: '37494366-ab4d-4f12-a784-39e37c50351a', status: 'present' },
-            { student_id: 's2', student_name: 'SRI HARI HARAN L', student_email: 'f30c40da-55df-4649-b45e-b91873a4642b', status: 'absent' },
-            { student_id: 's3', student_name: 'SRI RAM K B', student_email: '2184504f-b85b-4446-8093-fe91a07bbe74', status: 'present' }
-        ])
-        setTopics('Test Topics for Debugging')
-        setLoading(false)
-        return
-    }
 
     try {
       const tutorInfo = await PeerTutorAuthService.getPeerTutorByEmail(userEmail)
@@ -78,7 +56,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
         : await AttendanceService.getAttendanceByClass(classItem.id)
 
       // Fetch Scheduled Class Details
-      let scheduledClass = classItem.scheduled_class_id 
+      const scheduledClass = classItem.scheduled_class_id 
         ? await ScheduledClassService.getScheduledClassById(classItem.scheduled_class_id)
         : await ScheduledClassService.getScheduledClassByClassId(classItem.id)
 
@@ -101,21 +79,29 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
     } finally {
       setLoading(false)
     }
-  }
+  }, [classItem, userEmail])
+
+  // Load Initial Data
+  useEffect(() => {
+    if (isOpen && classItem && userEmail) {
+      loadClassDetails()
+      setCurrentStep('topics')
+    }
+  }, [isOpen, classItem, userEmail, loadClassDetails])
 
   // Steps Logic
   const handleNextStep = async () => {
     if (currentStep === 'topics') {
       if (!topics.trim()) return alert('Please add topics first.')
-       // Save Topics immediately for safety (skip for dummy class)
-       if (scheduledClassId && classItem?.id !== 'dummy-test-class-today') {
+       // Save Topics immediately for safety
+       if (scheduledClassId) {
            await ScheduledClassService.updateScheduledClassTopics(scheduledClassId, topics)
        }
       setCurrentStep('proof')
     } else if (currentStep === 'proof') {
       // Image link is optional now
-      // Save Link if provided (skip for dummy class)
-      if (scheduledClassId && imageLink.trim() && classItem?.id !== 'dummy-test-class-today') {
+      // Save Link if provided
+      if (scheduledClassId && imageLink.trim()) {
           await ScheduledClassService.updateScheduledClassImageLink(scheduledClassId, imageLink)
       }
       setCurrentStep('attendance')
@@ -123,16 +109,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
   }
 
   const handleCompleteClass = async () => {
-    // Special handling for dummy test class
-    if (classItem?.id === 'dummy-test-class-today') {
-        setSaving(true)
-        // Simulate network delay
-        setTimeout(() => {
-            setCurrentStep('completed')
-            setSaving(false)
-        }, 1000)
-        return
-    }
+
 
     if (!scheduledClassId || !peerTutorId) {
         console.error('Missing IDs:', { scheduledClassId, peerTutorId })

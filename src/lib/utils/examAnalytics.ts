@@ -76,7 +76,7 @@ export function preprocessMarks(
       
       if (markValue !== undefined && markValue !== null && markValue !== '') {
         let numericMark = 0
-        let rawMark = markValue
+        const rawMark = markValue
 
         // Handle string format like "40/100" or "40"
         if (typeof markValue === 'string') {
@@ -323,45 +323,68 @@ export function calculateTrend(
   }
 }
 
+export interface InsightItem {
+  type: 'positive' | 'neutral' | 'negative'
+  text: string
+}
+
 /**
  * Generate ML-style insights
  */
 export function generateInsights(
   studentPerformance: StudentPerformance[],
   subjectPerformance: SubjectPerformance[]
-): string[] {
-  const insights: string[] = []
+): InsightItem[] {
+  const insights: InsightItem[] = []
 
   // Overall performance insights
   const avgPerformance = studentPerformance.reduce((sum, s) => sum + s.averagePercentage, 0) / studentPerformance.length
   if (avgPerformance < 60) {
-    insights.push(`Overall class performance is below average (${avgPerformance.toFixed(1)}%). Consider targeted intervention.`)
+    insights.push({
+      type: 'negative',
+      text: `Overall class performance is below average (${avgPerformance.toFixed(1)}%). Consider targeted intervention.`
+    })
   } else if (avgPerformance >= 80) {
-    insights.push(`Excellent overall class performance (${avgPerformance.toFixed(1)}%). Maintain current teaching strategies.`)
+    insights.push({
+      type: 'positive',
+      text: `Excellent overall class performance (${avgPerformance.toFixed(1)}%). Maintain current teaching strategies.`
+    })
   }
 
   // Subject insights
   subjectPerformance.forEach(subject => {
     if (subject.averagePercentage < 50) {
-      insights.push(`${subject.subjectName} shows low average performance (${subject.averagePercentage.toFixed(1)}%). Focus on this subject.`)
+      insights.push({
+        type: 'negative',
+        text: `${subject.subjectName} shows low average performance (${subject.averagePercentage.toFixed(1)}%). Focus on this subject.`
+      })
     }
     if (subject.standardDeviation > 20) {
-      insights.push(`${subject.subjectName} has high variance (${subject.standardDeviation.toFixed(1)}%). Consider differentiated instruction.`)
+      insights.push({
+        type: 'neutral',
+        text: `${subject.subjectName} has high variance (${subject.standardDeviation.toFixed(1)}%). Consider differentiated instruction.`
+      })
     }
   })
 
   // Student consistency insights
   const inconsistentStudents = studentPerformance.filter(s => s.standardDeviation > 25)
   if (inconsistentStudents.length > 0) {
-    insights.push(`${inconsistentStudents.length} student(s) show inconsistent performance. Provide targeted support.`)
+    insights.push({
+      type: 'neutral',
+      text: `${inconsistentStudents.length} student(s) show inconsistent performance. Provide targeted support.`
+    })
   }
 
   // Top performers
   const topPerformers = studentPerformance.filter(s => s.averagePercentage >= 80).slice(0, 3)
   if (topPerformers.length > 0) {
-    insights.push(`Top performers: ${topPerformers.map(s => s.studentName).join(', ')}. Consider peer tutoring opportunities.`)
+    insights.push({
+      type: 'positive',
+      text: `Top performers: ${topPerformers.map(s => s.studentName).join(', ')}. Consider peer tutoring opportunities.`
+    })
   }
 
-  return insights.length > 0 ? insights : ['All students are performing consistently well.']
+  return insights.length > 0 ? insights : [{ type: 'neutral', text: 'All students are performing consistently well.' }]
 }
 

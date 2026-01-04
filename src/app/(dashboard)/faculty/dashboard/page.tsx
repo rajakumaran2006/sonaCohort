@@ -7,19 +7,18 @@ import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { FacultyService } from '@/lib/services/facultyService'
-import { ScheduledClassService } from '@/lib/services/scheduledClassService'
-import { AdditionalClassService } from '@/lib/services/additionalClassService'
+import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
+import { AdditionalClassService, AdditionalClass } from '@/lib/services/additionalClassService'
 import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 import { FeedbackService } from '@/lib/services/feedbackService'
 import { RenumerationService } from '@/lib/services/renumerationService'
-import { Card, CardContent, CardHeader, CardTitle, Button } from '@/components/ui'
+import { Card } from '@/components/ui'
 import { FacultyDashboardSkeleton } from '@/components/skeletons/FacultyDashboardSkeleton'
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  PieChart, Pie, Cell
 } from 'recharts'
 import { 
   MoreHorizontal, 
@@ -33,7 +32,19 @@ import {
   Clock
 } from 'lucide-react'
 
-// --- Types ---
+interface RecentClass {
+  subject_name: string
+  year: string
+  scheduled_date: string
+  percentage: number
+}
+
+interface TodaysClassesStats {
+  classes: ScheduledClassWithDetails[]
+  total: number
+  completed: number
+  percentage: number
+}
 
 interface DashboardStats {
   totalClasses: number
@@ -43,14 +54,14 @@ interface DashboardStats {
   weeklyActivity: { day: string; classes: number }[]
   yearStats: { year: string; count: number; percentage: number }[]
   attendanceBreakdown: { name: string; value: number; color: string }[]
-  recentClasses: any[]
+  recentClasses: RecentClass[]
   currentWeekTotal: number
   weeklyChange: number
   additionalClassesByYear: { year: string; count: number }[]
   totalAdditionalClasses: number
   totalPeerTutors: number
   totalStudents: number
-  todaysClasses: any
+  todaysClasses: TodaysClassesStats
   newFeedbackCount: number
   newRenumerationCount: number
 }
@@ -116,6 +127,7 @@ function FacultyDashboardContent() {
         }
       }
     }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const timer = setTimeout(checkSidebarState, 0)
     const handleSidebarToggle = () => setTimeout(checkSidebarState, 0)
     window.addEventListener('sidebar-toggle', handleSidebarToggle)
@@ -202,7 +214,7 @@ function FacultyDashboardContent() {
       // Additional Classes Logic
       const totalAdditionalClasses = additionalClasses.length
       const addClassCounts: Record<string, number> = { '2': 0, '3': 0, '4': 0 }
-      additionalClasses.forEach((cls: any) => {
+      additionalClasses.forEach((cls: AdditionalClass & { peer_tutors?: { year: string } }) => {
            let y = cls.year || (cls.peer_tutors ? cls.peer_tutors.year : '')
            y = y.toString()
            if (y.includes('2')) y = '2'
@@ -321,7 +333,7 @@ function FacultyDashboardContent() {
           return d.getTime() < todayDate.getTime()
         })
         .map(cls => ({
-          subject_name: cls.class?.subject_name || cls.subject_name || 'Individual Session',
+          subject_name: cls.class?.subject_name || 'Individual Session',
           year: cls.year,
           scheduled_date: cls.scheduled_date,
           percentage: cls.completion_status === 'completed' ? 100 : (cls.attendance_completed || cls.topics_completed ? 50 : 0)
@@ -360,7 +372,7 @@ function FacultyDashboardContent() {
             return d.getTime() === t.getTime()
           })
           
-          let totalCount = todayClasses.length
+          const totalCount = todayClasses.length
           let completedCount = 0
           
           todayClasses.forEach(cls => {
@@ -574,7 +586,7 @@ function FacultyDashboardContent() {
                           stats.recentClasses.map((cls, i) => {
                             let statusColor = 'bg-emerald-500'
                             let statusText = 'Completed'
-                            let bgColor = 'bg-gray-100' // Changed to gray
+                            const bgColor = 'bg-gray-100' // Changed to gray
                             if (cls.percentage < 100) {
                                 statusColor = 'bg-amber-500'
                                 statusText = 'In Progress'
@@ -772,7 +784,7 @@ function FacultyDashboardContent() {
                     {/* Today's Classes Scrollable List */}
                     <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 flex flex-col overflow-hidden max-h-[380px]">
                        <div className="flex flex-row items-center justify-between mb-6 border-b border-gray-50 pb-4">
-                          <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Today's Timeline</h4>
+                          <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Today&apos;s Timeline</h4>
                           <span className="bg-gray-100 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-sm">
                             {new Date().toLocaleDateString('en-US', { weekday: 'short' })}
                           </span>
@@ -780,7 +792,7 @@ function FacultyDashboardContent() {
                        
                        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3">
                           {stats.todaysClasses.total > 0 ? (
-                            stats.todaysClasses.classes.map((cls: any, i: number) => (
+                            stats.todaysClasses.classes.map((cls: ScheduledClassWithDetails, i: number) => (
                               <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-white transition-all duration-300 group">
                                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-bold text-gray-700 group-hover:scale-110 transition-transform">
                                     {cls.year}

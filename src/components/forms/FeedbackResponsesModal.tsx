@@ -26,7 +26,7 @@ export default function FeedbackResponsesModal({
 
     // Prepare data for export
     const exportData = responses.map(response => {
-      const baseData: Record<string, any> = {
+      const baseData: Record<string, string | number | boolean | null> = {
         'Student Name': response.student.name,
         'Student Email': response.student.email,
         'Year': response.student.year,

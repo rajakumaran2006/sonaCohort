@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
@@ -10,7 +9,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService } from '@/lib/services/facultyService'
 import { AnalyticsService, PendingClassStudent } from '@/lib/services/analyticsService'
 import { Card } from '@/components/ui'
-import { Users, TrendingUp, AlertCircle, Calendar, Eye, Search, Download } from 'lucide-react'
+import { Users, TrendingUp, AlertCircle, Calendar, Search, Download } from 'lucide-react'
 
 export default function AnalyticsPage() {
   return (

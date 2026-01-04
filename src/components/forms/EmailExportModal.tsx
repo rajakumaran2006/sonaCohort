@@ -7,18 +7,14 @@ import { EmailService, ExportOption, AVAILABLE_EXPORTS } from '@/lib/services/em
 interface EmailExportModalProps {
   isOpen: boolean
   onClose: () => void
-  facultyName: string
   facultyEmail: string
-  department: string
   onExportsGenerated?: (exports: ExportOption[]) => void
 }
 
 export default function EmailExportModal({
   isOpen,
   onClose,
-  facultyName,
   facultyEmail,
-  department,
   onExportsGenerated
 }: EmailExportModalProps) {
   const [selectedExports, setSelectedExports] = useState<Set<string>>(new Set())
@@ -130,8 +126,8 @@ export default function EmailExportModal({
                   <div className="flex-1">
                     <h3 className="text-sm font-bold text-blue-900 mb-1">How it works</h3>
                     <p className="text-xs text-blue-700 leading-relaxed">
-                      Select the data exports you want to send. We'll generate the Excel files and send them directly 
-                      to your super admin's email address with the files attached. No manual downloading or attaching required!
+                      Select the data exports you want to send. We&apos;ll generate the Excel files and send them directly 
+                      to your super admin&apos;s email address with the files attached. No manual downloading or attaching required!
                     </p>
                   </div>
                 </div>

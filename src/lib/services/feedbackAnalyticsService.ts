@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/client'
-import { FeedbackForm, FeedbackResponseWithDetails } from './feedbackService'
+import { FeedbackForm, FeedbackResponseWithDetails, FeedbackQuestion } from './feedbackService'
 
 export interface ResponseAnalytics {
   totalResponses: number
@@ -86,7 +86,7 @@ export class FeedbackAnalyticsService {
         if (!formError && formData) {
           return await this.processVersionedAnalytics(formData, formId, filters)
         }
-      } catch (versioningError) {
+      } catch {
         console.log('Versioning tables not available, falling back to legacy schema')
       }
 
@@ -119,7 +119,7 @@ export class FeedbackAnalyticsService {
    * Process analytics for versioned forms
    */
   private static async processVersionedAnalytics(
-    formData: any,
+    formData: FeedbackForm,
     formId: string,
     filters: AnalyticsFilterOptions
   ): Promise<ResponseAnalytics> {
@@ -159,7 +159,7 @@ export class FeedbackAnalyticsService {
    * Process analytics for legacy forms
    */
   private static async processLegacyAnalytics(
-    formData: any,
+    formData: FeedbackForm,
     formId: string,
     filters: AnalyticsFilterOptions
   ): Promise<ResponseAnalytics> {
@@ -199,8 +199,8 @@ export class FeedbackAnalyticsService {
    * Calculate analytics from form and response data
    */
   private static async calculateAnalytics(
-    formData: any,
-    responsesData: any[],
+    formData: FeedbackForm,
+    responsesData: FeedbackResponseWithDetails[],
     formId: string,
     filters: AnalyticsFilterOptions
   ): Promise<ResponseAnalytics> {
@@ -243,7 +243,7 @@ export class FeedbackAnalyticsService {
     let averageCompletionTime = 0
     
     if (totalResponses > 0 && filteredResponses) {
-      const completionTimes = filteredResponses.map(response => {
+      const completionTimes = filteredResponses.map(() => {
         const questionCount = questions.length
         return Math.max(1, questionCount * 0.5) // Assume 30 seconds per question minimum
       })
@@ -261,7 +261,7 @@ export class FeedbackAnalyticsService {
     // Calculate question analytics
     // If a questionId filter is present, limit analytics to that question; otherwise all
     const filteredQuestions = filters.questionId
-      ? (questions || []).filter((q: any) => q.id === filters.questionId)
+      ? (questions || []).filter((q: FeedbackQuestion) => q.id === filters.questionId)
       : questions
 
     const questionAnalytics = this.calculateQuestionAnalytics(filteredQuestions, filteredResponses)
@@ -286,8 +286,8 @@ export class FeedbackAnalyticsService {
    * Only calculates if ALL questions are star_rating type
    */
   private static calculateSatisfactionMetrics(
-    questions: any[],
-    responses: any[]
+    questions: FeedbackQuestion[],
+    responses: FeedbackResponseWithDetails[]
   ): { averageScore: number; delta: number } {
     // Only calculate satisfaction if ALL questions are star_rating
     if (questions.length === 0 || !responses || responses.length === 0) {
@@ -305,7 +305,7 @@ export class FeedbackAnalyticsService {
     let totalResponses = 0
 
     responses.forEach(response => {
-      response.responses?.forEach((answer: any) => {
+      response.responses?.forEach((answer: FeedbackAnswerWithDetails) => {
         const question = starRatingQuestions.find(q => q.id === answer.question_id)
         if (question && answer.star_rating) {
           totalScore += answer.star_rating
@@ -332,12 +332,12 @@ export class FeedbackAnalyticsService {
    * Calculate analytics for each question
    */
   private static calculateQuestionAnalytics(
-    questions: any[],
-    responses: any[]
+    questions: FeedbackQuestion[],
+    responses: FeedbackResponseWithDetails[]
   ): QuestionAnalytics[] {
     return questions.map(question => {
       const questionResponses = responses.flatMap(response => 
-        response.responses?.filter((answer: any) => answer.question_id === question.id) || []
+        response.responses?.filter((answer: FeedbackAnswerWithDetails) => answer.question_id === question.id) || []
       )
 
       const analytics: QuestionAnalytics = {
@@ -349,7 +349,7 @@ export class FeedbackAnalyticsService {
 
       if (question.question_type === 'star_rating') {
         const ratings = questionResponses
-          .map((answer: any) => answer.star_rating)
+          .map((answer: FeedbackAnswerWithDetails) => answer.star_rating)
           .filter((rating: number) => rating !== null && rating !== undefined)
 
         if (ratings.length > 0) {
@@ -366,7 +366,7 @@ export class FeedbackAnalyticsService {
         }
       } else if (question.question_type === 'multiple_choice') {
         const options = questionResponses
-          .map((answer: any) => {
+          .map((answer: FeedbackAnswerWithDetails) => {
             const opt = answer.selected_option
             if (opt === null || opt === undefined || String(opt).trim() === '') return 'Other'
             return String(opt)
@@ -393,7 +393,7 @@ export class FeedbackAnalyticsService {
         }
       } else if (question.question_type === 'text') {
         analytics.textResponses = questionResponses
-          .map((answer: any) => answer.answer_text)
+          .map((answer: FeedbackAnswerWithDetails) => answer.answer_text)
           .filter((text: string) => text !== null && text !== undefined && text.trim() !== '')
 
         if (analytics.textResponses && analytics.textResponses.length > 0) {
@@ -410,14 +410,14 @@ export class FeedbackAnalyticsService {
    * Calculate student response analytics
    */
   private static calculateStudentResponseAnalytics(
-    responses: any[],
-    questions: any[]
+    responses: FeedbackResponseWithDetails[],
+    questions: FeedbackQuestion[]
   ): StudentResponseAnalytics[] {
     // Only calculate satisfaction if ALL questions are star_rating
     const allStarRating = questions.length > 0 && questions.every(q => q.question_type === 'star_rating')
     
     return responses.map(response => {
-      const studentResponses = response.responses?.map((answer: any) => {
+      const studentResponses = response.responses?.map((answer: FeedbackAnswerWithDetails) => {
         const question = questions.find(q => q.id === answer.question_id)
         return {
           questionId: answer.question_id,

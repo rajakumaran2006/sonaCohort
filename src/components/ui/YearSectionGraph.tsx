@@ -8,9 +8,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell
+  ResponsiveContainer
 } from 'recharts'
 
 interface SectionData {

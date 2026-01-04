@@ -6,8 +6,8 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService } from '@/lib/services/facultyService'
 import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
-import { useState, useEffect } from 'react'
-import { User, Users, GraduationCap, Building2, ArrowLeft, Mail } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Building2, ArrowLeft, Mail } from 'lucide-react'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -66,7 +66,7 @@ function SettingsContent() {
     }
   }, [])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       if (!user?.email) return
 
@@ -94,13 +94,13 @@ function SettingsContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.email])
 
   useEffect(() => {
     if (user) {
       loadData()
     }
-  }, [user])
+  }, [user, loadData])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -293,9 +293,7 @@ function SettingsContent() {
         <EmailExportModal
           isOpen={showEmailModal}
           onClose={() => setShowEmailModal(false)}
-          facultyName={user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'}
           facultyEmail={user?.email || ''}
-          department={stats.department}
         />
       </div>
     </div>

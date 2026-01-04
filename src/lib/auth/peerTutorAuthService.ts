@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { PeerTutor } from '../services/peerTutorService'
 
 export class PeerTutorAuthService {
   /**
@@ -36,7 +37,7 @@ export class PeerTutorAuthService {
    * @param supabaseClient Optional Supabase client instance (for server-side usage)
    * @returns Peer tutor data or null
    */
-  static async getPeerTutorByEmail(email: string, supabaseClient?: SupabaseClient): Promise<any> {
+  static async getPeerTutorByEmail(email: string, supabaseClient?: SupabaseClient): Promise<PeerTutor | null> {
     try {
       const supabase = supabaseClient || createClient()
       

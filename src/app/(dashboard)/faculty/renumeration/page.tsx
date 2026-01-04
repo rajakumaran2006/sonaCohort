@@ -1,16 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { RenumerationService, RenumerationTemplate, PeerTutorRenumeration } from '@/lib/services/renumerationService'
+import { RenumerationService, RenumerationTemplate } from '@/lib/services/renumerationService'
 import RenumerationModal from '@/components/forms/RenumerationModal'
 import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Eye } from 'lucide-react'
 
 export default function FacultyRenumerationPage() {
   return (

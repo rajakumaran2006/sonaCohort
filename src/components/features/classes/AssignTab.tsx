@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AssignmentService, AssignmentStats, Assignment } from '@/lib/services/assignmentService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
@@ -52,9 +52,9 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
 
   useEffect(() => {
     loadData()
-  }, [dept, year, section])
+  }, [dept, year, section, loadData])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const [statsData, assignmentsData, studentsData, tutorsData] = await Promise.all([
@@ -73,7 +73,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [dept, year, section])
 
   const handleAutoAssign = async () => {
     setAutoAssigning(true)

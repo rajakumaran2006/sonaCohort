@@ -1,16 +1,18 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import Image from 'next/image'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import ClassDetailsModal from '@/components/features/classes/ClassDetailsModal'
 import AdditionalClassesTab from '@/components/features/classes/AdditionalClassesTab'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { ClassService, Class } from '@/lib/services/classService'
+import { Class } from '@/lib/services/classService'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
+import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+import { PeerTutor } from '@/lib/services/peerTutorService'
 import { ReportService } from '@/lib/services/reportService'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
@@ -22,13 +24,8 @@ import {
   Clock, 
   Calendar, 
   Search, 
-  Filter, 
-  MoreHorizontal,
   Lock,
-  ChevronDown,
-  ChevronRight,
-  Eye,
-  Users
+  ChevronDown
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -51,13 +48,13 @@ function PeerClassesContent() {
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const [peerTutorInfo, setPeerTutorInfo] = useState<any>(null)
+  const [peerTutorInfo, setPeerTutorInfo] = useState<PeerTutor | null>(null)
   const [selectedClass, setSelectedClass] = useState<Class | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'scheduled' | 'additional'>('scheduled')
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [loadingClassDetails, setLoadingClassDetails] = useState<Set<string>>(new Set())
-  const [classDetails, setClassDetails] = useState<Map<string, { topics: string, attendance: any[] }>>(new Map())
+  const [classDetails, setClassDetails] = useState<Map<string, { topics: string, attendance: Array<Record<string, unknown>> }>>(new Map())
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   
   // Filter states
@@ -200,7 +197,7 @@ function PeerClassesContent() {
   const handleClassClick = (classItem: ClassWithStatus) => {
     if (!classItem.isEditable) {
       const scheduledDate = new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', {
-        weekday: 'long', week: 'numeric', month: 'long', day: 'numeric'
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
       })
       alert(`You can only manage this class on ${scheduledDate}. Today is not the scheduled day.`)
       return
@@ -587,13 +584,13 @@ function PeerClassesContent() {
                                                         }`}
                                                      >
                                                         <div>
-                                                           <p className="text-xs font-bold text-gray-900">{record.student_name || record.student_id}</p>
-                                                           {record.student_email && <p className="text-[10px] text-gray-500">{record.student_email}</p>}
+                                                           <p className="text-xs font-bold text-gray-900">{String(record.student_name || record.student_id || '')}</p>
+                                                           {record.student_email ? <p className="text-[10px] text-gray-500">{String(record.student_email)}</p> : null}
                                                         </div>
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                                                            record.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                                                         }`}>
-                                                           {record.status}
+                                                           {String(record.status)}
                                                         </span>
                                                      </div>
                                                   ))}
@@ -616,13 +613,13 @@ function PeerClassesContent() {
                                 {!shouldShowClasses ? (
                                    <div className="flex flex-col items-center justify-center">
                                       <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-                                         <img src="/icons/search.png" alt="No Students" className="w-12 h-12 opacity-40" />
+                                         <Image src="/icons/search.png" alt="No Students" width={48} height={48} className="opacity-40" />
                                       </div>
                                       <h3 className="text-lg font-black text-gray-900 uppercase tracking-widest mb-2">
                                          No Students Assigned
                                       </h3>
                                       <p className="text-sm text-gray-500 max-w-md font-medium">
-                                         You currently don't have any students assigned to you. Once students are allocated, your class schedule will appear here.
+                                         You currently don&apos;t have any students assigned to you. Once students are allocated, your class schedule will appear here.
                                       </p>
                                    </div>
                                 ) : (
@@ -642,9 +639,9 @@ function PeerClassesContent() {
                   </div>
                 </div>
               </>
-            ) : (
+            ) : peerTutorInfo ? (
               <AdditionalClassesTab peerTutorInfo={peerTutorInfo} assignedStudents={assignedStudents || []} />
-            )}
+            ) : null}
           </div>
         </main>
       </div>

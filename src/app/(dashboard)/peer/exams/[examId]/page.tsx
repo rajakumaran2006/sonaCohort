@@ -5,23 +5,19 @@ import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams } from 'next/navigation'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
-import { ExamService, Exam } from '@/lib/services/examService'
+import { ExamService } from '@/lib/services/examService'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import { ClassService, Class } from '@/lib/services/classService'
-import { ExamMarksService, ExamMark } from '@/lib/services/examMarksService'
-import { ExamSubjectService, ExamSubject } from '@/lib/services/examSubjectService'
+import { ExamMarksService } from '@/lib/services/examMarksService'
+import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import {
   preprocessMarks,
   calculateStudentPerformance,
   calculateSubjectPerformance,
   generateAttentionItems,
-  generateInsights,
-  type StudentPerformance,
-  type SubjectPerformance,
-  type AttentionItem,
+  generateInsights
 } from '@/lib/utils/examAnalytics'
 import { Card, CardHeader, CardTitle, CardContent, LoadingOverlay, StudentPerformanceChart } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
@@ -29,7 +25,6 @@ import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import { ArrowLeft, Edit, Save, X, Plus, Upload, Download, Filter } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { Student } from '@/lib/services/studentService'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { Input } from '@/components/ui'
 import ImportMarksModal from '@/components/forms/ImportMarksModal'
@@ -333,7 +328,7 @@ function PeerExamDetailsContent() {
       const subjects = examSubjects
       
       // Prepare data for export
-      const exportData: any[][] = []
+      const exportData: Array<Array<string | number>> = []
       
       // Add header rows with exam information
       exportData.push(['Subjects Export Report'])
@@ -392,7 +387,7 @@ function PeerExamDetailsContent() {
   const markField = 'marks'
 
   // Calculate average marks for each student
-  const calculateStudentAverage = (studentId: string): number => {
+  const calculateStudentAverage = useCallback((studentId: string): number => {
     if (!examSubjects || examSubjects.length === 0) return 0
     
     let totalMarks = 0
@@ -412,7 +407,7 @@ function PeerExamDetailsContent() {
     })
     
     return count > 0 ? totalMarks / count : 0
-  }
+  }, [examSubjects, marksData])
 
   // Get sorted students
   const sortedStudents = useMemo(() => {
@@ -429,7 +424,7 @@ function PeerExamDetailsContent() {
       sorted.sort((a, b) => a.name.localeCompare(b.name))
     }
     return sorted
-  }, [students, sortBy, marksData, examSubjects])
+  }, [students, sortBy, calculateStudentAverage])
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -463,7 +458,7 @@ function PeerExamDetailsContent() {
     return generateAttentionItems(studentPerformance)
   }, [studentPerformance])
 
-  const insights = useMemo(() => {
+  useMemo(() => {
     return generateInsights(studentPerformance, subjectPerformance)
   }, [studentPerformance, subjectPerformance])
 
@@ -772,7 +767,7 @@ function PeerExamDetailsContent() {
                                     type="text"
                                     value={marksData[student.id]?.[subject.id]?.[markField] || ''}
                                     onChange={(e) => {
-                                      let value = e.target.value
+                                      const value = e.target.value
                                       // Allow "40/100" format or just "40"
                                       handleMarkChange(student.id, subject.id, markField, value)
                                     }}

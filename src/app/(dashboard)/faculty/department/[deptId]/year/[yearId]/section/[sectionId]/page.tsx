@@ -1,14 +1,17 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
-import { useState, useEffect, useRef, Fragment, useMemo } from 'react'
+import { useState, useEffect, useRef, Fragment, useMemo, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
+import Image from 'next/image'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
-import { AssignmentService, Assignment, AssignmentStats } from '@/lib/services/assignmentService'
+import { AssignmentService } from '@/lib/services/assignmentService'
 import AssignPeerTutorModal from '@/components/forms/AssignPeerTutorModal'
 import AddStudentModal from '@/components/forms/AddStudentModal'
 import BulkImportExport from '@/components/forms/BulkImportExport'
@@ -17,19 +20,19 @@ import AssignmentImportModal from '@/components/forms/AssignmentImportModal'
 import PeerTutorImportModal from '@/components/forms/PeerTutorImportModal'
 import StudentImportModal from '@/components/forms/StudentImportModal'
 import DateAssignmentModal from '@/components/forms/DateAssignmentModal'
-import { ClassService, Class } from '@/lib/services/classService'
-import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
-import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
+import { ClassService } from '@/lib/services/classService'
+import { ScheduledClassService } from '@/lib/services/scheduledClassService'
+import { AttendanceService } from '@/lib/services/attendanceService'
 import { FacultyService } from '@/lib/services/facultyService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { ReportService } from '@/lib/services/reportService'
-import { createClient } from '@/utils/supabase/client'
 import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
-import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Eye, Users, BookOpen, Clock, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, Search, X, ChevronDown, Check, Filter, Edit2, Calendar } from 'lucide-react'
+
+import { createClient } from '@/utils/supabase/client'
+import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, Search, X, Eye } from 'lucide-react'
 import { toast } from 'sonner'
-import Link from 'next/link'
-import { Card, CardHeader, CardTitle, CardContent, StatCard } from '@/components/ui'
+
+
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import { SectionPageSkeleton } from '@/components/skeletons/SectionPageSkeleton'
 import { AssignTabSkeleton } from '@/components/skeletons/AssignTabSkeleton'
@@ -37,7 +40,7 @@ import { ClassesTabSkeleton } from '@/components/skeletons/ClassesTabSkeleton'
 import AttendanceTabSkeleton from '@/components/skeletons/AttendanceTabSkeleton'
 import ImportExportTabSkeleton from '@/components/skeletons/ImportExportTabSkeleton'
 import TransferModal from '@/components/common/TransferModal'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { BackButton } from '@/components/ui/BackButton'
 
@@ -47,7 +50,7 @@ function createSheetWithHeader(
   year: string,
   section: string,
   title: string,
-  rows: Array<Record<string, any>>,
+  rows: Array<Record<string, unknown>>,
   headersInOrder: string[]
 ) {
   const headerRows = [
@@ -69,7 +72,7 @@ function createSheetWithHeader(
 
   // Ensure columns are in the exact order by mapping each row
   const orderedRows = rows.map((row) => {
-    const ordered: Record<string, any> = {}
+    const ordered: Record<string, unknown> = {}
     headersInOrder.forEach((key) => {
       ordered[key] = row[key]
     })
@@ -224,7 +227,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
       setPeerTutorStudentCounts({})
       setLoading(false)
     }
-  }, [peerTutors, students])
+  }, [peerTutors, students, dept, year, section])
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -330,20 +333,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
     setShowDeleteModal(true)
   }
 
-  const handleSingleDelete = (tutorId: string) => {
-    const tutor = peerTutorsWithStats.find(t => t.id === tutorId)
-    if (tutor) {
-      const items = [{
-        name: tutor.name,
-        email: tutor.email,
-        additionalInfo: `${peerTutorStudentCounts[tutor.id] || 0} student(s) assigned, ${tutor.classStats?.totalClasses || 0} total class(es)`
-      }]
-      setItemsToDelete(items)
-    }
-    setDeleteTarget('single')
-    setSingleDeleteId(tutorId)
-    setShowDeleteModal(true)
-  }
+
 
   const confirmDelete = async () => {
     const idsToDelete = deleteTarget === 'selected' 
@@ -695,9 +685,9 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
         <TableSkeleton />
       ) : sortedPeerTutors.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 bg-gray-50 rounded-lg">
-           <img src="/icons/student.png" alt="No peer tutors assigned" className="mx-auto h-24 w-24 opacity-60 grayscale" />
+           <Image src="/icons/student.png" alt="No peer tutors assigned" width={96} height={96} className="mx-auto opacity-60 grayscale" />
           <p className="text-lg font-semibold text-gray-900 mb-2">NO PEER TUTOR ASSIGNED</p>
-          <p className="text-sm text-gray-500 text-center px-4">Click "ADD" to Assign a Peer Tutor</p>
+          <p className="text-sm text-gray-500 text-center px-4">Click &quot;ADD&quot; to Assign a Peer Tutor</p>
         </div>
       ) : (
         <>
@@ -927,8 +917,7 @@ interface StudentsTabProps {
 
 function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemoveStudent, dept, year, section, onRefresh }: StudentsTabProps) {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>(students)
-  const [peerTutorsWithStats, setPeerTutorsWithStats] = useState<PeerTutorWithStats[]>([])
-  const [peerTutorStudentCounts, setPeerTutorStudentCounts] = useState<{[key: string]: number}>({})
+
   const [selectedPeerTutor, setSelectedPeerTutor] = useState<string>('all')
   const [showFilterPopup, setShowFilterPopup] = useState(false)
   const filterRef = useRef<HTMLDivElement>(null)
@@ -984,51 +973,8 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
   }
 
   useEffect(() => {
-    const loadPeerTutorStats = async () => {
-      try {
-        const tutorsWithStats = await Promise.all(
-          peerTutors.map(async (tutor) => {
-            const classStats = await ScheduledClassService.getPeerTutorClassStats(tutor.id)
-            const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
-            
-            return {
-              ...tutor,
-              classStats,
-              additionalClassesCount: additionalClasses.length
-            }
-          })
-        )
-        setPeerTutorsWithStats(tutorsWithStats)
-
-        // Calculate student counts for each peer tutor
-        const studentCounts: {[key: string]: number} = {}
-        peerTutors.forEach(tutor => {
-          const count = students.filter(student => student.assigned_peer_tutor_id === tutor.id).length
-          studentCounts[tutor.id] = count
-        })
-        setPeerTutorStudentCounts(studentCounts)
-      } catch (error) {
-        console.error('Error loading peer tutor stats:', error)
-        // Fallback
-        setPeerTutorsWithStats(peerTutors.map(tutor => ({
-          ...tutor,
-          classStats: { totalClasses: 0, completedClasses: 0, pendingClasses: 0 },
-          additionalClassesCount: 0
-        })))
-        setPeerTutorStudentCounts({})
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (peerTutors.length > 0) {
-      loadPeerTutorStats()
-    } else {
-      setPeerTutorsWithStats([])
-      setPeerTutorStudentCounts({})
-      setLoading(false)
-    }
-  }, [peerTutors, students])
+    setLoading(false)
+  }, [])
 
   // Apply peer tutor filter and search
   useEffect(() => {
@@ -1136,21 +1082,8 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
     setShowDeleteModal(true)
   }
 
-  const handleSingleDeleteStudent = (studentId: string) => {
-    const student = students.find(s => s.id === studentId)
-    if (student) {
-      const assignedPeerTutor = peerTutors.find(tutor => tutor.id === student.assigned_peer_tutor_id)
-      const items = [{
-        name: student.name,
-        email: student.email,
-        additionalInfo: `${student.year} - ${student.section}${assignedPeerTutor ? `, Assigned to: ${assignedPeerTutor.name}` : ''}`
-      }]
-      setItemsToDeleteStudents(items)
-    }
-    setDeleteTarget('single')
-    setSingleDeleteId(studentId)
-    setShowDeleteModal(true)
-  }
+
+
 
   const confirmDeleteStudents = async () => {
     const idsToDelete = deleteTarget === 'selected' 
@@ -1452,9 +1385,9 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
         <TableSkeleton />
       ) : filteredStudents.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 bg-gray-50 rounded-lg">
-         <img src="/icons/student.png" alt="No students found" className="mx-auto h-24 w-24 opacity-60 grayscale" />
+         <Image src="/icons/student.png" alt="No students found" width={96} height={96} className="mx-auto opacity-60 grayscale" />
           <p className="text-lg font-semibold text-gray-900 mb-2">NO STUDENTS FOUND</p>
-          <p className="text-sm text-gray-500 text-center px-4">Click "ADD" to add students</p>
+          <p className="text-sm text-gray-500 text-center px-4">Click &quot;ADD&quot; to add students</p>
         </div>
       ) : (
         <>
@@ -1642,7 +1575,6 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
           onClose={() => setShowImportModal(false)}
           onSuccess={() => {
             setShowImportModal(false)
-            // Refresh the page to show new students
             onRefresh()
           }}
         />
@@ -1654,9 +1586,6 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
 interface PeerTutorDetailViewProps {
   peerTutorId: string
   peerTutorName: string
-  dept: string
-  year: string
-  section: string
   onBack: () => void
 }
 
@@ -1674,15 +1603,13 @@ interface SubjectAttendanceData {
   }[]
 }
 
-function PeerTutorDetailView({ peerTutorId, peerTutorName, dept, year, section, onBack }: PeerTutorDetailViewProps) {
+function PeerTutorDetailView({ peerTutorId, peerTutorName, onBack }: PeerTutorDetailViewProps) {
   const [loading, setLoading] = useState(true)
   const [subjectsData, setSubjectsData] = useState<SubjectAttendanceData[]>([])
 
-  useEffect(() => {
-    loadDetailData()
-  }, [peerTutorId, dept, year, section])
 
-  const loadDetailData = async () => {
+
+  const loadDetailData = useCallback(async () => {
     try {
       setLoading(true)
       const supabase = createClient()
@@ -1744,7 +1671,7 @@ function PeerTutorDetailView({ peerTutorId, peerTutorName, dept, year, section, 
       // Process each subject
       const subjectsWithData: SubjectAttendanceData[] = []
 
-      subjects.forEach((subject: any, subjectIdx: number) => {
+      subjects.forEach((subject: any) => {
         // Get scheduled classes for this subject
         const subjectScheduledClasses = (scheduledClasses || []).filter(
           sc => sc.class?.subject_name === subject.subject_name
@@ -1827,7 +1754,11 @@ function PeerTutorDetailView({ peerTutorId, peerTutorName, dept, year, section, 
     } finally {
       setLoading(false)
     }
-  }
+  }, [peerTutorId])
+
+  useEffect(() => {
+    loadDetailData()
+  }, [loadDetailData])
 
   if (loading) {
     return (
@@ -1989,11 +1920,7 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
   const [selectedPeerTutor, setSelectedPeerTutor] = useState<string | null>(null)
   const [selectedPeerTutorName, setSelectedPeerTutorName] = useState<string>('')
 
-  useEffect(() => {
-    loadGeneralData()
-  }, [dept, year, section])
-
-  const loadGeneralData = async () => {
+  const loadGeneralData = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -2034,7 +1961,13 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [dept, year, section])
+
+  useEffect(() => {
+    loadGeneralData()
+  }, [dept, year, section, loadGeneralData])
+
+
 
   if (loading) {
     return (
@@ -2049,9 +1982,6 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
       <PeerTutorDetailView
         peerTutorId={selectedPeerTutor}
         peerTutorName={selectedPeerTutorName}
-        dept={dept}
-        year={year}
-        section={section}
         onBack={() => {
           setSelectedPeerTutor(null)
           setSelectedPeerTutorName('')
@@ -2155,11 +2085,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
   const [attendanceData, setAttendanceData] = useState<PeerTutorAttendanceRow[]>([])
   const [dates, setDates] = useState<string[]>([])
 
-  useEffect(() => {
-    loadAttendanceData()
-  }, [dept, year, section])
-
-  const loadAttendanceData = async () => {
+  const loadAttendanceData = useCallback(async () => {
     try {
       setLoading(true)
       const supabase = createClient()
@@ -2234,7 +2160,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
       scheduledClasses?.forEach(sc => {
         const tutorId = sc.peer_tutor_id
         const subjectName = sc.class?.subject_name || 'Unknown'
-        const key = `${tutorId}-${subjectName}`
+        // const key = `${tutorId}-${subjectName}`
         
         if (!tutorSubjectMap.has(tutorId)) {
           tutorSubjectMap.set(tutorId, new Map())
@@ -2299,7 +2225,13 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
     } finally {
       setLoading(false)
     }
-  }
+  }, [dept, year, section])
+
+  useEffect(() => {
+    loadAttendanceData()
+  }, [dept, year, section, loadAttendanceData])
+
+
 
   if (loading) {
     return (
@@ -2472,7 +2404,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
         // Get additional classes count
         const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
         // Filter by current section (additional classes should have dept, year, section if they were created in the AttendanceTab)
-        const sectionAdditionalClasses = additionalClasses.filter(ac => {
+        const sectionAdditionalClasses = additionalClasses.filter(() => {
           // Since additional classes might not have dept/year/section directly,
           // we'll count all additional classes for peer tutors in this section
           return true
@@ -2924,7 +2856,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
 
   // --- Queries ---
 
-  const { data: assignments = [], isLoading: loadingAssignments } = useQuery({
+  const { isLoading: loadingAssignments } = useQuery({
     queryKey: ['assignments', dept, dbYear, dbSection],
     queryFn: () => AssignmentService.getAssignments(dept, dbYear, dbSection)
   })
@@ -2982,16 +2914,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
     }
   }
 
-  const handleUnassignStudent = async (studentId: string) => {
-    try {
-      const success = await AssignmentService.unassignStudent(studentId)
-      if (success) {
-        invalidateQueries()
-      }
-    } catch (error) {
-      console.error('Error unassigning student:', error)
-    }
-  }
+
 
   const handleUnassignAll = async () => {
     try {
@@ -3080,7 +3003,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
       // 2. Prepare rows and merges
       const rows: any[] = []
       const merges: any[] = []
-      let currentRow = 1 // Start after header (0-indexed in array, but Excel is 1-indexed? SheetJS uses object properties)
+      // const currentRow = 1 // Start after header (0-indexed in array, but Excel is 1-indexed? SheetJS uses object properties)
       // Actually SheetJS uses 0-indexed for start/end in merges.
       // Header is row 0. Data starts at row 1.
       
@@ -3097,7 +3020,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
            return
         }
 
-        group.students.forEach((student, itemsIndex) => {
+        group.students.forEach((student) => {
           rows.push({
             'Peer Tutor Name': group.tutorName,
             'Peer Tutor Email': group.tutorEmail,
@@ -3148,15 +3071,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
     }
   }
 
-  // Helper function to get initials from name
-  const getInitials = (name: string): string => {
-    return name
-      .split(' ')
-      .map(word => word.charAt(0))
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
-  }
+
 
   if (loading) {
     return <AssignTabSkeleton />
@@ -3327,7 +3242,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
         
         {peerTutorsWithStudents.length === 0 ? (
           <div className="p-8 text-center flex flex-col items-center">
-               <img src="/icons/student.png" alt="No assignments found" className="mx-auto h-24 w-24 opacity-60 grayscale" />
+                <Image src="/icons/student.png" alt="No assignments found" width={96} height={96} className="mx-auto opacity-60 grayscale" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">NO ASSIGNMENTS FOUND</h3>
             <p className="text-gray-500 text-sm px-4 mb-6">Add peer tutors and students to start assigning, or import assignments.</p>
           </div>
@@ -3531,15 +3446,16 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   const [showExportModal, setShowExportModal] = useState(false)
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'scheduled'>('all')
   const [filterByClass, setFilterByClass] = useState<string>('')
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   const [sortOrder, setSortOrder] = useState<'date' | 'class'>('date')
+  const [loadingSubjects, setLoadingSubjects] = useState(false)
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   const [newClass, setNewClass] = useState({
     subject_name: ''
   })
-  const [allSubjects, setAllSubjects] = useState<string[]>([])
   const [filteredSubjects, setFilteredSubjects] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [loadingSubjects, setLoadingSubjects] = useState(false)
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
   
   // Delete mode state
   const [isDeleteMode, setIsDeleteMode] = useState(false)
@@ -3571,7 +3487,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   })
 
   // Derived loading state
-  const loading = loadingClasses || loadingScheduled || loadingSubjectsList
+
 
   const isLoading = loadingClasses || loadingScheduled || loadingSubjectsList
 
@@ -3590,7 +3506,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     
     if (value.length > 0) {
       // Filter subjects that contain the input value (case-insensitive)
-      const filtered = allSubjects.filter(subject =>
+      const filtered = querySubjects.filter(subject =>
         subject.toLowerCase().includes(value.toLowerCase())
       )
       setFilteredSubjects(filtered)
@@ -3679,18 +3595,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   }
 
 
-  const handleDeleteClass = async (classId: string) => {
-    if (confirm('Are you sure you want to delete this class?')) {
-      try {
-        const success = await ClassService.deleteClass(classId)
-        if (success) {
-          invalidateQueries()
-        }
-      } catch (error) {
-        console.error('Error deleting class:', error)
-      }
-    }
-  }
+
 
   const handleExportSubjects = async () => {
     try {
@@ -3714,18 +3619,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     }
   }
 
-  const handleDeleteScheduledClass = async (scheduledClassId: string) => {
-    if (confirm('Are you sure you want to remove this schedule?')) {
-      try {
-        const success = await ScheduledClassService.deleteScheduledClass(scheduledClassId)
-        if (success) {
-          invalidateQueries()
-        }
-      } catch (error) {
-        console.error('Error deleting scheduled class:', error)
-      }
-    }
-  }
+
 
   // Delete mode handlers
   const toggleDeleteMode = () => {
@@ -3941,32 +3835,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   }
 
   // Handle deletion of scheduled class group (all peer tutors for a subject on a specific date)
-  const handleDeleteScheduledClassGroup = async (subjectName: string, scheduledDate: string) => {
-    if (!confirm(`Are you sure you want to remove the schedule for "${subjectName}" on ${new Date(scheduledDate).toLocaleDateString('en-GB')}? This will remove the schedule for all peer tutors assigned to this subject on this date.`)) {
-      return
-    }
 
-    try {
-      // Find all scheduled classes for this subject and date
-      const classesToDelete = scheduledClasses.filter(sc => 
-        sc.class.subject_name === subjectName && sc.scheduled_date === scheduledDate
-      )
-
-      // Delete each scheduled class
-      for (const scheduledClass of classesToDelete) {
-        const success = await ScheduledClassService.deleteScheduledClass(scheduledClass.id)
-        if (!success) {
-          console.error(`Failed to delete scheduled class ${scheduledClass.id}`)
-        }
-      }
-
-      // Reload classes to reflect changes
-      invalidateQueries()
-    } catch (error) {
-      console.error('Error deleting scheduled class group:', error)
-      alert('Failed to remove schedule. Please try again.')
-    }
-  }
 
 
   if (isLoading) {
@@ -4139,9 +4008,9 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
             // All Subjects Tab
             classes.length === 0 ? (
               <div className="text-center py-12">
-                <img src="/icons/classes.png" alt="No subjects created" className="mx-auto h-24 w-24 opacity-60 grayscale" />
+                <Image src="/icons/classes.png" alt="No subjects created" width={96} height={96} className="mx-auto opacity-60 grayscale" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">NO SUBJECTS CREATED</h3>
-                <p className="text-gray-500 text-sm">Click "ADD" to create the subject</p>
+                <p className="text-gray-500 text-sm">Click &quot;ADD&quot; to create the subject</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -4219,9 +4088,9 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
             <div>
               {scheduledClasses.length === 0 ? (
                 <div className="text-center py-8">
-                  <img src="/icons/classes.png" alt="No scheduled subjects" className="mx-auto h-24 w-24 opacity-60 grayscale" />
+                  <Image src="/icons/classes.png" alt="No scheduled subjects" width={96} height={96} className="mx-auto opacity-60 grayscale" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">NO SCHEDULED SUBJECTS</h3>
-                  <p className="text-gray-500">Click "Assign" to schedule subjects</p>
+                  <p className="text-gray-500">Click &quot;Assign&quot; to schedule subjects</p>
                 </div>
               ) : (
                 <div>
@@ -4463,7 +4332,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
               <ul className="text-sm text-gray-600 space-y-1 ml-4">
                 <li>• Subject names as parent rows</li>
                 <li>• Scheduled dates as child rows under each subject</li>
-                <li>• Unscheduled subjects will show "Not Scheduled"</li>
+                <li>• Unscheduled subjects will show &quot;Not Scheduled&quot;</li>
               </ul>
             </div>
             
@@ -4613,7 +4482,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   const dbSection = section
 
   const [selectedClass, setSelectedClass] = useState<string>('')
-  const [selectedClassType, setSelectedClassType] = useState<'scheduled' | 'additional'>('scheduled')
+
   const [peerTutorAttendance, setPeerTutorAttendance] = useState<any[]>([])
   const [selectedPeerTutor, setSelectedPeerTutor] = useState<any>(null)
   const [studentDetails, setStudentDetails] = useState<any[]>([])
@@ -4713,174 +4582,6 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
     },
     enabled: scheduledClasses.length > 0
   })
-
-  const loadPeerTutorAttendance = async (scheduledClassId: string) => {
-    try {
-      setLoading(true)
-      const supabase = createClient()
-      
-      console.log('Loading peer tutor attendance for scheduled class:', scheduledClassId)
-      
-      // First, let's see what attendance records exist in the database
-      const { data: allAttendance, error: allError } = await supabase
-        .from('attendance')
-        .select('scheduled_class_id, peer_tutor_id, student_id, status')
-        .limit(10)
-      
-      console.log('All attendance records in database:', allAttendance, 'Error:', allError)
-      
-      // First try simple query to see if records exist
-      const { data: simpleData, error: simpleError } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('scheduled_class_id', scheduledClassId)
-      
-      console.log('Simple attendance query result:', simpleData, 'Error:', simpleError)
-      
-      if (simpleError) {
-        console.error('Error in simple query:', simpleError)
-      }
-      
-      // Get attendance records for this scheduled class grouped by peer tutor
-      const { data: attendanceData, error } = await supabase
-        .from('attendance')
-        .select(`
-          *,
-          peer_tutors(
-            id,
-            name,
-            email
-          )
-        `)
-        .eq('scheduled_class_id', scheduledClassId)
-
-      console.log('Full attendance query result:', attendanceData, 'Error:', error)
-
-      if (error) {
-        console.error('Error loading peer tutor attendance:', error)
-        return
-      }
-
-      // If no records found by scheduled_class_id, try by class_id
-      let recordsToProcess = attendanceData || []
-      
-      if (recordsToProcess.length === 0 && (!simpleData || simpleData.length === 0)) {
-        console.log('No records found by scheduled_class_id, trying class_id...')
-        
-        // Get the class_id from the scheduled class
-        const selectedScheduledClass = scheduledClasses.find(sc => sc.id === scheduledClassId)
-        if (selectedScheduledClass) {
-          console.log('Trying to find attendance by class_id:', selectedScheduledClass.class_id)
-          
-          const { data: classAttendanceData, error: classError } = await supabase
-            .from('attendance')
-            .select(`
-              *,
-              peer_tutors(
-                id,
-                name,
-                email
-              )
-            `)
-            .eq('class_id', selectedScheduledClass.class_id)
-          
-          console.log('Attendance by class_id result:', classAttendanceData, 'Error:', classError)
-          
-          if (classAttendanceData && classAttendanceData.length > 0) {
-            console.log('Found attendance records by class_id, using those')
-            recordsToProcess = classAttendanceData
-          }
-        }
-      }
-      
-      // If we found records by class_id, use those instead
-      if (recordsToProcess.length === 0 && simpleData && simpleData.length > 0) {
-        console.log('Using simple data since joined query returned empty')
-        recordsToProcess = simpleData
-        
-        // Fetch peer tutor names separately
-        const peerTutorIds = [...new Set(simpleData.map(r => r.peer_tutor_id))]
-        const { data: peerTutors } = await supabase
-          .from('peer_tutors')
-          .select('id, name, email')
-          .in('id', peerTutorIds)
-        
-        console.log('Fetched peer tutors:', peerTutors)
-        
-        const peerTutorMap = new Map(peerTutors?.map(p => [p.id, p]) || [])
-        
-        // Group by peer tutor and count present/absent
-        const peerTutorAttendanceMap = new Map()
-        
-        recordsToProcess.forEach(record => {
-          const peerTutorId = record.peer_tutor_id
-          const peerTutor = peerTutorMap.get(peerTutorId)
-          const peerTutorName = peerTutor?.name || 'Unknown Peer Tutor'
-          
-          if (!peerTutorAttendanceMap.has(peerTutorId)) {
-            peerTutorAttendanceMap.set(peerTutorId, {
-              peer_tutor_id: peerTutorId,
-              peer_tutor_name: peerTutorName,
-              peer_tutor_email: peerTutor?.email || 'No email',
-              present_count: 0,
-              absent_count: 0,
-              total_count: 0
-            })
-          }
-          
-          const peerTutorData = peerTutorAttendanceMap.get(peerTutorId)
-          peerTutorData.total_count++
-          
-          if (record.status === 'present') {
-            peerTutorData.present_count++
-          } else {
-            peerTutorData.absent_count++
-          }
-        })
-
-        const peerTutorAttendanceList = Array.from(peerTutorAttendanceMap.values())
-        console.log('Peer tutor attendance (with separate queries):', peerTutorAttendanceList)
-        setPeerTutorAttendance(peerTutorAttendanceList)
-        return
-      }
-
-      // Group by peer tutor and count present/absent (for joined query)
-      const peerTutorMap = new Map()
-      
-      recordsToProcess.forEach(record => {
-        const peerTutorId = record.peer_tutor_id
-        const peerTutorName = record.peer_tutors?.name || 'Unknown Peer Tutor'
-        
-        if (!peerTutorMap.has(peerTutorId)) {
-          peerTutorMap.set(peerTutorId, {
-            peer_tutor_id: peerTutorId,
-            peer_tutor_name: peerTutorName,
-            peer_tutor_email: record.peer_tutors?.email || 'No email',
-            present_count: 0,
-            absent_count: 0,
-            total_count: 0
-          })
-        }
-        
-        const peerTutor = peerTutorMap.get(peerTutorId)
-        peerTutor.total_count++
-        
-        if (record.status === 'present') {
-          peerTutor.present_count++
-        } else {
-          peerTutor.absent_count++
-        }
-      })
-
-      const peerTutorAttendanceList = Array.from(peerTutorMap.values())
-      console.log('Peer tutor attendance (with joins):', peerTutorAttendanceList)
-      setPeerTutorAttendance(peerTutorAttendanceList)
-    } catch (error) {
-      console.error('Error loading peer tutor attendance:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
 
   const loadPeerTutorAttendanceForClass = async (classIdOrSubject: string, isAdditional: boolean = false) => {
@@ -5022,159 +4723,6 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       
     } catch (error) {
       console.error('Error loading peer tutor attendance:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadStudentDetails = async (scheduledClassId: string, peerTutorId: string) => {
-    try {
-      setLoading(true)
-      const supabase = createClient()
-      
-      console.log('=== Loading Student Details ===')
-      console.log('Class ID:', scheduledClassId)
-      console.log('Peer Tutor ID:', peerTutorId)
-      
-      // Check if this is an additional class
-      const additionalClass = additionalClasses.find(ac => ac.id === scheduledClassId)
-      
-      if (additionalClass) {
-        // Handle additional class attendance
-        console.log('Loading student details for additional class:', additionalClass)
-        
-        const studentDetailsList = additionalClass.attendance_records.map((record: any) => ({
-          student_id: record.student_id,
-          student_name: record.student_name,
-          student_email: '', // Additional class attendance doesn't have email in the record
-          status: record.status,
-          created_at: record.created_at,
-          updated_at: record.updated_at
-        }))
-        
-        // Fetch student emails if needed
-        if (studentDetailsList.length > 0) {
-          const studentIds = studentDetailsList.map((s: any) => s.student_id)
-          const { data: students } = await supabase
-            .from('peer_students')
-            .select('id, email')
-            .in('id', studentIds)
-          
-          const studentEmailMap = new Map(students?.map((s: any) => [s.id, s.email]) || [])
-          studentDetailsList.forEach((student: any) => {
-            student.student_email = studentEmailMap.get(student.student_id) || ''
-          })
-        }
-        
-        console.log('Student details for additional class:', studentDetailsList)
-        setStudentDetails(studentDetailsList)
-        return
-      }
-      
-      // Handle scheduled class (existing logic)
-      // Check the scheduled class details first
-      const { data: scheduledClassData } = await supabase
-        .from('scheduled_classes')
-        .select('*')
-        .eq('id', scheduledClassId)
-        .single()
-      
-      console.log('Scheduled Class Details:', scheduledClassData)
-      
-      // First, let's check if there are ANY attendance records for this scheduled class
-      const { data: allRecords, error: allError } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('scheduled_class_id', scheduledClassId)
-      
-      console.log('ALL attendance records for this scheduled class:', allRecords?.length || 0, allRecords)
-      
-      // Now check specifically for this peer tutor
-      const { data: simpleData, error: simpleError } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('scheduled_class_id', scheduledClassId)
-        .eq('peer_tutor_id', peerTutorId)
-      
-      console.log('Attendance records for this peer tutor:', simpleData?.length || 0, simpleData)
-      console.log('Error (if any):', simpleError)
-      
-      // Also check if there are ANY attendance records for this peer tutor (regardless of scheduled_class_id)
-      const { data: peerTutorRecords } = await supabase
-        .from('attendance')
-        .select('*, scheduled_classes(scheduled_date, class_id)')
-        .eq('peer_tutor_id', peerTutorId)
-        .order('created_at', { ascending: false })
-        .limit(10)
-      
-      console.log('Recent attendance records for this peer tutor (any scheduled class):', peerTutorRecords)
-      
-      // Get student details for this peer tutor and scheduled class
-      const { data: attendanceData, error } = await supabase
-        .from('attendance')
-        .select(`
-          *,
-          peer_students(
-            id,
-            name,
-            email
-          )
-        `)
-        .eq('scheduled_class_id', scheduledClassId)
-        .eq('peer_tutor_id', peerTutorId)
-
-      console.log('Full student query result:', attendanceData, 'Error:', error)
-
-      if (error) {
-        console.error('Error loading student details:', error)
-        return
-      }
-
-      // Use simple data if joined query fails
-      let recordsToProcess = attendanceData || []
-      if (recordsToProcess.length === 0 && simpleData && simpleData.length > 0) {
-        console.log('Using simple data for students since joined query returned empty')
-        recordsToProcess = simpleData
-        
-        // Fetch student names separately
-        const studentIds = [...new Set(simpleData.map(r => r.student_id))]
-        const { data: students } = await supabase
-          .from('peer_students')
-          .select('id, name, email')
-          .in('id', studentIds)
-        
-        console.log('Fetched students:', students)
-        
-        const studentMap = new Map(students?.map(s => [s.id, s]) || [])
-        
-        const studentDetails = recordsToProcess.map(record => {
-          const student = studentMap.get(record.student_id)
-          return {
-            student_id: record.student_id,
-            student_name: student?.name || 'Unknown Student',
-            student_email: student?.email || 'No email',
-            status: record.status,
-            created_at: record.created_at
-          }
-        })
-        
-        console.log('Student details (with separate queries):', studentDetails)
-        setStudentDetails(studentDetails)
-        return
-      }
-
-      const studentDetails = recordsToProcess.map(record => ({
-        student_id: record.student_id,
-        student_name: record.peer_students?.name || 'Unknown Student',
-        student_email: record.peer_students?.email || 'No email',
-        status: record.status,
-        created_at: record.created_at
-      }))
-
-      console.log('Student details (with joins):', studentDetails)
-      setStudentDetails(studentDetails)
-    } catch (error) {
-      console.error('Error loading student details:', error)
     } finally {
       setLoading(false)
     }
@@ -5528,7 +5076,6 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
 
     const handleClassSelect = async (classIdOrSubject: string) => {
       setSelectedClass(classIdOrSubject)
-      setSelectedClassType('scheduled')
       setView('peer-tutors')
       await loadPeerTutorAttendanceForClass(classIdOrSubject, false)
     }
@@ -5758,7 +5305,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-8 text-center">
-            <img src="/icons/attendance.png" alt="No scheduled classes" className="mx-auto h-24 w-24 opacity-60 grayscale" />
+            <Image src="/icons/attendance.png" alt="No scheduled classes" width={96} height={96} className="mx-auto opacity-60 grayscale" />
             <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">NO SCHEDULED CLASSES</h3>
             <p className="text-sm text-gray-500 mb-4 px-4">No classes have been scheduled</p>
           </div>
@@ -6307,22 +5854,12 @@ function SectionContent() {
   const yearId = params.yearId as string
   const sectionId = params.sectionId as string
   
-  // Ensure params are defined and cast to string
-  if (!deptId || !yearId || !sectionId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Invalid Route</h1>
-          <p className="text-gray-600">Missing required parameters</p>
-        </div>
-      </div>
-    )
-  }
-  
   // Cast params to string (Next.js params can be string arrays)
   const deptIdStr = Array.isArray(deptId) ? deptId[0] : deptId
   const yearIdStr = Array.isArray(yearId) ? yearId[0] : yearId
   const sectionIdStr = Array.isArray(sectionId) ? sectionId[0] : sectionId
+  
+
   
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'peer-tutors' | 'students' | 'assign' | 'classes' | 'attendance'  | 'import-export'>('peer-tutors')
@@ -6361,7 +5898,7 @@ function SectionContent() {
       yearIdStr,
       sectionIdStr
     ),
-    enabled: !!department?.name
+    enabled: !!department?.name && !!yearIdStr && !!sectionIdStr
   })
 
   const isLoading = isDepartmentLoading || isPeerTutorsLoading || isStudentsLoading
@@ -6371,8 +5908,7 @@ function SectionContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
   
-  // Delete confirmation modal state
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Check if sidebar is collapsed - read from localStorage first (source of truth)
@@ -6479,13 +6015,9 @@ function SectionContent() {
     { id: 'C', name: 'Section C' }
   ]
 
-  const handleSignOut = async () => {
-    // await signOut() // This line was removed as per the new_code
-  }
 
-  const handleBackToYear = () => {
-    router.push(`/faculty/department/${deptId}/year/${yearId}`)
-  }
+
+
 
   const handleDropdownToggle = (dropdown: string) => {
     setDropdownOpen(dropdownOpen === dropdown ? null : dropdown)
@@ -6513,7 +6045,7 @@ function SectionContent() {
         queryClient.invalidateQueries({ queryKey: ['peerTutors'] }),
         queryClient.invalidateQueries({ queryKey: ['students'] })
       ])
-      setLastRefresh(new Date())
+
     } finally {
       setTimeout(() => setIsRefreshing(false), 500)
     }
@@ -6586,6 +6118,18 @@ function SectionContent() {
     // This will be called when bulk import is completed
     // We can reload the assignments data if needed
     console.log('Bulk import completed')
+  }
+
+  // Ensure params are defined and cast to string
+  if (!deptId || !yearId || !sectionId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Invalid Route</h1>
+          <p className="text-gray-600">Missing required parameters</p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Card, CardContent } from "@/components/ui"
+// import { Skeleton } from "@/components/ui/skeleton"
 
 export function AssignTabSkeleton() {
   return (

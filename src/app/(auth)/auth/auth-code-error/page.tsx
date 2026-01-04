@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 
 export default function AuthCodeError() {
@@ -25,21 +26,21 @@ export default function AuthCodeError() {
         
         <div className="mt-8 space-y-6">
           <div className="text-center">
-            <a
+            <Link
               href="/login"
               className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md text-sm font-medium transition-colors duration-200"
             >
               Try Again
-            </a>
+            </Link>
           </div>
           
           <div className="text-center">
-            <a
+            <Link
               href="/"
               className="text-blue-600 hover:text-blue-500 text-sm"
             >
               Return to Home
-            </a>
+            </Link>
           </div>
         </div>
       </div>

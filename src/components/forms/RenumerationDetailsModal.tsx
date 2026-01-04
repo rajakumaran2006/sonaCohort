@@ -1,10 +1,32 @@
 'use client'
 
 import { useState } from 'react'
-import { RenumerationService } from '@/lib/services/renumerationService'
+
+interface RenumerationFieldType {
+  id: string
+  field_name: string
+  field_type: string
+  is_mandatory: boolean
+  options?: string[]
+}
 
 interface RenumerationDetailsModalProps {
-  submission: any
+  submission: {
+    id: string
+    template_id: string
+    peer_tutor?: {
+      name: string
+      email: string
+    }
+    created_at: string
+    submitted_at?: string
+    status: string
+    template?: {
+      name: string
+      fields: RenumerationFieldType[]
+    }
+    field_responses: Record<string, string | number | boolean | null>
+  } | null
   isOpen: boolean
   onClose: () => void
   onStatusUpdate: (renumerationId: string, status: 'approved' | 'rejected') => void
@@ -93,7 +115,7 @@ export default function RenumerationDetailsModal({
             <h3 className="text-lg font-medium text-gray-900 mb-3">Form Responses</h3>
             {submission.template?.fields && submission.template.fields.length > 0 ? (
               <div className="space-y-4">
-                {submission.template.fields.map((field: any) => (
+                {submission.template.fields.map((field: RenumerationFieldType) => (
                   <div key={field.id} className="border-b border-gray-200 pb-4 last:border-b-0">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {field.field_name}

@@ -4,7 +4,6 @@ import type { NextRequest } from 'next/server'
 export async function middleware(req: NextRequest) {
   // Check if the request is for protected routes
   const isProtectedRoute = req.nextUrl.pathname.startsWith('/admin') || req.nextUrl.pathname.startsWith('/faculty')
-  const isLoginRoute = req.nextUrl.pathname === '/login'
   
   // Get all cookies and check for any Supabase auth cookies
   const cookies = req.cookies.getAll()

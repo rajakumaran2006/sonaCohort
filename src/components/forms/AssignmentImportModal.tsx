@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import { X, Upload, AlertCircle, CheckCircle, UserPlus, Users } from 'lucide-react'
+import { X, Upload, AlertCircle, Users, UserPlus } from 'lucide-react'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
 
@@ -66,8 +66,7 @@ export default function AssignmentImportModal({
   const [importData, setImportData] = useState<ImportRow[]>([])
   const [processedData, setProcessedData] = useState<GroupedAssignment[]>([])
   const [showPreview, setShowPreview] = useState(false)
-  const [existingPeerTutors, setExistingPeerTutors] = useState<PeerTutor[]>([])
-  const [existingStudents, setExistingStudents] = useState<Student[]>([])
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,10 +80,9 @@ export default function AssignmentImportModal({
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
       const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-      const jsonData = XLSX.utils.sheet_to_json<any>(worksheet)
+      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet)
 
-      // Parse rows - now supports email-only entries and merged cells (fill-down)
-      const rawRows = jsonData as any[]
+      const rawRows = jsonData as unknown[]
       const rows: ImportRow[] = []
       let lastPeerTutorName: string | undefined
       let lastPeerTutorEmail: string | undefined
@@ -132,8 +130,13 @@ export default function AssignmentImportModal({
         StudentService.getAllStudents()
       ])
 
+      /*
+      // These were unused but fetching was happening.
+      // Keeping fetching logic for processing but removing state setters if variables not used.
+      // Wait, processImportData uses tutors and students immediately, so state might not be needed if not used elsewhere.
       setExistingPeerTutors(tutors)
       setExistingStudents(students.filter(s => !s.peer_tutor))
+      */
 
       // Process data
       await processImportData(rows, tutors, students.filter(s => !s.peer_tutor))
@@ -430,8 +433,10 @@ export default function AssignmentImportModal({
         StudentService.getAllStudents()
       ])
 
+      /*
       setExistingPeerTutors(tutors)
       setExistingStudents(students.filter(s => !s.peer_tutor))
+      */
 
       // Reprocess
       await processImportData(importData, tutors, students.filter(s => !s.peer_tutor))

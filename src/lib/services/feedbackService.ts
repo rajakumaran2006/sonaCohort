@@ -287,7 +287,7 @@ export class FeedbackService {
             questions: form.current_version?.questions || []
           })) as FeedbackForm[]
         }
-      } catch (versioningError) {
+      } catch {
         console.log('Versioning tables not available, falling back to legacy schema')
       }
 
@@ -406,7 +406,7 @@ export class FeedbackService {
 
           return { success, strategy }
         }
-      } catch (versioningError) {
+      } catch {
         console.log('Versioning not available, using legacy update method')
       }
 
@@ -587,7 +587,7 @@ export class FeedbackService {
             }
           })
 
-          const { data: answersData, error: answersError } = await supabase
+          const { error: answersError } = await supabase
             .from('feedback_answers')
             .insert(answersWithResponseId)
             .select()
@@ -609,7 +609,7 @@ export class FeedbackService {
 
           return true
         }
-      } catch (versioningError) {
+      } catch {
         console.log('Versioning not available, using legacy response method')
       }
 
@@ -667,7 +667,7 @@ export class FeedbackService {
         }
       })
 
-      const { data: answersData, error: answersError } = await supabase
+      const { error: answersError } = await supabase
         .from('feedback_answers')
         .insert(answersWithResponseId)
         .select()
@@ -863,7 +863,7 @@ export class FeedbackService {
     proposedChanges: {
       name?: string
       description?: string
-      questions?: any[]
+      questions?: Omit<FeedbackQuestion, 'id' | 'feedback_form_id' | 'created_at'>[]
     }
   ): Promise<FormEditStrategy> {
     return await FeedbackVersioningService.getEditStrategy(formId, proposedChanges)

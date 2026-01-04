@@ -120,7 +120,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
       const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][]
       
       // Skip header row
       const rows = jsonData.slice(1) as string[][]
@@ -162,8 +162,8 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
       if (!peerTutorEmail || !studentEmail) continue
       
-      let peerTutor: any = existingPeerTutors.find(pt => pt.email.toLowerCase() === peerTutorEmail.toLowerCase())
-      let student: any = existingStudents.find(s => s.email.toLowerCase() === studentEmail.toLowerCase())
+      let peerTutor: PeerTutor | undefined = existingPeerTutors.find(pt => pt.email.toLowerCase() === peerTutorEmail.toLowerCase())
+      let student: Student | undefined = existingStudents.find(s => s.email.toLowerCase() === studentEmail.toLowerCase())
       
       // If peer tutor not found locally, check Microsoft Graph and create if exists
       if (!peerTutor) {
@@ -440,7 +440,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
           <p className="text-xs text-gray-900 font-medium mb-1">Auto-Import Feature</p>
           <p className="text-xs text-gray-700">
             The system will automatically check Microsoft Graph and add users if they exist there. 
-            You don't need to manually add peer tutors and students before importing assignments!
+            You don&apos;t need to manually add peer tutors and students before importing assignments!
           </p>
         </div>
       </div>

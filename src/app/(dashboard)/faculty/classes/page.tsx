@@ -6,11 +6,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
-import { useAuth } from '@/lib/auth/AuthContext'
 import { ClassService, Class } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui/Table'
+import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import ClassesPageSkeleton from '@/components/skeletons/ClassesPageSkeleton'
 import ClassesExportModal from '@/components/forms/ClassesExportModal'
 import FilterDropdown from '@/components/ui/FilterDropdown'
@@ -25,11 +24,9 @@ export default function FacultyClassesPage() {
 }
 
 function FacultyClassesContent() {
-  const { user } = useAuth()
   const router = useRouter()
   const queryClient = useQueryClient()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
   const [filterYear, setFilterYear] = useState('')
   const [filterSection, setFilterSection] = useState('')
   const [filterSubject, setFilterSubject] = useState('')
@@ -73,16 +70,6 @@ function FacultyClassesContent() {
   const filteredClasses = useMemo(() => {
     let filtered = allClasses
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(classItem =>
-        classItem.subject_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        classItem.dept.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        classItem.year.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        classItem.section.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
-
     // Apply year filter
     if (filterYear) {
       filtered = filtered.filter(classItem => classItem.year === filterYear)
@@ -99,7 +86,7 @@ function FacultyClassesContent() {
     }
 
     return filtered
-  }, [allClasses, searchTerm, filterYear, filterSection, filterSubject])
+  }, [allClasses, filterYear, filterSection, filterSubject])
 
   // Get unique values for filter dropdowns
   const getUniqueYears = () => [...new Set(allClasses.map(c => c.year))].sort()
@@ -180,12 +167,7 @@ function FacultyClassesContent() {
 
 
 
-  const resetFilters = () => {
-    setSearchTerm('')
-    setFilterYear('')
-    setFilterSection('')
-    setFilterSubject('')
-  }
+
 
   return (
     <div className="min-h-screen bg-gray-50">

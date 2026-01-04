@@ -29,7 +29,7 @@ export class FacultyService {
       
       // First, check if the departments table exists and is accessible
       try {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('departments')
           .select('id')
           .limit(1)

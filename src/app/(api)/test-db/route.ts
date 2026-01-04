@@ -36,7 +36,7 @@ export async function GET() {
     }
 
     // Test table structure
-    const { data: structure, error: structureError } = await supabase
+    const { error: structureError } = await supabase
       .from('departments')
       .select('id, name, faculty_name, faculty_email, created_at, updated_at')
       .limit(0)

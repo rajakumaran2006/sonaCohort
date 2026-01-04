@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import Image from 'next/image'
 import { StudentService, StudentAssignment } from '@/lib/services/studentService'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { Search, X, Loader2, User, Mail, Plus, AlertCircle, Check } from 'lucide-react'
+import { Search, X, Loader2, User, Mail, AlertCircle, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AddStudentModalProps {
@@ -17,6 +18,15 @@ interface AddStudentModalProps {
 
 type ViewMode = 'all' | 'selected'
 
+interface SearchResultStudent {
+  displayName?: string
+  name?: string
+  mail?: string
+  email?: string
+  userPrincipalName?: string
+  [key: string]: unknown
+}
+
 export default function AddStudentModal({
   isOpen,
   onClose,
@@ -28,17 +38,17 @@ export default function AddStudentModal({
   const { user } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<SearchResultStudent[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set()) // Store emails of selected students
   // We need to keep track of the full student objects for the selected emails
-  const [selectedStudentObjects, setSelectedStudentObjects] = useState<Map<string, any>>(new Map())
+  const [selectedStudentObjects, setSelectedStudentObjects] = useState<Map<string, SearchResultStudent>>(new Map())
 
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Search for available students
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return
 
     setIsSearching(true)
@@ -47,13 +57,13 @@ export default function AddStudentModal({
     try {
       const results = await StudentService.searchAvailableStudents(searchQuery, dept, year, section)
       setSearchResults(results)
-    } catch (err) {
+    } catch {
       setError('Failed to search for students. Please try again.')
       setSearchResults([])
     } finally {
       setIsSearching(false)
     }
-  }
+  }, [searchQuery, dept, year, section])
 
   // Handle search input change with debouncing
   useEffect(() => {
@@ -66,7 +76,7 @@ export default function AddStudentModal({
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [searchQuery])
+  }, [searchQuery, handleSearch])
 
   // Add selected students
   const handleAdd = async () => {
@@ -108,7 +118,7 @@ export default function AddStudentModal({
       } else {
         setError('Failed to add any students. Please try again.')
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred while adding the students.')
     } finally {
       setIsAdding(false)
@@ -116,7 +126,7 @@ export default function AddStudentModal({
   }
 
   // Toggle selection for a single student
-  const handleToggleStudent = (student: any) => {
+  const handleToggleStudent = (student: SearchResultStudent) => {
     const email = student.mail || student.email || student.userPrincipalName
     if (!email) return
 
@@ -350,13 +360,13 @@ export default function AddStudentModal({
                   {viewMode === 'all' ? (
                     searchQuery ? (
                       <>
-                        <img src="/icons/search.png" alt="No students found" className="mx-auto h-24 w-24 opacity-60 grayscale" />
+                        <Image src="/icons/search.png" alt="No students found" width={96} height={96} className="mx-auto opacity-60 grayscale" />
                         <p className="text-black font-semibold">NO STUDENTS FOUND</p>
                         <p className="text-sm mt-1">Try searching with a different name or email</p>
                       </>
                     ) : (
                       <>
-                        <img src="/icons/student.png" alt="search for students" className="w-16 h-16 mb-4" />
+                        <Image src="/icons/student.png" alt="search for students" width={64} height={64} className="mb-4" />
                         <p className="text-gray-900 font-semibold text-lg">SEARCH FOR STUDENTS</p>
                         <p className="text-sm mt-1 max-w-xs mx-auto text-gray-500">
                            Enter a name or email to add to this section
@@ -365,10 +375,10 @@ export default function AddStudentModal({
                     )
                   ) : (
                     <>
-                      <img src="/icons/student.png" alt="no students selected" className="w-16 h-16 mb-4" />
+                      <Image src="/icons/student.png" alt="no students selected" width={64} height={64} className="mb-4" />
                       <p className="text-gray-900 font-semibold text-lg">NO STUDENTS SELECTED</p>
                       <p className="text-sm mt-1 max-w-xs mx-auto text-gray-500">
-                         Select students from the "All USERS"
+                         Select students from the &quot;All USERS&quot;
                       </p>
                     </>
                   )}

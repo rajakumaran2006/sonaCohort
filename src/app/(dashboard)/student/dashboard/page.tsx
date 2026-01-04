@@ -7,7 +7,7 @@ import { StudentService, StudentWithPeerTutor } from '@/lib/services/studentServ
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
 import FeedbackSubmissionModal from '@/components/forms/FeedbackSubmissionModal'
 import StudentSidebar from '@/components/layout/StudentSidebar'
-import { Card, CardHeader, CardTitle, CardContent, Button, LoadingOverlay, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, StatusBadge } from '@/components/ui'
+import { Card, CardHeader, CardTitle, CardContent, Button, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, StatusBadge } from '@/components/ui'
 
 interface FeedbackFormWithStatus extends FeedbackForm {
   isSubmitted: boolean
@@ -99,6 +99,8 @@ export default function StudentDashboard() {
   }
 
   const handleFeedbackSubmitted = async () => {
+    if (!student) return
+    
     // Reload feedback forms to update submission status
     const forms = await FeedbackService.getActiveFeedbackForms()
     const formsWithStatus = await Promise.all(

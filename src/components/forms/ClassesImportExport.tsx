@@ -14,12 +14,6 @@ interface ClassesImportExportProps {
   onImportComplete: () => void
 }
 
-interface ClassImportData {
-  subject_name: string
-  scheduled_date: string
-  topics?: string
-}
-
 interface ImportPreview {
   validClasses: Array<{
     subject_name: string

@@ -5,6 +5,23 @@ import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 
+export interface RecentClassStats {
+  subject_name: string
+  year: string
+  total: number
+  completed: number
+  scheduled_date: string
+  percentage: number
+}
+
+interface GroupedClassStats {
+  subject_name: string
+  year: string
+  total: number
+  completed: number
+  scheduled_date: string
+}
+
 export interface DashboardStats {
   totalClasses: number
   completedClasses: number
@@ -13,7 +30,7 @@ export interface DashboardStats {
   weeklyActivity: { day: string; classes: number }[]
   yearStats: { year: string; count: number; percentage: number }[]
   attendanceBreakdown: { name: string; value: number; color: string }[]
-  recentClasses: any[]
+  recentClasses: RecentClassStats[]
   currentWeekTotal: number
   weeklyChange: number
   additionalClassesByYear: { year: string; count: number }[]
@@ -54,7 +71,6 @@ export function useFacultyDashboardData(userEmail: string | undefined | null) {
       
       // Calculate Rates
       const attendanceRate = totalClasses > 0 ? Math.round((completedCount / totalClasses) * 100) : 0
-      const inProgressRate = totalClasses > 0 ? Math.round((inProgressCount / totalClasses) * 100) : 0
       
       // 4. Get Additional Classes Stats (For Department)
       const additionalClasses = await AdditionalClassService.getAllAdditionalClassesForDepartment(dept.name)
@@ -182,7 +198,7 @@ export function useFacultyDashboardData(userEmail: string | undefined | null) {
       const recentClassesRaw = allClasses
 
       // Group by Subject + Year
-      const groupedClasses: Record<string, any> = {}
+      const groupedClasses: Record<string, GroupedClassStats> = {}
       
       recentClassesRaw.forEach(cls => {
         const key = `${cls.class?.subject_name}-${cls.year}`

@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { RenumerationService, PeerTutorRenumeration } from '@/lib/services/renumerationService'
+import { RenumerationService, PeerTutorRenumeration, RenumerationField } from '@/lib/services/renumerationService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+
 
 export default function PeerRenumerationPage() {
   return (
@@ -20,24 +21,33 @@ export default function PeerRenumerationPage() {
 function PeerRenumerationContent() {
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [peerTutorInfo, setPeerTutorInfo] = useState<any>(null)
+
   const [renumerations, setRenumerations] = useState<PeerTutorRenumeration[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState<string | null>(null)
-  const [fieldResponses, setFieldResponses] = useState<Record<string, Record<string, any>>>({})
+  const [fieldResponses, setFieldResponses] = useState<Record<string, Record<string, string | number | boolean | null>>>({})
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Use custom hook for sidebar collapsed state
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
-  useEffect(() => {
-    if (user) {
-      loadPeerTutorData()
+  // Helper to get status badge
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'submitted':
+        return <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-widest leading-none">Submitted</span>
+      case 'approved':
+        return <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-green-50 text-green-600 border border-green-100 uppercase tracking-widest leading-none">Approved</span>
+      case 'rejected':
+        return <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-red-50 text-red-600 border border-red-100 uppercase tracking-widest leading-none">Rejected</span>
+      case 'pending':
+      default:
+        return <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-yellow-50 text-yellow-600 border border-yellow-100 uppercase tracking-widest leading-none">Pending</span>
     }
-  }, [user])
+  }
 
-  const loadPeerTutorData = async () => {
+  const loadPeerTutorData = useCallback(async () => {
     if (!user?.email) return
 
     setLoading(true)
@@ -45,7 +55,6 @@ function PeerRenumerationContent() {
       // Get peer tutor information
       const tutorInfo = await PeerTutorAuthService.getPeerTutorByEmail(user.email)
       if (tutorInfo) {
-        setPeerTutorInfo(tutorInfo)
         
         // Get renumeration data and filter out rejected items
         const renumerationData = await RenumerationService.getPeerTutorRenumeration(tutorInfo.id)
@@ -53,9 +62,9 @@ function PeerRenumerationContent() {
         setRenumerations(filteredData)
         
         // Initialize field responses
-        const responses: Record<string, Record<string, any>> = {}
+        const responses: Record<string, Record<string, string | number | boolean | null>> = {}
         renumerationData.forEach(renumeration => {
-          responses[renumeration.id] = renumeration.field_responses || {}
+          responses[renumeration.id] = (renumeration.field_responses as Record<string, string | number | boolean | null>) || {}
         })
         setFieldResponses(responses)
       }
@@ -64,7 +73,13 @@ function PeerRenumerationContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (user) {
+      loadPeerTutorData()
+    }
+  }, [user, loadPeerTutorData])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -76,7 +91,7 @@ function PeerRenumerationContent() {
     }
   }
 
-  const handleFieldChange = (renumerationId: string, fieldName: string, value: any) => {
+  const handleFieldChange = (renumerationId: string, fieldName: string, value: string | number | boolean | null) => {
     setFieldResponses(prev => ({
       ...prev,
       [renumerationId]: {
@@ -89,6 +104,20 @@ function PeerRenumerationContent() {
   const handleSubmit = async (renumerationId: string) => {
     if (!fieldResponses[renumerationId]) return
 
+    const renumeration = renumerations.find(r => r.id === renumerationId)
+    if (!renumeration || !renumeration.template?.fields) return
+
+    // Check mandatory fields
+    const missingFields = renumeration.template.fields.filter(f => {
+      const val = fieldResponses[renumerationId]?.[f.field_name]
+      return f.is_mandatory && (val === undefined || val === null || val === '')
+    })
+
+    if (missingFields.length > 0) {
+      alert(`Please fill in all mandatory fields: ${missingFields.map(f => f.field_name).join(', ')}`)
+      return
+    }
+
     setSubmitting(renumerationId)
     try {
       const success = await RenumerationService.submitRenumerationResponse(
@@ -97,18 +126,24 @@ function PeerRenumerationContent() {
       )
       
       if (success) {
+        alert('Renumeration response submitted successfully!')
         loadPeerTutorData() // Reload data to show updated status
+      } else {
+        alert('Failed to submit renumeration response. Please try again.')
       }
     } catch (error) {
       console.error('Error submitting renumeration:', error)
+      alert('An error occurred while submitting. Please try again.')
     } finally {
       setSubmitting(null)
     }
   }
 
-  const renderField = (renumeration: PeerTutorRenumeration, field: any) => {
-    const fieldId = `${renumeration.id}_${field.field_name}`
-    const value = fieldResponses[renumeration.id]?.[field.field_name] || ''
+  const renderField = (renumeration: PeerTutorRenumeration, field: RenumerationField) => {
+
+    const rawValue = fieldResponses[renumeration.id]?.[field.field_name]
+    // Handle null/undefined and ensure boolean values are converted to string for input compatibility
+    const value = rawValue === null || rawValue === undefined ? '' : (typeof rawValue === 'boolean' ? String(rawValue) : rawValue)
 
     switch (field.field_type) {
       case 'text':
@@ -187,7 +222,7 @@ function PeerRenumerationContent() {
             onChange={(e) => handleFieldChange(renumeration.id, field.field_name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder={`Enter ${field.field_name}`}
-            disabled={renumeration.status !== 'pending'}
+            disabled={renumeration.status !== 'pending' || !renumeration.template?.is_active}
           />
         )
     }
@@ -235,7 +270,7 @@ function PeerRenumerationContent() {
                     </svg>
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No renumeration requests</h3>
-                  <p className="text-gray-500">You don't have any renumeration requests at the moment.</p>
+                  <p className="text-gray-500">You don&apos;t have any renumeration requests at the moment.</p>
                 </div>
               </div>
             ) : (
@@ -253,8 +288,9 @@ function PeerRenumerationContent() {
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center space-x-3">
-                        <span className="text-sm text-gray-500">
+                      <div className="flex items-center space-x-4">
+                        {getStatusBadge(renumeration.status)}
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                           Created {new Date(renumeration.created_at).toLocaleDateString()}
                         </span>
                       </div>

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import Image from 'next/image'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
@@ -8,7 +9,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { AttendanceService } from '@/lib/services/attendanceService'
-import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
+import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 import { useRouter } from 'next/navigation'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
@@ -20,34 +21,6 @@ export default function PeerAttendancePage() {
       <PeerAttendanceContent />
     </PeerProtectedRoute>
   )
-}
-
-interface AttendanceHistoryRecord {
-  id: string
-  class_id: string
-  scheduled_class_id?: string
-  student_id: string
-  status: 'present' | 'absent'
-  created_at: string
-  updated_at: string
-  classes: {
-    id: string
-    subject_name: string
-    created_at: string
-    dept: string
-    year: string
-    section: string
-  }
-  scheduled_classes?: {
-    id: string
-    scheduled_date: string
-    class_id: string
-  }
-  peer_students: {
-    id: string
-    name: string
-    email: string
-  }
 }
 
 function PeerAttendanceContent() {
@@ -143,7 +116,7 @@ function PeerAttendanceContent() {
     absentCount: 0,
     attendanceRate: 0
   }
-  const attendanceHistory = attendanceHistoryData || []
+  const attendanceHistory = useMemo(() => attendanceHistoryData || [], [attendanceHistoryData])
   const scheduledClasses = scheduledClassesData || []
 
   // Filter attendance history based on status and search
@@ -158,12 +131,12 @@ function PeerAttendanceContent() {
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(record =>
-        record.peer_students.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.peer_students.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.classes?.subject_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.classes?.dept.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.classes?.year.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.classes?.section.toLowerCase().includes(searchTerm.toLowerCase())
+        (record.peer_students?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (record.peer_students?.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (record.classes?.subject_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (record.classes?.dept || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (record.classes?.year || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (record.classes?.section || '').toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
@@ -390,23 +363,28 @@ function PeerAttendanceContent() {
                               <TableCell className="py-4 pl-6">
                                 <button
                                   onClick={() => {
-                                    router.push(`/peer/attendance/${record.peer_students.id}`)
+                                    if (record.peer_students?.id) {
+                                      router.push(`/peer/attendance/${record.peer_students.id}`)
+                                    }
                                   }}
                                   className="flex items-center text-left group/btn"
+                                  disabled={!record.peer_students?.id}
                                 >
                                   <div className="mr-3 transition-transform group-hover/btn:scale-105">
-                                    <img 
+                                    <Image 
                                       src="/icons/student.png" 
                                       alt="Student" 
-                                      className="w-8 h-8 rounded-lg object-cover shadow-sm"
+                                      width={32}
+                                      height={32}
+                                      className="rounded-lg object-cover shadow-sm"
                                     />
                                   </div>
                                   <div>
                                     <div className="text-xs font-bold text-gray-900 group-hover/btn:text-blue-600 transition-colors">
-                                      {record.peer_students.name}
+                                      {record.peer_students?.name || 'Unknown Student'}
                                     </div>
                                     <div className="text-[10px] text-gray-400 font-medium">
-                                      {record.peer_students.email}
+                                      {record.peer_students?.email || 'No Email'}
                                     </div>
                                   </div>
                                 </button>
@@ -482,7 +460,7 @@ function PeerAttendanceContent() {
                   ) : (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
              <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
-                  <img src="/icons/search.png" alt="search" />
+                  <Image src="/icons/search.png" alt="search" width={64} height={64} />
                </div>
                       <h3 className="text-lg font-black text-gray-900 uppercase tracking-widest mb-2">
                         {attendanceHistory.length === 0 ? 'No records found' : 'No records match your filters'}

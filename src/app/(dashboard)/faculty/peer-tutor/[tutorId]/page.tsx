@@ -10,7 +10,7 @@ import { StudentService, Student } from '@/lib/services/studentService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { RenumerationService, PeerTutorRenumeration } from '@/lib/services/renumerationService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Eye } from 'lucide-react'
+
 
 export default function PeerTutorProfilePage() {
   return (
@@ -41,7 +41,7 @@ function PeerTutorProfileContent() {
   const [isSidebarCollapsed] = useSidebarCollapsed()
   const [peerTutor, setPeerTutor] = useState<PeerTutor | null>(null)
   const [assignedStudents, setAssignedStudents] = useState<Student[]>([])
-  const [scheduledClasses, setScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
+  const [, setScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
   const [renumerations, setRenumerations] = useState<PeerTutorRenumeration[]>([])
   const [stats, setStats] = useState<PeerTutorStats>({
     totalClasses: 0,
@@ -55,6 +55,7 @@ function PeerTutorProfileContent() {
     if (user && tutorId) {
       loadPeerTutorData()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, tutorId])
 
   const loadPeerTutorData = async () => {

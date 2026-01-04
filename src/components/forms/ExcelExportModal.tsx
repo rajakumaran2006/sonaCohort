@@ -1,5 +1,6 @@
 'use client'
 import React, { useState } from 'react'
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as XLSX from 'xlsx'
 import { PeerTutorReportData } from '@/lib/services/reportService'
 import { ReportService } from '@/lib/services/reportService'
@@ -9,7 +10,7 @@ import ExcelPreviewModal from './ExcelPreviewModal'
 interface ExcelExportModalProps {
   isOpen: boolean
   onClose: () => void
-  peerTutorInfo: any
+  peerTutorInfo: { id: string; name: string } | null
   reportData: PeerTutorReportData | null
 }
 
@@ -45,7 +46,7 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
       const workbook = XLSX.utils.book_new()
 
       // Prepare data array
-      const data: any[][] = []
+      const data: string[][] = []
 
       // Add header rows based on user input
       for (let i = 0; i < numHeaders; i++) {
@@ -122,7 +123,7 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
         let topicSerialNumber = 1
         let totalPresentCount = 0
         let totalClassesCount = 0
-        const subjectClassRows: any[][] = [] // Collect classes for this subject
+        const subjectClassRows: string[][] = [] // Collect classes for this subject
 
         // Process each class (scheduled or additional) - ONLY if attendance was taken
         for (const classItem of allClasses) {
@@ -136,7 +137,7 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
               const date = new Date(classItem.scheduled_date).toLocaleDateString()
               const presentStudents = classReport.attendance_records
                 .filter(record => record.status === 'present')
-                .map((record: any) => record.student_name)
+                .map((record: { student_name: string }) => record.student_name)
               
               const presentCount = presentStudents.length
               totalPresentCount += presentCount
@@ -246,7 +247,7 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
         for (let col = 0; col < 5; col++) {
           const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
           if (worksheet[cellAddress]) {
-            worksheet[cellAddress].s = {
+            ;(worksheet[cellAddress] as any).s = {
               font: { name: 'Times New Roman', sz: 12, bold: true },
               alignment: { horizontal: 'center', vertical: 'center' }
             }
@@ -261,7 +262,7 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
         for (let col = 0; col < 5; col++) {
           const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
           if (worksheet[cellAddress]) {
-            worksheet[cellAddress].s = {
+            ;(worksheet[cellAddress] as any).s = {
               font: { name: 'Times New Roman', sz: 12, bold: true },
               alignment: { horizontal: 'center', vertical: 'center' }
             }
@@ -272,13 +273,13 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
       // Format peer tutor info row (left align for name, right align for dept/year)
       const peerTutorRowIndex = numHeaders + extraHeaders.filter(h => h.trim()).length + 2
       if (worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 0 })]) {
-        worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 0 })].s = {
+        ;(worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 0 })] as any).s = {
           font: { name: 'Times New Roman', sz: 11, bold: true },
           alignment: { horizontal: 'left', vertical: 'center' }
         }
       }
       if (worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 3 })]) {
-        worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 3 })].s = {
+        ;(worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 3 })] as any).s = {
           font: { name: 'Times New Roman', sz: 11, bold: true },
           alignment: { horizontal: 'right', vertical: 'center' }
         }
@@ -289,23 +290,23 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
         for (let col = 0; col <= range.e.c; col++) {
           const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
           if (worksheet[cellAddress]) {
-            if (!worksheet[cellAddress].s) {
-              worksheet[cellAddress].s = {}
+            if (!(worksheet[cellAddress] as any).s) {
+              ;(worksheet[cellAddress] as any).s = {}
             }
-            worksheet[cellAddress].s.font = { name: 'Times New Roman', sz: 11 }
+            ;(worksheet[cellAddress] as any).s.font = { name: 'Times New Roman', sz: 11 }
             
             // Format subject total rows (rows containing "TOTAL FOR")
             if (worksheet[cellAddress].v && typeof worksheet[cellAddress].v === 'string' && 
                 worksheet[cellAddress].v.includes('TOTAL FOR')) {
-              worksheet[cellAddress].s.font = { name: 'Times New Roman', sz: 11, bold: true }
-              worksheet[cellAddress].s.fill = { fgColor: { rgb: 'FFFF99' } } // Light yellow background
+              ;(worksheet[cellAddress] as any).s.font = { name: 'Times New Roman', sz: 11, bold: true }
+              ;(worksheet[cellAddress] as any).s.fill = { fgColor: { rgb: 'FFFF99' } } // Light yellow background
             }
             
             // Format grand total row (rows containing "GRAND TOTAL")
             if (worksheet[cellAddress].v && typeof worksheet[cellAddress].v === 'string' && 
                 worksheet[cellAddress].v.includes('GRAND TOTAL')) {
-              worksheet[cellAddress].s.font = { name: 'Times New Roman', sz: 11, bold: true }
-              worksheet[cellAddress].s.fill = { fgColor: { rgb: 'CCE5FF' } } // Light blue background
+              ;(worksheet[cellAddress] as any).s.font = { name: 'Times New Roman', sz: 11, bold: true }
+              ;(worksheet[cellAddress] as any).s.fill = { fgColor: { rgb: 'CCE5FF' } } // Light blue background
             }
           }
         }

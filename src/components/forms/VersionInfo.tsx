@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { FeedbackForm } from '@/lib/services/feedbackService'
-import { FeedbackVersioningService } from '@/lib/services/feedbackVersioningService'
+import { FeedbackVersioningService, FeedbackFormVersion } from '@/lib/services/feedbackVersioningService'
 
 interface VersionInfoProps {
   form: FeedbackForm
@@ -10,7 +10,7 @@ interface VersionInfoProps {
 
 export default function VersionInfo({ form }: VersionInfoProps) {
   const [showVersions, setShowVersions] = useState(false)
-  const [versions, setVersions] = useState<any[]>([])
+  const [versions, setVersions] = useState<FeedbackFormVersion[]>([])
   const [loading, setLoading] = useState(false)
 
   const handleViewVersions = async () => {
@@ -68,7 +68,7 @@ export default function VersionInfo({ form }: VersionInfoProps) {
               </div>
 
               <div className="space-y-4">
-                {versions.map((version, index) => (
+                {versions.map((version) => (
                   <div 
                     key={version.id} 
                     className={`border rounded-lg p-4 ${

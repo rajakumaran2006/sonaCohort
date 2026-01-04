@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import StudentProtectedRoute from '@/components/auth/StudentProtectedRoute'
 import StudentSidebar from '@/components/layout/PeerSidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { StudentAuthService } from '@/lib/auth/studentAuthService'
+import { StudentService, Student } from '@/lib/services/studentService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 
 export default function StudentStudentsPage() {
@@ -20,20 +20,25 @@ function StudentStudentsContent() {
   const { user, signOut } = useAuth()
   const router = useRouter()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [studentInfo, setStudentInfo] = useState<any>(null)
-  const [assignedStudents, setAssignedStudents] = useState<any[]>([])
+  const [studentInfo, setStudentInfo] = useState<Student | null>(null)
+  const [assignedStudents, setAssignedStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
       if (user?.email) {
         try {
-          const [info, students] = await Promise.all([
-            StudentAuthService.getStudentInfo(user.email),
-            AssignmentService.getStudentsByPeerTutor(user.id)
-          ])
-          setStudentInfo(info)
-          setAssignedStudents(students)
+          // Get all students and find the current student
+          const allStudents = await StudentService.getAllStudentsWithPeerTutors()
+          const currentStudent = allStudents.find(s => s.email === user.email)
+          
+          if (currentStudent) {
+            setStudentInfo(currentStudent)
+            // For students viewing other students - this might not be the intended behavior
+            // but keeping it as is for now
+            const students = await AssignmentService.getStudentsByPeerTutor(user.id || '')
+            setAssignedStudents(students)
+          }
         } catch (error) {
           console.error('Error loading data:', error)
         } finally {
@@ -148,7 +153,7 @@ function StudentStudentsContent() {
                       </svg>
                     </div>
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No students assigned</h3>
-                    <p className="text-gray-500">You don't have any students assigned to you yet.</p>
+                    <p className="text-gray-500">You don&apos;t have any students assigned to you yet.</p>
                   </div>
                 )}
               </div>

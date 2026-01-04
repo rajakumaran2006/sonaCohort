@@ -1,16 +1,26 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { FeedbackForm } from '@/lib/services/feedbackService'
 import { FeedbackAnalyticsService, ResponseAnalytics, StudentResponseAnalytics } from '@/lib/services/feedbackAnalyticsService'
 import { DepartmentService } from '@/lib/services/departmentService'
 import StarRating from '@/components/ui/StarRating'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import Chart, { TrendChart, SparklineChart } from '@/components/ui/Chart'
+import Chart, {TrendChart, SparklineChart } from '@/components/ui/Chart'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui'
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+
+// Helper functions
+const formatCompletionTime = (seconds: number): string => {
+  if (seconds < 60) return `${Math.round(seconds)}s`
+  return `${(seconds / 60).toFixed(1)} min`
+}
+
+const getDeltaColor = (delta: number): string => {
+  if (delta > 0) return 'text-green-600'
+  if (delta < 0) return 'text-red-600'
+  return 'text-gray-900'
+}
 
 interface FeedbackAnalyticsPageProps {
   form: FeedbackForm
@@ -34,17 +44,6 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
   const [sections, setSections] = useState<Array<{id: string, name: string}>>([])
   const filterDropdownRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    loadAnalytics()
-    loadTrends()
-    loadYearsAndSections()
-  }, [form.id])
-
-  // Refetch analytics when date range or question filter changes
-  useEffect(() => {
-    loadAnalytics()
-  }, [startDate, endDate, selectedQuestionId])
-
   // Close filter dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -62,7 +61,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     }
   }, [showFilters])
 
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -78,18 +77,18 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     } finally {
       setLoading(false)
     }
-  }
+  }, [form.id, startDate, endDate, selectedQuestionId])
 
-  const loadTrends = async () => {
+  const loadTrends = useCallback(async () => {
     try {
       const trendData = await FeedbackAnalyticsService.getResponseTrends(form.id, 30)
       setTrends(trendData)
     } catch (err) {
       console.error('Error loading trends:', err)
     }
-  }
+  }, [form.id])
 
-  const loadYearsAndSections = async () => {
+  const loadYearsAndSections = useCallback(async () => {
     try {
       const [yearsData, sectionsData] = await Promise.all([
         DepartmentService.getYears(),
@@ -100,7 +99,22 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     } catch (err) {
       console.error('Error loading years and sections:', err)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadAnalytics()
+    loadTrends()
+    loadYearsAndSections()
+  }, [loadAnalytics, loadTrends, loadYearsAndSections])
+
+  useEffect(() => {
+    // Skip initial load to avoid double fetching since the first useEffect handles it?
+    // Actually, initial state of startDate/endDate is empty, so this won't trigger change unless set.
+    // But we need to refetch if these change.
+    if (startDate || endDate || selectedQuestionId) {
+      loadAnalytics()
+    }
+  }, [startDate, endDate, selectedQuestionId, loadAnalytics])
 
   // Filter student responses based on selected year and section
   const getFilteredResponses = (): StudentResponseAnalytics[] => {
@@ -163,7 +177,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     let yPos = 42
     
     // Process each student
-    filteredResponses.forEach((student, studentIndex) => {
+    filteredResponses.forEach((student) => {
       // Check if we need a new page
       if (yPos > 250) {
         doc.addPage()
@@ -211,34 +225,10 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     doc.save(fileName)
   }
 
-  const formatCompletionTime = (minutes: number): string => {
-    if (minutes < 1) {
-      return '< 1 min'
-    } else if (minutes < 60) {
-      return `${Math.round(minutes)} min`
-    } else {
-      const hours = Math.floor(minutes / 60)
-      const remainingMinutes = Math.round(minutes % 60)
-      return `${hours}h ${remainingMinutes}m`
-    }
-  }
-
   const getSatisfactionColor = (score: number): string => {
     if (score >= 4) return 'text-green-600'
     if (score >= 3) return 'text-yellow-600'
     return 'text-red-600'
-  }
-
-  const getDeltaColor = (delta: number): string => {
-    if (delta > 0) return 'text-green-600'
-    if (delta < 0) return 'text-red-600'
-    return 'text-gray-600'
-  }
-
-  const getDeltaIcon = (delta: number): string => {
-    if (delta > 0) return '↗'
-    if (delta < 0) return '↘'
-    return '→'
   }
 
   if (loading) {
@@ -481,16 +471,16 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                           <div className="text-sm text-gray-700">Top option</div>
-                          <div className="text-lg font-semibold text-gray-900">{(question as any).topOption?.option ?? '—'}</div>
+                          <div className="text-lg font-semibold text-gray-900">{(question as { topOption?: { option?: string } }).topOption?.option ?? '—'}</div>
                           {question.totalResponses > 0 && (
                             <div className="text-xs text-gray-600">
-                              {(question as any).topOption?.count ?? 0} · {((question as any).topOption?.percent ?? 0).toFixed(0)}%
+                              {(question as { topOption?: { count?: number; percent?: number } }).topOption?.count ?? 0} · {((question as { topOption?: { count?: number; percent?: number } }).topOption?.percent ?? 0).toFixed(0)}%
                             </div>
                           )}
                         </div>
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                           <div className="text-sm text-gray-700">Distinct options</div>
-                          <div className="text-lg font-semibold text-gray-900">{(question as any).distinctOptionCount ?? 0}</div>
+                          <div className="text-lg font-semibold text-gray-900">{(question as { distinctOptionCount?: number }).distinctOptionCount ?? 0}</div>
                         </div>
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                           <div className="text-sm text-gray-700">Total selections</div>
@@ -529,8 +519,8 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                           <div className="text-sm text-gray-700">Top keywords</div>
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {(question as any).topKeywords?.length ? (
-                              (question as any).topKeywords.map((kw: string, i: number) => (
+                            {(question as { topKeywords?: string[] }).topKeywords?.length ? (
+                              (question as { topKeywords?: string[] }).topKeywords!.map((kw: string, i: number) => (
                                 <span key={i} className="px-2 py-0.5 text-xs rounded-md bg-gray-100 text-gray-700">{kw}</span>
                               ))
                             ) : (
@@ -540,7 +530,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
                         </div>
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                           <Chart
-                            data={(question as any).responseLengthHistogram || {}}
+                            data={(question as { responseLengthHistogram?: Record<string, number> }).responseLengthHistogram || {}}
                             title="Response Lengths"
                             type="bar"
                             colors={["#6B7280"]}
@@ -554,7 +544,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
                         <div className="max-h-48 overflow-y-auto space-y-2 mt-3" aria-label="Representative quotes">
                           {question.textResponses.slice(0, 10).map((response, idx) => (
                             <div key={idx} className="text-sm text-gray-700 bg-gray-50 p-3 rounded-md border border-gray-200">
-                              "{response}"
+                              &quot;{response}&quot;
                             </div>
                           ))}
                           {question.textResponses.length > 10 && (

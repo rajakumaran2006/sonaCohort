@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ExamService, ExamAssignment, ExamMark } from '@/lib/services/examService'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Button } from '@/components/ui'
 
@@ -22,9 +22,9 @@ export default function PeerTutorMarksModal({
     if (isOpen && examAssignment) {
       loadMarks()
     }
-  }, [isOpen, examAssignment])
+  }, [isOpen, examAssignment, loadMarks])
 
-  const loadMarks = async () => {
+  const loadMarks = useCallback(async () => {
     setLoading(true)
     try {
       const marksData = await ExamService.getExamMarks(examAssignment.id)
@@ -34,7 +34,7 @@ export default function PeerTutorMarksModal({
     } finally {
       setLoading(false)
     }
-  }
+  }, [examAssignment])
 
   // Group marks by subject
   const marksBySubject = marks.reduce((acc, mark) => {

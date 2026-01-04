@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { LayoutGrid, Users, GraduationCap, ClipboardList, FileText, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import Image from 'next/image'
 
 interface FacultySidebarProps {
   isOpen: boolean
@@ -14,7 +15,7 @@ interface FacultySidebarProps {
   onToggleCollapse?: () => void
 }
 
-export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCollapsed = false, onToggleCollapse }: FacultySidebarProps) {
+export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: FacultySidebarProps) {
   const { user, signOut } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
@@ -92,11 +93,15 @@ export default function FacultySidebar({ isOpen, onClose, isCollapsed: initialCo
         {/* Logo Header */}
         <div className={`flex items-center h-20 flex-shrink-0 ${isCollapsed ? 'px-4' : 'pl-4 pr-10'} pt-6 mb-6 transition-all duration-300`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center w-full' : 'w-full'}`}>
-            <img 
-              src="/peers.png" 
-              alt="Peers Logo" 
-              className={`h-auto object-contain transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-full'}`}
-            />
+            <div className={`relative ${isCollapsed ? 'w-12 h-12' : 'w-full h-12'}`}>
+              <Image 
+                src="/peers.png" 
+                alt="Peers Logo" 
+                fill
+                className={`object-contain transition-all duration-300`}
+                priority
+              />
+            </div>
           </div>
         </div>
 

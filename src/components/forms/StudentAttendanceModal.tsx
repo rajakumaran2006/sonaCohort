@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AttendanceService } from '@/lib/services/attendanceService'
 
 interface StudentAttendanceModalProps {
@@ -56,9 +56,9 @@ export default function StudentAttendanceModal({
     if (isOpen && student) {
       loadStudentAttendance()
     }
-  }, [isOpen, student, peerTutorId])
+  }, [isOpen, student, peerTutorId, loadStudentAttendance])
 
-  const loadStudentAttendance = async () => {
+  const loadStudentAttendance = useCallback(async () => {
     if (!student) return
 
     setLoading(true)
@@ -84,7 +84,7 @@ export default function StudentAttendanceModal({
     } finally {
       setLoading(false)
     }
-  }
+  }, [student, peerTutorId])
 
   if (!isOpen || !student) return null
 

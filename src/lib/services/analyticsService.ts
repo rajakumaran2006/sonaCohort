@@ -1,6 +1,19 @@
 import { createClient } from '@/utils/supabase/client'
-import { ScheduledClassService } from './scheduledClassService'
-import { AdditionalClassService } from './additionalClassService'
+
+import { AdditionalClass } from './additionalClassService'
+
+interface AnalyticsScheduledClass {
+  id: string
+  scheduled_date: string
+  completion_status: 'not_started' | 'pending' | 'completed' // Approximated from DB values
+  attendance_completed: boolean
+  topics_completed: boolean
+  class: {
+    subject_name: string
+  } | {
+    subject_name: string
+  }[]
+}
 
 export interface PendingClassStudent {
   id: string
@@ -188,7 +201,7 @@ export class AnalyticsService {
       })
 
       // Get additional classes if needed for continuous calculation
-      let additionalClasses: any[] = []
+      let additionalClasses: Pick<AdditionalClass, 'id' | 'class_date' | 'subject_name'>[] = []
       if (excludeAdditionalClasses) {
         const { data: addClasses, error: addError } = await supabase
           .from('additional_classes')
@@ -227,12 +240,15 @@ export class AnalyticsService {
         peer_tutor_name: peerTutorName,
         pending_count: pendingClasses.length,
         continuous_pending_count: continuousPendingCount,
-        scheduled_classes: pendingClasses.map(cls => ({
-          id: cls.id,
-          scheduled_date: cls.scheduled_date,
-          subject_name: cls.class.subject_name,
-          completion_status: cls.completion_status || 'not_started'
-        })),
+        scheduled_classes: pendingClasses.map(cls => {
+          const classData = Array.isArray(cls.class) ? cls.class[0] : cls.class
+          return {
+            id: cls.id,
+            scheduled_date: cls.scheduled_date,
+            subject_name: classData?.subject_name || '',
+            completion_status: cls.completion_status || 'not_started'
+          }
+        }),
         additional_classes: additionalClasses.map(cls => ({
           id: cls.id,
           class_date: cls.class_date,
@@ -251,8 +267,8 @@ export class AnalyticsService {
    * If excludeAdditionalClasses is true, additional classes break the streak
    */
   private static calculateContinuousPending(
-    pendingClasses: any[],
-    additionalClasses: any[],
+    pendingClasses: AnalyticsScheduledClass[],
+    additionalClasses: Pick<AdditionalClass, 'id' | 'class_date' | 'subject_name'>[],
     excludeAdditionalClasses: boolean
   ): number {
     if (pendingClasses.length === 0) return 0
@@ -296,11 +312,12 @@ export class AnalyticsService {
       pendingDate.setHours(0, 0, 0, 0)
 
       if (lastPendingDate) {
+        const currentDate = lastPendingDate;
         // Check if there's an additional class between lastPendingDate and pendingDate
         const hasAdditionalBetween = sortedAdditional.some(addCls => {
           const addDate = new Date(addCls.class_date)
           addDate.setHours(0, 0, 0, 0)
-          return addDate > lastPendingDate && addDate < pendingDate
+          return addDate > currentDate && addDate < pendingDate
         })
 
         if (hasAdditionalBetween) {
@@ -331,7 +348,7 @@ export class AnalyticsService {
     total_pending_classes: number
   }[]> {
     try {
-      const supabase = createClient()
+      // const supabase = createClient()
 
       const years = ['2', '3', '4']
       const stats = []

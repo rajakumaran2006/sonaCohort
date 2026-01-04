@@ -25,7 +25,6 @@ export default function DeleteConfirmationModal({
   type,
   isLoading = false
 }: DeleteConfirmationModalProps) {
-  const [confirmationCode, setConfirmationCode] = useState('')
   const [generatedCode, setGeneratedCode] = useState('')
   const [inputCode, setInputCode] = useState('')
   const [error, setError] = useState('')

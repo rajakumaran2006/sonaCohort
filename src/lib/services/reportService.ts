@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/client'
 import { AttendanceService } from './attendanceService'
-import { ScheduledClassService, ScheduledClassWithDetails } from './scheduledClassService'
+import { ScheduledClassWithDetails } from './scheduledClassService'
 import { AdditionalClassService } from './additionalClassService'
 
 export interface PeerTutorSubject {
@@ -96,12 +96,7 @@ export class ReportService {
         return []
       }
 
-      // Filter scheduled classes by date for stats calculation (only count classes after creation)
-      const scheduledClassesForStats = (allScheduledClasses || []).filter(sc => {
-        const classDate = new Date(sc.scheduled_date)
-        classDate.setHours(0, 0, 0, 0)
-        return classDate >= minimumClassDate
-      })
+
 
       if (!allScheduledClasses || allScheduledClasses.length === 0) {
         // If no scheduled classes at all, check if there are classes available for this dept/year/section
@@ -137,13 +132,40 @@ export class ReportService {
       const classMap = new Map<string, {
         class_id: string
         subject_name: string
-        allScheduledClasses: any[]
-        scheduledClassesForStats: any[]
+        allScheduledClasses: {
+          class_id: string
+          scheduled_date: string
+          completion_status?: 'not_started' | 'pending' | 'completed'
+          attendance_completed?: boolean
+          topics_completed?: boolean
+          class: {
+            id: string
+            subject_name: string
+          } | {
+            id: string
+            subject_name: string
+          }[]
+        }[]
+        scheduledClassesForStats: {
+          class_id: string
+          scheduled_date: string
+          completion_status?: 'not_started' | 'pending' | 'completed'
+          attendance_completed?: boolean
+          topics_completed?: boolean
+          class: {
+            id: string
+            subject_name: string
+          } | {
+            id: string
+            subject_name: string
+          }[]
+        }[]
       }>()
 
       allScheduledClasses.forEach(sc => {
         const classId = sc.class_id
-        const subjectName = sc.class?.subject_name || ''
+        const classData = Array.isArray(sc.class) ? sc.class[0] : sc.class
+        const subjectName = classData?.subject_name || ''
         
         if (!classMap.has(classId)) {
           classMap.set(classId, {

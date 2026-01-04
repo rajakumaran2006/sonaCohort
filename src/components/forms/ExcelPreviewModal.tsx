@@ -1,15 +1,14 @@
 'use client'
-import React from 'react'
+
 
 interface ExcelPreviewModalProps {
   isOpen: boolean
   onClose: () => void
   numHeaders: number
   extraHeaders: string[]
-  sampleData: any[]
 }
 
-export default function ExcelPreviewModal({ isOpen, onClose, numHeaders, extraHeaders, sampleData }: ExcelPreviewModalProps) {
+export default function ExcelPreviewModal({ isOpen, onClose, numHeaders, extraHeaders }: ExcelPreviewModalProps) {
   if (!isOpen) return null
 
   return (

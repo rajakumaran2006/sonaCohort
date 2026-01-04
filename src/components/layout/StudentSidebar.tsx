@@ -4,7 +4,6 @@ import React, { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Button } from '@/components/ui'
 import { LayoutGrid, Users, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface StudentSidebarProps {

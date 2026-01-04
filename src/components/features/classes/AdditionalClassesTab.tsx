@@ -1,19 +1,32 @@
 'use client'
-import React, { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/auth/AuthContext'
-import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
+import React, { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
+
+import { AttendanceRecord } from '@/lib/services/attendanceService'
 import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
 import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
 import * as XLSX from 'xlsx'
-import { Plus, Trash2, FileDown, ChevronDown, CheckCircle, XCircle, Search, Calendar, User, FileText } from 'lucide-react'
+import { Plus, Trash2, FileDown, ChevronDown, CheckCircle, XCircle, Calendar, User, FileText } from 'lucide-react'
+
+interface PeerTutorInfo {
+  id: string
+  name: string
+}
+
+interface Student {
+  id: string
+  name: string
+  email: string
+}
 
 interface AdditionalClassesTabProps {
-  peerTutorInfo: any
-  assignedStudents: any[]
+  peerTutorInfo: PeerTutorInfo
+  assignedStudents: Student[]
 }
 
 export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }: AdditionalClassesTabProps) {
-  const { user } = useAuth()
+  // const { user } = useAuth() // keeping user if it might be needed, or remove if truly unused. The error said 'user' is assigned but never used.
+
   const [additionalClasses, setAdditionalClasses] = useState<AdditionalClassWithAttendance[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -30,15 +43,8 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
   const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set())
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => {
-    if (peerTutorInfo) {
-      loadAdditionalClasses()
-    }
-  }, [peerTutorInfo])
-
-  const loadAdditionalClasses = async () => {
+  const loadAdditionalClasses = useCallback(async () => {
     if (!peerTutorInfo?.id) return
 
     setLoading(true)
@@ -50,7 +56,13 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
     } finally {
       setLoading(false)
     }
-  }
+  }, [peerTutorInfo?.id])
+
+  useEffect(() => {
+    if (peerTutorInfo) {
+      loadAdditionalClasses()
+    }
+  }, [peerTutorInfo, loadAdditionalClasses])
 
   useEffect(() => {
     if (assignedStudents && assignedStudents.length > 0) {
@@ -187,7 +199,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
   const confirmDelete = async () => {
     if (selectedClasses.size === 0) return
 
-    setDeleting(true)
+
     try {
       const deletePromises = Array.from(selectedClasses).map(classId =>
         AdditionalClassService.deleteAdditionalClass(classId)
@@ -204,7 +216,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
       console.error('Error deleting classes:', error)
       alert('Error deleting classes. Please try again.')
     } finally {
-      setDeleting(false)
+
     }
   }
 
@@ -220,7 +232,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
         return acc
       }, {} as Record<string, AdditionalClassWithAttendance[]>)
 
-      const exportData: any[][] = []
+      const exportData: unknown[][] = []
       let totalClassesOverall = 0
       let totalPresentCountOverall = 0
       let totalStudentCountOverall = 0
@@ -586,7 +598,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
          ) : (
             <div className="py-20 flex flex-col items-center justify-center text-center">
                <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
-                  <img src="/icons/search.png" alt="search" />
+                  <Image src="/icons/search.png" alt="search" width={64} height={64} />
                </div>
                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">No Additional Classes</h3>
                <p className="text-xs text-gray-400 mt-2 max-w-xs block">

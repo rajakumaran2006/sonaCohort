@@ -13,9 +13,9 @@ interface PageHeaderProps {
   onRefresh?: () => void | Promise<void>
   isRefreshing?: boolean
   showRefresh?: boolean
-  children?: React.ReactNode
-  isSidebarCollapsed?: boolean
   onToggleSidebar?: () => void
+  isSidebarCollapsed?: boolean
+  children?: React.ReactNode
 }
 
 export default function PageHeader({
@@ -27,9 +27,9 @@ export default function PageHeader({
   onRefresh,
   isRefreshing = false,
   showRefresh = true,
-  children,
-  isSidebarCollapsed = false,
   onToggleSidebar,
+  // isSidebarCollapsed, - keeping as comment or remove line? The interface has it but it is unused. I should remove from destructuring.
+  children,
 }: PageHeaderProps) {
   // Use tagline if provided, otherwise fall back to subtitle for backward compatibility
   const displayTagline = tagline || subtitle
@@ -66,10 +66,17 @@ export default function PageHeader({
         <div className="flex items-center gap-4">
           {children}
           {showRefresh && onRefresh && (
-            <AnimatedRefreshButton 
-              onRefresh={onRefresh}
-              isRefreshing={isRefreshing}
-            />
+            <div className="flex flex-col items-end">
+              <AnimatedRefreshButton 
+                onRefresh={onRefresh}
+                isRefreshing={isRefreshing}
+              />
+              {lastRefresh && (
+                <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-1 whitespace-nowrap">
+                  Last updated: {lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>

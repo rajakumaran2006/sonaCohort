@@ -14,7 +14,7 @@ export function useSidebarCollapsed() {
       if (saved !== null) {
         try {
           return JSON.parse(saved)
-        } catch (e) {
+        } catch {
           return false
         }
       }
@@ -31,18 +31,21 @@ export function useSidebarCollapsed() {
 
   // Listen for sidebar toggle events from other components
   useEffect(() => {
-    const handleSidebarToggle = (event?: any) => {
-      // Prefer event detail when available for instantaneous sync
-      if (event && event.detail && typeof event.detail.isCollapsed === 'boolean') {
-        setIsCollapsed(event.detail.isCollapsed)
+    const handleSidebarToggle = (event: Event) => {
+      // Check if it's a custom event with detail
+      const customEvent = event as CustomEvent
+      if (customEvent.detail && typeof customEvent.detail.isCollapsed === 'boolean') {
+        setIsCollapsed(customEvent.detail.isCollapsed)
         return
       }
+
+      // Handle storage event or fallback
       if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('sidebar-collapsed')
         if (saved !== null) {
           try {
             setIsCollapsed(JSON.parse(saved))
-          } catch (e) {
+          } catch {
             // Ignore parse errors
           }
         }
@@ -50,13 +53,13 @@ export function useSidebarCollapsed() {
     }
 
     // Listen for custom events
-    window.addEventListener('sidebar-toggle', handleSidebarToggle as EventListener)
+    window.addEventListener('sidebar-toggle', handleSidebarToggle)
     
     // Listen for storage changes (for multi-tab sync)
     window.addEventListener('storage', handleSidebarToggle)
 
     return () => {
-      window.removeEventListener('sidebar-toggle', handleSidebarToggle as EventListener)
+      window.removeEventListener('sidebar-toggle', handleSidebarToggle)
       window.removeEventListener('storage', handleSidebarToggle)
     }
   }, [])

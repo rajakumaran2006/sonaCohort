@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+
+import Image from 'next/image'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
@@ -11,8 +12,6 @@ import { NotificationCenter, Notification } from '@/components/common/Notificati
 import PeerRenumerationModal from '@/components/forms/PeerRenumerationModal'
 import { Card, LoadingSpinner } from '@/components/ui'
 import { 
-  Users, 
-  Clock, 
   ArrowUpRight, 
   ChevronRight,
   MoreHorizontal
@@ -40,12 +39,10 @@ export default function PeerDashboardPage() {
 
 function PeerDashboardContent() {
   const { user } = useAuth()
-  const router = useRouter()
   const queryClient = useQueryClient()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [showRenumerationModal, setShowRenumerationModal] = useState(false)
   const [selectedRenumeration, setSelectedRenumeration] = useState<PeerTutorRenumeration | null>(null)
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Use custom hook for sidebar collapsed state
@@ -85,7 +82,7 @@ function PeerDashboardContent() {
       return
     }
 
-    const exportData = studentsWithAttendance.map((student: any) => ({
+    const exportData = studentsWithAttendance.map((student: { name: string; email: string; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number }) => ({
       'Student Name': student.name,
       'Email': student.email,
       'Department': student.dept,
@@ -115,7 +112,6 @@ function PeerDashboardContent() {
             queryClient.invalidateQueries({ queryKey: ['activeFeedbackForms'] }),
             queryClient.invalidateQueries({ queryKey: ['pendingClassAlert'] })
         ])
-      setLastRefresh(new Date())
     } finally {
       setTimeout(() => setIsRefreshing(false), 500)
     }
@@ -158,7 +154,7 @@ function PeerDashboardContent() {
         read: false, 
         actionLabel: 'View Details',
         onClick: () => {
-           console.log('Navigate to feedback', f.id)
+
         }
       })
     })
@@ -188,7 +184,6 @@ function PeerDashboardContent() {
         <PageHeader
           title="DASHBOARD"
           tagline="Role & Performance Overview"
-          lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
           onToggleSidebar={() => setIsSidebarOpen(true)}
@@ -307,7 +302,7 @@ function PeerDashboardContent() {
                        </div>
                     ) : studentsWithAttendance.length > 0 ? (
                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 max-h-[500px]">
-                          {studentsWithAttendance.map((student: any) => (
+                          {studentsWithAttendance.map((student: { id: string; name: string; email: string; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number }) => (
                              <div key={student.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-white transition-all duration-300 group cursor-default">
                                 <div className="flex items-center gap-4">
                                    <div className="w-12 h-12 rounded-xl bg-[#1C2434] text-white flex items-center justify-center text-xs font-bold shadow-md shadow-gray-200 group-hover:scale-105 transition-transform duration-300">
@@ -341,7 +336,7 @@ function PeerDashboardContent() {
                     ) : (
                        <div className="py-20 flex flex-col items-center justify-center text-center">
            <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
-                  <img src="/icons/student.png" alt="student" />
+                  <Image src="/icons/student.png" alt="student" width={64} height={64} />
                </div>
                           <p className="text-xs font-black text-gray-900 uppercase tracking-widest mb-1">No Students Assigned</p>
                           <p className="text-[10px] text-gray-400 max-w-[200px] font-medium leading-relaxed">Students allocated to you will appear here.</p>
@@ -405,11 +400,8 @@ function PeerDashboardContent() {
                         </div>
 
                         <div className="mt-5 flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                           <div className="p-2 bg-white rounded-lg shadow-sm">
-                              <Clock size={14} className="text-emerald-500" />
-                           </div>
                            <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
-                              You're doing great! Complete <strong className="text-gray-900">{totalClassesAllocated - classesTaken} more</strong> classes to reach your target for this semester.
+                              You&apos;re doing great! Complete <strong className="text-gray-900">{totalClassesAllocated - classesTaken} more</strong> classes to reach your target for this semester.
                            </p>
                         </div>
                      </div>
@@ -478,8 +470,8 @@ function PeerDashboardContent() {
                            ))
                         ) : (
                            <div className="py-12 flex flex-col items-center justify-center text-center">
-           <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
-                  <img src="/icons/search.png" alt="search" />
+            <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
+                   <Image src="/icons/search.png" alt="search" width={64} height={64} />
                </div>
                               <p className="text-xs font-black text-gray-900 uppercase tracking-widest mb-1">No Active Forms</p>
                               <p className="text-[10px] text-gray-400 max-w-[200px] font-medium leading-relaxed">Renumeration forms will appear here.</p>

@@ -29,7 +29,6 @@ export default function StudentPerformanceChart({ students, subjectNames, maxMar
 
   // Calculate max mark value for scaling
   const maxMarkValue = Math.max(...students.flatMap(s => s.marks), maxMarks)
-  const minMarkValue = 0
 
   // Colors for each student
   const colors = [

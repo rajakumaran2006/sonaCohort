@@ -5,35 +5,30 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams } from 'next/navigation'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
-import { ExamService, Exam } from '@/lib/services/examService'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { ExamService } from '@/lib/services/examService'
+import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import { ExamSubjectService, ExamSubject } from '@/lib/services/examSubjectService'
+import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
-import { calculateAscendScore } from '@/lib/utils/ascendScore'
 import {
   preprocessMarks,
   calculateStudentPerformance,
   calculateSubjectPerformance,
   generateAttentionItems,
   generateInsights,
-  type StudentPerformance,
-  type SubjectPerformance,
-  type AttentionItem,
 } from '@/lib/utils/examAnalytics'
-import { Chart, Heatmap, Card, CardHeader, CardTitle, CardContent, LoadingOverlay, StudentPerformanceChart } from '@/components/ui'
+import { Heatmap, Card, CardContent, LoadingOverlay, StudentPerformanceChart } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { Input } from '@/components/ui'
-import { ArrowLeft, Edit, Save, X, Plus, Download, Filter, RotateCw } from 'lucide-react'
+import { ArrowLeft, Edit, Save, Plus, Filter, RotateCw } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
-import { Student } from '@/lib/services/studentService'
 
 export default function PeerTutorExamDetailsPage() {
   return (
@@ -324,11 +319,11 @@ function PeerTutorExamDetailsContent() {
       const subjects = examSubjects
       
       // Prepare data for export
-      const exportData: any[][] = []
+      const exportData: (string | number)[][] = []
       
       // Add header rows with exam information
       exportData.push(['Subjects Export Report'])
-      exportData.push(['Department:', (department as any)?.dept || department?.name || ''])
+      exportData.push(['Department:', (department as { dept?: string; name?: string })?.dept || department?.name || ''])
       exportData.push(['Year:', peerTutor.year])
       exportData.push(['Section:', peerTutor.section])
       exportData.push(['Peer Tutor:', peerTutor.name])
@@ -398,7 +393,7 @@ function PeerTutorExamDetailsContent() {
   const markField = 'marks'
 
   // Calculate average marks for each student
-  const calculateStudentAverage = (studentId: string): number => {
+  const calculateStudentAverage = useCallback((studentId: string): number => {
     if (!examSubjects || examSubjects.length === 0) return 0
     
     let totalMarks = 0
@@ -418,7 +413,7 @@ function PeerTutorExamDetailsContent() {
     })
     
     return count > 0 ? totalMarks / count : 0
-  }
+  }, [examSubjects, marksData])
 
   // Get sorted students
   const sortedStudents = useMemo(() => {
@@ -435,7 +430,7 @@ function PeerTutorExamDetailsContent() {
       sorted.sort((a, b) => a.name.localeCompare(b.name))
     }
     return sorted
-  }, [students, sortBy, marksData, examSubjects])
+  }, [students, sortBy, calculateStudentAverage])
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -482,6 +477,27 @@ function PeerTutorExamDetailsContent() {
       value: mark.percentage,
     }))
   }, [processedMarks, students, examSubjects])
+
+  // Prepare chart data adapting StudentPerformance to StudentMark interface
+  const chartData = useMemo(() => {
+    if (!studentPerformance || !examSubjects) return []
+    return studentPerformance.map(sp => {
+      // Map marks to subjects maintaining order
+      const marks = examSubjects.map(subject => {
+        const score = sp.subjectScores.find(s => s.subjectName === subject.subject_name)
+        return score ? score.mark : 0
+      })
+      
+      // Calculate raw average for the chart (same scale as marks)
+      const average = sp.subjectCount > 0 ? sp.totalMarks / sp.subjectCount : 0
+      
+      return {
+        studentName: sp.studentName,
+        marks,
+        average
+      }
+    })
+  }, [studentPerformance, examSubjects])
 
   if (loading) {
     return (
@@ -855,7 +871,11 @@ function PeerTutorExamDetailsContent() {
                       <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Student Performance Overview</h4>
                     </div>
                     <div className="p-6">
-                      <StudentPerformanceChart data={studentPerformance} maxMarks={exam.max_marks || 100} />
+                      <StudentPerformanceChart 
+                        students={chartData} 
+                        subjectNames={examSubjects?.map(s => s.subject_name) || []}
+                        maxMarks={exam.max_marks || 100} 
+                      />
                     </div>
                   </div>
 
@@ -867,9 +887,8 @@ function PeerTutorExamDetailsContent() {
                     <div className="p-6">
                       <Heatmap
                         data={heatmapData}
-                        xKey="subject"
-                        yKey="student"
-                        valueKey="value"
+                        students={sortedStudents.map(s => s.name)}
+                        subjects={examSubjects?.map(s => s.subject_name) || []}
                       />
                     </div>
                   </div>
@@ -891,7 +910,7 @@ function PeerTutorExamDetailsContent() {
                             <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100 italic transition-transform hover:scale-[1.02]">
                               <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5"></div>
                               <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                                <span className="font-bold text-gray-900">{item.studentName}</span>: {item.reason}
+                                <span className="font-bold text-gray-900">{item.studentName}</span>: {item.reasons.join(', ')}
                               </p>
                             </div>
                           ))

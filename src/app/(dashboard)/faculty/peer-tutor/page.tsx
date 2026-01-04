@@ -3,17 +3,16 @@
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import * as XLSX from 'xlsx'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
-import { StudentService, Student, StudentWithPeerTutor } from '@/lib/services/studentService'
-import { AssignmentService } from '@/lib/services/assignmentService'
+import { StudentService, StudentWithPeerTutor } from '@/lib/services/studentService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
-import { RenumerationService, RenumerationTemplate } from '@/lib/services/renumerationService'
-import { FeedbackService, FeedbackForm, FeedbackResponseWithDetails } from '@/lib/services/feedbackService'
+import { RenumerationService, RenumerationTemplate, PeerTutorRenumeration } from '@/lib/services/renumerationService'
+import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
 import { FeedbackAnalyticsService } from '@/lib/services/feedbackAnalyticsService'
 import { ReportService, PeerTutorReportData, ClassAttendanceReport } from '@/lib/services/reportService'
 import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
@@ -26,7 +25,7 @@ import FeedbackAnalyticsPage from '@/components/forms/FeedbackAnalyticsPage'
 import ExcelExportModal from '@/components/forms/ExcelExportModal'
 import PeerTutorImportModal from '@/components/forms/PeerTutorImportModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { UserCheck, Clock, Users, UserMinus, ClipboardList, MessageSquare, Banknote, Eye, Edit } from 'lucide-react'
+import { Edit, Eye } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 
 export default function FacultyPeerTutorPage() {
@@ -46,6 +45,10 @@ interface PeerTutorWithStats extends PeerTutor {
   additionalClassesCount: number
 }
 
+interface SubmissionWithClasses extends PeerTutorRenumeration {
+  classesCompleted?: number
+}
+
 function FacultyPeerTutorContent() {
   const router = useRouter()
   const { user } = useAuth()
@@ -62,7 +65,6 @@ function FacultyPeerTutorContent() {
   const [loading, setLoading] = useState(true)
   const [statsLoading, setStatsLoading] = useState(false)
   const [assignedCount, setAssignedCount] = useState(0)
-  const [unassignedCount, setUnassignedCount] = useState(0)
   const [assignedStudentCount, setAssignedStudentCount] = useState(0)
   const [unassignedStudentCount, setUnassignedStudentCount] = useState(0)
   const [peerTutorStudentCounts, setPeerTutorStudentCounts] = useState<{[key: string]: number}>({})
@@ -80,22 +82,20 @@ function FacultyPeerTutorContent() {
 
   // Renumeration states
   const [showRenumerationModal, setShowRenumerationModal] = useState(false)
-  const [renumerationSubmissions, setRenumerationSubmissions] = useState<any[]>([])
+  const [renumerationSubmissions, setRenumerationSubmissions] = useState<PeerTutorRenumeration[]>([])
   const [renumerationLoading, setRenumerationLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'tutors' | 'students' | 'feedback' | 'renumeration' | 'reports' | 'leaderboard'>('tutors')
   const [showDetailsModal, setShowDetailsModal] = useState(false)
-  const [selectedSubmission, setSelectedSubmission] = useState<any>(null)
+  const [selectedSubmission, setSelectedSubmission] = useState<PeerTutorRenumeration | null>(null)
   
   // Template management states
   const [renumerationTemplates, setRenumerationTemplates] = useState<RenumerationTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<RenumerationTemplate | null>(null)
-  const [templateSubmissions, setTemplateSubmissions] = useState<any[]>([])
   const [renumerationView, setRenumerationView] = useState<'templates' | 'submissions'>('templates')
   const [templatesLoading, setTemplatesLoading] = useState(false)
-  const [submissionsWithClasses, setSubmissionsWithClasses] = useState<any[]>([])
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set())
-  const [showDeleteTemplateModal, setShowDeleteTemplateModal] = useState(false)
-  const [isDeleteMode, setIsDeleteMode] = useState(false)
+  const [submissionsWithClasses, setSubmissionsWithClasses] = useState<SubmissionWithClasses[]>([])
+
+
   // Submissions filters/sorting
   const [filterYear, setFilterYear] = useState<string>('')
   const [filterSection, setFilterSection] = useState<string>('')
@@ -116,12 +116,12 @@ function FacultyPeerTutorContent() {
   const [feedbackLoading, setFeedbackLoading] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [selectedFeedbackForm, setSelectedFeedbackForm] = useState<FeedbackForm | null>(null)
-  const [feedbackResponses, setFeedbackResponses] = useState<FeedbackResponseWithDetails[]>([])
+
   const [showFeedbackResponsesModal, setShowFeedbackResponsesModal] = useState(false)
   const [selectedFeedbackFormForAnalytics, setSelectedFeedbackFormForAnalytics] = useState<FeedbackForm | null>(null)
   const [isFeedbackDeleteMode, setIsFeedbackDeleteMode] = useState(false)
   const [selectedFeedbackFormIds, setSelectedFeedbackFormIds] = useState<Set<string>>(new Set())
-  const [feedbackFormDropdownOpen, setFeedbackFormDropdownOpen] = useState<string | null>(null)
+
 
   // Delete confirmation modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -131,15 +131,12 @@ function FacultyPeerTutorContent() {
   const [peerTutorReports, setPeerTutorReports] = useState<PeerTutorReportData[]>([])
   const [filteredPeerTutorReports, setFilteredPeerTutorReports] = useState<PeerTutorReportData[]>([])
   const [reportsLoading, setReportsLoading] = useState(false)
-  const [selectedPeerTutorForReport, setSelectedPeerTutorForReport] = useState<string | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
-  const [exportHeaders, setExportHeaders] = useState<number>(1)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [reportFilterYear, setReportFilterYear] = useState<string>('all')
   const [reportFilterSection, setReportFilterSection] = useState<string>('all')
   const [reportFilterSubject, setReportFilterSubject] = useState<string>('all')
-  const [showReportFilter, setShowReportFilter] = useState(false)
-  const reportFilterRef = useRef<HTMLDivElement>(null)
+
   
   // Inline report view states
   const [selectedReport, setSelectedReport] = useState<{tutorId: string, subjectId: string, tutorName: string, subjectName: string} | null>(null)
@@ -148,50 +145,49 @@ function FacultyPeerTutorContent() {
   const [selectedClass, setSelectedClass] = useState<ClassAttendanceReport | null>(null)
   const [showClassModal, setShowClassModal] = useState(false)
 
+  const loadData = useCallback(async () => {
+    try {
+      // Load peer tutors
+      const tutors = await PeerTutorService.getAllPeerTutors()
+      setPeerTutors(tutors)
+      setFilteredPeerTutors(tutors)
+      
+      // Calculate assigned/unassigned counts for peer tutors
+      const assignedTutors = tutors.filter(() => {
+        // Check if this peer tutor has any assigned students
+        // This would need to be implemented in the service
+        return true // For now, assuming all are assigned
+      })
+      setAssignedCount(assignedTutors.length)
+
+      // Load students with peer tutor information
+      const allStudents = await StudentService.getAllStudentsWithPeerTutors()
+      setStudents(allStudents)
+      setFilteredStudents(allStudents)
+      
+      // Calculate assigned/unassigned counts for students
+      const assignedStudents = allStudents.filter(student => student.assigned_peer_tutor)
+      setAssignedStudentCount(assignedStudents.length)
+      setUnassignedStudentCount(allStudents.length - assignedStudents.length)
+
+      // Calculate student counts for each peer tutor
+      const studentCounts: {[key: string]: number} = {}
+      tutors.forEach(tutor => {
+        const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
+        studentCounts[tutor.id] = count
+      })
+      setPeerTutorStudentCounts(studentCounts)
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   // Load peer tutors and students data with caching
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Load peer tutors
-        const tutors = await PeerTutorService.getAllPeerTutors()
-        setPeerTutors(tutors)
-        setFilteredPeerTutors(tutors)
-        
-        // Calculate assigned/unassigned counts for peer tutors
-        const assignedTutors = tutors.filter(tutor => {
-          // Check if this peer tutor has any assigned students
-          // This would need to be implemented in the service
-          return true // For now, assuming all are assigned
-        })
-        setAssignedCount(assignedTutors.length)
-        setUnassignedCount(tutors.length - assignedTutors.length)
-
-        // Load students with peer tutor information
-        const allStudents = await StudentService.getAllStudentsWithPeerTutors()
-        setStudents(allStudents)
-        setFilteredStudents(allStudents)
-        
-        // Calculate assigned/unassigned counts for students
-        const assignedStudents = allStudents.filter(student => student.assigned_peer_tutor)
-        setAssignedStudentCount(assignedStudents.length)
-        setUnassignedStudentCount(allStudents.length - assignedStudents.length)
-
-        // Calculate student counts for each peer tutor
-        const studentCounts: {[key: string]: number} = {}
-        tutors.forEach(tutor => {
-          const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
-          studentCounts[tutor.id] = count
-        })
-        setPeerTutorStudentCounts(studentCounts)
-      } catch (error) {
-        console.error('Error loading data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     loadData()
-  }, [])
+  }, [loadData])
 
   // Handle refresh
   const handleRefresh = async () => {
@@ -209,7 +205,6 @@ function FacultyPeerTutorContent() {
       // Recalculate counts
       const assignedTutors = tutors.filter(() => true)
       setAssignedCount(assignedTutors.length)
-      setUnassignedCount(tutors.length - assignedTutors.length)
       
       const assignedStudents = allStudents.filter(student => student.assigned_peer_tutor)
       setAssignedStudentCount(assignedStudents.length)
@@ -349,9 +344,6 @@ function FacultyPeerTutorContent() {
       if (studentFilterRef.current && !studentFilterRef.current.contains(event.target as Node)) {
         setShowStudentFilterPopup(false)
       }
-      if (reportFilterRef.current && !reportFilterRef.current.contains(event.target as Node)) {
-        setShowReportFilter(false)
-      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -425,10 +417,10 @@ function FacultyPeerTutorContent() {
   }
 
   // Handle peer tutor deletion
-  const handleDeletePeerTutor = (tutorId: string, tutorName: string) => {
-    setPeerTutorToDelete({ id: tutorId, name: tutorName })
-    setShowDeleteModal(true)
-  }
+  // const handleDeletePeerTutor = (tutorId: string, tutorName: string) => {
+  //   setPeerTutorToDelete({ id: tutorId, name: tutorName })
+  //   setShowDeleteModal(true)
+  // }
 
   // Confirm peer tutor deletion
   const confirmDeletePeerTutor = async () => {
@@ -448,12 +440,11 @@ function FacultyPeerTutorContent() {
         setFilteredPeerTutors(tutors)
         
         // Recalculate assigned/unassigned counts
-        const assignedTutors = tutors.filter(tutor => {
+        const assignedTutors = tutors.filter(() => {
           // Check if this peer tutor has any assigned students
           return true // For now, assuming all are assigned
         })
         setAssignedCount(assignedTutors.length)
-        setUnassignedCount(tutors.length - assignedTutors.length)
         
         // Close modal
         setShowDeleteModal(false)
@@ -479,9 +470,8 @@ function FacultyPeerTutorContent() {
               setFilteredPeerTutors(tutors)
               
               // Recalculate counts
-              const assignedTutors = tutors.filter(tutor => true)
+              const assignedTutors = tutors.filter(() => true)
               setAssignedCount(assignedTutors.length)
-              setUnassignedCount(tutors.length - assignedTutors.length)
               
               // Close modal
               setShowDeleteModal(false)
@@ -668,9 +658,9 @@ function FacultyPeerTutorContent() {
       setPeerTutors(tutors)
       setFilteredPeerTutors(tutors)
 
-      const assignedTutors = tutors.filter(tutor => true)
+      const assignedTutors = tutors.filter(() => true)
       setAssignedCount(assignedTutors.length)
-      setUnassignedCount(tutors.length - assignedTutors.length)
+      setUnassignedStudentCount(tutors.length - assignedTutors.length)
 
       // Recalculate student counts
       const allStudents = await StudentService.getAllStudentsWithPeerTutors()
@@ -697,7 +687,7 @@ function FacultyPeerTutorContent() {
   }
 
   // Load renumeration templates
-  const loadRenumerationTemplates = async () => {
+  const loadRenumerationTemplates = useCallback(async () => {
     if (!user?.id) return
     
     setTemplatesLoading(true)
@@ -709,10 +699,10 @@ function FacultyPeerTutorContent() {
     } finally {
       setTemplatesLoading(false)
     }
-  }
+  }, [user?.id])
 
   // Load renumeration submissions
-  const loadRenumerationSubmissions = async () => {
+  const loadRenumerationSubmissions = useCallback(async () => {
     if (!user?.id) return
     
     setRenumerationLoading(true)
@@ -724,14 +714,14 @@ function FacultyPeerTutorContent() {
     } finally {
       setRenumerationLoading(false)
     }
-  }
+  }, [user?.id])
 
   // Load template-specific submissions
   const loadTemplateSubmissions = async (templateId: string) => {
     setRenumerationLoading(true)
     try {
       const submissions = await RenumerationService.getRenumerationSubmissionsByTemplate(templateId)
-      setTemplateSubmissions(submissions)
+      // setTemplateSubmissions(submissions) - Removed unused state assignment
 
       // Load classes completed data for each submission
       const submissionsWithClassesData = await Promise.all(
@@ -741,7 +731,7 @@ function FacultyPeerTutorContent() {
             const classStats = await ScheduledClassService.getPeerTutorClassStats(submission.peer_tutor_id)
             classesCompleted = classStats.completedClasses
           } catch (error) {
-            console.warn('Could not fetch class stats for peer tutor:', submission.peer_tutor_id)
+            console.warn('Could not fetch class stats for peer tutor:', submission.peer_tutor_id, error)
           }
 
           return {
@@ -757,6 +747,12 @@ function FacultyPeerTutorContent() {
       setRenumerationLoading(false)
     }
   }
+
+
+
+
+
+
 
   // Handle template selection
   const handleTemplateClick = async (template: RenumerationTemplate) => {
@@ -778,15 +774,15 @@ function FacultyPeerTutorContent() {
 
   // Derived submissions based on filters/sort
   const filteredAndSortedSubmissions = (submissionsWithClasses || [])
-    .filter((s: any) => (filterYear ? s.peer_tutor?.year === filterYear : true))
-    .filter((s: any) => (filterSection ? s.peer_tutor?.section === filterSection : true))
-    .filter((s: any) => {
+    .filter((s) => (filterYear ? s.peer_tutor?.year === filterYear : true))
+    .filter((s) => (filterSection ? s.peer_tutor?.section === filterSection : true))
+    .filter((s) => {
       if (!filterStatus) return true
       if (filterStatus === 'pending') return !s.submitted_at
       if (filterStatus === 'completed') return !!s.submitted_at
       return true
     })
-    .sort((a: any, b: any) => {
+    .sort((a, b) => {
       if (!sortDescByName) return 0
       const an = (a.peer_tutor?.name || '').toLowerCase()
       const bn = (b.peer_tutor?.name || '').toLowerCase()
@@ -810,9 +806,7 @@ function FacultyPeerTutorContent() {
   const handleBackToTemplates = () => {
     setRenumerationView('templates')
     setSelectedTemplate(null)
-    setTemplateSubmissions([])
-    setSelectedTemplateIds(new Set())
-    setIsDeleteMode(false)
+    setSubmissionsWithClasses([]) // Changed from setTemplateSubmissions([])
     setFilterYear('')
     setFilterSection('')
     setSortDescByName(false)
@@ -820,83 +814,7 @@ function FacultyPeerTutorContent() {
     setShowSubmissionFilter(false)
   }
 
-  // Toggle delete mode
-  const handleToggleDeleteMode = () => {
-    setIsDeleteMode(prev => {
-      if (!prev) {
-        // Entering delete mode - clear any previous selections
-        setSelectedTemplateIds(new Set())
-      }
-      return !prev
-    })
-  }
 
-  // Cancel delete mode
-  const handleCancelDeleteMode = () => {
-    setIsDeleteMode(false)
-    setSelectedTemplateIds(new Set())
-  }
-
-  // Handle template checkbox selection
-  const handleTemplateCheckboxChange = (templateId: string, checked: boolean) => {
-    setSelectedTemplateIds(prev => {
-      const newSet = new Set(prev)
-      if (checked) {
-        newSet.add(templateId)
-      } else {
-        newSet.delete(templateId)
-      }
-      return newSet
-    })
-  }
-
-  // Handle select all templates
-  const handleSelectAllTemplates = (checked: boolean) => {
-    if (checked) {
-      setSelectedTemplateIds(new Set(renumerationTemplates.map(t => t.id)))
-    } else {
-      setSelectedTemplateIds(new Set())
-    }
-  }
-
-  // Handle delete selected templates
-  const handleDeleteSelectedTemplates = () => {
-    if (selectedTemplateIds.size === 0) {
-      alert('Please select at least one template to delete.')
-      return
-    }
-    setShowDeleteTemplateModal(true)
-  }
-
-  // Confirm delete templates
-  const confirmDeleteTemplates = async () => {
-    if (selectedTemplateIds.size === 0) return
-
-    try {
-      const deletePromises = Array.from(selectedTemplateIds).map(id =>
-        RenumerationService.deleteRenumerationTemplate(id)
-      )
-      
-      const results = await Promise.all(deletePromises)
-      const allSuccess = results.every(r => r === true)
-
-      if (allSuccess) {
-        // Reload templates and submissions to update counts
-        await Promise.all([
-          loadRenumerationTemplates(),
-          loadRenumerationSubmissions()
-        ])
-        setSelectedTemplateIds(new Set())
-        setIsDeleteMode(false)
-        setShowDeleteTemplateModal(false)
-      } else {
-        alert('Some templates could not be deleted. Please try again.')
-      }
-    } catch (error) {
-      console.error('Error deleting templates:', error)
-      alert('Error deleting templates. Please try again.')
-    }
-  }
 
   // Export submissions to Excel/CSV
   const exportToExcel = async () => {
@@ -926,7 +844,7 @@ function FacultyPeerTutorContent() {
         // Add renumeration field responses
         selectedTemplate.fields.forEach(field => {
           const value = submission.field_responses?.[field.id] || ''
-          row.push(value)
+          row.push(String(value))
         })
 
         return row
@@ -951,7 +869,6 @@ function FacultyPeerTutorContent() {
       link.setAttribute('download', `${selectedTemplate.name}_submissions${suffix ? '_' + suffix : ''}_${new Date().toISOString().split('T')[0]}.csv`)
       link.style.visibility = 'hidden'
       document.body.appendChild(link)
-      link.click()
       document.body.removeChild(link)
     } catch (error) {
       console.error('Error exporting to Excel:', error)
@@ -985,21 +902,15 @@ function FacultyPeerTutorContent() {
   }
 
   // Load feedback forms
-  const loadFeedbackForms = async () => {
-    console.log('loadFeedbackForms called')
-    console.log('User object:', user)
-    console.log('User ID:', user?.id)
+  const loadFeedbackForms = useCallback(async () => {
     
     if (!user?.id) {
-      console.log('No user ID available, skipping feedback forms load')
       return
     }
     
     setFeedbackLoading(true)
     try {
-      console.log('Calling FeedbackService.getFeedbackFormsByFaculty with:', user.id)
       const forms = await FeedbackService.getFeedbackFormsByFaculty(user.id)
-      console.log('Received feedback forms:', forms)
       
       // Load response counts and delta scores for each form
       const formsWithCounts = await Promise.all(
@@ -1039,7 +950,7 @@ function FacultyPeerTutorContent() {
     } finally {
       setFeedbackLoading(false)
     }
-  }
+  }, [user])
   
   // Handle feedback form checkbox selection
   const handleFeedbackFormCheckboxChange = (formId: string, checked: boolean) => {
@@ -1108,18 +1019,7 @@ function FacultyPeerTutorContent() {
     }
   }
 
-  // Load feedback responses for a form
-  const loadFeedbackResponses = async (formId: string) => {
-    setFeedbackLoading(true)
-    try {
-      const responses = await FeedbackService.getFeedbackResponses(formId)
-      setFeedbackResponses(responses)
-    } catch (error) {
-      console.error('Error loading feedback responses:', error)
-    } finally {
-      setFeedbackLoading(false)
-    }
-  }
+
 
   // Toggle feedback form status (open/close)
   const handleToggleFormStatus = async (formId: string, currentStatus: boolean) => {
@@ -1157,49 +1057,30 @@ function FacultyPeerTutorContent() {
     setShowFeedbackModal(false)
   }
 
-  // Handle view feedback responses - show in modal
-  const handleViewFeedbackResponses = async (form: FeedbackForm) => {
-    try {
-      const responses = await FeedbackService.getFeedbackResponses(form.id)
-      setFeedbackResponses(responses)
-      setShowFeedbackResponsesModal(true)
-    } catch (error) {
-      console.error('Error loading feedback responses:', error)
-      alert('Failed to load feedback responses')
-    }
-  }
+
 
   // Handle view analytics - show analytics view
   const handleViewAnalytics = (form: FeedbackForm) => {
     setSelectedFeedbackFormForAnalytics(form)
   }
 
-  // Load renumeration data when switching to renumeration tab
   useEffect(() => {
     if (activeTab === 'renumeration') {
       loadRenumerationTemplates()
       loadRenumerationSubmissions()
     }
-  }, [activeTab, user?.id])
+  }, [activeTab, user?.id, loadRenumerationTemplates, loadRenumerationSubmissions])
 
-  // Load feedback data when switching to feedback tab
   useEffect(() => {
     if (activeTab === 'feedback') {
       loadFeedbackForms()
       // Reset analytics view when switching to feedback tab
       setSelectedFeedbackFormForAnalytics(null)
     }
-  }, [activeTab, user?.id])
-
-  // Load reports data when switching to reports tab
-  useEffect(() => {
-    if (activeTab === 'reports') {
-      loadPeerTutorReports()
-    }
-  }, [activeTab])
+  }, [activeTab, loadFeedbackForms])
 
   // Load peer tutor reports
-  const loadPeerTutorReports = async () => {
+  const loadPeerTutorReports = useCallback(async () => {
     setReportsLoading(true)
     try {
       const reports = await ReportService.getAllPeerTutorReports()
@@ -1210,7 +1091,14 @@ function FacultyPeerTutorContent() {
     } finally {
       setReportsLoading(false)
     }
-  }
+  }, [])
+
+  // Load reports data when switching to reports tab
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      loadPeerTutorReports()
+    }
+  }, [activeTab, loadPeerTutorReports])
 
   // Apply report filters
   useEffect(() => {
@@ -1276,7 +1164,7 @@ function FacultyPeerTutorContent() {
       // Create a sheet for each year
       for (const year of uniqueYears) {
         const yearReports = reportsByYear[year]
-        const exportData: any[][] = []
+        const exportData: unknown[][] = []
 
         // Add header rows
         exportData.push(['Peer Tutor Reports Export'])
@@ -1493,18 +1381,7 @@ function FacultyPeerTutorContent() {
     }
   }
 
-  // Get completion status for scheduled class
-  const getCompletionStatus = (scheduledClass: ScheduledClassWithDetails) => {
-    if (scheduledClass.completion_status === 'completed' || 
-        (scheduledClass.attendance_completed && scheduledClass.topics_completed)) {
-      return { status: 'completed', color: 'bg-green-100 text-green-800' }
-    } else if (scheduledClass.completion_status === 'pending' || 
-               scheduledClass.attendance_completed || scheduledClass.topics_completed) {
-      return { status: 'pending', color: 'bg-yellow-100 text-yellow-800' }
-    } else {
-      return { status: 'not_started', color: 'bg-gray-100 text-gray-800' }
-    }
-  }
+
 
   // Handle back from report view
   const handleBackFromReport = () => {
@@ -1545,7 +1422,7 @@ function FacultyPeerTutorContent() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as 'tutors' | 'students' | 'feedback' | 'renumeration' | 'reports' | 'leaderboard')}
                 className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105' 
@@ -2402,7 +2279,7 @@ function FacultyPeerTutorContent() {
                             </svg>
                           </div>
                           <div className="text-3xl font-bold text-gray-900">
-                            {feedbackForms.reduce((total, form) => total + (form as any).responseCount || 0, 0)}
+                            {feedbackForms.reduce((total, form) => total + (form as FeedbackForm & { responseCount: number }).responseCount || 0, 0)}
                           </div>
                           <div className="mt-2 flex items-center text-xs text-green-600">
                             <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2541,9 +2418,9 @@ function FacultyPeerTutorContent() {
                           </tr>
                         ) : (
                           feedbackForms.map((form) => {
-                            const responseCount = (form as any).responseCount || 0
-                            const totalEligibleStudents = (form as any).totalEligibleStudents || 0
-                            const deltaScore = (form as any).deltaScore || 0
+                            const responseCount = (form as FeedbackForm & { responseCount: number }).responseCount || 0
+                            const totalEligibleStudents = (form as FeedbackForm & { totalEligibleStudents: number }).totalEligibleStudents || 0
+                            const deltaScore = (form as FeedbackForm & { deltaScore: number }).deltaScore || 0
                             const hasResponses = responseCount > 0
                             const isSelected = selectedFeedbackFormIds.has(form.id)
 
@@ -2811,7 +2688,6 @@ function FacultyPeerTutorContent() {
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
                                 {reportScheduledClasses.map((scheduledClass) => {
-                                  const completionStatus = getCompletionStatus(scheduledClass)
                                   const isPresent = scheduledClass.completion_status === 'completed' || 
                                                    (scheduledClass.attendance_completed && scheduledClass.topics_completed)
                                   return (
@@ -3359,7 +3235,7 @@ function FacultyPeerTutorContent() {
                           ? filteredAndSortedSubmissions.length
                           : renumerationTemplates.reduce((total, template) => {
                               const submissionCount = renumerationSubmissions.filter(
-                                (submission: any) => submission.template_id === template.id
+                                (submission: { template_id: string }) => submission.template_id === template.id
                               ).length
                               return total + submissionCount
                             }, 0)
@@ -3393,17 +3269,6 @@ function FacultyPeerTutorContent() {
                             </svg>
                             CREATE
                           </button>
-                          {renumerationTemplates.length > 0 && (
-                            <button
-                              onClick={handleToggleDeleteMode}
-                              className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
-                              title="Delete"
-                            >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -3421,7 +3286,7 @@ function FacultyPeerTutorContent() {
                             </svg>
                           </div>
                           <h3 className="text-lg font-medium text-gray-900 mb-2">No templates found</h3>
-                          <p className="text-gray-500">Create your first renumeration template to get started.</p>
+                          <p className="text-sm text-gray-500">Create your first renumeration template to get started.</p>
                         </div>
                       ) : (
                         <div className="overflow-hidden">
@@ -3451,7 +3316,7 @@ function FacultyPeerTutorContent() {
                             <tbody className="bg-white divide-y divide-gray-200">
                               {renumerationTemplates.map((template) => {
                                 const submissionCount = renumerationSubmissions.filter(
-                                  (submission: any) => submission.template_id === template.id
+                                  (submission: { template_id: string }) => submission.template_id === template.id
                                 ).length
                                 const totalEligiblePeerTutors = peerTutors.length
 
@@ -3743,7 +3608,7 @@ function FacultyPeerTutorContent() {
             setSelectedFeedbackForm(null)
           }}
           feedbackForm={selectedFeedbackForm}
-          responses={feedbackResponses}
+          responses={[]}
           loading={feedbackLoading}
         />
       )}
@@ -3893,81 +3758,11 @@ function FacultyPeerTutorContent() {
         reportData={null}
       />
 
-      {/* Delete Templates Confirmation Modal */}
-      {showDeleteTemplateModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
-          {/* Background overlay */}
-          <div 
-            className="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm"
-            onClick={() => setShowDeleteTemplateModal(false)}
-          ></div>
 
-          {/* Modal Content */}
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full relative z-10">
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-                  <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Delete Templates
-                  </h3>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <p className="text-sm text-gray-600 mb-4">
-                  Are you sure you want to delete <strong>{selectedTemplateIds.size}</strong> template(s)? This action will also delete all associated submissions and cannot be undone.
-                </p>
-
-                {/* List selected templates */}
-                <div className="max-h-48 overflow-y-auto bg-gray-50 rounded-md p-3 mb-4 border border-gray-200">
-                  <ul className="space-y-1">
-                    {renumerationTemplates
-                      .filter(t => selectedTemplateIds.has(t.id))
-                      .map((template) => (
-                        <li key={template.id} className="text-sm text-gray-700">
-                          • {template.name}
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-
-                <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-                  <p className="text-sm text-red-800">
-                    <strong>Warning:</strong> This action is permanent and cannot be undone.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => setShowDeleteTemplateModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmDeleteTemplates}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-              >
-                Delete Permanently
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Peer Tutor Import Modal */}
       {showImportModal && (
         <PeerTutorImportModal
-          dept={user?.dept || 'AIDS'}
+          dept={user?.user_metadata?.dept || 'AIDS'}
           year={selectedYear !== 'all' ? selectedYear : ''}
           section={selectedSection !== 'all' ? selectedSection : ''}
           onClose={() => setShowImportModal(false)}

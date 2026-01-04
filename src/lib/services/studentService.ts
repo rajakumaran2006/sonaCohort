@@ -2,6 +2,8 @@ import { createClient } from '@/utils/supabase/client'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
 import { PeerTutorService } from './peerTutorService'
 
+import { MicrosoftUser } from '@/lib/types'
+
 export interface Student {
   id: string
   name: string
@@ -38,7 +40,7 @@ export class StudentService {
    * Create a student from Microsoft Graph user data
    */
   static async createFromMicrosoftUser(
-    microsoftUser: any,
+    microsoftUser: MicrosoftUser,
     facultyId: string,
     dept: string,
     year: string,
@@ -252,7 +254,7 @@ export class StudentService {
   /**
    * Search for available students using Microsoft Graph (excluding existing students and peer tutors)
    */
-  static async searchAvailableStudents(query: string, dept: string, year: string, section: string): Promise<any[]> {
+  static async searchAvailableStudents(query: string, dept: string, year: string, section: string): Promise<MicrosoftUser[]> {
     try {
       // Get all existing student emails to exclude them
       const existingStudents = await this.getStudentsBySection(dept, year, section)
@@ -337,4 +339,27 @@ export class StudentService {
       return []
     }
   }
+
+  // Transfer students to a new section
+  static async transferStudents(ids: string[], newSection: string): Promise<boolean> {
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase
+        .from('peer_students')
+        .update({ section: newSection })
+        .in('id', ids)
+
+      if (error) {
+        console.error('Error transferring students:', error)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error in transferStudents:', error)
+      return false
+    }
+  }
+
 }

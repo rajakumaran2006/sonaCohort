@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Bell, Check, Info, FileText, X } from 'lucide-react'
+import { Bell, Check, Info, FileText } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export interface Notification {
@@ -180,7 +180,7 @@ export function NotificationCenter({
                     <Bell className="w-8 h-8 opacity-50" />
                   </div>
                   <h4 className="text-sm font-bold text-gray-900 mb-1">No Notifications</h4>
-                  <p className="text-xs text-gray-400 max-w-[200px]">You're all caught up! Check back later for updates.</p>
+                  <p className="text-xs text-gray-400 max-w-[200px]">You&apos;re all caught up! Check back later for updates.</p>
                 </div>
               )}
             </div>

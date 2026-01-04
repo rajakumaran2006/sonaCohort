@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
 import FeedbackAnalyticsPage from '@/components/forms/FeedbackAnalyticsPage'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+
 
 export default function FeedbackFormAnalytics() {
   return (
@@ -84,6 +84,7 @@ function FeedbackFormAnalyticsContent() {
     if (formId && user?.id) {
       loadForm()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formId, user?.id])
 
   const loadForm = async () => {

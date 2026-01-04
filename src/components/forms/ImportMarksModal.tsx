@@ -1,13 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { useState, useRef } from 'react'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { Button } from '@/components/ui'
-import { Input } from '@/components/ui'
+
 import * as XLSX from 'xlsx'
 import { createClient } from '@/utils/supabase/client'
 import { ExamMarksService } from '@/lib/services/examMarksService'
-import { ExamSubjectService, ExamSubject } from '@/lib/services/examSubjectService'
+import { ExamSubject } from '@/lib/services/examSubjectService'
 
 interface ImportMarksModalProps {
   isOpen: boolean
@@ -221,7 +222,7 @@ export default function ImportMarksModal({
           .replace(/[\u2000-\u200B\u202F\u205F\u3000]/g, ' ') // Replace various Unicode spaces
           .trim()
         
-        let foundStudents = nameToStudents.get(normalizedName) || []
+        const foundStudents = nameToStudents.get(normalizedName) || []
         
         // Debug: log if no exact match found (helps troubleshoot)
         if (foundStudents.length === 0 && studentName) {
@@ -480,7 +481,7 @@ export default function ImportMarksModal({
               </button>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              The file must contain "StudentName" and "Consolidated Mark" (or "Consolidted Mark") columns
+              The file must contain &quot;StudentName&quot; and &quot;Consolidated Mark&quot; (or &quot;Consolidted Mark&quot;) columns
             </p>
           </div>
 

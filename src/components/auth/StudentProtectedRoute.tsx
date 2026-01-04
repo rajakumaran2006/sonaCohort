@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { StudentAuthService } from '@/lib/auth/studentAuthService'
+import { StudentService } from '@/lib/services/studentService'
 import StudentSidebar from '@/components/layout/StudentSidebar'
 
 interface StudentProtectedRouteProps {
@@ -24,7 +24,7 @@ export default function StudentProtectedRoute({ children }: StudentProtectedRout
         throw new Error('No user email')
       }
       console.log('StudentProtectedRoute: Verifying student access for:', user.email)
-      return await StudentAuthService.isStudent(user.email)
+      return await StudentService.isStudent(user.email)
     },
     enabled: !!user && !loading,
     staleTime: 15 * 60 * 1000, // Cache for 15 minutes

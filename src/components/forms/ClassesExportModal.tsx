@@ -51,7 +51,7 @@ export default function ClassesExportModal({
       const { data: worksheetData, merges: dynamicMerges } = await createWorksheetData()
       
       // Create worksheet
-      const ws = XLSX.utils.aoa_to_sheet(worksheetData)
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData as unknown[][])
       
       // Apply styling and formatting (conceptually, sheetjs styling support in pure JS is limited in open source, 
       // but we can set column widths and merges)
@@ -85,9 +85,9 @@ export default function ClassesExportModal({
     }
   }
 
-  const createWorksheetData = async (): Promise<{ data: any[][], merges: any[] }> => {
-    const data: any[][] = []
-    const merges: any[] = []
+  const createWorksheetData = async (): Promise<{ data: unknown[][], merges: unknown[] }> => {
+    const data: unknown[][] = []
+    const merges: unknown[] = []
     
     // Auto-detect department if not set manually
     const deptHeader = header.department === 'DEPARTMENT OF INFORMATION TECHNOLOGY' && filteredClasses.length > 0 
@@ -109,7 +109,6 @@ export default function ClassesExportModal({
 
     // Table Headers (Row 6)
     data.push(['S NO', 'Subject Name', 'Department', 'Year', 'Section', 'Scheduled Date', 'Topics'])
-    const headerRowIndex = 5
 
     let serialNumber = 1
     let currentRowIndex = 6 // Data starts at row 7 (index 6)

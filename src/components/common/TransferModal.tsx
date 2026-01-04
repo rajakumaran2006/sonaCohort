@@ -5,7 +5,7 @@ import Modal, { ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/compon
 import { ClassService } from '@/lib/services/classService'
 import { StudentService } from '@/lib/services/studentService'
 import { PeerTutorService } from '@/lib/services/peerTutorService'
-import { AlertCircle, ArrowRight, CheckCircle, XCircle, Loader2, Users } from 'lucide-react'
+import { AlertCircle, CheckCircle, XCircle, Loader2, Users } from 'lucide-react'
 
 interface ItemToTransfer {
   id: string
@@ -57,23 +57,12 @@ export default function TransferModal({
 
   // Get validation for selected section
   const selectedSectionValidation = selectedSection ? sectionValidations.get(selectedSection) : null
-  const canTransferToSelected = selectedSectionValidation?.canTransfer ?? true
   const conflictingItems = selectedSectionValidation?.conflictingItems ?? []
   const transferableItems = validItems.filter(item => 
     !conflictingItems.some(c => c.email === item.email)
   )
 
-  useEffect(() => {
-    if (isOpen) {
-      loadSections()
-      setSelectedSection('')
-      setError(null)
-      setConfirming(false)
-      setSectionValidations(new Map())
-    }
-  }, [isOpen, dept, year])
-
-  const loadSections = async () => {
+  const loadSections = React.useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -99,10 +88,20 @@ export default function TransferModal({
     } finally {
       setLoading(false)
     }
-  }
+  }, [dept, year, currentSection])
+
+  useEffect(() => {
+    if (isOpen) {
+      loadSections()
+      setSelectedSection('')
+      setError(null)
+      setConfirming(false)
+      setSectionValidations(new Map())
+    }
+  }, [isOpen, dept, year, loadSections])
 
   // Validate if items can be transferred to a specific section
-  const validateSection = async (section: string) => {
+  const validateSection = React.useCallback(async (section: string) => {
     if (!section || sectionValidations.has(section)) return
     
     setValidating(true)
@@ -145,14 +144,14 @@ export default function TransferModal({
     } finally {
       setValidating(false)
     }
-  }
+  }, [dept, year, type, validItems, sectionValidations])
 
   // Validate when section is selected
   useEffect(() => {
     if (selectedSection && !sectionValidations.has(selectedSection)) {
       validateSection(selectedSection)
     }
-  }, [selectedSection])
+  }, [selectedSection, sectionValidations, validateSection])
 
   const handleTransfer = async () => {
     if (!selectedSection) return
@@ -177,7 +176,6 @@ export default function TransferModal({
   }
 
   const getTypeName = () => type === 'students' ? 'Students' : 'Peer Tutors'
-  const getSingularTypeName = () => type === 'students' ? 'student' : 'peer tutor'
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="md">

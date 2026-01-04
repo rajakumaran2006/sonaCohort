@@ -8,24 +8,17 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
-import { ExamService, Exam } from '@/lib/services/examService'
+import { ExamService } from '@/lib/services/examService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
-import { Card, LoadingOverlay } from '@/components/ui'
+import { LoadingOverlay } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { 
   FileText, 
-  Calendar, 
-  Users, 
   CheckCircle, 
-  Clock, 
-  ChevronRight, 
-  ArrowUpRight,
-  TrendingUp,
-  BrainCircuit
+  Clock
 } from 'lucide-react'
-import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 export default function PeerExamsPage() {
   return (
@@ -104,17 +97,9 @@ function PeerExamsContent() {
           const subjects = await ExamSubjectService.getExamSubjects(exam.id)
           const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutorInfo.id, exam.id)
           
-          let formattedMarksCount = 0
           const totalPossibleMarks = students.length * subjects.length
+          
 
-          marks.forEach(mark => {
-             // Iterate through subjects to verify mark exists for specific subject
-             subjects.forEach(subject => {
-                 if (mark.exam_subject_id === subject.id && mark.marks && mark.marks.marks) {
-                     formattedMarksCount++
-                 }
-             })
-          })
 
           // We need a more accurate count based on unique student-subject pairs
           // But for now, let's look at the fetch logic. getExamMarksByPeerTutorAndExam returns one record per student-exam-subject?

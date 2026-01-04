@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import * as XLSX from 'xlsx'
-import { AssignmentService } from '@/lib/services/assignmentService'
+
 import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 
@@ -36,8 +36,6 @@ interface YearSectionGroup {
 
 export default function PeerTutorMappingExport({ 
   dept, 
-  year, 
-  section, 
   onClose 
 }: PeerTutorMappingExportProps) {
   const [isExporting, setIsExporting] = useState(false)
@@ -198,8 +196,8 @@ export default function PeerTutorMappingExport({
     }
   }
 
-  const createWorksheetData = (peerTutorsWithStudents: PeerTutorWithStudents[]): any[][] => {
-    const data: any[][] = []
+  const createWorksheetData = (peerTutorsWithStudents: PeerTutorWithStudents[]): (string | number)[][] => {
+    const data: (string | number)[][] = []
     
     // Add header rows (rows 1-8)
     data.push([header.collegeName]) // Row 1
@@ -256,7 +254,7 @@ export default function PeerTutorMappingExport({
     return data
   }
 
-  const applyWorksheetFormatting = (ws: XLSX.WorkSheet, totalRows: number) => {
+  const applyWorksheetFormatting = (ws: XLSX.WorkSheet) => {
     // Set column widths
     ws['!cols'] = [
       { wch: 8 },  // S NO

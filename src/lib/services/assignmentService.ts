@@ -521,7 +521,16 @@ export class AssignmentService {
         return []
       }
 
-      return data.map((item: any) => ({
+      return data.map((item: {
+        id: string;
+        name: string;
+        email: string;
+        dept: string;
+        year: string;
+        section: string;
+        assigned_peer_tutor_id: string;
+        peer_tutors: { id: string; name: string; email: string }[];
+      }) => ({
         id: item.id,
         student_id: item.id,
         peer_tutor_id: item.assigned_peer_tutor_id,
@@ -764,4 +773,30 @@ static async importAssignmentsFromCSV(
     }
   }
 }
+
+
+  // Unassign all students in a section
+  static async unassignAllStudents(dept: string, year: string, section: string): Promise<boolean> {
+    const supabase = createClient()
+    
+    try {
+      const { error } = await supabase
+        .from('peer_students')
+        .update({ assigned_peer_tutor_id: null })
+        .eq('dept', dept)
+        .eq('year', year)
+        .eq('section', section)
+        
+      if (error) {
+        console.error('Error unassigning all students:', error)
+        return false
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Error in unassignAllStudents:', error)
+      return false
+    }
+  }
+
 }

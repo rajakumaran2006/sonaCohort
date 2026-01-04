@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
-import { Button } from '@/components/ui'
 import { LayoutGrid, BarChart3, User, LogOut } from 'lucide-react'
 
 interface SidebarProps {

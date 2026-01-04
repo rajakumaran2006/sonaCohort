@@ -3,15 +3,15 @@
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { ReportService, ClassAttendanceReport } from '@/lib/services/reportService'
-import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
+import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Card, LoadingSpinner } from '@/components/ui'
-import { ArrowLeft, Clock, CheckCircle, AlertCircle, Calendar, Users, Eye } from 'lucide-react'
+import { ArrowLeft, CheckCircle, AlertCircle, Calendar, Eye } from 'lucide-react'
 
 export default function PeerSubjectDetailsPage() {
   return (
@@ -30,9 +30,7 @@ function PeerSubjectDetailsContent() {
   const [loading, setLoading] = useState(true)
   const [selectedClass, setSelectedClass] = useState<ClassAttendanceReport | null>(null)
   const [showClassModal, setShowClassModal] = useState(false)
-  const [peerTutorInfo, setPeerTutorInfo] = useState<any>(null)
   const [subjectName, setSubjectName] = useState<string>('')
-  const [currentUserTutorId, setCurrentUserTutorId] = useState<string>('')
   
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
@@ -40,14 +38,7 @@ function PeerSubjectDetailsContent() {
   const subjectId = searchParams.get('subjectId')
   const subjectNameParam = searchParams.get('subjectName')
 
-  useEffect(() => {
-    if (tutorId && subjectId && subjectNameParam && user?.email) {
-      setSubjectName(subjectNameParam)
-      loadSubjectData()
-    }
-  }, [tutorId, subjectId, subjectNameParam, user?.email])
-
-  const loadSubjectData = async () => {
+  const loadSubjectData = useCallback(async () => {
     if (!user?.email || !tutorId || !subjectId) return
 
     setLoading(true)
@@ -60,9 +51,6 @@ function PeerSubjectDetailsContent() {
         return
       }
 
-      setCurrentUserTutorId(currentTutorInfo.id)
-      setPeerTutorInfo(currentTutorInfo)
-
       // Get scheduled classes for this subject
       const classes = await ReportService.getSubjectScheduledClasses(tutorId, subjectNameParam || '')
       setScheduledClasses(classes)
@@ -71,7 +59,14 @@ function PeerSubjectDetailsContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, tutorId, subjectId, subjectNameParam, router])
+
+  useEffect(() => {
+    if (tutorId && subjectId && subjectNameParam && user?.email) {
+      setSubjectName(subjectNameParam)
+      loadSubjectData()
+    }
+  }, [tutorId, subjectId, subjectNameParam, user?.email, loadSubjectData])
 
   const handleClassClick = async (scheduledClass: ScheduledClassWithDetails) => {
     const status = getCompletionStatus(scheduledClass).status

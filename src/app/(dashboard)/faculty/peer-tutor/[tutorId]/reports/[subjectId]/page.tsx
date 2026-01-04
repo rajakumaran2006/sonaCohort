@@ -5,9 +5,7 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ReportService, ClassAttendanceReport } from '@/lib/services/reportService'
-import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
-import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Eye } from 'lucide-react'
+import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 
 export default function SubjectReportsPage() {
   return (
@@ -25,7 +23,7 @@ function SubjectReportsContent() {
   const [loading, setLoading] = useState(true)
   const [selectedClass, setSelectedClass] = useState<ClassAttendanceReport | null>(null)
   const [showClassModal, setShowClassModal] = useState(false)
-  const [peerTutorInfo, setPeerTutorInfo] = useState<any>(null)
+  const [peerTutorInfo, setPeerTutorInfo] = useState<{ id: string; name: string } | null>(null)
   const [subjectName, setSubjectName] = useState<string>('')
   
   // Check if sidebar is collapsed - read from localStorage first (source of truth)
@@ -86,6 +84,7 @@ function SubjectReportsContent() {
     if (tutorId && subjectId) {
       loadSubjectData()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tutorId, subjectId])
 
   const loadSubjectData = async () => {
@@ -144,17 +143,7 @@ function SubjectReportsContent() {
     }
   }
 
-  const getCompletionStatus = (scheduledClass: ScheduledClassWithDetails) => {
-    if (scheduledClass.completion_status === 'completed' || 
-        (scheduledClass.attendance_completed && scheduledClass.topics_completed)) {
-      return { status: 'completed', color: 'bg-green-100 text-green-800' }
-    } else if (scheduledClass.completion_status === 'pending' || 
-               scheduledClass.attendance_completed || scheduledClass.topics_completed) {
-      return { status: 'pending', color: 'bg-yellow-100 text-yellow-800' }
-    } else {
-      return { status: 'not_started', color: 'bg-gray-100 text-gray-800' }
-    }
-  }
+
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -318,7 +307,6 @@ function SubjectReportsContent() {
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {scheduledClasses.map((scheduledClass) => {
-                              const completionStatus = getCompletionStatus(scheduledClass)
                               const isPresent = scheduledClass.completion_status === 'completed' || 
                                                (scheduledClass.attendance_completed && scheduledClass.topics_completed)
                               return (

@@ -13,8 +13,6 @@ import {
   Loader2, 
   MessageSquare, 
   Star,
-  Type,
-  List,
   Info,
   Settings,
   AlertTriangle
@@ -109,7 +107,7 @@ export default function FeedbackFormModal({
         })))
       }
     }
-  }, [allStarRatingMode])
+  }, [allStarRatingMode, questions])
 
   const addQuestion = () => {
     setQuestions([...questions, {
@@ -124,7 +122,7 @@ export default function FeedbackFormModal({
     setQuestions(questions.filter((_, i) => i !== index))
   }
 
-  const updateQuestion = (index: number, field: keyof QuestionForm, value: any) => {
+  const updateQuestion = (index: number, field: keyof QuestionForm, value: string | boolean | "multiple_choice" | "text" | "star_rating") => {
     const updatedQuestions = [...questions]
     updatedQuestions[index] = { ...updatedQuestions[index], [field]: value }
     setQuestions(updatedQuestions)

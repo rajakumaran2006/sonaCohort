@@ -5,7 +5,7 @@ import { PeerTutorService } from './peerTutorService'
 import { StudentService } from './studentService'
 import { ExamService } from './examService'
 import { ExamMarksService } from './examMarksService'
-import { ClassService } from './classService'
+
 
 export interface ExportFile {
   filename: string
@@ -83,7 +83,7 @@ export class ExportGenerationService {
     const exams = await ExamService.getAllExams()
     
     // Prepare data
-    const data: any[][] = []
+    const data: (string | number | boolean | Date | null | undefined)[][] = []
     data.push(['Exams Data Export'])
     data.push([`Department: ${department}`])
     data.push([`Generated: ${new Date().toLocaleString()}`])
@@ -122,7 +122,7 @@ export class ExportGenerationService {
     const exams = await ExamService.getAllExams()
     
     // Prepare data
-    const data: any[][] = []
+    const data: (string | number | boolean | Date | null | undefined)[][] = []
     data.push(['Peer Tutor Marks Export'])
     data.push([`Department: ${department}`])
     data.push([`Generated: ${new Date().toLocaleString()}`])
@@ -179,7 +179,7 @@ export class ExportGenerationService {
     const peerTutors = await PeerTutorService.getPeerTutorsByDepartment(department)
     
     // Prepare data
-    const data: any[][] = []
+    const data: (string | number | boolean | Date | null | undefined)[][] = []
     data.push(['Peer Tutor Reports'])
     data.push([`Department: ${department}`])
     data.push([])
@@ -219,7 +219,7 @@ export class ExportGenerationService {
     const allClasses = [...classStatus.completed, ...classStatus.pending]
 
     // Prepare data
-    const data: any[][] = []
+    const data: (string | number | boolean | Date | null | undefined)[][] = []
     data.push(['Attendance Report'])
     data.push([`Department: ${department}`])
     data.push([`Generated: ${new Date().toLocaleString()}`])
@@ -265,7 +265,7 @@ export class ExportGenerationService {
     const peerTutors = await PeerTutorService.getPeerTutorsByDepartment(department)
 
     // Prepare data
-    const data: any[][] = []
+    const data: (string | number | boolean | Date | null | undefined)[][] = []
     data.push(['Peer Tutors List'])
     data.push([`Department: ${department}`])
     data.push([`Generated: ${new Date().toLocaleString()}`])
@@ -308,7 +308,7 @@ export class ExportGenerationService {
     const allClasses = [...classStatus.completed, ...classStatus.pending]
 
     // Prepare data
-    const data: any[][] = []
+    const data: (string | number | boolean | Date | null | undefined)[][] = []
     data.push(['Classes Schedule'])
     data.push([`Department: ${department}`])
     data.push([`Generated: ${new Date().toLocaleString()}`])

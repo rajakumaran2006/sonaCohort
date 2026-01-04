@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/client'
-import { AttendanceService, AttendanceRecord } from './attendanceService'
+import { AttendanceRecord } from './attendanceService'
 
 export interface AdditionalClass {
   id: string

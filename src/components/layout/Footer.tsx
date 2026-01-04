@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function Footer() {
   const scrollToSection = (sectionId: string) => {
@@ -15,13 +16,12 @@ export default function Footer() {
           {/* Company Info */}
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center mb-4">
-              <img 
+              <Image 
                 src="/logo.png" 
                 alt="PeerTutors" 
-                className="h-8 w-8 mr-2"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
-                }}
+                width={32}
+                height={32}
+                className="mr-2"
               />
               <span className="font-title text-xl">PeerTutors</span>
             </div>

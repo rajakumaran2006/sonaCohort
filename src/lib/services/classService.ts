@@ -289,10 +289,10 @@ export class ClassService {
 
       if (topicsError) {
         console.warn('Warning: could not delete class topics. Proceeding with class delete.', {
-          message: (topicsError as any)?.message,
-          details: (topicsError as any)?.details,
-          hint: (topicsError as any)?.hint,
-          code: (topicsError as any)?.code
+          message: topicsError.message,
+          details: topicsError.details,
+          hint: topicsError.hint,
+          code: topicsError.code
         })
       }
 
@@ -436,7 +436,7 @@ export class ClassService {
       console.log('getSectionsForYear called with:', { dept, year, normalizedDept, normalizedYear })
       
       // First, try case-insensitive matching for department
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from('peer_students')
         .select('section')
         .ilike('dept', normalizedDept) // Case-insensitive match
@@ -561,12 +561,15 @@ export class ClassService {
       const supabase = createClient()
       
       // Try to get existing record
-      let { data, error } = await supabase
+      const result = await supabase
         .from('class_completion')
         .select('*')
         .eq('class_id', classId)
         .eq('peer_tutor_id', peerTutorId)
         .single()
+      
+      let { data } = result
+      const { error } = result
 
       // If no record exists, create one
       if (error && error.code === 'PGRST116') {
@@ -698,7 +701,7 @@ export class ClassService {
   /**
    * Get classes with completion status for a peer tutor
    */
-  static async getClassesWithCompletion(peerTutorId: string, dept: string, year: string, section: string): Promise<any[]> {
+  static async getClassesWithCompletion(peerTutorId: string, dept: string, year: string, section: string): Promise<(Class & { isEditable: boolean; completion: ClassCompletion })[]> {
     try {
       const supabase = createClient()
       

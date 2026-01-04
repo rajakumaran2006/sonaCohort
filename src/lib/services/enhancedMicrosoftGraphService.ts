@@ -1,3 +1,4 @@
+import { MicrosoftUser } from '@/lib/types'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { NotificationService } from '@/lib/utils/notificationService'
 
@@ -8,7 +9,7 @@ export class EnhancedMicrosoftGraphService {
   /**
    * Search users with enhanced error handling
    */
-  static async searchUsers(query: string): Promise<any[]> {
+  static async searchUsers(query: string): Promise<MicrosoftUser[]> {
     try {
       const users = await MicrosoftGraphService.searchUsers(query)
       return users
@@ -28,9 +29,9 @@ export class EnhancedMicrosoftGraphService {
   /**
    * Get user profile with enhanced error handling
    */
-  static async getUserProfile(userId: string): Promise<any | null> {
+  static async getUserProfile(userId: string): Promise<MicrosoftUser | null> {
     try {
-      const profile = await MicrosoftGraphService.getUserProfile(userId)
+      const profile = await MicrosoftGraphService.getUserById(userId)
       return profile
     } catch (error) {
       console.error('Error getting user profile:', error)

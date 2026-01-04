@@ -6,8 +6,6 @@ import { StudentService, Student } from '@/lib/services/studentService'
 import { X, Upload, AlertCircle, CheckCircle, Download } from 'lucide-react'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
-import { FacultyService } from '@/lib/services/facultyService'
 import { createClient } from '@/utils/supabase/client'
 
 interface StudentImportModalProps {
@@ -18,10 +16,7 @@ interface StudentImportModalProps {
   onSuccess: () => void
 }
 
-interface ImportRow {
-  name?: string
-  email?: string
-}
+
 
 interface ProcessedStudent {
   student: Student | null

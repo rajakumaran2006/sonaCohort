@@ -26,7 +26,7 @@ export interface PeerTutorRenumeration {
   peer_tutor_id: string
   template_id: string
   status: 'pending' | 'submitted' | 'approved' | 'rejected'
-  field_responses: Record<string, any>
+  field_responses: Record<string, string | number | boolean | null>
   submitted_at?: string
   approved_at?: string
   approved_by?: string
@@ -37,6 +37,9 @@ export interface PeerTutorRenumeration {
     id: string
     name: string
     email: string
+    dept?: string
+    year?: string
+    section?: string
   }
 }
 
@@ -394,7 +397,7 @@ export class RenumerationService {
    */
   static async submitRenumerationResponse(
     renumerationId: string,
-    fieldResponses: Record<string, any>
+    fieldResponses: Record<string, string | number | boolean | null>
   ): Promise<boolean> {
     try {
       const supabase = createClient()

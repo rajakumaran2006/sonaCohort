@@ -6,7 +6,6 @@ import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Button } from '@/components/ui'
 import { useQuery } from '@tanstack/react-query'
 import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
 import { ExamService } from '@/lib/services/examService'
@@ -49,18 +48,18 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
     refetchOnMount: false, // Don't refetch on mount if data exists
   })
 
-  // Base navigation items (excluding Reports which we want last)
-  const baseNavigation = [
-    { name: 'Dashboard', href: '/peer/dashboard', Icon: LayoutGrid },
-    { name: 'Classes', href: '/peer/classes', Icon: GraduationCap },
-    { name: 'Attendance', href: '/peer/attendance', Icon: ClipboardList },
-  ]
-
-  const examNavItem = { name: 'Exams', href: '/peer/exams', Icon: FileText }
-  const reportsNavItem = { name: 'Reports', href: '/peer/reports', Icon: FileBarChart }
-
   // Memoize navigation to prevent recreation on every render
   const navigation = useMemo(() => {
+    // Base navigation items (excluding Reports which we want last)
+    const baseNavigation = [
+        { name: 'Dashboard', href: '/peer/dashboard', Icon: LayoutGrid },
+        { name: 'Classes', href: '/peer/classes', Icon: GraduationCap },
+        { name: 'Attendance', href: '/peer/attendance', Icon: ClipboardList },
+    ]
+
+    const examNavItem = { name: 'Exams', href: '/peer/exams', Icon: FileText }
+    const reportsNavItem = { name: 'Reports', href: '/peer/reports', Icon: FileBarChart }
+
     const items = [...baseNavigation]
     
     // Add Exams if access is allowed

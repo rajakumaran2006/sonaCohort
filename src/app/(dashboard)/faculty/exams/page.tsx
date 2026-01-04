@@ -13,12 +13,12 @@ import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import { Card, CardHeader, CardTitle, CardContent, LoadingOverlay } from '@/components/ui'
+import { LoadingOverlay } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import CreateExamModal from '@/components/forms/CreateExamModal'
-import { FileText, Plus, Trash2, Eye, Download } from 'lucide-react'
+import { FileText, Plus, Trash2 } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
 import { calculatePeerTutorAscendScore } from '@/lib/utils/ascendScore'
@@ -45,7 +45,7 @@ function FacultyExamsContent() {
     pending: number
     ongoing: number
   }>>({})
-  const [isLoadingStats, setIsLoadingStats] = useState(false)
+  const [, setIsLoadingStats] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
   const [isSidebarCollapsed] = useSidebarCollapsed()
@@ -258,7 +258,6 @@ function FacultyExamsContent() {
         try {
           // Get exam subjects
           const examSubjects = await ExamSubjectService.getExamSubjects(exam.id)
-          const subjectsText = examSubjects.map(s => s.subject_name).join(', ')
           
           // Get peer tutors for this exam's years
           const peerTutors = await PeerTutorService.getPeerTutorsByYears(exam.years)
@@ -272,11 +271,11 @@ function FacultyExamsContent() {
           const sectionsText = uniqueSections.length > 1 ? 'ALL' : uniqueSections[0] || 'ALL'
           
           // Prepare export data
-          const exportData: any[][] = []
+          const exportData: (string | number)[][] = []
           
           // Add header rows following xlsx-rule.mdc format
           exportData.push(['Subjects Export Report'])
-          exportData.push([`Department: ${(department as any)?.dept || department.name || ''}`])
+          exportData.push([`Department: ${(department as { dept?: string; name?: string })?.dept || department.name || ''}`])
           exportData.push([`Year: ${yearsText}`])
           exportData.push([`Section: ${sectionsText}`])
           exportData.push([

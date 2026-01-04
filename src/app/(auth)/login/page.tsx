@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { AdminService } from '@/lib/services/adminService'
 import Image from 'next/image'
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { RenumerationService, RenumerationField } from '@/lib/services/renumerationService'
+import { RenumerationService } from '@/lib/services/renumerationService'
 
 interface RenumerationModalProps {
   isOpen: boolean
@@ -265,7 +265,7 @@ export default function RenumerationModal({ isOpen, onClose, onSuccess, facultyI
                       </label>
                       <select
                         value={field.field_type}
-                        onChange={(e) => handleFieldChange(index, { field_type: e.target.value as any })}
+                        onChange={(e) => handleFieldChange(index, { field_type: e.target.value as FieldConfig['field_type'] })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         {fieldTypes.map(type => (

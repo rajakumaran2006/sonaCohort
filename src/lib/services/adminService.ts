@@ -132,7 +132,7 @@ export class AdminService {
       
       // First check if the admin_users table exists
       try {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('admin_users')
           .select('id')
           .limit(1)

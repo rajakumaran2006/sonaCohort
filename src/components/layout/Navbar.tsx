@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Menu, X } from 'lucide-react'
 
 export default function Navbar() {
@@ -26,13 +27,12 @@ export default function Navbar() {
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center">
-              <img 
+              <Image 
                 src="/logo.png" 
                 alt="PeerTutors" 
-                className="h-32 w-32 mr-2"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
-                }}
+                width={128}
+                height={128}
+                className="h-32 w-32 mr-2 object-contain"
               />
             </Link>
           </div>

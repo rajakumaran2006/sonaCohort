@@ -16,7 +16,7 @@ export default function PeerRenumerationModal({
   onClose, 
   onSuccess 
 }: PeerRenumerationModalProps) {
-  const [formData, setFormData] = useState<Record<string, any>>({})
+  const [formData, setFormData] = useState<Record<string, string | number | boolean | null>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fields, setFields] = useState<RenumerationField[]>([])
@@ -29,7 +29,7 @@ export default function PeerRenumerationModal({
     }
   }, [renumeration])
 
-  const handleFieldChange = (fieldName: string, value: any) => {
+  const handleFieldChange = (fieldName: string, value: string | number | boolean | null) => {
     setFormData(prev => ({
       ...prev,
       [fieldName]: value
