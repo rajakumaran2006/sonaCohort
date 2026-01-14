@@ -60,14 +60,14 @@ export class AttendanceService {
   /**
    * Get students assigned to a peer tutor for attendance
    */
-  static async getStudentsForAttendance(peerTutorId: string): Promise<Pick<Student, 'id' | 'name' | 'email'>[]> {
+  static async getStudentsForAttendance(peertutorsId: string): Promise<Pick<Student, 'id' | 'name' | 'email'>[]> {
     try {
       const supabase = createClient()
       
       const { data, error } = await supabase
         .from('peer_students')
         .select('id, name, email')
-        .eq('assigned_peer_tutor_id', peerTutorId)
+        .eq('assigned_peer_tutor_id', peertutorsId)
         .eq('peer_tutor', false)
 
       if (error) {
@@ -89,7 +89,7 @@ export class AttendanceService {
     try {
       const supabase = createClient()
       
-      console.log('Getting attendance for scheduled class:', scheduledClassId)
+      // console.log('Getting attendance for scheduled class:', scheduledClassId)
       
       // First, get the scheduled class details to find the peer tutor and class_id
       const { data: scheduledClass, error: classError } = await supabase
@@ -103,10 +103,10 @@ export class AttendanceService {
         return []
       }
 
-      console.log('Scheduled class details:', {
-        peerTutorId: scheduledClass.peer_tutor_id,
-        classId: scheduledClass.class_id
-      })
+      // console.log('Scheduled class details:', {
+      //   peertutorsId: scheduledClass.peer_tutor_id,
+      //   classId: scheduledClass.class_id
+      // })
 
       // Get all students assigned to this peer tutor
       const { data: assignedStudents, error: studentsError } = await supabase
@@ -120,7 +120,7 @@ export class AttendanceService {
         return []
       }
 
-      console.log('Assigned students:', assignedStudents)
+      // console.log('Assigned students:', assignedStudents)
 
       // Get attendance records for this scheduled class
       const { data: attendanceData, error: attendanceError } = await supabase
@@ -137,18 +137,18 @@ export class AttendanceService {
         return []
       }
 
-      console.log('Attendance records found:', attendanceData || [])
-      console.log('Query used:', `scheduled_class_id.eq.${scheduledClassId}`)
+      // console.log('Attendance records found:', attendanceData || [])
+      // console.log('Query used:', `scheduled_class_id.eq.${scheduledClassId}`)
 
       // Create a map of attendance records for quick lookup
       const attendanceMap = new Map()
       if (attendanceData) {
         attendanceData.forEach(record => {
-          console.log('Attendance record:', {
-            studentId: record.student_id,
-            status: record.status,
-            scheduledClassId: record.scheduled_class_id
-          })
+          // console.log('Attendance record:', {
+          //   studentId: record.student_id,
+          //   status: record.status,
+          //   scheduledClassId: record.scheduled_class_id
+          // })
           attendanceMap.set(record.student_id, record.status)
         })
       }
@@ -163,7 +163,7 @@ export class AttendanceService {
 
       // If no assigned students found but we have attendance data, try to get student info directly from attendance records
       if (result.length === 0 && attendanceData.length > 0) {
-        console.log('No assigned students found, trying direct approach from attendance records...')
+        // console.log('No assigned students found, trying direct approach from attendance records...')
         
         // Get student info for each attendance record
         const studentIds = attendanceData.map(record => record.student_id)
@@ -175,7 +175,7 @@ export class AttendanceService {
         if (studentInfoError) {
           console.error('Error getting student info:', studentInfoError)
         } else {
-          console.log('Student info from attendance records:', studentInfo)
+          // console.log('Student info from attendance records:', studentInfo)
           
           result = attendanceData.map(record => {
             const student = studentInfo?.find(s => s.id === record.student_id)
@@ -189,16 +189,16 @@ export class AttendanceService {
         }
       }
 
-      console.log('Final attendance result:', result)
-      console.log('Debug summary:', {
-        assignedStudentsCount: assignedStudents.length,
-        attendanceRecordsCount: attendanceData.length,
-        attendanceMapSize: attendanceMap.size,
-        finalResultCount: result.length,
-        assignedStudentIds: assignedStudents.map(s => s.id),
-        attendanceRecordStudentIds: attendanceData.map(r => r.student_id),
-        attendanceMapKeys: Array.from(attendanceMap.keys())
-      })
+      // console.log('Final attendance result:', result)
+      // console.log('Debug summary:', {
+      //   assignedStudentsCount: assignedStudents.length,
+      //   attendanceRecordsCount: attendanceData.length,
+      //   attendanceMapSize: attendanceMap.size,
+      //   finalResultCount: result.length,
+      //   assignedStudentIds: assignedStudents.map(s => s.id),
+      //   attendanceRecordStudentIds: attendanceData.map(r => r.student_id),
+      //   attendanceMapKeys: Array.from(attendanceMap.keys())
+      // })
       return result
 
     } catch (error) {
@@ -215,7 +215,7 @@ export class AttendanceService {
     try {
       const supabase = createClient()
       
-      console.log('Getting attendance for class:', classId)
+      // console.log('Getting attendance for class:', classId)
       
       // First, get all scheduled classes for this class_id
       const { data: scheduledClasses, error: scheduledError } = await supabase
@@ -229,7 +229,7 @@ export class AttendanceService {
       }
 
       if (!scheduledClasses || scheduledClasses.length === 0) {
-        console.log('No scheduled classes found for class:', classId)
+        // console.log('No scheduled classes found for class:', classId)
         return []
       }
 
@@ -260,11 +260,11 @@ export class AttendanceService {
         return []
       }
 
-      console.log('Attendance data retrieved:', data)
+      // console.log('Attendance data retrieved:', data)
 
       // If no attendance records exist, return empty array
       if (!data || data.length === 0) {
-        console.log('No attendance records found for class:', classId)
+        // console.log('No attendance records found for class:', classId)
         return []
       }
 
@@ -283,17 +283,17 @@ export class AttendanceService {
   /**
    * Mark attendance for students in a scheduled class
    */
-  static async markAttendanceForScheduledClass(scheduledClassId: string, peerTutorId: string, attendanceRecords: AttendanceRecord[]): Promise<boolean> {
+  static async markAttendanceForScheduledClass(scheduledClassId: string, peertutorsId: string, attendanceRecords: AttendanceRecord[]): Promise<boolean> {
     try {
       const supabase = createClient()
       
-      console.log('=== markAttendanceForScheduledClass called ===')
-      console.log('Marking attendance for scheduled class:', scheduledClassId, 'peer tutor:', peerTutorId)
-      console.log('Attendance records:', attendanceRecords)
+      // console.log('=== markAttendanceForScheduledClass called ===')
+      // console.log('Marking attendance for scheduled class:', scheduledClassId, 'peer tutor:', peertutorsId)
+      // console.log('Attendance records:', attendanceRecords)
       
       // Validate input data
-      if (!scheduledClassId || !peerTutorId) {
-        console.error('Missing required parameters: scheduledClassId or peerTutorId')
+      if (!scheduledClassId || !peertutorsId) {
+        console.error('Missing required parameters: scheduledClassId or peertutorsId')
         return false
       }
       
@@ -314,7 +314,7 @@ export class AttendanceService {
         return false
       }
       
-      console.log('Valid attendance records:', validRecords)
+      // console.log('Valid attendance records:', validRecords)
       
       // Get the class_id from the scheduled class
       const scheduledClass = await ScheduledClassService.getScheduledClassById(scheduledClassId)
@@ -323,36 +323,36 @@ export class AttendanceService {
         return false
       }
       
-      console.log('Scheduled class found:', scheduledClass)
+      // console.log('Scheduled class found:', scheduledClass)
       
       // Prepare attendance data for insert with both scheduled_class_id and class_id
       const attendanceData = validRecords.map(record => ({
         scheduled_class_id: scheduledClassId,
         class_id: scheduledClass.class_id,
         student_id: record.student_id,
-        peer_tutor_id: peerTutorId,
+        peer_tutor_id: peertutorsId,
         status: record.status
       }))
 
-      console.log('Prepared attendance data for insert:', attendanceData)
+      // console.log('Prepared attendance data for insert:', attendanceData)
 
       // First, delete existing attendance records for this scheduled class and peer tutor
-      console.log('Deleting existing attendance records...')
+      // console.log('Deleting existing attendance records...')
       const { error: deleteError } = await supabase
         .from('attendance')
         .delete()
         .eq('scheduled_class_id', scheduledClassId)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
 
       if (deleteError) {
         console.error('Error deleting existing attendance records:', deleteError)
         throw deleteError
       } else {
-        console.log('Successfully deleted existing attendance records')
+        // console.log('Successfully deleted existing attendance records')
       }
 
       // Then insert new attendance records
-      console.log('Inserting new attendance records...')
+      // console.log('Inserting new attendance records...')
       const { data, error: insertError } = await supabase
         .from('attendance')
         .insert(attendanceData)
@@ -363,7 +363,7 @@ export class AttendanceService {
         throw insertError
       }
 
-      console.log('Successfully inserted attendance records:', data)
+      // console.log('Successfully inserted attendance records:', data)
       return true
     } catch (error) {
       console.error('Error in markAttendanceForScheduledClass:', error)
@@ -374,16 +374,16 @@ export class AttendanceService {
   /**
    * Mark attendance for students (legacy method for backward compatibility)
    */
-  static async markAttendance(classId: string, peerTutorId: string, attendanceRecords: AttendanceRecord[], scheduledClassId?: string): Promise<boolean> {
+  static async markAttendance(classId: string, peertutorsId: string, attendanceRecords: AttendanceRecord[], scheduledClassId?: string): Promise<boolean> {
     try {
       const supabase = createClient()
       
-      console.log('Marking attendance for class:', classId, 'peer tutor:', peerTutorId)
-      console.log('Attendance records:', attendanceRecords)
+      // console.log('Marking attendance for class:', classId, 'peer tutor:', peertutorsId)
+      // console.log('Attendance records:', attendanceRecords)
       
       // Validate input data
-      if (!classId || !peerTutorId) {
-        console.error('Missing required parameters: classId or peerTutorId')
+      if (!classId || !peertutorsId) {
+        console.error('Missing required parameters: classId or peertutorsId')
         return false
       }
       
@@ -404,7 +404,7 @@ export class AttendanceService {
         return false
       }
       
-      console.log('Valid attendance records:', validRecords)
+      // console.log('Valid attendance records:', validRecords)
       
       // Resolve scheduled_class_id and class_id correctly
       let resolvedScheduledClassId = scheduledClassId
@@ -424,29 +424,29 @@ export class AttendanceService {
         scheduled_class_id: resolvedScheduledClassId,
         class_id: resolvedClassId,
         student_id: record.student_id,
-        peer_tutor_id: peerTutorId,
+        peer_tutor_id: peertutorsId,
         status: record.status
       }))
 
-      console.log('Prepared attendance data for insert:', attendanceData)
+      // console.log('Prepared attendance data for insert:', attendanceData)
 
       // First, delete existing attendance records for this scheduled class and peer tutor
-      console.log('Deleting existing attendance records...')
+      // console.log('Deleting existing attendance records...')
       const { error: deleteError } = await supabase
         .from('attendance')
         .delete()
         .eq('scheduled_class_id', resolvedScheduledClassId || resolvedClassId)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
 
       if (deleteError) {
         console.error('Error deleting existing attendance records:', deleteError)
         // Don't return false here, continue with insert as delete might fail if no records exist
       } else {
-        console.log('Successfully deleted existing attendance records')
+        // console.log('Successfully deleted existing attendance records')
       }
 
       // Then insert new attendance records
-      console.log('Inserting new attendance records...')
+      // console.log('Inserting new attendance records...')
       const { data, error: insertError } = await supabase
         .from('attendance')
         .insert(attendanceData)
@@ -463,7 +463,7 @@ export class AttendanceService {
         return false
       }
 
-      console.log('Successfully inserted attendance records:', data)
+      // console.log('Successfully inserted attendance records:', data)
       return true
     } catch (error) {
       console.error('Error in markAttendance:', error)
@@ -499,7 +499,7 @@ export class AttendanceService {
   /**
    * Add a topic to a class
    */
-  static async addClassTopic(classId: string, peerTutorId: string, topicName: string, description?: string): Promise<boolean> {
+  static async addClassTopic(classId: string, peertutorsId: string, topicName: string, description?: string): Promise<boolean> {
     try {
       const supabase = createClient()
       
@@ -507,7 +507,7 @@ export class AttendanceService {
         .from('class_topics')
         .insert([{
           class_id: classId,
-          peer_tutor_id: peerTutorId,
+          peer_tutor_id: peertutorsId,
           topic_name: topicName,
           description: description
         }])
@@ -552,7 +552,7 @@ export class AttendanceService {
    * Get attendance history for a peer tutor with date and class filtering
    */
   static async getAttendanceHistory(
-    peerTutorId: string, 
+    peertutorsId: string, 
     startDate?: string, 
     endDate?: string, 
     scheduledClassId?: string
@@ -591,7 +591,7 @@ export class AttendanceService {
             email
           )
         `)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .order('created_at', { ascending: false })
 
       if (startDate) {
@@ -624,11 +624,11 @@ export class AttendanceService {
       const validData = Array.isArray(data) ? data : []
       
       if (validData.length === 0) {
-        console.log('No attendance records found for peer tutor:', peerTutorId)
+        // console.log('No attendance records found for peer tutor:', peertutorsId)
         return []
       }
       
-      console.log(`Processing ${validData.length} attendance records for peer tutor:`, peerTutorId)
+      // console.log(`Processing ${validData.length} attendance records for peer tutor:`, peertutorsId)
       
       // Add scheduled class information if available
       const enrichedData = await Promise.all(
@@ -699,7 +699,7 @@ export class AttendanceService {
   /**
    * Get attendance summary for a peer tutor
    */
-  static async getAttendanceSummary(peerTutorId: string): Promise<{
+  static async getAttendanceSummary(peertutorsId: string): Promise<{
     totalClasses: number
     totalStudents: number
     presentCount: number
@@ -709,13 +709,13 @@ export class AttendanceService {
     try {
       const supabase = createClient()
       
-      console.log('Getting attendance summary for peer tutor ID:', peerTutorId)
+      // console.log('Getting attendance summary for peer tutor ID:', peertutorsId)
       
       // First get peer tutor info to get dept, year, section
       const { data: tutorData, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('dept, year, section')
-        .eq('id', peerTutorId)
+        .eq('id', peertutorsId)
         .single()
 
       if (tutorError) {
@@ -736,7 +736,7 @@ export class AttendanceService {
       }
 
       if (!tutorData) {
-        console.error('No peer tutor data found for ID:', peerTutorId)
+        console.error('No peer tutor data found for ID:', peertutorsId)
         return {
           totalClasses: 0,
           totalStudents: 0,
@@ -746,7 +746,7 @@ export class AttendanceService {
         }
       }
 
-      console.log('Peer tutor data:', tutorData)
+      // console.log('Peer tutor data:', tutorData)
 
       // Get total scheduled classes for this peer tutor's dept, year, section
       const { data: scheduledClassesData, error: scheduledClassesError } = await supabase
@@ -755,6 +755,7 @@ export class AttendanceService {
         .eq('dept', tutorData.dept)
         .eq('year', tutorData.year)
         .eq('section', tutorData.section)
+        .eq('peer_tutor_id', peertutorsId)
 
       if (scheduledClassesError) {
         console.error('Error getting scheduled classes count:', scheduledClassesError)
@@ -777,7 +778,7 @@ export class AttendanceService {
       const { data: studentsData, error: studentsError } = await supabase
         .from('peer_students')
         .select('id')
-        .eq('assigned_peer_tutor_id', peerTutorId)
+        .eq('assigned_peer_tutor_id', peertutorsId)
         .eq('peer_tutor', false)
 
       if (studentsError) {
@@ -801,7 +802,7 @@ export class AttendanceService {
       const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
         .select('status')
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
 
       if (attendanceError) {
         console.error('Error getting attendance records:', attendanceError)
@@ -885,7 +886,7 @@ export class AttendanceService {
   /**
    * Get attendance history for a specific student
    */
-  static async getStudentAttendanceHistory(studentId: string, peerTutorId: string): Promise<AttendanceHistoryRecord[]> {
+  static async getStudentAttendanceHistory(studentId: string, peertutorsId: string): Promise<AttendanceHistoryRecord[]> {
     try {
       const supabase = createClient()
       
@@ -915,7 +916,7 @@ export class AttendanceService {
           )
         `)
         .eq('student_id', studentId)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .order('created_at', { ascending: false })
 
       if (error) {

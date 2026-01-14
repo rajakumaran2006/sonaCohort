@@ -55,7 +55,7 @@ export const AVAILABLE_EXPORTS: ExportOption[] = [
 ]
 
 export class EmailService {
-  private static SUPER_ADMIN_EMAIL = 'admin@peertutors.edu' // Default, can be configured
+  private static SUPER_ADMIN_EMAIL = 'admin@peerTutor.edu' // Default, can be configured
 
   /**
    * Set the super admin email address

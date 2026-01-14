@@ -186,7 +186,7 @@ export class ExamService {
   /**
    * Get exam marks for a peer tutor assignment (compatibility method)
    */
-  static async getExamMarks(peerTutorId: string): Promise<ExamMark[]> {
+  static async getExamMarks(peertutorsId: string): Promise<ExamMark[]> {
     try {
       const supabase = createClient()
       
@@ -197,7 +197,7 @@ export class ExamService {
           student:peer_students(name),
           class:classes(subject_name)
         `)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -215,7 +215,7 @@ export class ExamService {
   /**
    * Get peer tutor marks (compatibility method)
    */
-  static async getPeerTutorMarks(peerTutorId: string): Promise<ExamMarkWithDetails[]> {
+  static async getpeertutorsMarks(peertutorsId: string): Promise<ExamMarkWithDetails[]> {
     try {
       const supabase = createClient()
       
@@ -226,7 +226,7 @@ export class ExamService {
           student:peer_students(name),
           subject:exam_subjects(subject_name)
         `)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -241,7 +241,7 @@ export class ExamService {
         subject_name: mark.subject?.subject_name
       })) as ExamMarkWithDetails[]
     } catch (error) {
-      console.error('Error in getPeerTutorMarks:', error)
+      console.error('Error in getpeertutorsMarks:', error)
       return []
     }
   }

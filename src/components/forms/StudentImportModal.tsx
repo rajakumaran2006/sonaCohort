@@ -7,6 +7,7 @@ import { X, Upload, AlertCircle, CheckCircle, Download } from 'lucide-react'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { createClient } from '@/utils/supabase/client'
+import { toast } from 'sonner'
 
 interface StudentImportModalProps {
   dept: string
@@ -20,10 +21,13 @@ interface StudentImportModalProps {
 
 interface ProcessedStudent {
   student: Student | null
+  microsoftUser?: { displayName: string; mail: string; userPrincipalName: string } | null
   name: string
   email?: string
   foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated'
   status: 'valid' | 'missing' | 'allocated'
+  year?: string
+  section?: string
 }
 
 export default function StudentImportModal({
@@ -51,30 +55,47 @@ export default function StudentImportModal({
     try {
       setIsProcessing(true)
       
-      const students = await StudentService.getStudentsBySection(dept, year, section)
+      let students: Student[] = []
+      // If we are in a specific section context, try to get students for that section initially
+      // But we might want to export template for the whole department if needed
+      if (dept && year && section) {
+        students = await StudentService.getStudentsBySection(dept, year, section)
+      } else {
+        students = await StudentService.getStudentsByDepartment(dept)
+      }
       
       const exportData = [
-        ['Student Name', 'Student Email']
+        ['Student Name', 'Student Email', 'Year', 'Section']
       ]
       
       students.forEach(s => {
-        exportData.push([s.name, s.email])
+        exportData.push([s.name, s.email, s.year, s.section])
       })
+
+      // If we are exporting a blank template because no data exists, add an example row
+      if (students.length === 0) {
+        exportData.push(['Example Name', 'example@sonatech.ac.in', '2', 'A'])
+      }
       
       const wb = XLSX.utils.book_new()
       const ws = XLSX.utils.aoa_to_sheet(exportData)
       
       ws['!cols'] = [
         { wch: 30 },
-        { wch: 35 }
+        { wch: 35 },
+        { wch: 10 },
+        { wch: 10 }
       ]
       
       XLSX.utils.book_append_sheet(wb, ws, 'Students')
-      XLSX.writeFile(wb, `students_${dept}_${year}_${section}.xlsx`)
+      const fileName = year && section 
+        ? `students_${dept}_${year}_${section}.xlsx`
+        : `students_${dept}_template.xlsx`
+      XLSX.writeFile(wb, fileName)
       
     } catch (error) {
       console.error('Error exporting students:', error)
-      alert('Error exporting data. Please try again.')
+      toast.error('Error exporting data. Please try again.')
     } finally {
       setIsProcessing(false)
     }
@@ -90,30 +111,52 @@ export default function StudentImportModal({
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
       const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[]
       
-      const rows = jsonData.slice(1)
-      
-      const existingStudents = await StudentService.getStudentsBySection(dept, year, section)
+      // Get all students in the department to check for duplicates/existing
+      const existingStudents = await StudentService.getStudentsByDepartment(dept)
       
       const processed: ProcessedStudent[] = []
+
+      // Helper for case-insensitive column lookup
+      const getValue = (row: Record<string, unknown>, targetKey: string) => {
+        const key = Object.keys(row).find(k => k.toLowerCase().trim() === targetKey.toLowerCase().trim())
+        return key ? row[key] : undefined
+      }
       
-      for (const row of rows) {
-        if (row.length === 0 || row.every(cell => !cell)) continue
+      for (const row of jsonData) {
+        // Try multiple variations for column names
+        const name = (getValue(row, 'Student Name') || getValue(row, 'Name') || getValue(row, 'Student') || '') as string
+        const email = (getValue(row, 'Student Email') || getValue(row, 'Email') || getValue(row, 'Mail') || '') as string
+        const rowYear = (getValue(row, 'Year') || year || '') as string
+        const rowSection = (getValue(row, 'Section') || section || '') as string
+
+        const cleanName = name?.toString().trim() || ''
+        const cleanEmail = email?.toString().trim() || ''
+        const cleanYear = rowYear?.toString().trim() || ''
+        const cleanSection = rowSection?.toString().trim() || ''
         
-        const name = row[0]?.toString().trim() || ''
-        const email = row[1]?.toString().trim() || ''
+        if (!cleanName && !cleanEmail) continue
         
-        if (!name && !email) continue
+        // Use the year and section from the row, or fallback to props
+        const targetYear = cleanYear
+        const targetSection = cleanSection
         
-        const result = await findStudent(existingStudents, name, email)
+        if (!targetYear || !targetSection) {
+          console.warn(`Missing year or section for ${cleanName || cleanEmail}`)
+        }
+
+        const result = await findStudent(existingStudents, cleanName, cleanEmail, targetYear, targetSection)
         
         processed.push({
           student: result.student,
-          name: result.student?.name || name || 'Unknown',
-          email: result.student?.email || email,
+          microsoftUser: result.microsoftUser,
+          name: result.student?.name || result.microsoftUser?.displayName || cleanName || 'Unknown',
+          email: result.student?.email || result.microsoftUser?.mail || cleanEmail,
           foundIn: result.foundIn,
-          status: result.foundIn === 'allocated' ? 'allocated' : (result.student ? 'valid' : 'missing')
+          status: result.foundIn === 'allocated' ? 'allocated' : (result.student || result.microsoftUser ? 'valid' : 'missing'),
+          year: targetYear,
+          section: targetSection
         })
       }
       
@@ -122,7 +165,7 @@ export default function StudentImportModal({
       
     } catch (error) {
       console.error('Error processing file:', error)
-      alert('Error processing file. Please check the format and try again.')
+      toast.error('Error processing file. Please check the format and try again.')
     } finally {
       setIsProcessing(false)
       if (fileInputRef.current) {
@@ -131,13 +174,20 @@ export default function StudentImportModal({
     }
   }
 
+  // Check if a student exists - does NOT create anything, just checks
   const findStudent = async (
     students: Student[],
     name?: string,
-    email?: string
-  ): Promise<{ student: Student | null, foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated' }> => {
+    email?: string,
+    targetYear?: string,
+    targetSection?: string
+  ): Promise<{ 
+    student: Student | null, 
+    microsoftUser: { displayName: string; mail: string; userPrincipalName: string } | null,
+    foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated' 
+  }> => {
     if (!name && !email) {
-      return { student: null, foundIn: 'not_found' }
+      return { student: null, microsoftUser: null, foundIn: 'not_found' }
     }
 
     // Check if email already exists in other roles (peer tutors, faculty/admin)
@@ -153,7 +203,7 @@ export default function StudentImportModal({
       
       if (tutorExists) {
         console.log(`❌ Email "${email}" already allocated as PEER TUTOR`)
-        return { student: null, foundIn: 'allocated' }
+        return { student: null, microsoftUser: null, foundIn: 'allocated' }
       }
       
       // Check faculty table (admins)
@@ -165,46 +215,49 @@ export default function StudentImportModal({
       
       if (facultyExists) {
         console.log(`❌ Email "${email}" already allocated as FACULTY/ADMIN`)
-        return { student: null, foundIn: 'allocated' }
+        return { student: null, microsoftUser: null, foundIn: 'allocated' }
       }
     }
 
     // Search local database for students
     if (name) {
-      const match = students.find(s => s.name.toLowerCase().trim() === name.toLowerCase().trim())
-      if (match) return { student: match, foundIn: 'local' }
+      const match = students.find(s => 
+        s.name.toLowerCase().trim() === name.toLowerCase().trim() &&
+        (!targetYear || s.year === targetYear) && 
+        (!targetSection || s.section === targetSection)
+      )
+      if (match) return { student: match, microsoftUser: null, foundIn: 'local' }
     }
     
     if (email) {
-      const match = students.find(s => s.email.toLowerCase().trim() === email.toLowerCase().trim())
-      if (match) return { student: match, foundIn: 'local' }
+      const match = students.find(s => 
+        s.email.toLowerCase().trim() === email.toLowerCase().trim() &&
+        (!targetYear || s.year === targetYear) && 
+        (!targetSection || s.section === targetSection)
+      )
+      if (match) return { student: match, microsoftUser: null, foundIn: 'local' }
     }
     
-    // Search Microsoft Graph by Email
-    if (email && user?.id) {
+    // Search Microsoft Graph by Email - DON'T CREATE, just find
+    if (email) {
       const microsoftUser = await MicrosoftGraphService.getUserByEmail(email)
       
       if (microsoftUser) {
-        const newStudent = await StudentService.createFromMicrosoftUser(
-          microsoftUser,
-          user.id,
-          dept,
-          year,
-          section
-        )
-        
-        if (newStudent) {
-          return { student: newStudent, foundIn: 'microsoft' }
+        return { 
+          student: null, 
+          microsoftUser: {
+            displayName: microsoftUser.displayName,
+            mail: microsoftUser.mail || microsoftUser.userPrincipalName,
+            userPrincipalName: microsoftUser.userPrincipalName
+          }, 
+          foundIn: 'microsoft' 
         }
       }
     }
 
-    // Search Microsoft Graph by Name (Exact Match)
-    if (name && user?.id) {
-      // Search for users with this name (Graph API searches are "startsWith")
+    // Search Microsoft Graph by Name (Exact Match) - DON'T CREATE, just find
+    if (name) {
       const microsoftUsers = await MicrosoftGraphService.searchUsers(name)
-      
-      // Find exact match
       const exactMatch = microsoftUsers.find(u => u.displayName.toLowerCase().trim() === name.toLowerCase().trim())
       
       if (exactMatch) {
@@ -220,25 +273,23 @@ export default function StudentImportModal({
               
             if (tutorExists) {
                console.log(`❌ Name "${name}" (Email: ${exactMatch.mail}) already allocated as PEER TUTOR`)
-               return { student: null, foundIn: 'allocated' }
+               return { student: null, microsoftUser: null, foundIn: 'allocated' }
             }
          }
 
-        const newStudent = await StudentService.createFromMicrosoftUser(
-          exactMatch,
-          user.id,
-          dept,
-          year,
-          section
-        )
-        
-        if (newStudent) {
-          return { student: newStudent, foundIn: 'microsoft' }
+        return { 
+          student: null, 
+          microsoftUser: {
+            displayName: exactMatch.displayName,
+            mail: exactMatch.mail || exactMatch.userPrincipalName,
+            userPrincipalName: exactMatch.userPrincipalName
+          }, 
+          foundIn: 'microsoft' 
         }
       }
     }
     
-    return { student: null, foundIn: 'not_found' }
+    return { student: null, microsoftUser: null, foundIn: 'not_found' }
   }
 
   const handleImport = async () => {
@@ -250,18 +301,51 @@ export default function StudentImportModal({
       const validStudents = processedData.filter(p => p.status === 'valid')
       
       if (validStudents.length === 0) {
-        alert('No valid students to import.')
+        toast.warning('No valid students to import.')
         return
       }
       
-      alert(`Successfully imported ${validStudents.length} student(s)!`)
+      let createdCount = 0
+      let existingCount = 0
+      
+      // Now actually create the students from Microsoft users
+      for (const item of validStudents) {
+        if (item.student) {
+          // Already exists in local database
+          existingCount++
+        } else if (item.microsoftUser) {
+          // Create from Microsoft user
+          const newStudent = await StudentService.createFromMicrosoftUser(
+            {
+              displayName: item.microsoftUser.displayName,
+              mail: item.microsoftUser.mail,
+              userPrincipalName: item.microsoftUser.userPrincipalName,
+              id: ''
+            },
+            user.id,
+            dept,
+            item.year || year || '',
+            item.section || section || ''
+          )
+          
+          if (newStudent) {
+            createdCount++
+          }
+        }
+      }
+      
+      if (createdCount > 0) {
+        toast.success(`Successfully imported ${createdCount} new student(s)!${existingCount > 0 ? ` (${existingCount} already existed)` : ''}`)
+      } else if (existingCount > 0) {
+        toast.info(`All ${existingCount} student(s) already exist in the system.`)
+      }
       
       onSuccess()
       onClose()
       
     } catch (error) {
       console.error('Error importing students:', error)
-      alert('Error importing students. Please try again.')
+      toast.error('Error importing students. Please try again.')
     } finally {
       setIsProcessing(false)
     }
@@ -273,13 +357,13 @@ export default function StudentImportModal({
   const hasMissing = processedData.some(p => p.status === 'missing')
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-8 py-6 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">STUDENT IMPORT/EXPORT</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">STUDENT IMPORT/EXPORT</h2>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">
               {dept} • {year} • {section}
             </p>
           </div>
@@ -292,33 +376,43 @@ export default function StudentImportModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 [&::-webkit-scrollbar]:hidden scrollbar-none">
           {!showPreview ? (
             <div className="space-y-6">
               {/* Excel Format Preview */}
               <div className="bg-gradient-to-br from-gray-50 to-gray-200 border-2 border-gray-200 rounded-xl p-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
-                  <h4 className="text-lg font-bold text-green-900">EXCEL FORMAT PREVIEW</h4>
+                  <h4 className="text-lg font-bold text-green-900 uppercase">Excel Template Preview</h4>
                 </div>
               
                 <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-md">
-                  <div className="grid grid-cols-2 bg-gray-600 text-white">
-                    <div className="px-4 py-3 border-r border-gray-300 font-bold uppercase text-xs text-white">
+                  <div className="grid grid-cols-4 bg-gray-600 text-white">
+                    <div className="px-4 py-3 border-r border-gray-300 font-bold uppercase text-[10px] text-white">
                       Student Name
                     </div>
-                    <div className="px-4 py-3 font-bold text-xs uppercase text-white">
+                    <div className="px-4 py-3 border-r font-bold uppercase text-[10px] text-white">
                       Student Email
+                    </div>
+                    <div className="px-4 py-3 border-r font-bold uppercase text-[10px] text-white">
+                       Year
+                    </div>
+                    <div className="px-4 py-3 font-bold uppercase text-[10px] text-white">
+                       Section
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 border-b border-gray-200 bg-white hover:bg-gray-50 transition-colors">
-                    <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">RAGUL K</div>
-                    <div className="px-4 py-2.5 text-sm text-gray-600">ragul.23ads@sonatech.ac.in</div>
+                  <div className="grid grid-cols-4 border-b border-gray-200 bg-white hover:bg-gray-50 transition-colors">
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-700">RAGUL K</div>
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-600">ragul.23ads@sonatech.ac.in</div>
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-600 text-center">2</div>
+                    <div className="px-4 py-2.5 text-xs text-gray-600 text-center">A</div>
                   </div>
                   
-                  <div className="grid grid-cols-2 bg-white hover:bg-gray-50 transition-colors">
-                    <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">KISHORE R</div>
-                    <div className="px-4 py-2.5 text-sm text-gray-600">kishore.23ads@sonatech.ac.in</div>
+                  <div className="grid grid-cols-4 bg-white hover:bg-gray-50 transition-colors">
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-700">KISHORE R</div>
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-600">kishore.23ads@sonatech.ac.in</div>
+                    <div className="px-4 py-2.5 border-r border-gray-200 text-xs text-gray-600 text-center">3</div>
+                    <div className="px-4 py-2.5 text-xs text-gray-600 text-center">B</div>
                   </div>
                 </div>
               </div>
@@ -342,7 +436,7 @@ export default function StudentImportModal({
                     className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
-                    {isProcessing ? 'EXPORTING...' : 'EXPORT TEMPLATE'}
+                    {isProcessing ? 'EXPORT TEMPLATE' : 'EXPORT TEMPLATE'}
                   </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -358,23 +452,29 @@ export default function StudentImportModal({
             <div className="space-y-4">
               {/* Stats */}
               <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm text-gray-500 font-medium mb-2 uppercase tracking-wide">Total</div>
-                    <div className="text-3xl font-bold text-gray-900 mb-1">{totalCount}</div>
-                    <div className="text-xs text-orange-500 uppercase">students</div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
+                    <div className="text-xs sm:text-sm text-gray-500 font-medium mb-1 sm:mb-2 uppercase tracking-wide">Total</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-0.5 sm:mb-1">{totalCount}</div>
+                    <div className="text-[10px] sm:text-xs text-orange-500 uppercase">students</div>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm text-gray-600 font-medium mb-2 uppercase tracking-wide">Found</div>
-                    <div className="text-3xl font-bold text-gray-900 mb-1">{foundCount}</div>
-                    <div className="text-xs text-green-600 uppercase">valid</div>
+                  <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
+                    <div className="text-xs sm:text-sm text-gray-600 font-medium mb-1 sm:mb-2 uppercase tracking-wide">Found</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-0.5 sm:mb-1">{foundCount}</div>
+                    <div className="text-[10px] sm:text-xs text-green-600 uppercase">valid</div>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm text-gray-500 font-medium mb-2 uppercase tracking-wide">Microsoft</div>
-                    <div className="text-3xl font-bold text-gray-900 mb-1">{microsoftCount}</div>
-                    <div className="text-xs text-purple-600 uppercase">added</div>
+                  <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
+                    <div className="text-xs sm:text-sm text-gray-500 font-medium mb-1 sm:mb-2 uppercase tracking-wide">Microsoft</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-0.5 sm:mb-1">{microsoftCount}</div>
+                    <div className="text-[10px] sm:text-xs text-purple-600 uppercase">added</div>
+                  </div>
+
+                   <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
+                    <div className="text-xs sm:text-sm text-gray-500 font-medium mb-1 sm:mb-2 uppercase tracking-wide">Not Found</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-0.5 sm:mb-1">{processedData.filter(p => p.status === 'missing').length}</div>
+                    <div className="text-[10px] sm:text-xs text-red-600 uppercase">missing</div>
                   </div>
                 </div>
                 
@@ -397,6 +497,8 @@ export default function StudentImportModal({
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
@@ -408,6 +510,12 @@ export default function StudentImportModal({
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-600">{s.email || '-'}</div>
+                          </td>
+                           <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="text-sm text-gray-600 font-bold">{s.year || '-'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="text-sm text-gray-600 font-bold">{s.section || '-'}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {s.status === 'allocated' ? (

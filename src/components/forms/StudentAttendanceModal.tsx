@@ -11,14 +11,14 @@ interface StudentAttendanceModalProps {
     name: string
     email: string
   } | null
-  peerTutorId: string
+  peertutorsId: string
 }
 
 export default function StudentAttendanceModal({
   isOpen,
   onClose,
   student,
-  peerTutorId
+  peertutorsId
 }: StudentAttendanceModalProps) {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceHistoryRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -35,7 +35,7 @@ export default function StudentAttendanceModal({
     setLoading(true)
     try {
       // Get all attendance records for this specific student
-      const records = await AttendanceService.getStudentAttendanceHistory(student.id, peerTutorId)
+      const records = await AttendanceService.getStudentAttendanceHistory(student.id, peertutorsId)
       setAttendanceRecords(records)
 
       // Calculate summary
@@ -55,18 +55,18 @@ export default function StudentAttendanceModal({
     } finally {
       setLoading(false)
     }
-  }, [student, peerTutorId])
+  }, [student, peertutorsId])
 
   useEffect(() => {
     if (isOpen && student) {
       loadStudentAttendance()
     }
-  }, [isOpen, student, peerTutorId, loadStudentAttendance])
+  }, [isOpen, student, peertutorsId, loadStudentAttendance])
 
   if (!isOpen || !student) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200">

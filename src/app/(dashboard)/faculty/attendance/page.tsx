@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
+import { peertutorservice } from '@/lib/services/peerTutorService'
 import { DepartmentService } from '@/lib/services/departmentService'
 import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
 import { FacultyService } from '@/lib/services/facultyService'
@@ -17,7 +17,7 @@ import FilterDropdown from '@/components/ui/FilterDropdown'
 import ExportButton from '@/components/ui/ExportButton'
 
 interface ClassWithAttendance extends ScheduledClassWithDetails {
-  peerTutorAttendance: 'present' | 'absent'
+  peertutorsAttendance: 'present' | 'absent'
   studentAttendance: AttendanceRecord[]
   attendanceSummary: {
     total: number
@@ -38,7 +38,7 @@ interface FilterOptions {
   subject: string
 }
 
-interface PeerTutorSummary {
+interface peerTutorummary {
   id: string
   name: string
   email: string
@@ -81,9 +81,9 @@ function FacultyAttendanceContent() {
   })
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [expandedPeerTutors, setExpandedPeerTutors] = useState<Set<string>>(new Set())
+  const [expandedpeerTutor, setExpandedpeerTutor] = useState<Set<string>>(new Set())
   const [subjects, setSubjects] = useState<Array<{ id: string; name: string }>>([])
-  const [peerTutors, setPeerTutors] = useState<Array<{
+  const [peerTutor, setpeerTutor] = useState<Array<{
     id: string
     name: string
     email: string
@@ -97,7 +97,7 @@ function FacultyAttendanceContent() {
     sections: Set<string>
     actualSection: string
   }>>([])
-  const [loadingPeerTutors, setLoadingPeerTutors] = useState(false)
+  const [loadingpeerTutor, setLoadingpeerTutor] = useState(false)
 
   useEffect(() => {
     loadInitialData()
@@ -131,25 +131,25 @@ function FacultyAttendanceContent() {
 
   // Update peer tutors whenever class status changes
   useEffect(() => {
-    const loadPeerTutors = async () => {
+    const loadpeerTutor = async () => {
       const allClasses = [...classStatus.completed, ...classStatus.pending]
       if (allClasses.length > 0) {
-        setLoadingPeerTutors(true)
+        setLoadingpeerTutor(true)
         try {
-          const tutors = await groupClassesByPeerTutor(allClasses)
-          setPeerTutors(tutors)
+          const tutors = await groupClassesBypeertutors(allClasses)
+          setpeerTutor(tutors)
         } catch (error) {
           console.error('Error grouping peer tutors:', error)
-          setPeerTutors([])
+          setpeerTutor([])
         } finally {
-          setLoadingPeerTutors(false)
+          setLoadingpeerTutor(false)
         }
       } else {
-        setPeerTutors([])
+        setpeerTutor([])
       }
     }
     
-    loadPeerTutors()
+    loadpeerTutor()
   }, [classStatus])
 
   // Auto-refresh every 30 seconds to catch real-time updates
@@ -219,14 +219,14 @@ function FacultyAttendanceContent() {
         // Convert to ClassWithAttendance format for stats display
         const statsCompleted = status.completed.map((cls: ScheduledClassWithDetails) => ({
           ...cls,
-          peerTutorAttendance: 'present' as 'present' | 'absent',
+          peertutorsAttendance: 'present' as 'present' | 'absent',
           studentAttendance: [],
           attendanceSummary: { total: 0, present: 0, absent: 0 }
         }))
         
         const statsPending = status.pending.map((cls: ScheduledClassWithDetails) => ({
           ...cls,
-          peerTutorAttendance: 'absent' as 'present' | 'absent',
+          peertutorsAttendance: 'absent' as 'present' | 'absent',
           studentAttendance: [],
           attendanceSummary: { total: 0, present: 0, absent: 0 }
         }))
@@ -278,7 +278,7 @@ function FacultyAttendanceContent() {
       if (filters.year && filters.section && dateFilter && dateFilter !== '') {
         // Year + Section + Date
         console.log('Using: Year + Section + Date filter', { year: filters.year, section: filters.section, date: dateFilter })
-        status = await ScheduledClassService.getPeerTutorClassStatusWithDate(
+        status = await ScheduledClassService.getpeertutorsClassStatusWithDate(
           facultyDepartment,
           filters.year,
           filters.section,
@@ -287,7 +287,7 @@ function FacultyAttendanceContent() {
       } else if (filters.year && filters.section) {
         // Year + Section (all dates)
         console.log('Using: Year + Section filter (all dates)')
-        status = await ScheduledClassService.getPeerTutorClassStatus(
+        status = await ScheduledClassService.getpeertutorsClassStatus(
           facultyDepartment,
           filters.year,
           filters.section
@@ -295,7 +295,7 @@ function FacultyAttendanceContent() {
       } else if (filters.year && dateFilter && dateFilter !== '') {
         // Year + Date (all sections)
         console.log('Using: Year + Date filter (all sections)', { year: filters.year, date: dateFilter })
-        status = await ScheduledClassService.getPeerTutorClassStatusByYearAndDate(
+        status = await ScheduledClassService.getpeertutorsClassStatusByYearAndDate(
           facultyDepartment,
           filters.year,
           dateFilter
@@ -303,7 +303,7 @@ function FacultyAttendanceContent() {
       } else if (filters.year) {
         // Year only (all sections, all dates)
         console.log('Using: Year only filter (all sections, all dates)')
-        status = await ScheduledClassService.getPeerTutorClassStatusByYear(
+        status = await ScheduledClassService.getpeertutorsClassStatusByYear(
           facultyDepartment,
           filters.year
         )
@@ -325,7 +325,7 @@ function FacultyAttendanceContent() {
       })
       
       // Helper function to determine peer tutor attendance based on your logic
-      const getPeerTutorAttendance = (cls: ScheduledClassWithDetails): 'present' | 'absent' => {
+      const getpeertutorsAttendance = (cls: ScheduledClassWithDetails): 'present' | 'absent' => {
         const referenceDate = new Date()
         const scheduledDate = new Date(cls.scheduled_date)
         
@@ -350,7 +350,7 @@ function FacultyAttendanceContent() {
         
         // Debug logging
         console.log('Attendance calculation:', {
-          peerTutor: cls.peer_tutor?.name,
+          peertutors: cls.peer_tutor?.name,
           scheduledDate: scheduledDate.toISOString().split('T')[0],
           referenceDate: referenceDate.toISOString().split('T')[0],
           isReferenceDate,
@@ -379,7 +379,7 @@ function FacultyAttendanceContent() {
       const enhancedCompleted = await Promise.all(
         status.completed.map(async (cls) => {
           const attendanceData = await AttendanceService.getAttendanceByScheduledClass(cls.id)
-          const peerTutorAttendance = getPeerTutorAttendance(cls)
+          const peertutorsAttendance = getpeertutorsAttendance(cls)
           
           console.log('Attendance data for class:', {
             classId: cls.id,
@@ -395,7 +395,7 @@ function FacultyAttendanceContent() {
           }
           return {
             ...cls,
-            peerTutorAttendance,
+            peertutorsAttendance,
             studentAttendance: attendanceData,
             attendanceSummary
           } as ClassWithAttendance
@@ -404,7 +404,7 @@ function FacultyAttendanceContent() {
 
       const enhancedPending = await Promise.all(
         status.pending.map(async (cls) => {
-          const peerTutorAttendance = getPeerTutorAttendance(cls)
+          const peertutorsAttendance = getpeertutorsAttendance(cls)
           
           console.log('Pending class (no attendance data):', {
             classId: cls.id,
@@ -422,7 +422,7 @@ function FacultyAttendanceContent() {
 
           return {
             ...cls,
-            peerTutorAttendance,
+            peertutorsAttendance,
             studentAttendance: [], // Empty array for pending classes
             attendanceSummary
           } as ClassWithAttendance
@@ -463,13 +463,13 @@ function FacultyAttendanceContent() {
 
 
 
-  const togglePeerTutorExpansion = (peerTutorId: string) => {
-    setExpandedPeerTutors(prev => {
+  const togglepeertutorsExpansion = (peertutorsId: string) => {
+    setExpandedpeerTutor(prev => {
       const newSet = new Set(prev)
-      if (newSet.has(peerTutorId)) {
-        newSet.delete(peerTutorId)
+      if (newSet.has(peertutorsId)) {
+        newSet.delete(peertutorsId)
       } else {
-        newSet.add(peerTutorId)
+        newSet.add(peertutorsId)
       }
       return newSet
     })
@@ -480,15 +480,15 @@ function FacultyAttendanceContent() {
     const headers = ['Peer Tutor Name', 'Email', 'Year', 'Section', 'Classes Completed', 'Additional Classes', 'Total Classes', 'Attendance %']
     const csvContent = [
       headers.join(','),
-      ...peerTutors.map(peerTutor => [
-        `"${peerTutor.name}"`,
-        `"${peerTutor.email}"`,
-        `"${Array.from(peerTutor.years).join(', ') || 'N/A'}"`,
-        `"${peerTutor.actualSection || Array.from(peerTutor.sections).filter(s => s !== 'ALL').join(', ') || 'N/A'}"`,
-        peerTutor.completedClasses - peerTutor.additionalClasses,
-        peerTutor.additionalClasses,
-        peerTutor.totalClasses,
-        peerTutor.totalClasses > 0 ? Math.round((peerTutor.completedClasses / peerTutor.totalClasses) * 100) : 0
+      ...peerTutor.map(peertutors => [
+        `"${peertutors.name}"`,
+        `"${peertutors.email}"`,
+        `"${Array.from(peertutors.years).join(', ') || 'N/A'}"`,
+        `"${peertutors.actualSection || Array.from(peertutors.sections).filter(s => s !== 'ALL').join(', ') || 'N/A'}"`,
+        peertutors.completedClasses - peertutors.additionalClasses,
+        peertutors.additionalClasses,
+        peertutors.totalClasses,
+        peertutors.totalClasses > 0 ? Math.round((peertutors.completedClasses / peertutors.totalClasses) * 100) : 0
       ].join(','))
     ].join('\n')
     
@@ -545,15 +545,15 @@ function FacultyAttendanceContent() {
   }
 
   // Group classes by peer tutor for simplified view
-  const groupClassesByPeerTutor = async (classes: ClassWithAttendance[]): Promise<PeerTutorSummary[]> => {
+  const groupClassesBypeertutors = async (classes: ClassWithAttendance[]): Promise<peerTutorummary[]> => {
     const grouped = classes.reduce((acc, cls) => {
-      const peerTutorId = cls.peer_tutor?.id || 'unknown'
-      const peerTutorName = cls.peer_tutor?.name || 'Unknown Peer Tutor'
+      const peertutorsId = cls.peer_tutor?.id || 'unknown'
+      const peertutorsName = cls.peer_tutor?.name || 'Unknown Peer Tutor'
       
-      if (!acc[peerTutorId]) {
-        acc[peerTutorId] = {
-          id: peerTutorId,
-          name: peerTutorName,
+      if (!acc[peertutorsId]) {
+        acc[peertutorsId] = {
+          id: peertutorsId,
+          name: peertutorsName,
           email: cls.peer_tutor?.email || '',
           classes: [],
           totalClasses: 0,
@@ -567,56 +567,56 @@ function FacultyAttendanceContent() {
         }
       }
       
-      acc[peerTutorId].classes.push(cls)
-      acc[peerTutorId].totalClasses++
+      acc[peertutorsId].classes.push(cls)
+      acc[peertutorsId].totalClasses++
       
       // Add year to sets (but don't add section from classes as it might be "ALL")
-      if (cls.year) acc[peerTutorId].years.add(cls.year)
+      if (cls.year) acc[peertutorsId].years.add(cls.year)
       
       if (cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)) {
-        acc[peerTutorId].completedClasses++
+        acc[peertutorsId].completedClasses++
       } else {
-        acc[peerTutorId].pendingClasses++
+        acc[peertutorsId].pendingClasses++
       }
       
       return acc
-    }, {} as Record<string, PeerTutorSummary>)
+    }, {} as Record<string, peerTutorummary>)
     
     // Fetch peer tutor data to get their actual section and year
     await Promise.all(
-      Object.values(grouped).map(async (peerTutor) => {
+      Object.values(grouped).map(async (peertutors) => {
         try {
           // Fetch peer tutor data from database to get actual section
-          const peerTutorData = await PeerTutorService.getPeerTutorById(peerTutor.id)
-          if (peerTutorData) {
+          const peertutorsData = await peertutorservice.getpeertutorsById(peertutors.id)
+          if (peertutorsData) {
             // Use the actual section from peer tutor record
-            peerTutor.actualSection = peerTutorData.section
-            peerTutor.sections.add(peerTutorData.section)
+            peertutors.actualSection = peertutorsData.section
+            peertutors.sections.add(peertutorsData.section)
             // Also add year if not already present
-            if (peerTutorData.year) {
-              peerTutor.years.add(peerTutorData.year)
+            if (peertutorsData.year) {
+              peertutors.years.add(peertutorsData.year)
             }
           }
           
           // Fetch additional classes
-          const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(peerTutor.id)
-          peerTutor.additionalClasses = additionalClasses.length
+          const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutors.id)
+          peertutors.additionalClasses = additionalClasses.length
           // Add additional classes to completed only (not to totalClasses)
           // Total classes should remain as allocated scheduled classes only
-          peerTutor.completedClasses += additionalClasses.length
+          peertutors.completedClasses += additionalClasses.length
         } catch (error) {
-          console.error('Error fetching peer tutor data:', peerTutor.id, error)
-          peerTutor.additionalClasses = 0
+          console.error('Error fetching peer tutor data:', peertutors.id, error)
+          peertutors.additionalClasses = 0
         }
       })
     )
     
     // Calculate overall status for each peer tutor
-    Object.values(grouped).forEach(peerTutor => {
-      const presentCount = peerTutor.classes.filter(cls => cls.peerTutorAttendance === 'present').length
+    Object.values(grouped).forEach(peertutors => {
+      const presentCount = peertutors.classes.filter(cls => cls.peertutorsAttendance === 'present').length
       // Include additional classes as "present" since they're all completed
-      const totalPresentCount = presentCount + peerTutor.additionalClasses
-      peerTutor.overallStatus = totalPresentCount > peerTutor.totalClasses / 2 ? 'present' : 'absent'
+      const totalPresentCount = presentCount + peertutors.additionalClasses
+      peertutors.overallStatus = totalPresentCount > peertutors.totalClasses / 2 ? 'present' : 'absent'
     })
     
     return Object.values(grouped)
@@ -628,7 +628,7 @@ function FacultyAttendanceContent() {
       <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
         {/* Top Header */}
         <PageHeader
           title="ATTENDANCE STATUS"
@@ -644,12 +644,12 @@ function FacultyAttendanceContent() {
         <main className="flex-1 overflow-y-auto">
           <div className={`max-w-full mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
             {loading && !classStatus.completed.length && !classStatus.pending.length ? (
-              <div className="flex items-center justify-center py-12">
+              <main className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading attendance data...</p>
+                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Loading Attendance Data...</p>
                 </div>
-              </div>
+              </main>
             ) : (
               <>
         {/* Stats Cards */}
@@ -665,12 +665,12 @@ function FacultyAttendanceContent() {
                     <p className="text-3xl font-bold text-gray-900 tracking-tight">
                       {(() => {
                         const allClasses = [...classStatus.completed, ...classStatus.pending]
-                        const uniquePeerTutors = new Set(
+                        const uniquepeerTutor = new Set(
                           allClasses
                             .map(cls => cls.peer_tutor?.id)
                             .filter((id): id is string => id !== undefined && id !== null)
                         )
-                        return uniquePeerTutors.size
+                        return uniquepeerTutor.size
                       })()}
                     </p>
                   </div>
@@ -681,11 +681,7 @@ function FacultyAttendanceContent() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                   <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                    </svg>
                     Across Department
                   </p>
                 </div>
@@ -705,11 +701,7 @@ function FacultyAttendanceContent() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
                   <p className="text-[9px] font-bold text-green-600 uppercase tracking-widest flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
                     Marked Verified
                   </p>
                 </div>
@@ -729,11 +721,7 @@ function FacultyAttendanceContent() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
                   <p className="text-[9px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
                     Action Required
                   </p>
                 </div>
@@ -746,7 +734,7 @@ function FacultyAttendanceContent() {
             <div className="px-6 py-5 border-b border-gray-100">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
-                  Attendance Status ({peerTutors.length})
+                  Attendance Status ({peerTutor.length})
                 </h3>
                 
                 <div className="flex items-center gap-3 flex-wrap">
@@ -780,7 +768,7 @@ function FacultyAttendanceContent() {
 
                   <ExportButton 
                     onClick={handleExportData}
-                    disabled={peerTutors.length === 0}
+                    disabled={peerTutor.length === 0}
                   />
 
                   </div>
@@ -818,7 +806,7 @@ function FacultyAttendanceContent() {
                 
                 {/* Table Body - Dynamic Content */}
                 <TableBody>
-                  {tableLoading || loadingPeerTutors ? (
+                  {tableLoading || loadingpeerTutor ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-12">
                         <div className="flex items-center justify-center space-x-3">
@@ -828,16 +816,16 @@ function FacultyAttendanceContent() {
                       </TableCell>
                     </TableRow>
                   ) : (() => {
-                    const filteredPeerTutorsList = peerTutors
+                    const filteredpeerTutorList = peerTutor
 
                     // Apply subject filter if selected
                     const subjectFilteredList = filters.subject 
-                      ? filteredPeerTutorsList.filter(peerTutor => 
-                          peerTutor.classes.some((cls: ClassWithAttendance) => 
+                      ? filteredpeerTutorList.filter(peertutors => 
+                          peertutors.classes.some((cls: ClassWithAttendance) => 
                             cls.class?.subject_name === filters.subject
                           )
                         )
-                      : filteredPeerTutorsList
+                      : filteredpeerTutorList
 
                     if (subjectFilteredList.length === 0) {
                       return (
@@ -859,25 +847,25 @@ function FacultyAttendanceContent() {
                       )
                     }
 
-                    return subjectFilteredList.map((peerTutor) => {
+                    return subjectFilteredList.map((peertutors) => {
                       // Get the actual section (prefer actualSection, otherwise use first non-ALL section, or 'ALL' as fallback)
-                      const actualSection = peerTutor.actualSection || Array.from(peerTutor.sections).filter(s => s !== 'ALL')[0] || 'ALL'
+                      const actualSection = peertutors.actualSection || Array.from(peertutors.sections).filter(s => s !== 'ALL')[0] || 'ALL'
                       // Get the year (use first year from the set)
-                      const year = Array.from(peerTutor.years)[0] || ''
+                      const year = Array.from(peertutors.years)[0] || ''
                       
                       return (
-                      <React.Fragment key={peerTutor.id}>
+                      <React.Fragment key={peertutors.id}>
                         <TableRow className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100">
                           <TableCell className="pl-6 py-4">
                             <div className="flex items-center gap-4">
                               <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
-                                <span className="text-xs font-bold text-gray-400 uppercase">
-                                  {peerTutor.name.substring(0, 2)}
+                                <span className="text-xs font-bold text-white uppercase">
+                                  {peertutors.name.substring(0, 2)}
                                 </span>
                               </div>
                               <div>
-                                <p className="text-sm font-bold text-gray-900 mb-0.5">{peerTutor.name}</p>
-                                <p className="text-[10px] text-gray-400 font-medium">{peerTutor.email}</p>
+                                <p className="text-sm font-bold text-gray-900 mb-0.5">{peertutors.name}</p>
+                                <p className="text-[10px] text-gray-400 font-medium">{peertutors.email}</p>
                               </div>
                             </div>
                           </TableCell>
@@ -887,39 +875,39 @@ function FacultyAttendanceContent() {
                             </span>
                           </TableCell>
                           <TableCell className="text-center py-4">
-                            <span className="text-sm font-bold text-gray-900">{peerTutor.totalClasses}</span>
+                            <span className="text-sm font-bold text-gray-900">{peertutors.totalClasses}</span>
                           </TableCell>
                           <TableCell className="text-center py-4">
-                            <span className="text-sm font-bold text-gray-900">{peerTutor.completedClasses - peerTutor.additionalClasses}</span>
+                            <span className="text-sm font-bold text-gray-900">{peertutors.completedClasses - peertutors.additionalClasses}</span>
                           </TableCell>
                           <TableCell className="text-center py-4">
-                            <span className="text-sm font-bold text-blue-600">{peerTutor.additionalClasses}</span>
+                            <span className="text-sm font-bold text-purple-600">{peertutors.additionalClasses}</span>
                           </TableCell>
                           <TableCell className="text-center py-4">
                             <div className="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100">
                               <span className="text-xs font-bold text-gray-900">
-                                {peerTutor.totalClasses > 0 ? Math.round((peerTutor.completedClasses / peerTutor.totalClasses) * 100) : 0}%
+                                {peertutors.totalClasses > 0 ? Math.round((peertutors.completedClasses / peertutors.totalClasses) * 100) : 0}%
                               </span>
                             </div>
                           </TableCell>
                           <TableCell className="text-right pr-6 py-4">
                             <button
-                              onClick={() => togglePeerTutorExpansion(peerTutor.id)}
+                              onClick={() => togglepeertutorsExpansion(peertutors.id)}
                               className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                             >
-                              {expandedPeerTutors.has(peerTutor.id) ? 'CLOSE' : 'VIEW'}
+                              {expandedpeerTutor.has(peertutors.id) ? 'CLOSE' : 'VIEW'}
                             </button>
                           </TableCell>
                         </TableRow>
                         
                         {/* Expanded Details Row */}
-                        {expandedPeerTutors.has(peerTutor.id) && (
+                        {expandedpeerTutor.has(peertutors.id) && (
                           <TableRow>
                             <TableCell colSpan={7} className="px-0 py-0">
                               <div className="bg-gray-50 border-t border-gray-200 p-6">
                                 <h4 className="text-lg font-semibold text-gray-900 mb-4">Class Details</h4>
                                 <div className="space-y-4">
-                                  {peerTutor.classes.map((cls: ClassWithAttendance) => (
+                                  {peertutors.classes.map((cls: ClassWithAttendance) => (
                                 <div key={cls.id} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm relative group overflow-hidden">
                                   <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-50">
                                     <div>
@@ -937,16 +925,16 @@ function FacultyAttendanceContent() {
                                       </div>
                                     </div>
                                     <div className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                                      cls.peerTutorAttendance === 'present' 
+                                      cls.peertutorsAttendance === 'present' 
                                         ? 'bg-green-50 text-green-600 border border-green-100' 
                                         : 'bg-red-50 text-red-600 border border-red-100'
                                     }`}>
-                                      {cls.peerTutorAttendance === 'present' ? 'Present' : 'Absent'}
+                                      {cls.peertutorsAttendance === 'present' ? 'Present' : 'Absent'}
                                     </div>
                                   </div>
                                   
                                   {/* Student Attendance Summary */}
-                                  {cls.peerTutorAttendance === 'present' ? (
+                                  {cls.peertutorsAttendance === 'present' ? (
                                     <div>
                                       <div className="grid grid-cols-3 gap-4 mb-5">
                                         <div className="p-4 bg-white border border-gray-100 rounded-xl text-center group-hover:border-green-100 transition-colors">

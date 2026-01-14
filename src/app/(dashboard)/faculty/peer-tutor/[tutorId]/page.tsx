@@ -4,32 +4,48 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
+import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
-import { RenumerationService, PeerTutorRenumeration } from '@/lib/services/renumerationService'
+import { RenumerationService, peertutorsRenumeration } from '@/lib/services/renumerationService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { Card } from '@/components/ui'
+import { 
+  BookOpen, 
+  CheckCircle, 
+  Clock, 
+  Users, 
+  ChevronLeft,
+  Mail,
+  GraduationCap,
+  Calendar,
+  User,
+  Hash,
+  FileText,
+  AlertCircle
+} from 'lucide-react'
+import PeerTutorProfileSkeleton from '@/components/skeletons/PeerTutorProfileSkeleton'
 
-
-export default function PeerTutorProfilePage() {
+export default function PeerTutorsProfilePage() {
   return (
     <FacultyProtectedRoute>
-      <PeerTutorProfileContent />
+      <PeerTutorsProfileContent />
     </FacultyProtectedRoute>
   )
 }
 
-interface PeerTutorStats {
+interface peerTutortats {
   totalClasses: number
   completedClasses: number
   pendingClasses: number
+  upcomingClasses: number
+  overdueClasses: number
   assignedStudents: number
 }
 
-
-
-function PeerTutorProfileContent() {
+function PeerTutorsProfileContent() {
   const { user } = useAuth()
   const params = useParams()
   const router = useRouter()
@@ -37,39 +53,42 @@ function PeerTutorProfileContent() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
-  // Use custom hook for sidebar collapsed state (reads from localStorage synchronously)
+  // Use custom hook for sidebar collapsed state
   const [isSidebarCollapsed] = useSidebarCollapsed()
-  const [peerTutor, setPeerTutor] = useState<PeerTutor | null>(null)
+  
+  const [peertutors, setpeertutors] = useState<peertutors | null>(null)
   const [assignedStudents, setAssignedStudents] = useState<Student[]>([])
   const [, setScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
-  const [renumerations, setRenumerations] = useState<PeerTutorRenumeration[]>([])
-  const [stats, setStats] = useState<PeerTutorStats>({
+  const [renumerations, setRenumerations] = useState<peertutorsRenumeration[]>([])
+  const [stats, setStats] = useState<peerTutortats>({
     totalClasses: 0,
     completedClasses: 0,
     pendingClasses: 0,
+    upcomingClasses: 0,
+    overdueClasses: 0,
     assignedStudents: 0
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (user && tutorId) {
-      loadPeerTutorData()
+      loadpeertutorsData()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, tutorId])
 
-  const loadPeerTutorData = async () => {
+  const loadpeertutorsData = async () => {
     if (!user?.email || !tutorId) return
 
     setLoading(true)
     try {
       // Get peer tutor information
-      const tutorData = await PeerTutorService.getPeerTutorById(tutorId)
+      const tutorData = await peertutorservice.getpeertutorsById(tutorId)
       if (tutorData) {
-        setPeerTutor(tutorData)
+        setpeertutors(tutorData)
 
         // Get assigned students
-        const students = await StudentService.getStudentsByPeerTutor(tutorId)
+        const students = await StudentService.getStudentsBypeertutors(tutorId)
         setAssignedStudents(students)
 
         // Get scheduled classes for this peer tutor
@@ -80,20 +99,51 @@ function PeerTutorProfileContent() {
         )
         setScheduledClasses(classes)
 
-
         // Get renumeration data for this peer tutor
-        const renumerationData = await RenumerationService.getPeerTutorRenumeration(tutorId)
+        const renumerationData = await RenumerationService.getpeertutorsRenumeration(tutorId)
         setRenumerations(renumerationData)
 
         // Calculate statistics
         const totalClasses = classes.length
-        const completedClasses = classes.filter(c => c.completion_status === 'completed').length
-        const pendingClasses = totalClasses - completedClasses
+        const completedClasses = classes.filter(c => 
+          c.completion_status === 'completed' || 
+          (c.attendance_completed && c.topics_completed)
+        ).length
+        
+        const pendingClassesList = classes.filter(c => 
+          c.completion_status !== 'completed' && 
+          !(c.attendance_completed && c.topics_completed)
+        )
+        const pendingClasses = pendingClassesList.length
+        
+        // Calculate Upcoming vs Overdue
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        let upcomingClasses = 0
+        let overdueClasses = 0
+        
+        pendingClassesList.forEach(c => {
+            if (!c.scheduled_date) {
+                overdueClasses++
+                return
+            }
+            const classDate = new Date(c.scheduled_date)
+            classDate.setHours(0, 0, 0, 0)
+            
+            if (classDate.getTime() > today.getTime()) {
+                upcomingClasses++
+            } else {
+                overdueClasses++
+            }
+        })
 
         setStats({
           totalClasses,
           completedClasses,
           pendingClasses,
+          upcomingClasses,
+          overdueClasses,
           assignedStudents: students.length
         })
       }
@@ -108,48 +158,34 @@ function PeerTutorProfileContent() {
     router.back()
   }
 
-  // Render loading state with sidebar
+  // Render loading state with skeleton
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex">
-        {/* Sidebar */}
-        <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        
-        {/* Main Content */}
-        <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading peer tutor data...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+    return <PeerTutorProfileSkeleton />
   }
 
   // Render error state with sidebar
-  if (!peerTutor) {
+  if (!peertutors) {
     return (
-      <div className="min-h-screen bg-gray-50 flex">
-        {/* Sidebar */}
+      <div className="min-h-screen bg-[#F8F9FA] flex">
         <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        
-        {/* Main Content */}
-        <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
+        <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} w-full lg:w-auto`}>
+           <PageHeader 
+             title="Error" 
+             onToggleSidebar={() => setIsSidebarOpen(true)}
+             isSidebarCollapsed={isSidebarCollapsed}
+            />
+          <div className="flex-1 p-6 flex items-center justify-center">
+            <div className="text-center max-w-md mx-auto">
+              <div className="w-20 h-20 bg-red-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <AlertCircle className="w-10 h-10 text-red-600" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Peer tutor not found</h3>
-              <p className="text-gray-500 mb-4">The requested peer tutor could not be found.</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Peer Tutor Not Found</h3>
+              <p className="text-gray-500 mb-8">The requested peer tutor profile could not be retrieved. They may have been removed or accessed incorrectly.</p>
               <button
                 onClick={handleBack}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors font-semibold flex items-center justify-center mx-auto gap-2"
               >
+                <ChevronLeft size={18} />
                 Go Back
               </button>
             </div>
@@ -160,297 +196,227 @@ function PeerTutorProfileContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-[#F8F9FA] flex">
       {/* Sidebar */}
       <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} w-full lg:w-auto`}>
         {/* Header */}
-        <header className="bg-white shadow flex-shrink-0 w-full">
-          <div className={`w-full ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-0' : 'px-4 sm:px-6 lg:px-8'}`}>
-            <div className="py-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <button
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 lg:hidden"
-                  >
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                  </button>
-                  <div className="ml-4">
-                    {/* Breadcrumb */}
-                    <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
-                      <button
-                        onClick={() => router.push('/faculty/peer-tutor')}
-                        className="hover:text-gray-700 transition-colors"
-                      >
-                        Peer Tutor Reports
-                      </button>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                      <span className="text-gray-900 font-medium">{peerTutor.name}</span>
-                    </nav>
-                    
-                    <h1 className="text-2xl font-bold text-gray-900">
-                      {peerTutor.name} - Peer Tutor Profile
-                    </h1>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {peerTutor.email} • {peerTutor.dept} - {peerTutor.year} - {peerTutor.section}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={handleBack}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-                  >
-                    Go Back
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
+        <PageHeader 
+          title="PEER TUTOR"
+          context={peertutors.name}
+          tagline={`${peertutors.email} • ${peertutors.dept} - ${peertutors.year} - ${peertutors.section}`}
+          onToggleSidebar={() => setIsSidebarOpen(true)}
+          isSidebarCollapsed={isSidebarCollapsed}
+        >
+             <button
+                onClick={handleBack}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-xs font-bold uppercase tracking-wider border border-gray-200 shadow-sm"
+              >
+                <ChevronLeft size={14} />
+                Back
+              </button>
+        </PageHeader>
 
         {/* Main Content */}
-        <main className={`flex-1 py-6 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-0' : 'px-4 sm:px-6 lg:px-8'}`}>
-          {/* Peer Tutor Information Card */}
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-8">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Peer Tutor Information</h3>
-            </div>
-            <div className="p-6">
-              <div className="flex items-center space-x-6">
-                <div className="w-16 h-16 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-2 ring-gray-900 shadow-xl">
-                  <span className="text-2xl font-bold text-gray-400 tracking-tighter">
-                    {peerTutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                  </span>
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-xl font-semibold text-gray-900">{peerTutor.name}</h4>
-                  <p className="text-gray-600">{peerTutor.email}</p>
-                  <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                    <span>Department: {peerTutor.dept}</span>
-                    <span>•</span>
-                    <span>Year: {peerTutor.year}</span>
-                    <span>•</span>
-                    <span>Section: {peerTutor.section}</span>
-                  </div>
-                  <div className="mt-1 text-sm text-gray-500">
-                    Assigned by: {peerTutor.assigned_by}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <main className="flex-1 p-6 overflow-y-auto bg-gray-50/50">
+           <div className="max-w-[1600px] mx-auto w-full space-y-6">
 
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Total Classes */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <div className="flex items-center">
-                <div className="p-3 bg-blue-500 rounded-xl">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Total Classes</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalClasses}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Completed Classes */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <div className="flex items-center">
-                <div className="p-3 bg-green-500 rounded-xl">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Completed Classes</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.completedClasses}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Pending Classes */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <div className="flex items-center">
-                <div className="p-3 bg-yellow-500 rounded-xl">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Pending Classes</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.pendingClasses}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Assigned Students */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <div className="flex items-center">
-                <div className="p-3 bg-purple-500 rounded-xl">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Assigned Students</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.assignedStudents}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Renumeration Section */}
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-8">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Renumeration Status</h3>
-              <p className="text-sm text-gray-600">
-                {renumerations.length} renumeration form(s) assigned
-              </p>
-            </div>
-            <div className="p-6">
-              {renumerations.length > 0 ? (
-                <div className="space-y-4">
-                  {renumerations.map((renumeration) => (
-                    <div key={renumeration.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">
-                            {renumeration.template?.name || 'Renumeration Form'}
-                          </h4>
-                          <p className="text-sm text-gray-500 mt-1">
-                            {renumeration.template?.description || 'No description available'}
-                          </p>
-                          <div className="flex items-center mt-2 space-x-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              renumeration.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              renumeration.status === 'submitted' ? 'bg-blue-100 text-blue-800' :
-                              renumeration.status === 'approved' ? 'bg-green-100 text-green-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {renumeration.status ? (renumeration.status.charAt(0).toUpperCase() + renumeration.status.slice(1)) : 'Unknown'}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              Created: {new Date(renumeration.created_at).toLocaleDateString()}
-                            </span>
-                            {renumeration.submitted_at && (
-                              <span className="text-xs text-gray-500">
-                                Submitted: {new Date(renumeration.submitted_at).toLocaleDateString()}
-                              </span>
-                            )}
-                            {renumeration.approved_at && (
-                              <span className="text-xs text-gray-500">
-                                {renumeration.status === 'approved' ? 'Approved' : 'Rejected'}: {new Date(renumeration.approved_at).toLocaleDateString()}
-                                {renumeration.approved_by && ` by ${renumeration.approved_by}`}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          {renumeration.status === 'submitted' && (
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => {
-                                  // Handle approve
-                                  console.log('Approve renumeration:', renumeration.id)
-                                }}
-                                className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => {
-                                  // Handle reject
-                                  console.log('Reject renumeration:', renumeration.id)
-                                }}
-                                className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 transition-colors"
-                              >
-                                Reject
-                              </button>
+            {/* Profile & Quick Stats Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Profile Card */}
+                <div className="lg:col-span-8">
+                     <div className="bg-gradient-to-br from-[#1C2434] to-[#2D3748] text-white rounded-[2rem] p-8 relative overflow-hidden shadow-2xl border border-white/10 h-full flex flex-col justify-center">
+                        <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-8">
+                            <div className="w-24 h-24 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl font-bold tracking-tighter shadow-xl">
+                                {peertutors.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                             </div>
-                          )}
-                          <button
-                            onClick={() => {
-                              // View details
-                              console.log('View renumeration details:', renumeration)
-                            }}
-                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
-                          >
-                            VIEW
-                          </button>
+                            <div className="flex-1 text-center sm:text-left">
+                                <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
+                                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]"></span>
+                                     <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">Peer Tutor</span>
+                                </div>
+                                <h2 className="text-3xl font-bold tracking-tight mb-2">{peertutors.name}</h2>
+                                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-sm text-gray-300 mb-6">
+                                    <span className="flex items-center gap-1.5 bg-white/5 px-3 py-1 rounded-full border border-white/5"><Mail size={14} /> {peertutors.email}</span>
+                                    <span className="flex items-center gap-1.5 bg-white/5 px-3 py-1 rounded-full border border-white/5"><GraduationCap size={14} /> {peertutors.dept}</span>
+                                    <span className="flex items-center gap-1.5 bg-white/5 px-3 py-1 rounded-full border border-white/5"><Calendar size={14} /> Year {peertutors.year}</span>
+                                    <span className="flex items-center gap-1.5 bg-white/5 px-3 py-1 rounded-full border border-white/5"><Hash size={14} /> Sec {peertutors.section}</span>
+                                </div>
+                                <p className="text-xs text-gray-400">
+                                    Assigned by <span className="text-white font-medium">{peertutors.assigned_by}</span>
+                                </p>
+                            </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                        {/* Decorators */}
+                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+                         <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl -ml-20 -mb-20"></div>
+                     </div>
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-md font-medium text-gray-900 mb-2">No renumeration forms</h3>
-                  <p className="text-gray-500">This peer tutor has no renumeration forms assigned yet.</p>
-                </div>
-              )}
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Assigned Students */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Assigned Students</h3>
-                <p className="text-sm text-gray-600">
-                  {assignedStudents.length} student(s) assigned
-                </p>
-              </div>
-              <div className="p-6">
-                {assignedStudents.length > 0 ? (
-                  <div className="space-y-3">
-                    {assignedStudents.map((student) => (
-                      <div key={student.id} className="flex items-center space-x-4 p-3.5 bg-gray-50/50 border border-gray-100 rounded-xl hover:bg-white hover:shadow-sm transition-all duration-200">
-                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 shadow-sm">
-                          <span className="text-slate-700 font-bold text-sm tracking-tighter">
-                            {student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                          </span>
+                {/* Quick Stats Grid */}
+                <div className="lg:col-span-4 grid grid-cols-2 gap-4">
+                     <Card className="rounded-[2rem] shadow-sm border-none p-5 bg-white hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
                         </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900">{student.name}</div>
-                          <div className="text-sm text-gray-500">{student.email}</div>
+                        <div>
+                            <div className="text-3xl font-black text-gray-900 tracking-tight">{stats.totalClasses}</div>
+                            <div className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-1">Total Classes</div>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {student.year} - {student.section}
+                     </Card>
+                     <Card className="rounded-[2rem] shadow-sm border-none p-5 bg-white hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-md font-medium text-gray-900 mb-2">No students assigned</h3>
-                    <p className="text-gray-500">This peer tutor has no students assigned yet.</p>
-                  </div>
-                )}
-              </div>
+                        <div>
+                            <div className="text-3xl font-black text-gray-900 tracking-tight">{stats.completedClasses}</div>
+                            <div className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-1">Completed</div>
+                        </div>
+                     </Card>
+                     <Card className="rounded-[2rem] shadow-sm border-none p-5 bg-white hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
+                        </div>
+                        <div>
+                            <div className="text-3xl font-black text-gray-900 tracking-tight">{stats.pendingClasses}</div>
+                             <div className="flex items-center gap-1 mt-1">
+                                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Pending</span>
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{stats.overdueClasses} Overdue</span>
+                             </div>
+                        </div>
+                     </Card>
+                     <Card className="rounded-[2rem] shadow-sm border-none p-5 bg-white hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
+                        </div>
+                        <div>
+                            <div className="text-3xl font-black text-gray-900 tracking-tight">{stats.assignedStudents}</div>
+                            <div className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-1">Students</div>
+                        </div>
+                     </Card>
+                </div>
             </div>
-          </div>
+
+            {/* Content Row: Renumeration & Students */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Renumeration Section */}
+                <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 h-full">
+                     <div className="flex flex-row items-center justify-between mb-6">
+                          <div className="flex items-center gap-3">
+                              <div>
+                                  <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Renumeration</h4>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{renumerations.length} Assigned Forms</p>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="space-y-4">
+                          {renumerations.length > 0 ? (
+                              renumerations.map((renumeration) => (
+                                  <div key={renumeration.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-md transition-all duration-200 group">
+                                      <div className="flex justify-between items-start mb-3">
+                                          <div>
+                                              <h5 className="font-bold text-gray-900">{renumeration.template?.name || 'Renumeration Form'}</h5>
+                                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{renumeration.template?.description || 'No description'}</p>
+                                          </div>
+                                           <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                              renumeration.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                              renumeration.status === 'submitted' ? 'bg-blue-100 text-blue-700' :
+                                              renumeration.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                              'bg-red-100 text-red-700'
+                                            }`}>
+                                              {renumeration.status || 'Unknown'}
+                                            </span>
+                                      </div>
+                                      
+                                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                                          <div className="flex flex-col gap-1">
+                                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Created: {new Date(renumeration.created_at).toLocaleDateString()}</span>
+                                              {renumeration.submitted_at && (
+                                                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Submitted: {new Date(renumeration.submitted_at).toLocaleDateString()}</span>
+                                              )}
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-2">
+                                              {renumeration.status === 'submitted' && (
+                                                <>
+                                                  <button 
+                                                    className="p-1.5 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                                                    title="Approve"
+                                                    onClick={() => console.log('Approve', renumeration.id)}
+                                                   >
+                                                      <CheckCircle size={14} />
+                                                  </button>
+                                                  <button 
+                                                    className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                    title="Reject"
+                                                    onClick={() => console.log('Reject', renumeration.id)}
+                                                   >
+                                                      <AlertCircle size={14} />
+                                                  </button>
+                                                </>
+                                              )}
+                                               <button
+                                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-900 transition-all shadow-sm"
+                                                onClick={() => console.log('View', renumeration)}
+                                              >
+                                                View
+                                              </button>
+                                          </div>
+                                      </div>
+                                  </div>
+                              ))
+                          ) : (
+                              <div className="text-center py-12">
+                                  <div className="w-12 h-12  rounded-2xl flex items-center justify-center mx-auto mb-3 text-gray-300">
+                                      <FileText size={24} color='black' />
+                                  </div>
+                                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No Renumeration Forms</p>
+                              </div>
+                          )}
+                      </div>
+                </Card>
+
+                {/* Assigned Students Section */}
+                <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 h-full">
+                     <div className="flex flex-row items-center justify-between mb-6">
+                          <div className="flex items-center gap-3">
+                              <div>
+                                  <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Assigned Students</h4>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{assignedStudents.length} Students</p>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="space-y-3">
+                          {assignedStudents.length > 0 ? (
+                              assignedStudents.map((student) => (
+                                  <div key={student.id} className="flex items-center space-x-4 p-3 rounded-2xl hover:bg-gray-50 transition-all duration-200 group border border-transparent hover:border-gray-100">
+                                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-xs font-black text-gray-500 tracking-tighter">
+                                          {student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                          <h5 className="text-sm font-bold text-gray-900 truncate">{student.name}</h5>
+                                          <p className="text-xs text-gray-500 truncate">{student.email}</p>
+                                      </div>
+                                      <div className="text-right">
+                                          <div className="text-xs font-bold text-gray-900">{student.year} - {student.section}</div>
+                                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Student</div>
+                                      </div>
+                                  </div>
+                              ))
+                          ) : (
+                               <div className="text-center py-12">
+                                  <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-gray-300">
+                                      <User size={24} />
+                                  </div>
+                                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No Students Assigned</p>
+                              </div>
+                          )}
+                      </div>
+                </Card>
+            </div>
+
+           </div>
         </main>
       </div>
     </div>

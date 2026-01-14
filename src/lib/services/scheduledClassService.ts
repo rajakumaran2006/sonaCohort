@@ -43,7 +43,7 @@ export interface ScheduledClassWithDetails extends ScheduledClass {
     id: string
     name: string
     email: string
-  }
+  } | null
 }
 
 export class ScheduledClassService {
@@ -104,10 +104,20 @@ export class ScheduledClassService {
         console.warn(`Class section (${classData.section}) does not match provided section (${normalizedSection}). Using class section.`)
       }
 
-      // Check if the scheduled date is from tomorrow onwards (not today or past)
+      // Check if the scheduled date is valid (today or future, not past)
       let scheduledDate: Date
       try {
-        scheduledDate = new Date(data.scheduled_date)
+        // Safe parsing to avoid timezone shifts (especially for YYYY-MM-DD strings)
+        const dateParts = data.scheduled_date.split(/[-/]/)
+        if (dateParts.length === 3) {
+          const year = parseInt(dateParts[0])
+          const month = parseInt(dateParts[1]) - 1
+          const day = parseInt(dateParts[2])
+          scheduledDate = new Date(year, month, day)
+        } else {
+          scheduledDate = new Date(data.scheduled_date)
+        }
+
         if (isNaN(scheduledDate.getTime())) {
           console.error('Invalid scheduled_date format:', data.scheduled_date)
           return false
@@ -120,18 +130,17 @@ export class ScheduledClassService {
       
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      const tomorrow = new Date(today)
-      tomorrow.setDate(today.getDate() + 1)
       
-      if (scheduledDate < tomorrow) {
-        console.log('Scheduled date is today or in the past. Not creating scheduled classes.')
-        return true
+      // Allow scheduling for today and future dates (reject only past dates)
+      if (scheduledDate < today) {
+        console.log('Scheduled date is in the past. Not creating scheduled classes.')
+        return false
       }
 
       // Always create scheduled classes for ALL peer tutors in this section
       console.log('Fetching peer tutors for:', { dept: normalizedDept, year: normalizedYear, section: normalizedSection })
       
-      const { data: peerTutors, error: tutorsError } = await supabase
+      const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('id')
         .ilike('dept', normalizedDept)
@@ -143,18 +152,55 @@ export class ScheduledClassService {
         return false
       }
 
-      console.log('Found peer tutors:', peerTutors?.length || 0)
+      console.log('Found peer tutors:', peerTutor?.length || 0)
 
-      if (!peerTutors || peerTutors.length === 0) {
-        console.warn('No peer tutors found for this section. Cannot create scheduled classes.')
-        return false
+      if (!peerTutor || peerTutor.length === 0) {
+        console.warn('No peer tutors found for this section. Creating a placeholder scheduled class.')
+        
+        // Check if a placeholder already exists
+        const { data: existingPlaceholder } = await supabase
+          .from('scheduled_classes')
+          .select('id')
+          .eq('class_id', data.class_id)
+          .eq('scheduled_date', data.scheduled_date)
+          .ilike('dept', normalizedDept)
+          .eq('year', normalizedYear)
+          .eq('section', normalizedSection)
+          .is('peer_tutor_id', null)
+          .maybeSingle()
+
+        if (existingPlaceholder) {
+            console.log('Placeholder scheduled class already exists')
+            return true
+        }
+
+        // Create placeholder
+        const { error: placeholderError } = await supabase
+          .from('scheduled_classes')
+          .insert({
+            class_id: data.class_id,
+            scheduled_date: data.scheduled_date,
+            dept: normalizedDept,
+            year: normalizedYear,
+            section: normalizedSection,
+            faculty_id: data.faculty_id,
+            peer_tutor_id: null,
+            topics: data.topics
+          })
+
+        if (placeholderError) {
+            console.error('Error creating placeholder scheduled class:', placeholderError)
+            return false
+        }
+        
+        return true
       }
 
       // Check which peer tutors already have this scheduled class
-      const peerTutorIds = peerTutors.map(t => t.id).filter(id => id) // Remove any undefined/null IDs
-      console.log('Checking existing scheduled classes for peer tutor IDs:', peerTutorIds.length)
+      const peertutorsIds = peerTutor.map(t => t.id).filter(id => id) // Remove any undefined/null IDs
+      console.log('Checking existing scheduled classes for peer tutor IDs:', peertutorsIds.length)
       
-      if (peerTutorIds.length === 0) {
+      if (peertutorsIds.length === 0) {
         console.error('No valid peer tutor IDs found')
         return false
       }
@@ -167,7 +213,7 @@ export class ScheduledClassService {
         .ilike('dept', normalizedDept)
         .eq('year', normalizedYear)
         .eq('section', normalizedSection)
-        .in('peer_tutor_id', peerTutorIds)
+        .in('peer_tutor_id', peertutorsIds)
 
       let existingTutorIds = new Set<string>()
       
@@ -181,7 +227,7 @@ export class ScheduledClassService {
         existingTutorIds = new Set((existing || []).map(e => e.peer_tutor_id))
       }
 
-      const tutorsToCreate = peerTutors.filter(t => !existingTutorIds.has(t.id))
+      const tutorsToCreate = peerTutor.filter(t => !existingTutorIds.has(t.id))
 
       if (tutorsToCreate.length === 0) {
         console.log('All peer tutors already have this scheduled class')
@@ -227,7 +273,7 @@ export class ScheduledClassService {
     dept: string, 
     year: string, 
     section: string, 
-    peerTutorId?: string
+    peertutorsId?: string
   ): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
@@ -253,7 +299,7 @@ export class ScheduledClassService {
             subject_name,
             created_at
           ),
-          peer_tutor:peer_tutors!inner(
+          peer_tutor:peer_tutors(
             id,
             name,
             email
@@ -265,8 +311,8 @@ export class ScheduledClassService {
         .order('scheduled_date', { ascending: true })
 
       // Filter by peer tutor if provided
-      if (peerTutorId) {
-        query = query.eq('peer_tutor_id', peerTutorId)
+      if (peertutorsId) {
+        query = query.eq('peer_tutor_id', peertutorsId)
       }
 
       const { data, error } = await query
@@ -286,7 +332,7 @@ export class ScheduledClassService {
   /**
    * Get scheduled classes ordered by date for a specific dept/year/section
    */
-  static async getScheduledClassesByDate(dept: string, year: string, section: string): Promise<ScheduledClassWithDetails[]> {
+  static async getScheduledClassesByDate(dept: string, year: string, section: string, peertutorsId?: string): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
       
@@ -302,7 +348,7 @@ export class ScheduledClassService {
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('scheduled_classes')
         .select(`
           *,
@@ -316,6 +362,12 @@ export class ScheduledClassService {
         .eq('year', normalizedYear)
         .eq('section', normalizedSection)
         .order('scheduled_date', { ascending: true })
+
+      if (peertutorsId) {
+        query = query.eq('peer_tutor_id', peertutorsId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('Error getting scheduled classes by date:', error)
@@ -588,7 +640,7 @@ export class ScheduledClassService {
   }
 
   /**
-   * Get all scheduled classes for a specific class ID
+   * Get all scheduled classes for a specific class_id
    */
   static async getAllScheduledClassesByClassId(classId: string): Promise<ScheduledClass[]> {
     try {
@@ -739,7 +791,7 @@ export class ScheduledClassService {
   /**
    * Get peer tutor class status for faculty attendance monitoring
    */
-  static async getPeerTutorClassStatus(dept: string, year: string, section: string, subject?: string): Promise<{
+  static async getpeertutorsClassStatus(dept: string, year: string, section: string, subject?: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
   }> {
@@ -803,16 +855,7 @@ export class ScheduledClassService {
         return { completed: [], pending: [] }
       }
 
-      // Filter classes based on date (today and previous days)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
-      const relevantClasses = (data || []).filter(cls => {
-        const classDate = new Date(cls.scheduled_date)
-        classDate.setHours(0, 0, 0, 0)
-        // Include today and past classes
-        return classDate <= today
-      })
+      const relevantClasses = data || []
 
       // Separate completed and pending classes
       const completed = relevantClasses.filter(cls => {
@@ -837,7 +880,7 @@ export class ScheduledClassService {
 
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getPeerTutorClassStatus:', error)
+      console.error('Error in getpeertutorsClassStatus:', error)
       return { completed: [], pending: [] }
     }
   }
@@ -845,7 +888,7 @@ export class ScheduledClassService {
   /**
    * Get peer tutor class status with date filtering
    */
-  static async getPeerTutorClassStatusWithDate(dept: string, year: string, section: string, dateFilter: string): Promise<{
+  static async getpeertutorsClassStatusWithDate(dept: string, year: string, section: string, dateFilter: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
   }> {
@@ -944,7 +987,7 @@ export class ScheduledClassService {
 
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getPeerTutorClassStatusWithDate:', error)
+      console.error('Error in getpeertutorsClassStatusWithDate:', error)
       return { completed: [], pending: [] }
     }
   }
@@ -952,7 +995,7 @@ export class ScheduledClassService {
   /**
    * Get peer tutor class status by year only (all sections, all dates)
    */
-  static async getPeerTutorClassStatusByYear(dept: string, year: string): Promise<{
+  static async getpeertutorsClassStatusByYear(dept: string, year: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
   }> {
@@ -1008,7 +1051,7 @@ export class ScheduledClassService {
 
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getPeerTutorClassStatusByYear:', error)
+      console.error('Error in getpeertutorsClassStatusByYear:', error)
       return { completed: [], pending: [] }
     }
   }
@@ -1016,7 +1059,7 @@ export class ScheduledClassService {
   /**
    * Get peer tutor class status by year and date (all sections)
    */
-  static async getPeerTutorClassStatusByYearAndDate(dept: string, year: string, dateFilter: string): Promise<{
+  static async getpeertutorsClassStatusByYearAndDate(dept: string, year: string, dateFilter: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
   }> {
@@ -1094,7 +1137,7 @@ export class ScheduledClassService {
 
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getPeerTutorClassStatusByYearAndDate:', error)
+      console.error('Error in getpeertutorsClassStatusByYearAndDate:', error)
       return { completed: [], pending: [] }
     }
   }
@@ -1147,7 +1190,7 @@ export class ScheduledClassService {
 
       // Get unique class IDs and peer tutor IDs
       const classIds = [...new Set(scheduledClasses.map(sc => sc.class_id))]
-      const peerTutorIds = [...new Set(scheduledClasses.map(sc => sc.peer_tutor_id))]
+      const peertutorsIds = [...new Set(scheduledClasses.map(sc => sc.peer_tutor_id))]
 
       // Get class details
       const { data: classes, error: classesError } = await supabase
@@ -1161,10 +1204,10 @@ export class ScheduledClassService {
       }
 
       // Get peer tutor details
-      const { data: peerTutors, error: tutorsError } = await supabase
+      const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('id, name, email')
-        .in('id', peerTutorIds)
+        .in('id', peertutorsIds)
 
       if (tutorsError) {
         console.error('Error getting peer tutor details:', tutorsError)
@@ -1173,7 +1216,7 @@ export class ScheduledClassService {
 
       // Create lookup maps
       const classMap = new Map(classes?.map(c => [c.id, c]) || [])
-      const tutorMap = new Map(peerTutors?.map(t => [t.id, t]) || [])
+      const tutorMap = new Map(peerTutor?.map(t => [t.id, t]) || [])
 
       // Combine the data
       const enrichedClasses: ScheduledClassWithDetails[] = scheduledClasses.map(sc => ({
@@ -1193,16 +1236,7 @@ export class ScheduledClassService {
         }
       }))
 
-      // Filter classes based on date (today and previous days)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
-      const relevantClasses = enrichedClasses.filter(cls => {
-        const classDate = new Date(cls.scheduled_date)
-        classDate.setHours(0, 0, 0, 0)
-        // Include today and past classes
-        return classDate <= today
-      })
+      const relevantClasses = enrichedClasses
 
       // Separate completed and pending classes
       const completed = relevantClasses.filter(cls => {
@@ -1240,84 +1274,109 @@ export class ScheduledClassService {
    * Get class statistics for a specific peer tutor
    * Only counts classes from the day after the peer tutor was created
    */
-  static async getPeerTutorClassStats(peerTutorId: string): Promise<{
+  static async getpeertutorsClassStats(peertutorsId: string): Promise<{
     totalClasses: number
     completedClasses: number
     pendingClasses: number
+    upcomingClasses: number
+    overdueClasses: number
   }> {
     try {
       const supabase = createClient()
       
       // First, get the peer tutor's creation date
-      const { data: peerTutor, error: tutorError } = await supabase
+      const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('created_at')
-        .eq('id', peerTutorId)
+        .eq('id', peertutorsId)
         .single()
 
-      if (tutorError || !peerTutor) {
+      if (tutorError || !peertutors) {
         console.error('Error getting peer tutor:', tutorError)
-        return { totalClasses: 0, completedClasses: 0, pendingClasses: 0 }
+        return { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0 }
       }
 
       // Calculate the minimum date for classes (day after peer tutor was created)
-      const createdDate = new Date(peerTutor.created_at)
+      const createdDate = new Date(peertutors.created_at)
       createdDate.setHours(0, 0, 0, 0)
       const minimumClassDate = new Date(createdDate)
-      minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
+      // minimumClassDate.setDate(minimumClassDate.getDate() + 1) // REMOVED: Count from creation date
 
       // Get all scheduled classes for this peer tutor
       const { data: scheduledClasses, error } = await supabase
         .from('scheduled_classes')
         .select('*')
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0]) // Only classes from day after creation
 
       if (error) {
         console.error('Error getting peer tutor class stats:', error)
-        return { totalClasses: 0, completedClasses: 0, pendingClasses: 0 }
+        return { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0 }
       }
 
       if (!scheduledClasses || scheduledClasses.length === 0) {
-        return { totalClasses: 0, completedClasses: 0, pendingClasses: 0 }
+        return { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0 }
       }
 
       // Total classes allocated should include ALL scheduled classes (past, present, and future)
       // from the day after the peer tutor was created
       const totalClasses = scheduledClasses.length
 
-      // For completed/pending counts, we only consider classes that have occurred (today and past)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      // For completed/pending counts, we consider all classes assigned to the tutor (past, present, and future)
+      const relevantClasses = scheduledClasses
       
-      const relevantClasses = scheduledClasses.filter(cls => {
-        const classDate = new Date(cls.scheduled_date)
-        classDate.setHours(0, 0, 0, 0)
-        // Include today and past classes, but only those from day after peer tutor was created
-        return classDate <= today && classDate >= minimumClassDate
-      })
-
-      // Count completed and pending classes (only for classes that have occurred)
+      // Count completed and pending classes
       const completedClasses = relevantClasses.filter(cls => {
         return cls.completion_status === 'completed' || 
                (cls.attendance_completed && cls.topics_completed) ||
                (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
       }).length
       
-      const pendingClasses = relevantClasses.filter(cls => {
+      const pendingClassesList = relevantClasses.filter(cls => {
         return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
                cls.completion_status === 'not_started' ||
                (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
-      }).length
+      })
+
+      const pendingClasses = pendingClassesList.length
+
+      // Calculate Upcoming and Overdue (User's definition of "Pending")
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      let upcomingClasses = 0
+      let overdueClasses = 0
+
+      pendingClassesList.forEach(cls => {
+        if (!cls.scheduled_date) {
+            overdueClasses++ // Default to overdue if no date? or ignore? treating as overdue/pending seems safer
+            return
+        }
+        
+        const classDate = new Date(cls.scheduled_date)
+        classDate.setHours(0, 0, 0, 0)
+
+        // User rule: 
+        // Upcoming = scheduled_date > today (Tomorrow onwards)
+        // Pending (Overdue) = scheduled_date <= today (Today or Past)
+        
+        if (classDate.getTime() > today.getTime()) {
+            upcomingClasses++
+        } else {
+            overdueClasses++
+        }
+      })
 
       return {
         totalClasses, // Include all classes (past, present, future)
         completedClasses,
-        pendingClasses
+        pendingClasses, // Existing Total Pending
+        upcomingClasses, // New Split: Upcoming
+        overdueClasses   // New Split: Pending/Overdue
       }
     } catch (error) {
-      console.error('Error in getPeerTutorClassStats:', error)
-      return { totalClasses: 0, completedClasses: 0, pendingClasses: 0 }
+      console.error('Error in getpeertutorsClassStats:', error)
+      return { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0 }
     }
   }
 
@@ -1348,7 +1407,7 @@ export class ScheduledClassService {
   /**
    * Get all peer tutors allocated to a specific scheduled class
    */
-  static async getPeerTutorsForScheduledClass(classId: string, dept: string, year: string, section: string): Promise<{
+  static async getpeerTutorForScheduledClass(classId: string, dept: string, year: string, section: string): Promise<{
     id: string
     name: string
     email: string
@@ -1391,18 +1450,18 @@ export class ScheduledClassService {
 
       // Extract unique peer tutors
       // Extract unique peer tutors
-      const peerTutors = (scheduledClasses || []).map((sc: { peer_tutor: { id: string, name: string, email: string } | { id: string, name: string, email: string }[] }) => {
+      const peerTutor = (scheduledClasses || []).map((sc: { peer_tutor: { id: string, name: string, email: string } | { id: string, name: string, email: string }[] }) => {
         return Array.isArray(sc.peer_tutor) ? sc.peer_tutor[0] : sc.peer_tutor
       }).filter(Boolean)
       
       // Remove duplicates based on ID
-      const uniquePeerTutors = peerTutors.filter((tutor: { id: string }, index: number, self: { id: string }[]) => 
+      const uniquepeerTutor = peerTutor.filter((tutor: { id: string }, index: number, self: { id: string }[]) => 
         index === self.findIndex((t) => t.id === tutor.id)
       )
 
-      return uniquePeerTutors
+      return uniquepeerTutor
     } catch (error) {
-      console.error('Error in getPeerTutorsForScheduledClass:', error)
+      console.error('Error in getpeerTutorForScheduledClass:', error)
       return []
     }
   }

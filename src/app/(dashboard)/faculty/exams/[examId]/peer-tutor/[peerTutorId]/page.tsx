@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ExamService } from '@/lib/services/examService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
+import { peertutorservice } from '@/lib/services/peerTutorService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
@@ -30,20 +30,20 @@ import { ArrowLeft, Edit, Save, Plus, Filter, RotateCw } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
 
-export default function PeerTutorExamDetailsPage() {
+export default function peertutorsExamDetailsPage() {
   return (
     <FacultyProtectedRoute>
-      <PeerTutorExamDetailsContent />
+      <PeerTutorsExamDetailsContent />
     </FacultyProtectedRoute>
   )
 }
 
-function PeerTutorExamDetailsContent() {
+function PeerTutorsExamDetailsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const params = useParams()
   const examId = params.examId as string
-  const peerTutorId = params.peerTutorId as string
+  const peertutorsId = params.peertutorsId as string
   const queryClient = useQueryClient()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
@@ -79,21 +79,21 @@ function PeerTutorExamDetailsContent() {
   })
 
   // Fetch peer tutor details
-  const { data: peerTutor, isLoading: isPeerTutorLoading } = useQuery({
-    queryKey: ['peer-tutor-details', peerTutorId],
-    queryFn: async () => await PeerTutorService.getPeerTutorById(peerTutorId),
-    enabled: !!peerTutorId,
+  const { data: peertutors, isLoading: ispeertutorsLoading } = useQuery({
+    queryKey: ['peer-tutor-details', peertutorsId],
+    queryFn: async () => await peertutorservice.getpeertutorsById(peertutorsId),
+    enabled: !!peertutorsId,
     staleTime: 5 * 60 * 1000,
   })
 
   // Fetch students assigned to peer tutor
   const { data: students, isLoading: isStudentsLoading } = useQuery({
-    queryKey: ['peer-tutor-students', peerTutorId],
+    queryKey: ['peer-tutor-students', peertutorsId],
     queryFn: async () => {
-      if (!peerTutorId) return []
-      return await AssignmentService.getStudentsByPeerTutor(peerTutorId)
+      if (!peertutorsId) return []
+      return await AssignmentService.getStudentsBypeertutors(peertutorsId)
     },
-    enabled: !!peerTutorId,
+    enabled: !!peertutorsId,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -107,32 +107,32 @@ function PeerTutorExamDetailsContent() {
 
   // Initialize subjects from classes if none exist
   useEffect(() => {
-    if (exam && peerTutor && examSubjects && examSubjects.length === 0) {
+    if (exam && peertutors && examSubjects && examSubjects.length === 0) {
       ExamSubjectService.initializeSubjectsFromClasses(
         examId,
-        peerTutor.id,
-        peerTutor.dept,
-        peerTutor.year,
-        peerTutor.section
+        peertutors.id,
+        peertutors.dept,
+        peertutors.year,
+        peertutors.section
       ).then(() => {
         refetchSubjects()
       })
     }
-  }, [exam, peerTutor, examSubjects, examId, refetchSubjects])
+  }, [exam, peertutors, examSubjects, examId, refetchSubjects])
 
   // Fetch existing exam marks
   const { data: existingMarks, isLoading: isMarksLoading } = useQuery({
-    queryKey: ['exam-marks', examId, peerTutorId],
+    queryKey: ['exam-marks', examId, peertutorsId],
     queryFn: async () => {
-      if (!examId || !peerTutorId) return []
-      return await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutorId, examId)
+      if (!examId || !peertutorsId) return []
+      return await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutorsId, examId)
     },
-    enabled: !!examId && !!peerTutorId,
+    enabled: !!examId && !!peertutorsId,
     staleTime: 1 * 60 * 1000, // Reduced stale time for better real-time updates
     refetchOnWindowFocus: true, // Refetch when window gains focus
   })
 
-  const loading = isDepartmentLoading || isExamLoading || isPeerTutorLoading || isStudentsLoading || isSubjectsLoading || isMarksLoading
+  const loading = isDepartmentLoading || isExamLoading || ispeertutorsLoading || isStudentsLoading || isSubjectsLoading || isMarksLoading
 
   // Initialize marks data
   useEffect(() => {
@@ -194,10 +194,10 @@ function PeerTutorExamDetailsContent() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['faculty-department', user?.email] }),
         queryClient.invalidateQueries({ queryKey: ['exam-details', examId] }),
-        queryClient.invalidateQueries({ queryKey: ['peer-tutor-details', peerTutorId] }),
-        queryClient.invalidateQueries({ queryKey: ['peer-tutor-students', peerTutorId] }),
+        queryClient.invalidateQueries({ queryKey: ['peer-tutor-details', peertutorsId] }),
+        queryClient.invalidateQueries({ queryKey: ['peer-tutor-students', peertutorsId] }),
         queryClient.invalidateQueries({ queryKey: ['exam-subjects', examId] }),
-        queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peerTutorId] }),
+        queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsId] }),
       ])
       setLastRefresh(new Date())
     } finally {
@@ -220,7 +220,7 @@ function PeerTutorExamDetailsContent() {
   }
 
   const handleSave = async () => {
-    if (!examId || !peerTutorId || !students || !examSubjects) return
+    if (!examId || !peertutorsId || !students || !examSubjects) return
 
     setIsSaving(true)
     try {
@@ -232,7 +232,7 @@ function PeerTutorExamDetailsContent() {
           if (studentMarks) {
             marksToSave.push({
               exam_id: examId,
-              peer_tutor_id: peerTutorId,
+              peer_tutor_id: peertutorsId,
               student_id: student.id,
               exam_subject_id: subject.id,
               marks: studentMarks,
@@ -247,7 +247,7 @@ function PeerTutorExamDetailsContent() {
         setIsEditing(false)
         // Invalidate queries for both faculty and peer tutor views
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peerTutorId] }),
+          queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsId] }),
           queryClient.invalidateQueries({ queryKey: ['exam-marks', examId] }), // For peer tutor view
         ])
       } else {
@@ -262,7 +262,7 @@ function PeerTutorExamDetailsContent() {
   }
 
   const handleCancel = () => {
-    queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peerTutorId] })
+    queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsId] })
     setIsEditing(false)
   }
 
@@ -312,7 +312,7 @@ function PeerTutorExamDetailsContent() {
 
   // Excel export function - respects filter/sort order
   const handleExportToExcel = async () => {
-    if (!exam || !peerTutor || !students || !examSubjects || students.length === 0 || examSubjects.length === 0) return
+    if (!exam || !peertutors || !students || !examSubjects || students.length === 0 || examSubjects.length === 0) return
 
     try {
       // Get exam subjects
@@ -324,9 +324,9 @@ function PeerTutorExamDetailsContent() {
       // Add header rows with exam information
       exportData.push(['Subjects Export Report'])
       exportData.push(['Department:', (department as { dept?: string; name?: string })?.dept || department?.name || ''])
-      exportData.push(['Year:', peerTutor.year])
-      exportData.push(['Section:', peerTutor.section])
-      exportData.push(['Peer Tutor:', peerTutor.name])
+      exportData.push(['Year:', peertutors.year])
+      exportData.push(['Section:', peertutors.section])
+      exportData.push(['Peer Tutor:', peertutors.name])
       exportData.push(['Generated on:', new Date().toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -339,7 +339,7 @@ function PeerTutorExamDetailsContent() {
       exportData.push(headerRow)
       
       // Get marks for all students
-      const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutorId, examId)
+      const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutorsId, examId)
       
       // Organize marks by student and subject
       const marksByStudentSubject: Record<string, Record<string, string>> = {}
@@ -380,7 +380,7 @@ function PeerTutorExamDetailsContent() {
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Exam Marks')
       
       // Generate filename
-      const filename = `Exam_${exam.name.replace(/[^a-zA-Z0-9]/g, '_')}_${peerTutor.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
+      const filename = `Exam_${exam.name.replace(/[^a-zA-Z0-9]/g, '_')}_${peertutors.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
       
       // Write file
       XLSX.writeFile(workbook, filename)
@@ -525,7 +525,7 @@ function PeerTutorExamDetailsContent() {
     )
   }
 
-  if (!exam || !peerTutor) {
+  if (!exam || !peertutors) {
     return (
       <div className="min-h-screen bg-gray-50">
         <FacultySidebar
@@ -588,7 +588,7 @@ function PeerTutorExamDetailsContent() {
                 </svg>
               </button>
               
-              <h1 className="text-xl font-semibold text-gray-900">{peerTutor.name} ALLOCATED STUDENT MARK</h1>
+              <h1 className="text-xl font-semibold text-gray-900">{peertutors.name} ALLOCATED STUDENT MARK</h1>
             </div>
             
             <div className="flex items-center space-x-4">
@@ -634,7 +634,7 @@ function PeerTutorExamDetailsContent() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-              <span className="text-gray-900 font-medium">{peerTutor.name}</span>
+              <span className="text-gray-900 font-medium">{peertutors.name}</span>
             </nav>
 
             {/* Peer Tutor Info Card - Clean White Design */}
@@ -645,7 +645,7 @@ function PeerTutorExamDetailsContent() {
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em]">Peer Tutor Performance</p>
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900 tracking-tight mb-4">{peerTutor.name}</h3>
+                  <h3 className="text-2xl font-bold text-gray-900 tracking-tight mb-4">{peertutors.name}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="flex items-center gap-3">
                       <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
@@ -655,7 +655,7 @@ function PeerTutorExamDetailsContent() {
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email Address</p>
-                        <p className="text-sm font-bold text-gray-700">{peerTutor.email}</p>
+                        <p className="text-sm font-bold text-gray-700">{peertutors.email}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -666,7 +666,7 @@ function PeerTutorExamDetailsContent() {
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year & Section</p>
-                        <p className="text-sm font-bold text-gray-700">{peerTutor.year} - {peerTutor.section}</p>
+                        <p className="text-sm font-bold text-gray-700">{peertutors.year} - {peertutors.section}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

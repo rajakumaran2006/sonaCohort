@@ -128,7 +128,7 @@ function AnalyticsContent() {
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col`}>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
         <PageHeader
           title="ANALYTICS"
           tagline="Pending Class Monitoring & Student Performance"
@@ -143,7 +143,7 @@ function AnalyticsContent() {
           <div className="max-w-[1600px] mx-auto w-full space-y-6">
             
             {/* Filters Section */}
-            <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7">
+            <Card className="rounded-[20px] shadow-sm border border-gray-100 bg-white p-7">
               <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">
                 PENDING CLASS FILTERS
               </h3>
@@ -201,7 +201,7 @@ function AnalyticsContent() {
                     onClick={() => setExcludeAdditionalClasses(!excludeAdditionalClasses)}
                     className={`w-full px-4 py-3 rounded-xl text-sm font-bold transition-all ${
                       excludeAdditionalClasses
-                        ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
                         : 'bg-white border-2 border-gray-200 text-gray-900 hover:border-gray-300'
                     }`}
                   >
@@ -215,69 +215,48 @@ function AnalyticsContent() {
             {!isLoading && analytics && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Total Students Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Students</p>
-                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{analytics.total_students}</p>
-                    </div>
-                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
-                      <Users className="w-4 h-4 text-gray-400" />
-                    </div>
+                <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+                  <div className="flex justify-between items-start mb-4 relative z-10">
+                    <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">TOTAL STUDENTS</h3>
                   </div>
-                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                    <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      With Pending
-                    </p>
+                  <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">
+                    {analytics.total_students}
+                  </div>
+                  <div className="flex items-center text-blue-500 text-xs font-bold relative z-10 gap-1.5">
+                    <span>WITH PENDING CLASSES</span>
                   </div>
                 </div>
 
                 {/* Total Pending Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Pending</p>
-                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{analytics.total_pending_classes}</p>
-                    </div>
-                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
-                      <AlertCircle className="w-4 h-4 text-gray-400" />
-                    </div>
+                <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+                  <div className="flex justify-between items-start mb-4 relative z-10">
+                    <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">TOTAL PENDING</h3>
                   </div>
-                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
-                    <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      Classes
-                    </p>
+                  <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">
+                    {analytics.total_pending_classes}
+                  </div>
+                  <div className="flex items-center text-amber-500 text-xs font-bold relative z-10 gap-1.5">
+                    <span>CLASSES ACROSS STUDENTS</span>
                   </div>
                 </div>
 
                 {/* Average Pending Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Average Pending</p>
-                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{analytics.average_pending_per_student}</p>
-                    </div>
-                    <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
-                      <TrendingUp className="w-4 h-4 text-gray-400" />
-                    </div>
+                <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+                  <div className="flex justify-between items-start mb-4 relative z-10">
+                    <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">AVERAGE PENDING</h3>
                   </div>
-                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                    <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      Per Student
-                    </p>
+                  <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">
+                    {analytics.average_pending_per_student}
+                  </div>
+                  <div className="flex items-center text-emerald-500 text-xs font-bold relative z-10 gap-1.5">
+                    <span>PER STUDENT</span>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Students Table */}
-            <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7">
+            <Card className="rounded-[20px] shadow-sm border border-gray-100 bg-white p-7">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 pb-4 border-b border-gray-50 gap-4">
                 <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">
                   STUDENTS WITH PENDING CLASSES

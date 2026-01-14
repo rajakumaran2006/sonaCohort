@@ -880,6 +880,18 @@ export class FeedbackService {
     try {
       const supabase = createClient()
       
+      // Get the form to find the faculty_id
+      const { data: form, error: formError } = await supabase
+        .from('feedback_forms')
+        .select('faculty_id')
+        .eq('id', formId)
+        .single()
+        
+      if (formError || !form) {
+        console.error('Error getting form details for stats:', formError)
+        return { totalResponses: 0, totalStudents: 0, responseRate: 0 }
+      }
+
       // Get total responses
       const { count: responseCount, error: responseError } = await supabase
         .from('feedback_responses')
@@ -891,10 +903,11 @@ export class FeedbackService {
         return { totalResponses: 0, totalStudents: 0, responseRate: 0 }
       }
 
-      // Get total students with assigned peer tutors (students who can respond to feedback forms)
+      // Get total students with assigned peer tutors for this faculty
       const { count: studentCount, error: studentError } = await supabase
         .from('peer_students')
         .select('*', { count: 'exact', head: true })
+        .eq('faculty_id', form.faculty_id)
         .eq('peer_tutor', false)
         .not('assigned_peer_tutor_id', 'is', null)
 

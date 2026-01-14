@@ -4,17 +4,20 @@ import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
+import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
 import * as XLSX from 'xlsx'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { useQueryClient } from '@tanstack/react-query'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
-import { StudentService, StudentWithPeerTutor } from '@/lib/services/studentService'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { FacultyService } from '@/lib/services/facultyService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
+import { StudentService, StudentWithpeertutors } from '@/lib/services/studentService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
-import { RenumerationService, RenumerationTemplate, PeerTutorRenumeration } from '@/lib/services/renumerationService'
+import { RenumerationService, RenumerationTemplate, peertutorsRenumeration } from '@/lib/services/renumerationService'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
 import { FeedbackAnalyticsService } from '@/lib/services/feedbackAnalyticsService'
-import { ReportService, PeerTutorReportData, ClassAttendanceReport } from '@/lib/services/reportService'
+import { ReportService, peertutorsReportData, ClassAttendanceReport } from '@/lib/services/reportService'
 import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import RenumerationModal from '@/components/forms/RenumerationModal'
@@ -25,68 +28,117 @@ import FeedbackAnalyticsPage from '@/components/forms/FeedbackAnalyticsPage'
 import ExcelExportModal from '@/components/forms/ExcelExportModal'
 import PeerTutorImportModal from '@/components/forms/PeerTutorImportModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Edit, Eye } from 'lucide-react'
+import { Edit, Eye, Search, X, Users, GraduationCap, Clock, Calendar, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react'
+import { Card } from '@/components/ui'
 import ExportButton from '@/components/ui/ExportButton'
+import AddStudentModal from '@/components/forms/AddStudentModal'
+import AddPeerTutorModal from '@/components/forms/AddPeerTutorModal'
+import PeerTutorPageSkeleton from '@/components/skeletons/PeerTutorPageSkeleton'
 
-export default function FacultyPeerTutorPage() {
+
+
+export default function FacultypeertutorsPage() {
   return (
     <FacultyProtectedRoute>
-      <FacultyPeerTutorContent />
+      <FacultypeertutorsContent />
     </FacultyProtectedRoute>
   )
 }
 
-interface PeerTutorWithStats extends PeerTutor {
+interface peertutorsWithStats extends peertutors {
   classStats: {
     totalClasses: number
     completedClasses: number
     pendingClasses: number
+    upcomingClasses: number
+    overdueClasses: number
   }
   additionalClassesCount: number
 }
 
-interface SubmissionWithClasses extends PeerTutorRenumeration {
+interface SubmissionWithClasses extends peertutorsRenumeration {
   classesCompleted?: number
 }
 
-function FacultyPeerTutorContent() {
+
+function FacultypeertutorsContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
   const queryClient = useQueryClient()
+
+  // Fetch department data
+  const { data: department } = useQuery({
+    queryKey: ['faculty-department', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return null
+      return await FacultyService.verifyFacultyAccess(user.email)
+    },
+    enabled: !!user?.email,
+    staleTime: 10 * 60 * 1000,
+  })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
   // Use custom hook for sidebar collapsed state (reads from localStorage synchronously)
   const [isSidebarCollapsed] = useSidebarCollapsed()
-  const [peerTutors, setPeerTutors] = useState<PeerTutor[]>([])
-  const [filteredPeerTutors, setFilteredPeerTutors] = useState<PeerTutor[]>([])
-  const [peerTutorsWithStats, setPeerTutorsWithStats] = useState<PeerTutorWithStats[]>([])
-  const [students, setStudents] = useState<StudentWithPeerTutor[]>([])
-  const [filteredStudents, setFilteredStudents] = useState<StudentWithPeerTutor[]>([])
+  const [peerTutor, setpeerTutor] = useState<peertutors[]>([])
+  const [filteredpeerTutor, setFilteredpeerTutor] = useState<peertutors[]>([])
+  const [peerTutorWithStats, setpeerTutorWithStats] = useState<peertutorsWithStats[]>([])
+  const [students, setStudents] = useState<StudentWithpeertutors[]>([])
+  const [filteredStudents, setFilteredStudents] = useState<StudentWithpeertutors[]>([])
   const [loading, setLoading] = useState(true)
   const [statsLoading, setStatsLoading] = useState(false)
   const [assignedCount, setAssignedCount] = useState(0)
   const [assignedStudentCount, setAssignedStudentCount] = useState(0)
   const [unassignedStudentCount, setUnassignedStudentCount] = useState(0)
-  const [peerTutorStudentCounts, setPeerTutorStudentCounts] = useState<{[key: string]: number}>({})
+  const [peerTutortudentCounts, setpeerTutortudentCounts] = useState<{[key: string]: number}>({})
   
   // Filter states
   const [selectedYear, setSelectedYear] = useState<string>('all')
   const [selectedSection, setSelectedSection] = useState<string>('all')
   const [selectedStudentYear, setSelectedStudentYear] = useState<string>('all')
   const [selectedStudentSection, setSelectedStudentSection] = useState<string>('all')
-  const [selectedPeerTutor, setSelectedPeerTutor] = useState<string>('all')
+  const [selectedpeertutors, setSelectedpeertutors] = useState<string>('all')
   const [showFilterPopup, setShowFilterPopup] = useState(false)
   const [showStudentFilterPopup, setShowStudentFilterPopup] = useState(false)
   const filterRef = useRef<HTMLDivElement>(null)
   const studentFilterRef = useRef<HTMLDivElement>(null)
+  
+  // Search states
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [ispeerTutorearchExpanded, setIspeerTutorearchExpanded] = useState(false)
+  const [studentSearchQuery, setStudentSearchQuery] = useState<string>('')
+  const [isStudentSearchExpanded, setIsStudentSearchExpanded] = useState(false)
+  const peerTutorearchRef = useRef<HTMLInputElement>(null)
+  const studentSearchRef = useRef<HTMLInputElement>(null)
 
   // Renumeration states
   const [showRenumerationModal, setShowRenumerationModal] = useState(false)
-  const [renumerationSubmissions, setRenumerationSubmissions] = useState<PeerTutorRenumeration[]>([])
+  const [renumerationSubmissions, setRenumerationSubmissions] = useState<peertutorsRenumeration[]>([])
   const [renumerationLoading, setRenumerationLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'tutors' | 'students' | 'feedback' | 'renumeration' | 'reports' | 'leaderboard'>('tutors')
+
+  // Handle tab from URL
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab && ['tutors', 'students', 'feedback', 'renumeration', 'reports', 'leaderboard'].includes(tab)) {
+      setActiveTab(tab as any)
+    }
+  }, [searchParams])
+
+  // Reset notification counts when visiting tabs
+  useEffect(() => {
+    if (activeTab === 'feedback') {
+      localStorage.setItem('last_visited_feedback', Date.now().toString())
+      // Trigger a storage event to update other components if needed
+      window.dispatchEvent(new Event('storage'))
+    } else if (activeTab === 'renumeration') {
+      localStorage.setItem('last_visited_renumeration', Date.now().toString())
+      window.dispatchEvent(new Event('storage'))
+    }
+  }, [activeTab])
   const [showDetailsModal, setShowDetailsModal] = useState(false)
-  const [selectedSubmission, setSelectedSubmission] = useState<PeerTutorRenumeration | null>(null)
+  const [selectedSubmission, setSelectedSubmission] = useState<peertutorsRenumeration | null>(null)
   
   // Template management states
   const [renumerationTemplates, setRenumerationTemplates] = useState<RenumerationTemplate[]>([])
@@ -94,6 +146,9 @@ function FacultyPeerTutorContent() {
   const [renumerationView, setRenumerationView] = useState<'templates' | 'submissions'>('templates')
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [submissionsWithClasses, setSubmissionsWithClasses] = useState<SubmissionWithClasses[]>([])
+
+  // Confirmation modal state
+
 
 
   // Submissions filters/sorting
@@ -107,9 +162,11 @@ function FacultyPeerTutorContent() {
   // Delete modes for Students and Peer Tutors
   const [isStudentDeleteMode, setIsStudentDeleteMode] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
-  const [isPeerTutorDeleteMode, setIsPeerTutorDeleteMode] = useState(false)
+  const [ispeertutorsDeleteMode, setIspeertutorsDeleteMode] = useState(false)
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set())
-  const [selectedPeerTutorIds, setSelectedPeerTutorIds] = useState<Set<string>>(new Set())
+  const [selectedpeertutorsIds, setSelectedpeertutorsIds] = useState<Set<string>>(new Set())
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false)
+  const [showAddPeerTutorModal, setShowAddPeerTutorModal] = useState(false)
 
   // Feedback states
   const [feedbackForms, setFeedbackForms] = useState<FeedbackForm[]>([])
@@ -122,20 +179,33 @@ function FacultyPeerTutorContent() {
   const [isFeedbackDeleteMode, setIsFeedbackDeleteMode] = useState(false)
   const [selectedFeedbackFormIds, setSelectedFeedbackFormIds] = useState<Set<string>>(new Set())
 
+  // Renumeration Delete State
+  const [isRenumerationDeleteMode, setIsRenumerationDeleteMode] = useState(false)
+  const [selectedRenumerationTemplateIds, setSelectedRenumerationTemplateIds] = useState<Set<string>>(new Set())
+
 
   // Delete confirmation modal states
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [peerTutorToDelete, setPeerTutorToDelete] = useState<{id: string, name: string} | null>(null)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [itemsToDelete, setItemsToDelete] = useState<{name: string, email?: string, additionalInfo?: string, originalId?: string}[]>([])
+  const [deleteType, setDeleteType] = useState<'peer-tutors' | 'students' | 'renumeration-templates' | 'feedback-forms'>('peer-tutors')
+  const [isDeleting, setIsDeleting] = useState(false)
+  
+
+
+
+
+
 
   // Reports states
-  const [peerTutorReports, setPeerTutorReports] = useState<PeerTutorReportData[]>([])
-  const [filteredPeerTutorReports, setFilteredPeerTutorReports] = useState<PeerTutorReportData[]>([])
+  const [peertutorsReports, setpeertutorsReports] = useState<peertutorsReportData[]>([])
+  const [filteredpeertutorsReports, setFilteredpeertutorsReports] = useState<peertutorsReportData[]>([])
   const [reportsLoading, setReportsLoading] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [reportFilterYear, setReportFilterYear] = useState<string>('all')
   const [reportFilterSection, setReportFilterSection] = useState<string>('all')
   const [reportFilterSubject, setReportFilterSubject] = useState<string>('all')
+  const [leaderboardFilterYear, setLeaderboardFilterYear] = useState<string>('all')
 
   
   // Inline report view states
@@ -146,11 +216,13 @@ function FacultyPeerTutorContent() {
   const [showClassModal, setShowClassModal] = useState(false)
 
   const loadData = useCallback(async () => {
+    if (!user?.id || !department?.name) return
+
     try {
       // Load peer tutors
-      const tutors = await PeerTutorService.getAllPeerTutors()
-      setPeerTutors(tutors)
-      setFilteredPeerTutors(tutors)
+      const tutors = await peertutorservice.getpeerTutorByDepartment(department.name)
+      setpeerTutor(tutors)
+      setFilteredpeerTutor(tutors)
       
       // Calculate assigned/unassigned counts for peer tutors
       const assignedTutors = tutors.filter(() => {
@@ -161,7 +233,8 @@ function FacultyPeerTutorContent() {
       setAssignedCount(assignedTutors.length)
 
       // Load students with peer tutor information
-      const allStudents = await StudentService.getAllStudentsWithPeerTutors()
+      // Load students with peer tutor information
+      const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department.name)
       setStudents(allStudents)
       setFilteredStudents(allStudents)
       
@@ -176,29 +249,47 @@ function FacultyPeerTutorContent() {
         const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
         studentCounts[tutor.id] = count
       })
-      setPeerTutorStudentCounts(studentCounts)
+      setpeerTutortudentCounts(studentCounts)
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.id, department?.name]) // Added department dependency
 
   // Load peer tutors and students data with caching
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    if (department?.name) {
+      loadData()
+    }
+  }, [loadData, department?.name])
+
+  const loadpeertutorsReports = useCallback(async () => {
+    if (!user?.id) return
+
+    setReportsLoading(true)
+    try {
+      const reports = await ReportService.getAllpeertutorsReports(user.id)
+      setpeertutorsReports(reports)
+      setFilteredpeertutorsReports(reports)
+    } catch (error) {
+      console.error('Error loading peer tutor reports:', error)
+    } finally {
+      setReportsLoading(false)
+    }
+  }, [user?.id])
 
   // Handle refresh
   const handleRefresh = async () => {
+    if (!user?.id || !department?.name) return
     setLoading(true)
     try {
       // Reload all data
-      const tutors = await PeerTutorService.getAllPeerTutors()
-      setPeerTutors(tutors)
-      setFilteredPeerTutors(tutors)
+      const tutors = await peertutorservice.getpeerTutorByDepartment(department.name)
+      setpeerTutor(tutors)
+      setFilteredpeerTutor(tutors)
       
-      const allStudents = await StudentService.getAllStudentsWithPeerTutors()
+      const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department.name)
       setStudents(allStudents)
       setFilteredStudents(allStudents)
       
@@ -215,11 +306,11 @@ function FacultyPeerTutorContent() {
         const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
         studentCounts[tutor.id] = count
       })
-      setPeerTutorStudentCounts(studentCounts)
+      setpeerTutortudentCounts(studentCounts)
       
       // Reload reports if on reports tab
       if (activeTab === 'reports') {
-        await loadPeerTutorReports()
+        await loadpeertutorsReports()
       }
       
       setLastRefresh(new Date())
@@ -232,7 +323,7 @@ function FacultyPeerTutorContent() {
 
   // Apply peer tutor filters
   useEffect(() => {
-    let filtered = peerTutors
+    let filtered = peerTutor
 
     if (selectedYear !== 'all') {
       filtered = filtered.filter(tutor => tutor.year === selectedYear)
@@ -240,6 +331,17 @@ function FacultyPeerTutorContent() {
 
     if (selectedSection !== 'all') {
       filtered = filtered.filter(tutor => tutor.section === selectedSection)
+    }
+
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(tutor => 
+        tutor.name.toLowerCase().includes(query) || 
+        tutor.email.toLowerCase().includes(query) ||
+        tutor.year.toLowerCase().includes(query) ||
+        tutor.section.toLowerCase().includes(query)
+      )
     }
 
     // Sort by year (2, 3, 4) then by section (A, B, C)
@@ -253,8 +355,8 @@ function FacultyPeerTutorContent() {
       return (sectionOrder[a.section as keyof typeof sectionOrder] || 0) - (sectionOrder[b.section as keyof typeof sectionOrder] || 0)
     })
 
-    setFilteredPeerTutors(filtered)
-  }, [peerTutors, selectedYear, selectedSection])
+    setFilteredpeerTutor(filtered)
+  }, [peerTutor, selectedYear, selectedSection, searchQuery])
 
   // Apply student filters
   useEffect(() => {
@@ -268,8 +370,23 @@ function FacultyPeerTutorContent() {
       filtered = filtered.filter(student => student.section === selectedStudentSection)
     }
 
-    if (selectedPeerTutor !== 'all') {
-      filtered = filtered.filter(student => student.assigned_peer_tutor_id === selectedPeerTutor)
+    if (selectedpeertutors !== 'all') {
+      filtered = filtered.filter(student => student.assigned_peer_tutor_id === selectedpeertutors)
+    }
+
+    // Apply search query filter
+    if (studentSearchQuery.trim()) {
+      const q = studentSearchQuery.toLowerCase()
+      filtered = filtered.filter(student => {
+        const assignedpeertutors = peerTutor.find(tutor => tutor.id === student.assigned_peer_tutor_id)
+        return (
+          student.name.toLowerCase().includes(q) ||
+          student.email.toLowerCase().includes(q) ||
+          student.year.toLowerCase().includes(q) ||
+          student.section.toLowerCase().includes(q) ||
+          assignedpeertutors?.name.toLowerCase().includes(q)
+        )
+      })
     }
 
     // Sort by year (2, 3, 4) then by section (A, B, C)
@@ -284,22 +401,22 @@ function FacultyPeerTutorContent() {
     })
 
     setFilteredStudents(filtered)
-  }, [students, selectedStudentYear, selectedStudentSection, selectedPeerTutor])
+  }, [students, selectedStudentYear, selectedStudentSection, selectedpeertutors, studentSearchQuery])
 
   // Load peer tutor statistics when filtered peer tutors change
   useEffect(() => {
-    const loadPeerTutorStats = async () => {
-      if (filteredPeerTutors.length === 0) {
-        setPeerTutorsWithStats([])
+    const loadpeerTutortats = async () => {
+      if (filteredpeerTutor.length === 0) {
+        setpeerTutorWithStats([])
         return
       }
 
       setStatsLoading(true)
       try {
         const tutorsWithStats = await Promise.all(
-          filteredPeerTutors.map(async (tutor) => {
-            const classStats = await ScheduledClassService.getPeerTutorClassStats(tutor.id)
-            const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+          filteredpeerTutor.map(async (tutor) => {
+            const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id)
+            const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
             
             // Debug logging
             console.log(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
@@ -318,13 +435,13 @@ function FacultyPeerTutorContent() {
             }
           })
         )
-        setPeerTutorsWithStats(tutorsWithStats)
+        setpeerTutorWithStats(tutorsWithStats)
       } catch (error) {
         console.error('Error loading peer tutor stats:', error)
         // Fallback to original data without stats
-        setPeerTutorsWithStats(filteredPeerTutors.map(tutor => ({
+        setpeerTutorWithStats(filteredpeerTutor.map(tutor => ({
           ...tutor,
-          classStats: { totalClasses: 0, completedClasses: 0, pendingClasses: 0 },
+          classStats: { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0 },
           additionalClassesCount: 0
         })))
       } finally {
@@ -332,8 +449,8 @@ function FacultyPeerTutorContent() {
       }
     }
 
-    loadPeerTutorStats()
-  }, [filteredPeerTutors])
+    loadpeerTutortats()
+  }, [filteredpeerTutor])
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -353,14 +470,14 @@ function FacultyPeerTutorContent() {
   }, [])
 
   // Get unique years and sections for filters
-  const availableYears = [...new Set(peerTutors.map(tutor => tutor.year))].sort()
-  const availableSections = [...new Set(peerTutors.map(tutor => tutor.section))].sort()
+  const availableYears = [...new Set(peerTutor.map(tutor => tutor.year))].sort()
+  const availableSections = [...new Set(peerTutor.map(tutor => tutor.section))].sort()
   const availableStudentYears = [...new Set(students.map(student => student.year))].sort()
   const availableStudentSections = [...new Set(students.map(student => student.section))].sort()
 
   // Check if any filters are active
   const hasActiveFilters = selectedYear !== 'all' || selectedSection !== 'all'
-  const hasActiveStudentFilters = selectedStudentYear !== 'all' || selectedStudentSection !== 'all' || selectedPeerTutor !== 'all'
+  const hasActiveStudentFilters = selectedStudentYear !== 'all' || selectedStudentSection !== 'all' || selectedpeertutors !== 'all'
 
   // Clear all filters
   const clearFilters = () => {
@@ -371,17 +488,17 @@ function FacultyPeerTutorContent() {
   const clearStudentFilters = () => {
     setSelectedStudentYear('all')
     setSelectedStudentSection('all')
-    setSelectedPeerTutor('all')
+    setSelectedpeertutors('all')
   }
 
   // Handle peer tutor view click
-  const handleViewPeerTutor = (tutorId: string) => {
+  const handleViewpeertutors = (tutorId: string) => {
     router.push(`/faculty/peer-tutor/${tutorId}`)
   }
 
   // Export functions
-  const exportPeerTutors = () => {
-    const exportData = peerTutorsWithStats.map(tutor => ({
+  const exportpeerTutor = () => {
+    const exportData = peerTutorWithStats.map(tutor => ({
       'Name': tutor.name,
       'Email': tutor.email,
       'Year & Section': `${tutor.year} - ${tutor.section}`,
@@ -389,7 +506,7 @@ function FacultyPeerTutorContent() {
       'Completed Classes': tutor.classStats.completedClasses,
       'Pending Classes': tutor.classStats.pendingClasses,
       'Additional Classes Taken': tutor.additionalClassesCount || 0,
-      'Students Assigned': peerTutorStudentCounts[tutor.id] || 0
+      'Students Assigned': peerTutortudentCounts[tutor.id] || 0
     }))
 
     const ws = XLSX.utils.json_to_sheet(exportData)
@@ -402,8 +519,8 @@ function FacultyPeerTutorContent() {
 
   const exportStudents = () => {
     const exportData = filteredStudents.map(student => ({
-      'Name': student.name,
-      'Email': student.email,
+      name: student.name,
+      email: student.email,
       'Year & Section': `${student.year} - ${student.section}`,
       'Assigned Peer Tutor': student.assigned_peer_tutor?.name || 'Not assigned'
     }))
@@ -416,81 +533,328 @@ function FacultyPeerTutorContent() {
     XLSX.writeFile(wb, fileName)
   }
 
-  // Handle peer tutor deletion
-  // const handleDeletePeerTutor = (tutorId: string, tutorName: string) => {
-  //   setPeerTutorToDelete({ id: tutorId, name: tutorName })
-  //   setShowDeleteModal(true)
-  // }
+  // Handle peer tutor deletion (Single)
+  const handleDeletepeertutors = (tutorId: string, tutorName: string) => {
+    // Find the tutor to get details
+    const tutor = peerTutorWithStats.find(t => t.id === tutorId)
+    if (!tutor) return
 
-  // Confirm peer tutor deletion
-  const confirmDeletePeerTutor = async () => {
-    if (!peerTutorToDelete) return
+    setItemsToDelete([{
+      name: tutor.name,
+      email: tutor.email,
+      additionalInfo: `${peerTutortudentCounts[tutorId] || 0} student(s) assigned`
+    }])
+    setDeleteType('peer-tutors')
+    setDeleteModalOpen(true)
+    
+    // Also set this for legacy compatibility if needed, using the setpeertutorsToDelete to track ID for single delete logic if we didn't use itemsToDelete fully
+    // But itemsToDelete is better. We'll use itemsToDelete for display and logic.
+    // Actually, for single delete, we need the ID. We can store it.
+    // Let's use `selectedpeertutorsIds` for consistency or just find by name/email? 
+    // Safer to just set selectedpeertutorsIds to this one ID temporarily if we want to reuse bulk logic?
+    // Or simpler: handle single delete by setting ID in a state?
+    // Let's reuse itemsToDelete but we need the ID. 
+    // We can add ID to itemsToDelete? define it as any?
+    // The modal expects {name, email, additionalInfo}.
+    // Let's use a separate state `singleDeleteId` or reuse `selectedpeertutorsIds`.
+    
+    // Strategy: Clear selection, add this ID, trigger "bulk" delete flow (which is just "delete selected").
+    // But this clears user's existing selection.
+    // Better: Just execute delete for this one ID.
+    // But modal onConfirm needs to know what to do.
+    // Let's use `itemsToDelete` for display. And check `itemsToDelete` length or rely on `selectedpeertutorsIds`.
+    // If I use `selectedpeertutorsIds`, I must update it.
+    setSelectedpeertutorsIds(new Set([tutorId]))
+    setItemsToDelete([{
+      name: tutor.name, 
+      email: tutor.email,
+      additionalInfo: `${peerTutortudentCounts[tutor.id] || 0} student(s) assigned`
+    }])
+    setDeleteType('peer-tutors')
+    setDeleteModalOpen(true)
+  }
 
+  // Unified Delete Confirmation Handler
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true)
     try {
-      const result = await PeerTutorService.removePeerTutor(peerTutorToDelete.id)
-      if (result.success) {
-        // Invalidate all related queries in the cache
+      if (deleteType === 'peer-tutors') {
+        let successCount = 0
+        let failCount = 0
+
+        // Use selectedpeertutorsIds which represents what we want to delete (single or bulk)
+        for (const tutorId of selectedpeertutorsIds) {
+           try {
+             // FORCE DELETE is implied by the secure modal
+             const result = await peertutorservice.removepeertutors(tutorId, true)
+             if (result.success) {
+               successCount++
+             } else {
+               failCount++
+             }
+           } catch (error) {
+             console.error(`Error deleting peer tutor ${tutorId}:`, error)
+             failCount++
+           }
+        }
+
+        // Refresh data
         queryClient.invalidateQueries({ queryKey: ['peer-tutor-stats'] })
         queryClient.invalidateQueries({ queryKey: ['all-students'] })
         queryClient.invalidateQueries({ queryKey: ['faculty-department'] })
         
-        // Reload peer tutors data
-        const tutors = await PeerTutorService.getAllPeerTutors()
-        setPeerTutors(tutors)
-        setFilteredPeerTutors(tutors)
+        const tutors = await peertutorservice.getpeerTutorByDepartment(department?.name || '')
+        setpeerTutor(tutors)
+        setFilteredpeerTutor(tutors)
         
-        // Recalculate assigned/unassigned counts
-        const assignedTutors = tutors.filter(() => {
-          // Check if this peer tutor has any assigned students
-          return true // For now, assuming all are assigned
-        })
+        // Recalculate counts
+        // ... (can use a separate refresh function if cleaner, but inline is fine)
+        const assignedTutors = tutors.filter(() => true)
         setAssignedCount(assignedTutors.length)
-        
-        // Close modal
-        setShowDeleteModal(false)
-        setPeerTutorToDelete(null)
-        
-        // Show success message
-        alert(result.message)
-      } else {
-        // Check if the error is about assigned students
-        if (result.message.includes('students are still assigned')) {
-          // Show a more detailed modal with force delete option
-          if (confirm(`${result.message}\n\nDo you want to force delete and unassign all students?`)) {
-            const forceResult = await PeerTutorService.removePeerTutor(peerTutorToDelete.id, true)
-            if (forceResult.success) {
-              // Invalidate all related queries in the cache
-              queryClient.invalidateQueries({ queryKey: ['peer-tutor-stats'] })
-              queryClient.invalidateQueries({ queryKey: ['all-students'] })
-              queryClient.invalidateQueries({ queryKey: ['faculty-department'] })
-              
-              // Reload data
-              const tutors = await PeerTutorService.getAllPeerTutors()
-              setPeerTutors(tutors)
-              setFilteredPeerTutors(tutors)
-              
-              // Recalculate counts
-              const assignedTutors = tutors.filter(() => true)
-              setAssignedCount(assignedTutors.length)
-              
-              // Close modal
-              setShowDeleteModal(false)
-              setPeerTutorToDelete(null)
-              
-              alert(forceResult.message)
-            } else {
-              alert(forceResult.message)
+        setUnassignedStudentCount(tutors.length - assignedTutors.length)
+         
+        // Update student counts map
+        const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department?.name || '')
+        const studentCounts: {[key: string]: number} = {}
+        tutors.forEach(tutor => {
+          const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
+          studentCounts[tutor.id] = count
+        })
+        setpeerTutortudentCounts(studentCounts)
+
+        if (successCount > 0) {
+            toast.success(
+            selectedpeertutorsIds.size > 1 
+                ? `${successCount} PEER TUTORS DELETED SUCCESSFULLY` 
+                : 'PEER TUTOR DELETED SUCCESSFULLY',
+            {
+                style: {
+                background: '#FEF08A',
+                color: '#854D0E',
+                border: '1px solid #FDE047',
+                textTransform: 'uppercase',
+                fontWeight: 'bold',
+                fontFamily: 'inherit'
+                },
+                className: 'uppercase font-bold'
             }
-          }
-        } else {
-          alert(result.message)
+            )
         }
+        if (failCount > 0) {
+            toast.error(`FAILED TO DELETE ${failCount} PEER TUTOR(S)`, {
+                style: { textTransform: 'uppercase', fontWeight: 'bold' }
+            })
+        }
+
+        setSelectedpeertutorsIds(new Set())
+        setIspeertutorsDeleteMode(false)
+
+      } else if (deleteType === 'students') {
+        let successCount = 0
+        let failCount = 0
+
+        for (const studentId of selectedStudentIds) {
+            try {
+                const result = await StudentService.removeStudent(studentId)
+                if(result) successCount++
+                else failCount++
+            } catch(e) {
+                console.error(`Error deleting student ${studentId}`, e)
+                failCount++
+            }
+        }
+        
+         // Refresh data
+        const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department?.name || '')
+        setStudents(allStudents)
+        setFilteredStudents(allStudents)
+        
+        const assignedStudents = allStudents.filter(student => student.assigned_peer_tutor)
+        setAssignedStudentCount(assignedStudents.length)
+        setUnassignedStudentCount(allStudents.length - assignedStudents.length)
+
+        if (successCount > 0) {
+            toast.success(
+            selectedStudentIds.size > 1 
+                ? `${successCount} STUDENTS DELETED SUCCESSFULLY` 
+                : 'STUDENT DELETED SUCCESSFULLY',
+            {
+                 style: {
+                background: '#FEF08A',
+                color: '#854D0E',
+                border: '1px solid #FDE047',
+                textTransform: 'uppercase',
+                fontWeight: 'bold',
+                fontFamily: 'inherit'
+                },
+                className: 'uppercase font-bold'
+            }
+            )
+        }
+        if (failCount > 0) {
+             toast.error(`FAILED TO DELETE ${failCount} STUDENT(S)`, {
+                style: { textTransform: 'uppercase', fontWeight: 'bold' }
+            })
+        }
+        
+        setSelectedStudentIds(new Set())
+        setIsStudentDeleteMode(false)
+      } else if (deleteType === 'renumeration-templates') {
+        let successCount = 0
+        let failCount = 0
+
+        for (const templateId of itemsToDelete.map(item => item.originalId as string)) {
+          if (!templateId) continue
+          try {
+            const success = await RenumerationService.deleteRenumerationTemplate(templateId)
+            if (success) successCount++
+            else failCount++
+          } catch (error) {
+            console.error(`Error deleting template ${templateId}:`, error)
+            failCount++
+          }
+        }
+
+        // Refresh data
+        await handleRenumerationSuccess()
+
+        if (successCount > 0) {
+          toast.success(
+            itemsToDelete.length > 1
+              ? `${successCount} TEMPLATES DELETED SUCCESSFULLY`
+              : 'TEMPLATE DELETED SUCCESSFULLY',
+            {
+              style: {
+                background: '#FEF08A',
+                color: '#854D0E',
+                border: '1px solid #FDE047',
+                textTransform: 'uppercase',
+                fontWeight: 'bold',
+                fontFamily: 'inherit'
+              },
+              className: 'uppercase font-bold'
+            }
+          )
+        }
+        if (failCount > 0) {
+          toast.error(`FAILED TO DELETE ${failCount} TEMPLATE(S)`, {
+            style: { textTransform: 'uppercase', fontWeight: 'bold' }
+          })
+        }
+
+        setSelectedRenumerationTemplateIds(new Set())
+        setIsRenumerationDeleteMode(false)
+
+      } else if (deleteType === 'feedback-forms') {
+        let successCount = 0
+        let failCount = 0
+
+        const deletePromises = Array.from(selectedFeedbackFormIds).map(async (id) => {
+          try {
+            const success = await FeedbackService.deleteFeedbackForm(id)
+            if (success) return true
+            return false
+          } catch (error) {
+            console.error(`Error deleting feedback form ${id}:`, error)
+            return false
+          }
+        })
+        
+        const results = await Promise.all(deletePromises)
+        successCount = results.filter(Boolean).length
+        failCount = results.length - successCount
+
+        // Refresh data
+        loadFeedbackForms()
+
+        if (successCount > 0) {
+          toast.success(
+            selectedFeedbackFormIds.size > 1
+              ? `${successCount} FORMS DELETED SUCCESSFULLY`
+              : 'FORM DELETED SUCCESSFULLY',
+            {
+              style: {
+                background: '#FEF08A',
+                color: '#854D0E',
+                border: '1px solid #FDE047',
+                textTransform: 'uppercase',
+                fontWeight: 'bold',
+                fontFamily: 'inherit'
+              },
+              className: 'uppercase font-bold'
+            }
+          )
+        }
+        if (failCount > 0) {
+          toast.error(`FAILED TO DELETE ${failCount} FORM(S)`, {
+            style: { textTransform: 'uppercase', fontWeight: 'bold' }
+          })
+        }
+
+        setSelectedFeedbackFormIds(new Set())
+        setIsFeedbackDeleteMode(false)
       }
     } catch (error) {
-      console.error('Error deleting peer tutor:', error)
-      alert('An error occurred while deleting the peer tutor. Please try again.')
+         console.error("Deletion failed", error)
+         toast.error("AN ERROR OCCURRED DURING DELETION")
+    } finally {
+      setIsDeleting(false)
+      setDeleteModalOpen(false)
+      setItemsToDelete([])
     }
   }
+
+  // Renumeration Template Delete Handlers
+  const handleRenumerationDeleteModeToggle = () => {
+    setIsRenumerationDeleteMode(!isRenumerationDeleteMode)
+    setSelectedRenumerationTemplateIds(new Set())
+  }
+
+  const handleSelectAllRenumerationTemplates = () => {
+    if (selectedRenumerationTemplateIds.size === renumerationTemplates.length) {
+      setSelectedRenumerationTemplateIds(new Set())
+    } else {
+      setSelectedRenumerationTemplateIds(new Set(renumerationTemplates.map(t => t.id)))
+    }
+  }
+
+  const handleRenumerationTemplateSelect = (templateId: string) => {
+    const newSelected = new Set(selectedRenumerationTemplateIds)
+    if (newSelected.has(templateId)) {
+      newSelected.delete(templateId)
+    } else {
+      newSelected.add(templateId)
+    }
+    setSelectedRenumerationTemplateIds(newSelected)
+  }
+
+  const handleDeleteRenumerationTemplate = (template: RenumerationTemplate) => {
+    setDeleteType('renumeration-templates')
+    const item = {
+      name: template.name,
+      email: template.description || 'No description',
+      additionalInfo: `${template.fields.length} field(s)`,
+      originalId: template.id
+    }
+    setItemsToDelete([item])
+    setDeleteModalOpen(true)
+  }
+
+  const handleBulkDeleteRenumerationTemplates = () => {
+    setDeleteType('renumeration-templates')
+    const items = renumerationTemplates
+      .filter(t => selectedRenumerationTemplateIds.has(t.id))
+      .map(t => ({
+        name: t.name,
+        email: t.description || 'No description',
+        additionalInfo: `${t.fields.length} field(s)`,
+        originalId: t.id
+      }))
+    setItemsToDelete(items)
+    setDeleteModalOpen(true)
+  }
+
+  // NOTE: old confirmDeletepeertutors removed/replaced by handleDeletepeertutors and handleDeleteConfirm
 
   // Handle student delete mode toggle
   const handleStudentDeleteModeToggle = () => {
@@ -501,10 +865,10 @@ function FacultyPeerTutorContent() {
   }
 
   // Handle peer tutor delete mode toggle
-  const handlePeerTutorDeleteModeToggle = () => {
-    setIsPeerTutorDeleteMode(!isPeerTutorDeleteMode)
-    if (!isPeerTutorDeleteMode) {
-      setSelectedPeerTutorIds(new Set())
+  const handlepeertutorsDeleteModeToggle = () => {
+    setIspeertutorsDeleteMode(!ispeertutorsDeleteMode)
+    if (!ispeertutorsDeleteMode) {
+      setSelectedpeertutorsIds(new Set())
     }
   }
 
@@ -529,161 +893,61 @@ function FacultyPeerTutorContent() {
   }
 
   // Handle peer tutor selection
-  const handlePeerTutorSelect = (tutorId: string) => {
-    const newSelected = new Set(selectedPeerTutorIds)
+  const handlepeerTutorelect = (tutorId: string) => {
+    const newSelected = new Set(selectedpeertutorsIds)
     if (newSelected.has(tutorId)) {
       newSelected.delete(tutorId)
     } else {
       newSelected.add(tutorId)
     }
-    setSelectedPeerTutorIds(newSelected)
+    setSelectedpeertutorsIds(newSelected)
   }
 
   // Handle select all peer tutors
-  const handleSelectAllPeerTutors = () => {
-    if (selectedPeerTutorIds.size === peerTutorsWithStats.length) {
-      setSelectedPeerTutorIds(new Set())
+  const handleSelectAllpeerTutor = () => {
+    if (selectedpeertutorsIds.size === peerTutorWithStats.length) {
+      setSelectedpeertutorsIds(new Set())
     } else {
-      setSelectedPeerTutorIds(new Set(peerTutorsWithStats.map(t => t.id)))
+      setSelectedpeertutorsIds(new Set(peerTutorWithStats.map(t => t.id)))
     }
   }
 
   // Bulk delete students
   const handleBulkDeleteStudents = async () => {
     if (selectedStudentIds.size === 0) {
-      alert('Please select at least one student to delete.')
+      toast.warning('Please select at least one student to delete.')
       return
     }
 
-    const confirmMessage = `Are you sure you want to delete ${selectedStudentIds.size} student(s)? This action cannot be undone.`
-    if (!confirm(confirmMessage)) {
-      return
-    }
+    const selectedStudentsList = filteredStudents.filter(s => selectedStudentIds.has(s.id))
+    const items = selectedStudentsList.map(s => ({
+      name: s.name,
+      email: s.email,
+      additionalInfo: s.assigned_peer_tutor ? `Assigned to ${s.assigned_peer_tutor.name}` : 'Unassigned'
+    }))
 
-    try {
-      let successCount = 0
-      let failCount = 0
-
-      for (const studentId of selectedStudentIds) {
-        try {
-          const result = await StudentService.removeStudent(studentId)
-          if (result) {
-            successCount++
-          } else {
-            failCount++
-          }
-        } catch (error) {
-          console.error(`Error deleting student ${studentId}:`, error)
-          failCount++
-        }
-      }
-
-      // Refresh data
-      const allStudents = await StudentService.getAllStudentsWithPeerTutors()
-      setStudents(allStudents)
-      setFilteredStudents(allStudents)
-      
-      const assignedStudents = allStudents.filter(student => student.assigned_peer_tutor)
-      setAssignedStudentCount(assignedStudents.length)
-      setUnassignedStudentCount(allStudents.length - assignedStudents.length)
-
-      // Reset delete mode
-      setIsStudentDeleteMode(false)
-      setSelectedStudentIds(new Set())
-
-      if (failCount === 0) {
-        alert(`Successfully deleted ${successCount} student(s).`)
-      } else {
-        alert(`Deleted ${successCount} student(s). Failed to delete ${failCount} student(s).`)
-      }
-    } catch (error) {
-      console.error('Error deleting students:', error)
-      alert('An error occurred while deleting students. Please try again.')
-    }
+    setItemsToDelete(items)
+    setDeleteType('students')
+    setDeleteModalOpen(true)
   }
 
   // Bulk delete peer tutors
-  const handleBulkDeletePeerTutors = async () => {
-    if (selectedPeerTutorIds.size === 0) {
-      alert('Please select at least one peer tutor to delete.')
+  const handleBulkDeletepeerTutor = async () => {
+    if (selectedpeertutorsIds.size === 0) {
+      toast.warning('Please select at least one peer tutor to delete.')
       return
     }
 
-    const confirmMessage = `Are you sure you want to delete ${selectedPeerTutorIds.size} peer tutor(s)? This action cannot be undone.`
-    if (!confirm(confirmMessage)) {
-      return
-    }
+    const selectedTutors = peerTutorWithStats.filter(t => selectedpeertutorsIds.has(t.id))
+    const items = selectedTutors.map(t => ({
+      name: t.name,
+      email: t.email,
+      additionalInfo: `${peerTutortudentCounts[t.id] || 0} student(s) assigned`
+    }))
 
-    try {
-      let successCount = 0
-      let failCount = 0
-
-      for (const tutorId of selectedPeerTutorIds) {
-        try {
-          const tutor = peerTutorsWithStats.find(t => t.id === tutorId)
-          if (!tutor) continue
-
-          const result = await PeerTutorService.removePeerTutor(tutorId)
-          if (result.success) {
-            successCount++
-          } else {
-            // Check if we should force delete
-            if (result.message.includes('students are still assigned')) {
-              if (confirm(`${result.message}\n\nDo you want to force delete and unassign all students?`)) {
-                const forceResult = await PeerTutorService.removePeerTutor(tutorId, true)
-                if (forceResult.success) {
-                  successCount++
-                } else {
-                  failCount++
-                }
-              } else {
-                failCount++
-              }
-            } else {
-              failCount++
-            }
-          }
-        } catch (error) {
-          console.error(`Error deleting peer tutor ${tutorId}:`, error)
-          failCount++
-        }
-      }
-
-      // Refresh data
-      queryClient.invalidateQueries({ queryKey: ['peer-tutor-stats'] })
-      queryClient.invalidateQueries({ queryKey: ['all-students'] })
-      queryClient.invalidateQueries({ queryKey: ['faculty-department'] })
-      
-      const tutors = await PeerTutorService.getAllPeerTutors()
-      setPeerTutors(tutors)
-      setFilteredPeerTutors(tutors)
-
-      const assignedTutors = tutors.filter(() => true)
-      setAssignedCount(assignedTutors.length)
-      setUnassignedStudentCount(tutors.length - assignedTutors.length)
-
-      // Recalculate student counts
-      const allStudents = await StudentService.getAllStudentsWithPeerTutors()
-      const studentCounts: {[key: string]: number} = {}
-      tutors.forEach(tutor => {
-        const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
-        studentCounts[tutor.id] = count
-      })
-      setPeerTutorStudentCounts(studentCounts)
-
-      // Reset delete mode
-      setIsPeerTutorDeleteMode(false)
-      setSelectedPeerTutorIds(new Set())
-
-      if (failCount === 0) {
-        alert(`Successfully deleted ${successCount} peer tutor(s).`)
-      } else {
-        alert(`Deleted ${successCount} peer tutor(s). Failed to delete ${failCount} peer tutor(s).`)
-      }
-    } catch (error) {
-      console.error('Error deleting peer tutors:', error)
-      alert('An error occurred while deleting peer tutors. Please try again.')
-    }
+    setItemsToDelete(items)
+    setDeleteType('peer-tutors')
+    setDeleteModalOpen(true)
   }
 
   // Load renumeration templates
@@ -728,7 +992,7 @@ function FacultyPeerTutorContent() {
         submissions.map(async (submission) => {
           let classesCompleted = 0
           try {
-            const classStats = await ScheduledClassService.getPeerTutorClassStats(submission.peer_tutor_id)
+            const classStats = await ScheduledClassService.getpeertutorsClassStats(submission.peer_tutor_id)
             classesCompleted = classStats.completedClasses
           } catch (error) {
             console.warn('Could not fetch class stats for peer tutor:', submission.peer_tutor_id, error)
@@ -768,7 +1032,7 @@ function FacultyPeerTutorContent() {
       await loadRenumerationSubmissions()
       await loadRenumerationTemplates()
     } else {
-      alert('Failed to update status. Please try again.')
+      toast.error('Failed to update status. Please try again.')
     }
   }
 
@@ -994,40 +1258,29 @@ function FacultyPeerTutorContent() {
   const handleDeleteSelectedFeedbackForms = async () => {
     if (selectedFeedbackFormIds.size === 0) return
     
-    if (!confirm(`Are you sure you want to delete ${selectedFeedbackFormIds.size} feedback form(s)? This action cannot be undone.`)) {
-      return
-    }
-    
-    try {
-      const deletePromises = Array.from(selectedFeedbackFormIds).map(id =>
-        FeedbackService.deleteFeedbackForm(id)
-      )
-      
-      const results = await Promise.all(deletePromises)
-      const successCount = results.filter(Boolean).length
-      
-      if (successCount === selectedFeedbackFormIds.size) {
-        setSelectedFeedbackFormIds(new Set())
-        setIsFeedbackDeleteMode(false)
-        loadFeedbackForms()
-      } else {
-        alert(`Failed to delete ${selectedFeedbackFormIds.size - successCount} form(s). Please try again.`)
-      }
-    } catch (error) {
-      console.error('Error deleting feedback forms:', error)
-      alert('An error occurred while deleting feedback forms. Please try again.')
-    }
+    // Prepare items for the delete confirmation modal
+    const formsToDelete = feedbackForms
+      .filter(f => selectedFeedbackFormIds.has(f.id))
+      .map(f => ({
+        name: f.name,
+        email: `Created: ${new Date(f.created_at).toLocaleDateString()}`,
+        additionalInfo: `${f.questions.length} questions`
+      }))
+
+    setItemsToDelete(formsToDelete)
+    setDeleteType('feedback-forms')
+    setDeleteModalOpen(true)
   }
 
 
 
-  // Toggle feedback form status (open/close)
-  const handleToggleFormStatus = async (formId: string, currentStatus: boolean) => {
+  // Update feedback form status (open/close)
+  const handleToggleFormStatus = async (formId: string, newStatus: boolean) => {
     try {
-      console.log('Toggling form status:', { formId, currentStatus, newStatus: !currentStatus })
+      console.log('Updating form status:', { formId, newStatus })
       
       const result = await FeedbackService.updateFeedbackForm(formId, {
-        is_active: !currentStatus
+        is_active: newStatus
       })
       
       console.log('Update result:', result)
@@ -1079,30 +1332,35 @@ function FacultyPeerTutorContent() {
     }
   }, [activeTab, loadFeedbackForms])
 
-  // Load peer tutor reports
-  const loadPeerTutorReports = useCallback(async () => {
-    setReportsLoading(true)
-    try {
-      const reports = await ReportService.getAllPeerTutorReports()
-      setPeerTutorReports(reports)
-      setFilteredPeerTutorReports(reports)
-    } catch (error) {
-      console.error('Error loading peer tutor reports:', error)
-    } finally {
-      setReportsLoading(false)
-    }
-  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex h-screen overflow-hidden bg-[#F8F9FA]">
+        <FacultySidebar 
+          isOpen={isSidebarOpen} 
+          onClose={() => setIsSidebarOpen(false)}
+        />
+        <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} w-full`}>
+           <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 pt-20 lg:pt-0">
+              <div className="container mx-auto px-6 py-8">
+                 <PeerTutorPageSkeleton />
+              </div>
+           </main>
+        </div>
+      </div>
+    )
+  }
 
   // Load reports data when switching to reports tab
   useEffect(() => {
     if (activeTab === 'reports') {
-      loadPeerTutorReports()
+      loadpeertutorsReports()
     }
-  }, [activeTab, loadPeerTutorReports])
+  }, [activeTab, loadpeertutorsReports])
 
   // Apply report filters
   useEffect(() => {
-    let filtered = peerTutorReports
+    let filtered = peertutorsReports
 
     if (reportFilterYear !== 'all') {
       filtered = filtered.filter(report => report.year === reportFilterYear)
@@ -1119,8 +1377,8 @@ function FacultyPeerTutorContent() {
       })).filter(report => report.subjects.length > 0)
     }
 
-    setFilteredPeerTutorReports(filtered)
-  }, [peerTutorReports, reportFilterYear, reportFilterSection, reportFilterSubject])
+    setFilteredpeertutorsReports(filtered)
+  }, [peertutorsReports, reportFilterYear, reportFilterSection, reportFilterSubject])
 
   // Clear report filters
   const clearReportFilters = () => {
@@ -1133,13 +1391,13 @@ function FacultyPeerTutorContent() {
   const hasActiveReportFilters = reportFilterYear !== 'all' || reportFilterSection !== 'all' || reportFilterSubject !== 'all'
 
   // Get available years, sections and subjects for reports
-  const availableReportYears = [...new Set(peerTutorReports.map(r => r.year))].sort()
-  const availableReportSections = [...new Set(peerTutorReports.map(r => r.section))].sort()
-  const availableReportSubjects = [...new Set(peerTutorReports.flatMap(r => r.subjects.map(s => s.subject_name)))].sort()
+  const availableReportYears = [...new Set(peertutorsReports.map(r => r.year))].sort()
+  const availableReportSections = [...new Set(peertutorsReports.map(r => r.section))].sort()
+  const availableReportSubjects = [...new Set(peertutorsReports.flatMap(r => r.subjects.map(s => s.subject_name)))].sort()
 
   // Handle export of filtered reports
   const handleExportFilteredReports = async () => {
-    if (filteredPeerTutorReports.length === 0) {
+    if (filteredpeertutorsReports.length === 0) {
       alert('No reports to export')
       return
     }
@@ -1148,13 +1406,13 @@ function FacultyPeerTutorContent() {
       const workbook = XLSX.utils.book_new()
       
       // Get unique years and sections from filtered reports
-      const uniqueYears = [...new Set(filteredPeerTutorReports.map(r => r.year))].sort()
-      const uniqueSections = [...new Set(filteredPeerTutorReports.map(r => r.section))].sort()
-      const dept = filteredPeerTutorReports[0]?.dept || 'N/A'
+      const uniqueYears = [...new Set(filteredpeertutorsReports.map(r => r.year))].sort()
+      const uniqueSections = [...new Set(filteredpeertutorsReports.map(r => r.section))].sort()
+      const dept = filteredpeertutorsReports[0]?.dept || 'N/A'
       
       // Group reports by year
-      const reportsByYear: Record<string, PeerTutorReportData[]> = {}
-      filteredPeerTutorReports.forEach((report) => {
+      const reportsByYear: Record<string, peertutorsReportData[]> = {}
+      filteredpeertutorsReports.forEach((report) => {
         if (!reportsByYear[report.year]) {
           reportsByYear[report.year] = []
         }
@@ -1196,7 +1454,7 @@ function FacultyPeerTutorContent() {
         ])
 
         // Group reports by section within this year
-        const reportsBySection: Record<string, PeerTutorReportData[]> = {}
+        const reportsBySection: Record<string, peertutorsReportData[]> = {}
         yearReports.forEach((report) => {
           if (!reportsBySection[report.section]) {
             reportsBySection[report.section] = []
@@ -1392,12 +1650,17 @@ function FacultyPeerTutorContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+    <div className="min-h-screen bg-[#F8F9FA]">
+      {/* Sidebar - Always Rendered */}
+      <FacultySidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
 
-      {/* Main Content */}
-      <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
+      {/* Content Container */}
+      <div 
+        suppressHydrationWarning
+        className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
         {/* Top Header */}
         <PageHeader
           title="STUDENT MANAGEMENT"
@@ -1410,23 +1673,23 @@ function FacultyPeerTutorContent() {
         />
 
         {/* Tab Navigation */}
-        <div className="bg-white border-b border-gray-100 flex items-center h-16 w-full sticky top-0 z-10 px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-2 overflow-x-auto no-scrollbar" aria-label="Tabs">
+        <div className="bg-[#F8F9FA] border-b border-gray-200/50 flex items-center h-16 w-full sticky top-0 z-10 px-4 sm:px-6 lg:px-8 backdrop-blur-sm bg-opacity-90">
+          <nav className="flex space-x-2 overflow-x-auto no-scrollbar py-2" aria-label="Tabs">
             {[
               { id: 'tutors', label: 'PEER TUTORS' },
               { id: 'students', label: 'STUDENTS' },
               { id: 'feedback', label: 'FEEDBACK' },
-              { id: 'renumeration', label: 'RENUMERATION MANAGEMENT' },
+              { id: 'renumeration', label: 'RENUMERATION' },
               { id: 'reports', label: 'REPORTS' },
               { id: 'leaderboard', label: 'LEADERBOARD' }
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as 'tutors' | 'students' | 'feedback' | 'renumeration' | 'reports' | 'leaderboard')}
-                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap ${
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-6 py-2.5 rounded-2xl text-[10px] font-black tracking-widest transition-all duration-200 whitespace-nowrap uppercase ${
                   activeTab === tab.id
-                    ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105' 
-                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                    ? 'bg-[#1C2434] text-white shadow-lg shadow-gray-200 scale-105' 
+                    : 'text-gray-400 hover:text-gray-900 hover:bg-white hover:shadow-sm'
                 }`}
               >
                 {tab.label}
@@ -1436,11 +1699,14 @@ function FacultyPeerTutorContent() {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className={`max-w-full mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
+        <main className="flex-1 p-6 overflow-y-auto bg-gray-50/50">
+          <div className={`max-w-[1600px] mx-auto w-full`}>
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <div className="flex-1 flex items-center justify-center py-16">
+                <div className="text-center">
+                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Loading Data...</p>
+                </div>
               </div>
             ) : activeTab === 'tutors' ? (
               <>
@@ -1458,12 +1724,10 @@ function FacultyPeerTutorContent() {
                         </svg>
                       </div>
                       <div className="text-3xl font-bold text-gray-900">
-                        {assignedCount} / {peerTutors.length}
+                        {assignedCount} / {peerTutor.length}
                       </div>
                       <div className="mt-2 flex items-center text-xs text-green-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+
                         <span className="font-semibold uppercase">Allocated</span>
                       </div>
                     </div>
@@ -1481,36 +1745,36 @@ function FacultyPeerTutorContent() {
                         </svg>
                       </div>
                       <div className="text-3xl font-bold text-gray-900">
-                        {peerTutorsWithStats.reduce((sum, t) => sum + t.classStats.totalClasses, 0)}
+                        {peerTutorWithStats.reduce((sum, t) => sum + t.classStats.totalClasses, 0)}
                       </div>
                       <div className="mt-2 flex items-center text-xs text-blue-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
+
                         <span className="font-semibold uppercase">Scheduled</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Pending Card */}
+                  {/* Classes (Pending) Card */}
                   <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          Pending
+                          Classes
                         </div>
-                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
                       </div>
-                      <div className="text-3xl font-bold text-gray-900">
-                        {peerTutorsWithStats.reduce((sum, t) => sum + t.classStats.pendingClasses, 0)}
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-bold text-gray-900">
+                          {peerTutorWithStats.reduce((sum, t) => sum + (t.classStats.upcomingClasses || 0), 0)}
+                        </span>
+                        <span className="text-2xl text-gray-300 font-light px-1">/</span>
+                        <span className="text-3xl font-bold text-gray-900">
+                          {peerTutorWithStats.reduce((sum, t) => sum + (t.classStats.overdueClasses || 0), 0)}
+                        </span>
                       </div>
-                      <div className="mt-2 flex items-center text-xs text-orange-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
-                        <span className="font-semibold uppercase">Remaining</span>
+                      <div className="mt-2 flex items-center text-[10px] font-bold tracking-widest gap-1">
+                        <span className="text-yellow-500 uppercase">UPCOMING</span>
+                        <span className="text-gray-300">/</span>
+                        <span className="text-rose-500 uppercase">PENDING</span>
                       </div>
                     </div>
                   </div>
@@ -1527,12 +1791,10 @@ function FacultyPeerTutorContent() {
                         </svg>
                       </div>
                       <div className="text-3xl font-bold text-gray-900">
-                        {peerTutorsWithStats.reduce((sum, t) => sum + (t.additionalClassesCount || 0), 0)}
+                        {peerTutorWithStats.reduce((sum, t) => sum + (t.additionalClassesCount || 0), 0)}
                       </div>
                       <div className="mt-2 flex items-center text-xs text-blue-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
+
                         <span className="font-semibold uppercase">Total Classes</span>
                       </div>
                     </div>
@@ -1545,7 +1807,7 @@ function FacultyPeerTutorContent() {
                   <div className="px-6 py-4 border-b border-gray-200">
                     <div className="flex items-center justify-between flex-wrap gap-4">
                       <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
-                        Peer Tutors ({filteredPeerTutors.length})
+                        Peer Tutors ({filteredpeerTutor.length})
                         {hasActiveFilters && (
                           <span className="ml-2 text-sm text-blue-600 normal-case">
                             (Filtered)
@@ -1554,18 +1816,45 @@ function FacultyPeerTutorContent() {
                       </h3>
                       
                       <div className="flex items-center gap-3 flex-wrap">
-                        {/* Search Icon */}
-                        <button
-                          className="p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors duration-200"
-                          title="Search"
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                        </button>
+                        {/* Search Bar */}
+                        {peerTutor.length > 0 && (
+                          <div className={`relative flex items-center transition-all duration-300 ease-in-out ${ispeerTutorearchExpanded ? 'w-64' : 'w-10'}`}>
+                            {ispeerTutorearchExpanded ? (
+                              <div className="absolute inset-0 flex items-center w-full">
+                                <input
+                                  ref={peerTutorearchRef}
+                                  type="text"
+                                  value={searchQuery}
+                                  onChange={(e) => setSearchQuery(e.target.value)}
+                                  placeholder="Search peer tutor..."
+                                  className="w-full pl-10 pr-8 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                  autoFocus
+                                />
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <button 
+                                  onClick={() => {
+                                    setIspeerTutorearchExpanded(false)
+                                    setSearchQuery('')
+                                  }}
+                                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setIspeerTutorearchExpanded(true)}
+                                className="p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors duration-200 w-full flex justify-center"
+                                title="Search"
+                              >
+                                <Search className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
 
                         {/* Filter Button */}
-                        {!isPeerTutorDeleteMode && filteredPeerTutors.length > 0 && (
+                        {!ispeertutorsDeleteMode && filteredpeerTutor.length > 0 && (
                           <div className="relative" ref={filterRef}>
                             <button
                               onClick={() => setShowFilterPopup(!showFilterPopup)}
@@ -1636,11 +1925,21 @@ function FacultyPeerTutorContent() {
                         )}
 
                         {/* Action Buttons */}
-                        {!isPeerTutorDeleteMode ? (
+                        {!ispeertutorsDeleteMode ? (
                           <>
-                            {peerTutors.length > 0 && (
+                            <button 
+                              onClick={() => setShowAddPeerTutorModal(true)}
+                              className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              ADD
+                            </button>
+
+                            {peerTutor.length > 0 && (
                               <button
-                                onClick={handlePeerTutorDeleteModeToggle}
+                                onClick={handlepeertutorsDeleteModeToggle}
                                 className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
                                 title="Delete"
                               >
@@ -1660,19 +1959,19 @@ function FacultyPeerTutorContent() {
                               IMPORT
                             </button>
 
-                            <ExportButton onClick={exportPeerTutors} />
+                            <ExportButton onClick={exportpeerTutor} />
                           </>
                         ) : (
                           <>
                             <button
-                              onClick={handleBulkDeletePeerTutors}
-                              disabled={selectedPeerTutorIds.size === 0}
+                              onClick={handleBulkDeletepeerTutor}
+                              disabled={selectedpeertutorsIds.size === 0}
                               className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors duration-200"
                             >
-                              Delete Selected ({selectedPeerTutorIds.size})
+                              Delete Selected ({selectedpeertutorsIds.size})
                             </button>
                             <button
-                              onClick={handlePeerTutorDeleteModeToggle}
+                              onClick={handlepeertutorsDeleteModeToggle}
                               className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
                             >
                               Cancel
@@ -1688,12 +1987,12 @@ function FacultyPeerTutorContent() {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-white">
                         <tr>
-                          {isPeerTutorDeleteMode && (
+                          {ispeertutorsDeleteMode && (
                             <th className="px-6 py-3 text-left">
                               <input
                                 type="checkbox"
-                                checked={selectedPeerTutorIds.size === peerTutorsWithStats.length && peerTutorsWithStats.length > 0}
-                                onChange={handleSelectAllPeerTutors}
+                                checked={selectedpeertutorsIds.size === peerTutorWithStats.length && peerTutorWithStats.length > 0}
+                                onChange={handleSelectAllpeerTutor}
                                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
                               />
                             </th>
@@ -1724,16 +2023,16 @@ function FacultyPeerTutorContent() {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {statsLoading ? (
                           <tr>
-                            <td colSpan={isPeerTutorDeleteMode ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
+                            <td colSpan={ispeertutorsDeleteMode ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
                               <div className="flex items-center justify-center">
                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
                                 Loading peer tutor statistics...
                               </div>
                             </td>
                           </tr>
-                        ) : peerTutorsWithStats.length === 0 ? (
+                        ) : peerTutorWithStats.length === 0 ? (
                           <tr>
-                            <td colSpan={isPeerTutorDeleteMode ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
+                            <td colSpan={ispeertutorsDeleteMode ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
                               <div className="flex flex-col items-center">
                                 <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
@@ -1749,14 +2048,14 @@ function FacultyPeerTutorContent() {
                             </td>
                           </tr>
                         ) : (
-                          peerTutorsWithStats.map((tutor) => (
+                          peerTutorWithStats.map((tutor) => (
                             <tr key={tutor.id} className="hover:bg-gray-50 transition-colors duration-150">
-                              {isPeerTutorDeleteMode && (
+                              {ispeertutorsDeleteMode && (
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <input
                                     type="checkbox"
-                                    checked={selectedPeerTutorIds.has(tutor.id)}
-                                    onChange={() => handlePeerTutorSelect(tutor.id)}
+                                    checked={selectedpeertutorsIds.has(tutor.id)}
+                                    onChange={() => handlepeerTutorelect(tutor.id)}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
                                   />
                                 </td>
@@ -1765,15 +2064,15 @@ function FacultyPeerTutorContent() {
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
                                     <div className="h-10 w-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
-                                      <span className="text-gray-400 font-bold text-sm tracking-tighter">
+                                      <span className="text-white font-bold text-sm tracking-tighter">
                                         {tutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                       </span>
                                     </div>
                                   </div>
                                   <div className="ml-4">
-                                    {!isPeerTutorDeleteMode ? (
+                                    {!ispeertutorsDeleteMode ? (
                                       <button
-                                        onClick={() => handleViewPeerTutor(tutor.id)}
+                                        onClick={() => handleViewpeertutors(tutor.id)}
                                         className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors text-left"
                                       >
                                         {tutor.name}
@@ -1806,13 +2105,13 @@ function FacultyPeerTutorContent() {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="text-sm font-bold text-gray-900">
+                                <div className="text-sm font-bold text-purple-900">
                                   {tutor.additionalClassesCount || 0}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
                                 <div className="text-sm font-bold text-gray-900">
-                                  {peerTutorStudentCounts[tutor.id] || 0}
+                                  {peerTutortudentCounts[tutor.id] || 0}
                                 </div>
                               </td>
                             </tr>
@@ -1842,9 +2141,7 @@ function FacultyPeerTutorContent() {
                         {students.length}
                       </div>
                       <div className="mt-2 flex items-center text-xs text-blue-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
+
                         <span className="font-semibold uppercase">Total</span>
                       </div>
                     </div>
@@ -1865,9 +2162,7 @@ function FacultyPeerTutorContent() {
                         {assignedStudentCount}
                       </div>
                       <div className="mt-2 flex items-center text-xs text-green-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+
                         <span className="font-semibold uppercase">With Tutors</span>
                       </div>
                     </div>
@@ -1888,9 +2183,7 @@ function FacultyPeerTutorContent() {
                         {unassignedStudentCount}
                       </div>
                       <div className="mt-2 flex items-center text-xs text-orange-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+
                         <span className="font-semibold uppercase">Pending</span>
                       </div>
                     </div>
@@ -1911,9 +2204,7 @@ function FacultyPeerTutorContent() {
                         {availableStudentYears.length}
                       </div>
                       <div className="mt-2 flex items-center text-xs text-blue-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
+
                         <span className="font-semibold uppercase">Active</span>
                       </div>
                     </div>
@@ -1935,15 +2226,42 @@ function FacultyPeerTutorContent() {
                       </h3>
                       
                       <div className="flex items-center gap-3 flex-wrap">
-                        {/* Search Icon */}
-                        <button
-                          className="p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors duration-200"
-                          title="Search"
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                        </button>
+                        {/* Search Bar */}
+                        {students.length > 0 && (
+                          <div className={`relative flex items-center transition-all duration-300 ease-in-out ${isStudentSearchExpanded ? 'w-64' : 'w-10'}`}>
+                            {isStudentSearchExpanded ? (
+                              <div className="absolute inset-0 flex items-center w-full">
+                                <input
+                                  ref={studentSearchRef}
+                                  type="text"
+                                  value={studentSearchQuery}
+                                  onChange={(e) => setStudentSearchQuery(e.target.value)}
+                                  placeholder="Search student..."
+                                  className="w-full pl-10 pr-8 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                  autoFocus
+                                />
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <button 
+                                  onClick={() => {
+                                    setIsStudentSearchExpanded(false)
+                                    setStudentSearchQuery('')
+                                  }}
+                                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setIsStudentSearchExpanded(true)}
+                                className="p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors duration-200 w-full flex justify-center"
+                                title="Search"
+                              >
+                                <Search className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
 
                         {/* Filter Button */}
                         {!isStudentDeleteMode && (
@@ -2013,12 +2331,12 @@ function FacultyPeerTutorContent() {
                                   <div>
                                     <label className="block text-xs font-medium text-gray-700 mb-1">Peer Tutor</label>
                                     <select
-                                      value={selectedPeerTutor}
-                                      onChange={(e) => setSelectedPeerTutor(e.target.value)}
+                                      value={selectedpeertutors}
+                                      onChange={(e) => setSelectedpeertutors(e.target.value)}
                                       className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                       <option value="all">All Peer Tutors</option>
-                                      {peerTutors.map(tutor => (
+                                      {peerTutor.map(tutor => (
                                         <option key={tutor.id} value={tutor.id}>{tutor.name}</option>
                                       ))}
                                     </select>
@@ -2033,18 +2351,14 @@ function FacultyPeerTutorContent() {
                         {/* Action Buttons */}
                         {!isStudentDeleteMode ? (
                           <>
-                            <button className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2">
+                            <button 
+                              onClick={() => setShowAddStudentModal(true)}
+                              className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+                            >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                               </svg>
                               ADD
-                            </button>
-                            
-                            <button className="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                              ASSIGN
                             </button>
 
                             {students.length > 0 && (
@@ -2054,7 +2368,7 @@ function FacultyPeerTutorContent() {
                                 title="Delete"
                               >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
                               </button>
                             )}
@@ -2159,8 +2473,8 @@ function FacultyPeerTutorContent() {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
-                                    <div className="h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 shadow-sm">
-                                      <span className="text-slate-700 font-bold text-sm tracking-tighter">
+                                    <div className="h-10 w-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
+                                      <span className="text-white font-bold text-sm tracking-tighter">
                                         {student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                       </span>
                                     </div>
@@ -2196,348 +2510,8 @@ function FacultyPeerTutorContent() {
                 </div>
               </>
             ) : activeTab === 'feedback' ? (
-              <>
-                {/* Show Analytics View if a form is selected, otherwise show Forms List */}
-                {selectedFeedbackFormForAnalytics ? (
-                  <>
-                    {/* Breadcrumb Navigation */}
-                    <div className="mb-6">
-                      <nav className="flex items-center space-x-2 text-sm text-gray-500">
-                        <button
-                          onClick={() => setSelectedFeedbackFormForAnalytics(null)}
-                          className="hover:text-gray-700 transition-colors"
-                        >
-                          Feedback
-                        </button>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                        <span className="text-gray-900 font-medium">{selectedFeedbackFormForAnalytics.name}</span>
-                      </nav>
-                    </div>
-                    <FeedbackAnalyticsPage form={selectedFeedbackFormForAnalytics} />
-                  </>
-                ) : (
-                  <>
-                    {/* Feedback Stats Overview - Clean White Design */}
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 lg:grid-cols-3 mb-6">
-                      {/* Total Forms Card */}
-                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
-                        <div className="p-5">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                              Total Forms
-                            </div>
-                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </div>
-                          <div className="text-3xl font-bold text-gray-900">
-                            {feedbackForms.length}
-                          </div>
-                          <div className="mt-2 flex items-center text-xs text-blue-600">
-                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="font-semibold uppercase">Created</span>
-                          </div>
-                        </div>
-                      </div>
+              <div className="p-10 text-center text-gray-500">Feedback Module View</div>
 
-                      {/* Active Forms Card */}
-                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
-                        <div className="p-5">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                              Active Forms
-                            </div>
-                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </div>
-                          <div className="text-3xl font-bold text-gray-900">
-                            {feedbackForms.filter(form => form.is_active).length}
-                          </div>
-                          <div className="mt-2 flex items-center text-xs text-yellow-600">
-                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span className="font-semibold uppercase">Pending</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Total Responses Card */}
-                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
-                        <div className="p-5">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                              Total Responses
-                            </div>
-                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                            </svg>
-                          </div>
-                          <div className="text-3xl font-bold text-gray-900">
-                            {feedbackForms.reduce((total, form) => total + (form as FeedbackForm & { responseCount: number }).responseCount || 0, 0)}
-                          </div>
-                          <div className="mt-2 flex items-center text-xs text-green-600">
-                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span className="font-semibold uppercase">Received</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                {/* Feedback Forms Table */}
-                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between flex-wrap gap-4">
-                      <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
-                        Feedback Forms ({feedbackForms.length})
-                      </h3>
-                      <div className="flex items-center gap-3 flex-wrap">
-                      <button
-                              onClick={() => {
-                                setSelectedFeedbackForm(null)
-                                setShowFeedbackModal(true)
-                              }}
-                              className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                              </svg>
-                              CREATE
-                            </button>
-                        {isFeedbackDeleteMode && (
-                          <>
-                            <button
-                              onClick={handleCancelFeedbackDeleteMode}
-                              className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handleDeleteSelectedFeedbackForms}
-                              disabled={selectedFeedbackFormIds.size === 0}
-                              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
-                                selectedFeedbackFormIds.size > 0
-                                  ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
-                                  : 'bg-gray-400 text-white cursor-not-allowed'
-                              }`}
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                              Delete Selected {selectedFeedbackFormIds.size > 0 && `(${selectedFeedbackFormIds.size})`}
-                            </button>
-                          </>
-                        )}
-                        {!isFeedbackDeleteMode && (
-                          <>
-                            {feedbackForms.length > 0 && (
-                              <button
-                                onClick={handleToggleFeedbackDeleteMode}
-                                className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
-                                title="Delete"
-                              >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-white">
-                        <tr>
-                          {isFeedbackDeleteMode && (
-                            <th className="px-6 py-3 text-left">
-                              <input
-                                type="checkbox"
-                                checked={selectedFeedbackFormIds.size === feedbackForms.length && feedbackForms.length > 0}
-                                onChange={(e) => handleSelectAllFeedbackForms(e.target.checked)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
-                              />
-                            </th>
-                          )}
-                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                            Form Name
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
-                            No of Fields
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Total Response
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Created
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Delta Score
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          {!isFeedbackDeleteMode && (
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {feedbackLoading ? (
-                          <tr>
-                            <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
-                              <div className="flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-                                Loading feedback forms...
-                              </div>
-                            </td>
-                          </tr>
-                        ) : feedbackForms.length === 0 ? (
-                          <tr>
-                            <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
-                              <div className="flex flex-col items-center">
-                                <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <p className="text-lg font-medium text-gray-900 mb-2">No feedback forms found</p>
-                                <p className="text-sm text-gray-500">Create your first feedback form to get started.</p>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : (
-                          feedbackForms.map((form) => {
-                            const responseCount = (form as FeedbackForm & { responseCount: number }).responseCount || 0
-                            const totalEligibleStudents = (form as FeedbackForm & { totalEligibleStudents: number }).totalEligibleStudents || 0
-                            const deltaScore = (form as FeedbackForm & { deltaScore: number }).deltaScore || 0
-                            const hasResponses = responseCount > 0
-                            const isSelected = selectedFeedbackFormIds.has(form.id)
-
-                            return (
-                              <tr 
-                                key={form.id} 
-                                className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
-                              >
-                                {isFeedbackDeleteMode && (
-                                  <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={(e) => {
-                                        e.stopPropagation()
-                                        handleFeedbackFormCheckboxChange(form.id, e.target.checked)
-                                      }}
-                                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
-                                    />
-                                  </td>
-                                )}
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm font-medium text-gray-900">{form.name}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center">
-                                  <div className="text-sm font-semibold text-gray-900">
-                                    {form.questions.length}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                  <div className="text-sm font-semibold text-gray-900">
-                                    {responseCount}/{totalEligibleStudents}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                                  {new Date(form.created_at).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-semibold">
-                                  {responseCount > 0 ? (
-                                    <span className={deltaScore >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                      {deltaScore > 0 ? '+' : ''}{deltaScore.toFixed(1)}%
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400">N/A</span>
-                                  )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                    form.is_active
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {form.is_active ? 'OPEN' : 'CLOSED'}
-                                  </span>
-                                </td>
-                                {!isFeedbackDeleteMode && (
-                                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                    <div className="flex items-center justify-center space-x-2">
-                                      <button
-                                        onClick={() => handleViewAnalytics(form)}
-                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
-                                      >
-                                        VIEW
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          if (hasResponses) {
-                                            alert('This form cannot be edited as responses are already being received.')
-                                            return
-                                          }
-                                          setSelectedFeedbackForm(form)
-                                          setShowFeedbackModal(true)
-                                        }}
-                                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                                      >
-                                        <Edit className="h-4 w-4 mr-1.5 text-gray-600" />
-                                        Edit
-                                      </button>
-                                      <button
-                                        onClick={() => handleToggleFormStatus(form.id, form.is_active)}
-                                        className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                                          form.is_active
-                                            ? 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                                            : 'text-white bg-green-600 hover:bg-green-700 border border-green-600'
-                                        }`}
-                                        title={form.is_active ? 'Close form' : 'Open form'}
-                                      >
-                                        {form.is_active ? (
-                                          <>
-                                            <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                            </svg>
-                                            Close
-                                          </>
-                                        ) : (
-                                          <>
-                                            <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            Open
-                                          </>
-                                        )}
-                                      </button>
-                                    </div>
-                                  </td>
-                                )}
-                              </tr>
-                            )
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                </>
-                )}
-              </>
             ) : activeTab === 'reports' ? (
               <div className="space-y-6">
                 {selectedReport ? (
@@ -2583,9 +2557,7 @@ function FacultyPeerTutorContent() {
                             {reportScheduledClasses.length}
                           </div>
                           <div className="mt-2 flex items-center text-xs text-blue-600">
-                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+
                             <span className="font-semibold uppercase">Scheduled</span>
                           </div>
                         </div>
@@ -2609,20 +2581,18 @@ function FacultyPeerTutorContent() {
                             ).length}
                           </div>
                           <div className="mt-2 flex items-center text-xs text-green-600">
-                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+
                             <span className="font-semibold uppercase">Finished</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Pending Classes Card */}
+                      {/* Classes (Old Pending) Card */}
                       <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                         <div className="p-5">
                           <div className="flex items-center justify-between mb-2">
                             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                              Pending Classes
+                              Classes
                             </div>
                             <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2634,11 +2604,31 @@ function FacultyPeerTutorContent() {
                               !(cls.attendance_completed && cls.topics_completed)
                             ).length}
                           </div>
-                          <div className="mt-2 flex items-center text-xs text-yellow-600">
-                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span className="font-semibold uppercase">Pending</span>
+                          <div className="mt-2 flex items-center text-xs font-semibold">
+                            {(() => {
+                                const today = new Date()
+                                today.setHours(0,0,0,0)
+                                const pendingClasses = reportScheduledClasses.filter(cls => 
+                                    cls.completion_status !== 'completed' && 
+                                    !(cls.attendance_completed && cls.topics_completed)
+                                )
+                                let upcoming = 0
+                                let overdue = 0
+                                pendingClasses.forEach(cls => {
+                                    if (!cls.scheduled_date) { overdue++; return }
+                                    const d = new Date(cls.scheduled_date)
+                                    d.setHours(0,0,0,0)
+                                    if (d.getTime() > today.getTime()) upcoming++
+                                    else overdue++
+                                })
+                                return (
+                                    <>
+                                        <span className="text-blue-600 mr-2">{upcoming} Upcoming</span>
+                                        <span className="text-gray-300 mr-2">/</span>
+                                        <span className="text-orange-600">{overdue} Pending</span>
+                                    </>
+                                )
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -2755,7 +2745,7 @@ function FacultyPeerTutorContent() {
                   <div className="px-6 py-4 border-b border-gray-200">
                     <div className="flex items-center justify-between flex-wrap gap-4">
                       <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
-                        Peer Tutor Reports ({filteredPeerTutorReports.length})
+                        Peer Tutor Reports ({filteredpeertutorsReports.length})
                       </h3>
                       <div className="flex items-center gap-3 flex-wrap">
                         {/* Filter Bar Redesign */}
@@ -2844,7 +2834,7 @@ function FacultyPeerTutorContent() {
                         )}
                       </div>
                       {/* Export Button - Only show if there are records */}
-                      {filteredPeerTutorReports.length > 0 && (
+                      {filteredpeertutorsReports.length > 0 && (
                         <ExportButton onClick={handleExportFilteredReports} />
                       )}
                     </div>
@@ -2855,7 +2845,7 @@ function FacultyPeerTutorContent() {
                       <div className="flex items-center justify-center py-12">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                       </div>
-                    ) : filteredPeerTutorReports.length === 0 ? (
+                    ) : filteredpeertutorsReports.length === 0 ? (
                       <div className="text-center py-12">
                         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                           <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2889,7 +2879,7 @@ function FacultyPeerTutorContent() {
                                 Completed Classes
                               </th>
                               <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                Pending Classes
+                                Classes
                               </th>
                               <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Additional Classes
@@ -2900,7 +2890,7 @@ function FacultyPeerTutorContent() {
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredPeerTutorReports.map((report) => {
+                            {filteredpeertutorsReports.map((report) => {
                               // If no subjects, show one row with peer tutor info
                               if (report.subjects.length === 0) {
                                 return (
@@ -2942,7 +2932,7 @@ function FacultyPeerTutorContent() {
                                         <div className="text-sm text-gray-500">{report.peer_tutor_email}</div>
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200" rowSpan={report.subjects.length}>
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        <span className="inline-flex items-center px-2.5 py-0.5  text-xs font-medium bg-gray-100 text-black">
                                           {report.year} - {report.section}
                                         </span>
                                       </td>
@@ -2992,30 +2982,62 @@ function FacultyPeerTutorContent() {
                       <h2 className="text-2xl font-bold text-gray-900">LEADERBOARD</h2>
                       <p className="text-sm text-gray-500 mt-1">Peer Tutor Rankings</p>
                     </div>
-                    <button
-                      onClick={handleRefresh}
-                      disabled={loading}
-                      className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      title="Refresh leaderboard"
-                    >
-                      <svg className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      {loading ? 'Refreshing...' : 'Refresh'}
-                    </button>
+                    
+                    <div className="flex items-center gap-3">
+                       {/* Year Filter Dropdown */}
+                       <div className="relative">
+                        <select
+                          value={leaderboardFilterYear}
+                          onChange={(e) => setLeaderboardFilterYear(e.target.value)}
+                          className={`h-10 px-4 pr-10 rounded-lg border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                            leaderboardFilterYear !== 'all' 
+                              ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm' 
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          <option value="all">All Years</option>
+                          {[...new Set(peerTutor.map(t => t.year))].sort().map(year => (
+                            <option key={year} value={year}>{year}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleRefresh}
+                        disabled={loading}
+                        className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Refresh leaderboard"
+                      >
+                        <svg className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {loading ? 'Refreshing...' : 'Refresh'}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Prepare ranked peer tutors with apex scores */}
                 {(() => {
-                  // Create array with apex scores (currently all 0, will be updated later)
-                  const rankedPeerTutors = peerTutors.map(tutor => ({
-                    ...tutor,
-                    apexScore: 0 // Will be calculated later
-                  }))
+                  // Create array with apex scores (completed classes count)
+                  const rankedpeerTutor = peerTutor
+                    .filter(tutor => leaderboardFilterYear === 'all' || tutor.year === leaderboardFilterYear)
+                    .map(tutor => {
+                      // Find stats for this tutor to get completed classes count
+                      const stats = peerTutorWithStats.find(s => s.id === tutor.id)
+                      return {
+                        ...tutor,
+                        apexScore: stats ? stats.classStats.completedClasses : 0
+                      }
+                    })
                   
                   // Sort by apex score (descending), then by name for ties
-                  rankedPeerTutors.sort((a, b) => {
+                  rankedpeerTutor.sort((a, b) => {
                     if (b.apexScore !== a.apexScore) {
                       return b.apexScore - a.apexScore
                     }
@@ -3025,7 +3047,7 @@ function FacultyPeerTutorContent() {
                   return (
                     <>
                       {/* Top 3 Podium */}
-                      {rankedPeerTutors.length >= 3 ? (
+                      {rankedpeerTutor.length >= 3 ? (
                         <div className="bg-white shadow rounded-lg p-8">
                           <h3 className="text-xl font-semibold text-gray-900 mb-6 text-center">Top Performers</h3>
                           <div className="flex items-end justify-center gap-4 max-w-4xl mx-auto">
@@ -3034,7 +3056,7 @@ function FacultyPeerTutorContent() {
                               <div className="w-full bg-gradient-to-b from-gray-300 to-gray-400 rounded-t-lg p-6 shadow-lg mb-4 min-h-[200px] flex flex-col items-center justify-end">
                                 <div className="text-6xl font-bold text-white mb-2">2</div>
                                 <div className="text-lg font-semibold text-white text-center break-words">
-                                  {rankedPeerTutors[1]?.name || 'N/A'}
+                                  {rankedpeerTutor[1]?.name || 'N/A'}
                                 </div>
                               </div>
                             </div>
@@ -3049,7 +3071,7 @@ function FacultyPeerTutorContent() {
                                 </div>
                                 <div className="text-7xl font-bold text-white mb-2">1</div>
                                 <div className="text-xl font-bold text-white text-center break-words">
-                                  {rankedPeerTutors[0]?.name || 'N/A'}
+                                  {rankedpeerTutor[0]?.name || 'N/A'}
                                 </div>
                               </div>
                             </div>
@@ -3059,7 +3081,7 @@ function FacultyPeerTutorContent() {
                               <div className="w-full bg-gradient-to-b from-orange-300 to-orange-500 rounded-t-lg p-6 shadow-lg mb-4 min-h-[180px] flex flex-col items-center justify-end">
                                 <div className="text-5xl font-bold text-white mb-2">3</div>
                                 <div className="text-lg font-semibold text-white text-center break-words">
-                                  {rankedPeerTutors[2]?.name || 'N/A'}
+                                  {rankedpeerTutor[2]?.name || 'N/A'}
                                 </div>
                               </div>
                             </div>
@@ -3074,11 +3096,11 @@ function FacultyPeerTutorContent() {
                       )}
 
                       {/* Table for Ranks 4+ */}
-                      {rankedPeerTutors.length > 3 && (
+                      {rankedpeerTutor.length > 3 && (
                         <div className="bg-white shadow rounded-lg">
                           <div className="px-6 py-4 border-b border-gray-200">
                             <h3 className="text-lg font-medium text-gray-900">
-                              All Rankings ({rankedPeerTutors.length - 3} peer tutors)
+                              All Rankings ({rankedpeerTutor.length - 3} peer tutors)
                             </h3>
                           </div>
                           <div className="overflow-hidden">
@@ -3100,7 +3122,7 @@ function FacultyPeerTutorContent() {
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
-                                {rankedPeerTutors.slice(3).map((tutor, index) => (
+                                {rankedpeerTutor.slice(3).map((tutor, index) => (
                                   <tr key={tutor.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       <div className="text-sm font-medium text-gray-900">{index + 4}</div>
@@ -3109,7 +3131,7 @@ function FacultyPeerTutorContent() {
                                       <div className="flex items-center">
                                         <div className="flex-shrink-0 h-10 w-10">
                                           <div className="h-10 w-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
-                                            <span className="text-gray-400 font-bold text-sm tracking-tighter">
+                                            <span className="text-white font-bold text-sm tracking-tighter">
                                               {tutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                             </span>
                                           </div>
@@ -3170,12 +3192,12 @@ function FacultyPeerTutorContent() {
 
                 {/* Renumeration Stats - Clean White Design */}
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 lg:grid-cols-3 mb-6">
-                  {/* Total Templates/Submissions Card */}
+                  {/* Total Assigned Card */}
                   <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          {renumerationView === 'submissions' ? 'Submissions' : 'Total Templates'}
+                          {renumerationView === 'submissions' ? 'Total Assigned' : 'Total Templates'}
                         </div>
                         <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -3185,20 +3207,17 @@ function FacultyPeerTutorContent() {
                         {renumerationView === 'submissions' ? filteredAndSortedSubmissions.length : renumerationTemplates.length}
                       </div>
                       <div className="mt-2 flex items-center text-xs text-blue-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="font-semibold uppercase">Information</span>
+                        <span className="font-semibold uppercase">{renumerationView === 'submissions' ? 'Allocated' : 'Information'}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Pending Review Card */}
+                  {/* Pending Submission Card */}
                   <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div className="p-5">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          Pending Review
+                          Pending Submission
                         </div>
                         <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -3206,14 +3225,11 @@ function FacultyPeerTutorContent() {
                       </div>
                       <div className="text-3xl font-bold text-gray-900">
                         {renumerationView === 'submissions' 
-                          ? filteredAndSortedSubmissions.filter(s => !!s.submitted_at).length
-                          : renumerationSubmissions.filter(s => !!s.submitted_at).length
+                          ? filteredAndSortedSubmissions.filter(s => !s.submitted_at).length
+                          : renumerationSubmissions.filter(s => !s.submitted_at).length
                         }
                       </div>
                       <div className="mt-2 flex items-center text-xs text-yellow-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
                         <span className="font-semibold uppercase">Pending</span>
                       </div>
                     </div>
@@ -3232,19 +3248,19 @@ function FacultyPeerTutorContent() {
                       </div>
                       <div className="text-3xl font-bold text-gray-900">
                         {renumerationView === 'submissions' 
-                          ? filteredAndSortedSubmissions.length
+                          ? filteredAndSortedSubmissions.filter(s => !!s.submitted_at).length
                           : renumerationTemplates.reduce((total, template) => {
                               const submissionCount = renumerationSubmissions.filter(
-                                (submission: { template_id: string }) => submission.template_id === template.id
+                                (submission: any) => 
+                                  submission.template_id === template.id &&
+                                  peerTutor.some(pt => pt.id === submission.peer_tutor_id) &&
+                                  submission.status !== 'pending'
                               ).length
                               return total + submissionCount
                             }, 0)
                         }
                       </div>
                       <div className="mt-2 flex items-center text-xs text-green-600">
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
                         <span className="font-semibold uppercase">Collected</span>
                       </div>
                     </div>
@@ -3269,6 +3285,41 @@ function FacultyPeerTutorContent() {
                             </svg>
                             CREATE
                           </button>
+                          {isRenumerationDeleteMode && (
+                            <>
+                              <button
+                                onClick={handleRenumerationDeleteModeToggle}
+                                className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleBulkDeleteRenumerationTemplates}
+                                disabled={selectedRenumerationTemplateIds.size === 0}
+                                className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
+                                  selectedRenumerationTemplateIds.size > 0
+                                    ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                                    : 'bg-gray-400 text-white cursor-not-allowed'
+                                }`}
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Delete Selected {selectedRenumerationTemplateIds.size > 0 && `(${selectedRenumerationTemplateIds.size})`}
+                              </button>
+                            </>
+                          )}
+                          {!isRenumerationDeleteMode && renumerationTemplates.length > 0 && (
+                            <button
+                              onClick={handleRenumerationDeleteModeToggle}
+                              className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                              title="Delete Templates"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3280,12 +3331,10 @@ function FacultyPeerTutorContent() {
                         </div>
                       ) : renumerationTemplates.length === 0 ? (
                         <div className="text-center py-12">
-                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </div>
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">No templates found</h3>
+                                <svg className="h-12 w-12 text-black mb-4 flex items-center justify-center mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                          <h3 className="text-lg font-medium uppercase text-black mb-2">No templates found</h3>
                           <p className="text-sm text-gray-500">Create your first renumeration template to get started.</p>
                         </div>
                       ) : (
@@ -3293,6 +3342,16 @@ function FacultyPeerTutorContent() {
                           <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-white">
                               <tr>
+                                {isRenumerationDeleteMode && (
+                                  <th className="px-6 py-3 text-left">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedRenumerationTemplateIds.size === renumerationTemplates.length && renumerationTemplates.length > 0}
+                                      onChange={handleSelectAllRenumerationTemplates}
+                                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                    />
+                                  </th>
+                                )}
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                                   Template Name
                                 </th>
@@ -3316,12 +3375,25 @@ function FacultyPeerTutorContent() {
                             <tbody className="bg-white divide-y divide-gray-200">
                               {renumerationTemplates.map((template) => {
                                 const submissionCount = renumerationSubmissions.filter(
-                                  (submission: { template_id: string }) => submission.template_id === template.id
+                                  (submission: any) => 
+                                    submission.template_id === template.id &&
+                                    peerTutor.some(pt => pt.id === submission.peer_tutor_id) &&
+                                    submission.status !== 'pending'
                                 ).length
-                                const totalEligiblePeerTutors = peerTutors.length
+                                const totalEligiblepeerTutor = peerTutor.length
 
                                 return (
                                   <tr key={template.id} className="hover:bg-gray-50">
+                                    {isRenumerationDeleteMode && (
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedRenumerationTemplateIds.has(template.id)}
+                                          onChange={() => handleRenumerationTemplateSelect(template.id)}
+                                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                        />
+                                      </td>
+                                    )}
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       <div className="text-sm font-medium text-gray-900">{template.name}</div>
                                       {template.description && (
@@ -3337,7 +3409,7 @@ function FacultyPeerTutorContent() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center">
                                       <div className="text-sm font-semibold text-gray-900">
-                                        {submissionCount}/{totalEligiblePeerTutors}
+                                        {submissionCount}/{totalEligiblepeerTutor}
                                       </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
@@ -3385,18 +3457,104 @@ function FacultyPeerTutorContent() {
                           {selectedTemplate?.name} Submissions ({filteredAndSortedSubmissions.length})
                         </h3>
                         <div className="flex items-center gap-3 flex-wrap">
-                          {/* Filter button */}
-                          <button
-                            onClick={() => setShowSubmissionFilter(s => !s)}
-                            className={`p-2.5 rounded-lg border transition-colors duration-200 ${
-                              showSubmissionFilter ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                            }`}
-                            title="Filter submissions"
-                          >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6l-5.2 7.28a2 2 0 00-.4 1.2V19l-4 2v-6.92a2 2 0 00-.4-1.2L3.2 4.6A1 1 0 013 4z" />
-                            </svg>
-                          </button>
+                          {/* Filter button - Relative Container for correct alignment */}
+                          <div className="relative">
+                            <button
+                              onClick={() => setShowSubmissionFilter(s => !s)}
+                              className={`p-2.5 rounded-lg border transition-colors duration-200 ${
+                                showSubmissionFilter ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                              }`}
+                              title="Filter submissions"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6l-5.2 7.28a2 2 0 00-.4 1.2V19l-4 2v-6.92a2 2 0 00-.4-1.2L3.2 4.6A1 1 0 013 4z" />
+                              </svg>
+                            </button>
+
+                            {/* Popup inside relative container */}
+                            {showSubmissionFilter && (
+                              <div ref={submissionFilterRef} className="absolute right-0 top-full mt-2 z-20 w-80 rounded-lg border bg-white shadow-lg">
+                                <div className="p-4">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-base font-semibold text-gray-900">Filter Submissions</h4>
+                                  </div>
+                                  <div className="space-y-3">
+                                    <div>
+                                      <label className="block text-sm text-gray-700 mb-1">Year</label>
+                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterYear} onChange={(e)=>setFilterYear(e.target.value)}>
+                                        <option value="">All Years</option>
+                                        <option value="I">I</option>
+                                        <option value="II">II</option>
+                                        <option value="III">III</option>
+                                        <option value="IV">IV</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm text-gray-700 mb-1">Section</label>
+                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterSection} onChange={(e)=>setFilterSection(e.target.value)}>
+                                        <option value="">All Sections</option>
+                                        <option value="A">A</option>
+                                        <option value="B">B</option>
+                                        <option value="C">C</option>
+                                        <option value="D">D</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm text-gray-700 mb-1">Status</label>
+                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterStatus} onChange={(e)=>setFilterStatus(e.target.value)}>
+                                        <option value="">All</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="completed">Completed</option>
+                                      </select>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-2">
+                                      <button
+                                        onClick={()=>setSortDescByName(s=>!s)}
+                                        className="px-3 py-2 border rounded-md text-sm hover:bg-gray-50 bg-white"
+                                        title="Toggle name sort (desc)"
+                                      >
+                                        {sortDescByName ? 'Name ↓' : 'Name'}
+                                      </button>
+                                      <div className="space-x-2">
+                                        <button onClick={() => { setFilterYear(''); setFilterSection(''); setFilterStatus(''); setSortDescByName(false); }} className="px-3 py-2 text-sm text-gray-700 hover:text-gray-900 hover:underline">Clear</button>
+                                        <button onClick={() => setShowSubmissionFilter(false)} className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 shadow-sm">Apply</button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Export Pending Button */}
+                          {filteredAndSortedSubmissions.length > 0 && (
+                            <button
+                              onClick={() => {
+                                // Logic to export pending only
+                                if (!selectedTemplate) return
+                                const pendingRows = filteredAndSortedSubmissions.filter(s => !s.submitted_at)
+                                if (pendingRows.length === 0) {
+                                  toast.info('No pending submissions to export')
+                                  return
+                                }
+                                
+                                const exportData = pendingRows.map(s => ({
+                                  'Name': s.peer_tutor?.name || 'Unknown',
+                                  'Email': s.peer_tutor?.email || 'No email',
+                                  'Year & Section': `${s.peer_tutor?.year || ''} - ${s.peer_tutor?.section || ''}`
+                                }))
+                                
+                                const ws = XLSX.utils.json_to_sheet(exportData)
+                                const wb = XLSX.utils.book_new()
+                                XLSX.utils.book_append_sheet(wb, ws, 'Pending Tutors')
+                                const fileName = `Pending_Submissions_${selectedTemplate.name}_${new Date().toISOString().split('T')[0]}.xlsx`
+                                XLSX.writeFile(wb, fileName)
+                              }}
+                              className="px-4 py-2.5 rounded-lg bg-yellow-400 border border-black hover:bg-yellow-500 text-black text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+                            >
+                              EXPORT PENDING
+                            </button>
+                          )}
 
                           {filteredAndSortedSubmissions.length > 0 && (
                             <button
@@ -3412,58 +3570,6 @@ function FacultyPeerTutorContent() {
                         </div>
                       </div>
                     </div>
-
-                          {/* Popup */}
-                          {showSubmissionFilter && (
-                            <div ref={submissionFilterRef} className="absolute right-6 mt-40 z-20 w-80 rounded-lg border bg-white shadow-lg">
-                              <div className="p-4">
-                                <h4 className="text-base font-semibold text-gray-900 mb-3">Filter Submissions</h4>
-                                <div className="space-y-3">
-                                  <div>
-                                    <label className="block text-sm text-gray-700 mb-1">Year</label>
-                                    <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterYear} onChange={(e)=>setFilterYear(e.target.value)}>
-                                      <option value="">All Years</option>
-                                      <option value="I">I</option>
-                                      <option value="II">II</option>
-                                      <option value="III">III</option>
-                                      <option value="IV">IV</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm text-gray-700 mb-1">Section</label>
-                                    <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterSection} onChange={(e)=>setFilterSection(e.target.value)}>
-                                      <option value="">All Sections</option>
-                                      <option value="A">A</option>
-                                      <option value="B">B</option>
-                                      <option value="C">C</option>
-                                      <option value="D">D</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm text-gray-700 mb-1">Status</label>
-                                    <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterStatus} onChange={(e)=>setFilterStatus(e.target.value)}>
-                                      <option value="">All</option>
-                                      <option value="pending">Pending</option>
-                                      <option value="completed">Completed</option>
-                                    </select>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <button
-                                      onClick={()=>setSortDescByName(s=>!s)}
-                                      className="px-3 py-2 border rounded-md text-sm hover:bg-gray-50"
-                                      title="Toggle name sort (desc)"
-                                    >
-                                      {sortDescByName ? 'Name ↓' : 'Name (no sort)'}
-                                    </button>
-                                    <div className="space-x-2">
-                                      <button onClick={() => { setFilterYear(''); setFilterSection(''); setFilterStatus(''); setSortDescByName(false); }} className="px-3 py-2 text-sm text-gray-700 hover:underline">Clear</button>
-                                      <button onClick={() => setShowSubmissionFilter(false)} className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">Apply</button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
 
                     <div className="overflow-x-auto">
                       {renumerationLoading ? (
@@ -3494,9 +3600,9 @@ function FacultyPeerTutorContent() {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center">
                                     <div className="flex-shrink-0 h-10 w-10">
-                                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                        <span className="text-blue-600 font-medium text-sm">
-                                          {submission.peer_tutor?.name?.split(' ').map((n: string) => n[0]).join('') || 'PT'}
+                                      <div className="h-10 w-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
+                                        <span className="text-white font-bold text-sm tracking-tighter">
+                                          {submission.peer_tutor?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'PT'}
                                         </span>
                                       </div>
                                     </div>
@@ -3514,7 +3620,7 @@ function FacultyPeerTutorContent() {
                                   {submission.submitted_at ? (
                                     <span className="text-sm text-gray-900">Completed</span>
                                   ) : (
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded uppercase text-xs font-medium bg-yellow-100 text-yellow-800">
                                       Pending
                                     </span>
                                   )}
@@ -3560,7 +3666,6 @@ function FacultyPeerTutorContent() {
             )}
           </div>
         </main>
-      </div>
 
       {/* Renumeration Modal */}
       {user && (
@@ -3614,49 +3719,26 @@ function FacultyPeerTutorContent() {
       )}
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && peerTutorToDelete && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
-                <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Delete Peer Tutor</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Are you sure you want to delete <strong>{peerTutorToDelete.name}</strong>? 
-                  This action cannot be undone and will permanently remove:
-                </p>
-                <ul className="text-sm text-gray-500 mb-6 list-disc list-inside space-y-1">
-                  <li>Peer tutor profile and information</li>
-                  <li>All renumeration records</li>
-                  <li>All class assignments and schedules</li>
-                  <li>Student assignments (if force delete is chosen)</li>
-                </ul>
-                <div className="flex items-center justify-center space-x-3">
-                  <button
-                    onClick={() => {
-                      setShowDeleteModal(false)
-                      setPeerTutorToDelete(null)
-                    }}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmDeletePeerTutor}
-                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setItemsToDelete([])
+        }}
+        onConfirm={handleDeleteConfirm}
+        title={
+          deleteType === 'peer-tutors' 
+            ? (itemsToDelete.length > 1 ? 'Confirm Bulk Peer Tutor Deletion' : 'Confirm Peer Tutor Deletion')
+            : deleteType === 'students'
+              ? (itemsToDelete.length > 1 ? 'Confirm Bulk Student Deletion' : 'Confirm Student Deletion')
+            : deleteType === 'renumeration-templates'
+              ? (itemsToDelete.length > 1 ? 'Confirm Bulk Template Deletion' : 'Confirm Template Deletion')
+            : (itemsToDelete.length > 1 ? 'Confirm Bulk Form Deletion' : 'Confirm Form Deletion')
+        }
+        itemsToDelete={itemsToDelete}
+        type={deleteType}
+        isLoading={isDeleting}
+      />
 
       {/* Class Details Modal */}
       {showClassModal && selectedClass && (
@@ -3732,8 +3814,8 @@ function FacultyPeerTutorContent() {
                             <td className="px-6 py-4 whitespace-nowrap text-center">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 record.status === 'present' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
+                                  ? 'bg-green-600 text-white' 
+                                  : 'bg-red-600 text-white'
                               }`}>
                                 {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                               </span>
@@ -3754,7 +3836,7 @@ function FacultyPeerTutorContent() {
       <ExcelExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        peerTutorInfo={null}
+        peertutorsInfo={null}
         reportData={null}
       />
 
@@ -3772,6 +3854,38 @@ function FacultyPeerTutorContent() {
           }}
         />
       )}
+
+      {/* Add Student Modal */}
+      {showAddStudentModal && (
+        <AddStudentModal
+          isOpen={showAddStudentModal}
+          onClose={() => setShowAddStudentModal(false)}
+          onSuccess={() => {
+            handleRefresh()
+            setShowAddStudentModal(false)
+          }}
+          dept={user?.user_metadata?.dept || 'AIDS'}
+          year={selectedStudentYear !== 'all' ? selectedStudentYear : ''}
+          section={selectedStudentSection !== 'all' ? selectedStudentSection : ''}
+        />
+      )}
+
+      {/* Add Peer Tutor Modal */}
+      {showAddPeerTutorModal && (
+        <AddPeerTutorModal
+          isOpen={showAddPeerTutorModal}
+          onClose={() => setShowAddPeerTutorModal(false)}
+          onSuccess={() => {
+            handleRefresh()
+            setShowAddPeerTutorModal(false)
+          }}
+          dept={user?.user_metadata?.dept || 'AIDS'}
+          year={selectedYear !== 'all' ? selectedYear : ''}
+          section={selectedSection !== 'all' ? selectedSection : ''}
+        />
+      )}
+
+
     </div>
-  )
-}
+  )}
+  

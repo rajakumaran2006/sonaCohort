@@ -2,7 +2,7 @@ import { createClient } from '@/utils/supabase/client'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
 import { MicrosoftUser } from '@/lib/types'
 
-export interface PeerTutor {
+export interface peertutors {
   id: string
   name: string
   email: string
@@ -14,7 +14,7 @@ export interface PeerTutor {
   assigned_by: string
 }
 
-export interface PeerTutorAssignment {
+export interface peertutorsAssignment {
   name: string
   email: string
   faculty_id: string
@@ -24,7 +24,7 @@ export interface PeerTutorAssignment {
   assigned_by: string
 }
 
-export class PeerTutorService {
+export class peertutorservice {
   /**
    * Create a peer tutor from Microsoft Graph user data
    */
@@ -34,7 +34,7 @@ export class PeerTutorService {
     dept: string,
     year: string,
     section: string
-  ): Promise<PeerTutor | null> {
+  ): Promise<peertutors | null> {
     try {
       const supabase = createClient()
       
@@ -53,7 +53,13 @@ export class PeerTutorService {
         .single()
 
       if (error) {
-        console.error('Error creating peer tutor from Microsoft user:', error)
+        console.error('Error creating peer tutor from Microsoft user:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          fullError: JSON.stringify(error, null, 2)
+        })
         return null
       }
 
@@ -71,7 +77,7 @@ export class PeerTutorService {
         console.warn('Failed to assign new peer tutor to future classes, but peer tutor was created successfully. The peer tutor will not be automatically assigned to future scheduled classes and will need to be manually assigned.')
       }
 
-      return data as PeerTutor
+      return data as peertutors
     } catch (error) {
       console.error('Error in createFromMicrosoftUser:', error)
       return null
@@ -81,7 +87,7 @@ export class PeerTutorService {
   /**
    * Get all peer tutors for a specific department, year, and section
    */
-  static async getPeerTutorsBySection(dept: string, year: string, section: string): Promise<PeerTutor[]> {
+  static async getpeerTutorBySection(dept: string, year: string, section: string): Promise<peertutors[]> {
     try {
       const supabase = createClient()
       
@@ -98,9 +104,9 @@ export class PeerTutorService {
         return []
       }
 
-      return data as PeerTutor[] || []
+      return data as peertutors[] || []
     } catch (error) {
-      console.error('Error in getPeerTutorsBySection:', error)
+      console.error('Error in getpeerTutorBySection:', error)
       return []
     }
   }
@@ -108,23 +114,29 @@ export class PeerTutorService {
   /**
    * Get all peer tutors across all departments
    */
-  static async getAllPeerTutors(): Promise<PeerTutor[]> {
+  static async getAllpeerTutor(facultyId?: string): Promise<peertutors[]> {
     try {
       const supabase = createClient()
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('peer_tutors')
         .select('*')
         .order('dept, year, section, name')
+
+      if (facultyId) {
+        query = query.eq('faculty_id', facultyId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('Error getting all peer tutors:', error)
         return []
       }
 
-      return data as PeerTutor[] || []
+      return data as peertutors[] || []
     } catch (error) {
-      console.error('Error in getAllPeerTutors:', error)
+      console.error('Error in getAllpeerTutor:', error)
       return []
     }
   }
@@ -132,7 +144,7 @@ export class PeerTutorService {
   /**
    * Get all peer tutors for a specific department
    */
-  static async getPeerTutorsByDepartment(dept: string): Promise<PeerTutor[]> {
+  static async getpeerTutorByDepartment(dept: string): Promise<peertutors[]> {
     try {
       const supabase = createClient()
       
@@ -147,9 +159,9 @@ export class PeerTutorService {
         return []
       }
 
-      return data as PeerTutor[] || []
+      return data as peertutors[] || []
     } catch (error) {
-      console.error('Error in getPeerTutorsByDepartment:', error)
+      console.error('Error in getpeerTutorByDepartment:', error)
       return []
     }
   }
@@ -157,7 +169,7 @@ export class PeerTutorService {
   /**
    * Get peer tutors by years (array of years)
    */
-  static async getPeerTutorsByYears(years: string[]): Promise<PeerTutor[]> {
+  static async getpeerTutorByYears(years: string[]): Promise<peertutors[]> {
     try {
       const supabase = createClient()
       
@@ -172,9 +184,9 @@ export class PeerTutorService {
         return []
       }
 
-      return data as PeerTutor[] || []
+      return data as peertutors[] || []
     } catch (error) {
-      console.error('Error in getPeerTutorsByYears:', error)
+      console.error('Error in getpeerTutorByYears:', error)
       return []
     }
   }
@@ -182,7 +194,7 @@ export class PeerTutorService {
   /**
    * Check if a student is already a peer tutor
    */
-  static async isAlreadyPeerTutor(email: string): Promise<boolean> {
+  static async isAlreadypeertutors(email: string): Promise<boolean> {
     try {
       const supabase = createClient()
       
@@ -199,7 +211,7 @@ export class PeerTutorService {
 
       return !!data
     } catch (error) {
-      console.error('Error in isAlreadyPeerTutor:', error)
+      console.error('Error in isAlreadypeertutors:', error)
       return false
     }
   }
@@ -207,7 +219,7 @@ export class PeerTutorService {
   /**
    * Assign a new peer tutor
    */
-  static async assignPeerTutor(assignment: PeerTutorAssignment): Promise<boolean> {
+  static async assignpeertutors(assignment: peertutorsAssignment): Promise<boolean> {
     try {
       const supabase = createClient()
       
@@ -221,7 +233,7 @@ export class PeerTutorService {
       }
 
       // After successfully creating the peer tutor, get the created peer tutor with created_at
-      const { data: createdPeerTutor, error: fetchError } = await supabase
+      const { data: createdpeertutors, error: fetchError } = await supabase
         .from('peer_tutors')
         .select('id, created_at')
         .eq('dept', assignment.dept)
@@ -232,7 +244,7 @@ export class PeerTutorService {
         .limit(1)
         .single()
 
-      if (fetchError || !createdPeerTutor) {
+      if (fetchError || !createdpeertutors) {
         console.error('Error fetching created peer tutor:', fetchError)
         return false
       }
@@ -243,8 +255,8 @@ export class PeerTutorService {
         assignment.dept, 
         assignment.year, 
         assignment.section,
-        createdPeerTutor.id,
-        createdPeerTutor.created_at
+        createdpeertutors.id,
+        createdpeertutors.created_at
       )
 
       if (!assignmentResult) {
@@ -253,19 +265,22 @@ export class PeerTutorService {
 
       return true
     } catch (error) {
-      console.error('Error in assignPeerTutor:', error)
+      console.error('Error in assignpeertutors:', error)
       return false
     }
   }
 
   /**
-   * Remove a peer tutor and all related records (CASCADE DELETE)
+   * Remove a peer tutor and unassign related students (students and their attendance remain intact)
    */
-  static async removePeerTutor(id: string, forceDelete: boolean = false): Promise<{ success: boolean; message: string }> {
+  static async removepeertutors(id: string, forceDelete: boolean = false): Promise<{ success: boolean; message: string }> {
     try {
       const supabase = createClient()
       
-      // First, check if there are any students assigned to this peer tutor
+      // console.log(`Starting peer tutor removal for: ${id}`)
+      const deletedRecords: string[] = []
+
+      // 1. Check if there are any students assigned to this peer tutor
       const { data: assignedStudents, error: checkError } = await supabase
         .from('peer_students')
         .select('id, name')
@@ -276,89 +291,8 @@ export class PeerTutorService {
         return { success: false, message: 'Failed to check assigned students' }
       }
 
-      if (assignedStudents && assignedStudents.length > 0 && !forceDelete) {
-        const studentNames = assignedStudents.map(s => s.name).join(', ')
-        return { 
-          success: false, 
-          message: `Cannot delete peer tutor. The following students are still assigned: ${studentNames}. Please reassign or remove these students first.` 
-        }
-      }
-
-      console.log(`Starting cascade delete for peer tutor: ${id}`)
-      const deletedRecords: string[] = []
-
-      // 1. Delete attendance records
-      const { data: attendanceData, error: attendanceError } = await supabase
-        .from('attendance')
-        .delete()
-        .eq('peer_tutor_id', id)
-        .select()
-
-      if (attendanceError) {
-        console.error('Error deleting attendance records:', attendanceError)
-      } else if (attendanceData && attendanceData.length > 0) {
-        deletedRecords.push(`${attendanceData.length} attendance records`)
-      }
-
- 
-
-      // 3. Delete scheduled classes
-      const { data: scheduledClassesData, error: scheduledClassesError } = await supabase
-        .from('scheduled_classes')
-        .delete()
-        .eq('peer_tutor_id', id)
-        .select()
-
-      if (scheduledClassesError) {
-        console.error('Error deleting scheduled classes:', scheduledClassesError)
-      } else if (scheduledClassesData && scheduledClassesData.length > 0) {
-        deletedRecords.push(`${scheduledClassesData.length} scheduled classes`)
-      }
-
-      // 4. Delete additional classes
-      const { data: additionalClassesData, error: additionalClassesError } = await supabase
-        .from('additional_classes')
-        .delete()
-        .eq('peer_tutor_id', id)
-        .select()
-
-      if (additionalClassesError) {
-        console.error('Error deleting additional classes:', additionalClassesError)
-      } else if (additionalClassesData && additionalClassesData.length > 0) {
-        deletedRecords.push(`${additionalClassesData.length} additional classes`)
-      }
-
-      // 5. Delete renumeration records
-      const { data: renumerationData, error: renumerationError } = await supabase
-        .from('peer_tutor_renumerations')
-        .delete()
-        .eq('peer_tutor_id', id)
-        .select()
-
-      if (renumerationError) {
-        console.error('Error deleting renumeration records:', renumerationError)
-      } else if (renumerationData && renumerationData.length > 0) {
-        deletedRecords.push(`${renumerationData.length} renumeration records`)
-      }
-
-      // Note: Feedback system is separate from peer tutors
-      // Feedback forms are created by faculty and responses are submitted by students
-      // No direct relationship exists between peer tutors and feedback records
-
-      // 6. Delete class assignments (old table if exists)
-      const { data: classAssignmentsData } = await supabase
-        .from('peer_tutor_class_assignments')
-        .delete()
-        .eq('peer_tutor_id', id)
-        .select()
-
-      if (classAssignmentsData && classAssignmentsData.length > 0) {
-        deletedRecords.push(`${classAssignmentsData.length} class assignments`)
-      }
-
-
-      // 8. Unassign all students if force delete is enabled
-      if (assignedStudents && assignedStudents.length > 0 && forceDelete) {
+      // 2. Unassign students (set assigned_peer_tutor_id to null) - keep student data and attendance intact
+      if (assignedStudents && assignedStudents.length > 0) {
         const { error: unassignError } = await supabase
           .from('peer_students')
           .update({ assigned_peer_tutor_id: null })
@@ -374,7 +308,80 @@ export class PeerTutorService {
         deletedRecords.push(`${assignedStudents.length} students unassigned`)
       }
 
-      // 9. Finally, delete the peer tutor record
+      // 3. Delete scheduled classes for this peer tutor
+      const { data: scheduledClassesData, error: scheduledClassesError } = await supabase
+        .from('scheduled_classes')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (scheduledClassesError) {
+        console.error('Error deleting scheduled classes:', scheduledClassesError)
+        return { success: false, message: `Failed to delete scheduled classes: ${scheduledClassesError.message}` }
+      } else if (scheduledClassesData && scheduledClassesData.length > 0) {
+        deletedRecords.push(`${scheduledClassesData.length} scheduled classes`)
+      }
+
+      // 4. Delete additional classes
+      const { data: additionalClassesData, error: additionalClassesError } = await supabase
+        .from('additional_classes')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (additionalClassesError) {
+        console.error('Error deleting additional classes:', additionalClassesError)
+        return { success: false, message: `Failed to delete additional classes: ${additionalClassesError.message}` }
+      } else if (additionalClassesData && additionalClassesData.length > 0) {
+        deletedRecords.push(`${additionalClassesData.length} additional classes`)
+      }
+
+      // 5. Delete renumeration records
+      const { data: renumerationData, error: renumerationError } = await supabase
+        .from('peer_tutor_renumerations')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (renumerationError) {
+        console.error('Error deleting renumeration records:', renumerationError)
+        return { success: false, message: `Failed to delete renumeration records: ${renumerationError.message}` }
+      } else if (renumerationData && renumerationData.length > 0) {
+        deletedRecords.push(`${renumerationData.length} renumeration records`)
+      }
+
+      // 6. Delete class assignments (old table if exists)
+      const { data: classAssignmentsData, error: classAssignmentsError } = await supabase
+        .from('peer_tutor_class_assignments')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (classAssignmentsError) {
+        // Only log warning if it's likely just table missing. 
+        // We don't want to stop deletion for a legacy/optional table error.
+        console.warn('Error deleting class assignments (table might not exist or other error):', classAssignmentsError)
+      } else if (classAssignmentsData && Array.isArray(classAssignmentsData) && classAssignmentsData.length > 0) {
+        deletedRecords.push(`${classAssignmentsData.length} class assignments`)
+      }
+
+      // 7. Delete attendance records linked to this peer tutor
+      // Note: Student attendance (attendance records with student_id) will remain intact
+      // Only peer tutor's own attendance records are deleted
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (attendanceError) {
+        console.error('Error deleting peer tutor attendance records:', attendanceError)
+        return { success: false, message: `Failed to delete attendance records: ${attendanceError.message}` }
+      } else if (attendanceData && attendanceData.length > 0) {
+        deletedRecords.push(`${attendanceData.length} peer tutor attendance records`)
+      }
+
+      // 8. Finally, delete the peer tutor record
       const { error: deleteError } = await supabase
         .from('peer_tutors')
         .delete()
@@ -391,13 +398,13 @@ export class PeerTutorService {
       // Build success message
       let message = 'Peer tutor deleted successfully'
       if (deletedRecords.length > 0) {
-        message += `. Deleted: ${deletedRecords.join(', ')}`
+        message += `. ${deletedRecords.join(', ')}`
       }
 
-      console.log(`Cascade delete completed for peer tutor ${id}:`, deletedRecords)
+      // console.log(`Peer tutor removal completed for ${id}:`, deletedRecords)
       return { success: true, message }
     } catch (error) {
-      console.error('Error in removePeerTutor:', error)
+      console.error('Error in removepeertutors:', error)
       return { 
         success: false, 
         message: `An unexpected error occurred: ${error instanceof Error ? error.message : 'Unknown error'}` 
@@ -411,8 +418,8 @@ export class PeerTutorService {
   static async searchAvailableStudents(query: string): Promise<MicrosoftUser[]> {
     try {
       // Get all existing peer tutor emails to exclude them
-      const existingPeerTutors = await this.getAllPeerTutors()
-      const existingPeerTutorEmails = existingPeerTutors.map(pt => pt.email.toLowerCase())
+      const existingpeerTutor = await this.getAllpeerTutor()
+      const existingpeertutorsEmails = existingpeerTutor.map(pt => pt.email.toLowerCase())
 
       // Get all existing student emails to exclude them
       const supabase = createClient()
@@ -427,7 +434,7 @@ export class PeerTutorService {
       const existingStudentEmails = (existingStudents || []).map(s => s.email.toLowerCase())
 
       // Combine all emails to exclude
-      const allExcludedEmails = [...existingPeerTutorEmails, ...existingStudentEmails]
+      const allExcludedEmails = [...existingpeertutorsEmails, ...existingStudentEmails]
 
       // Search Microsoft Graph for students
       const searchResults = await MicrosoftGraphService.searchUsers(query)
@@ -447,24 +454,24 @@ export class PeerTutorService {
   /**
    * Get peer tutor statistics
    */
-  static async getPeerTutorStats(): Promise<{
+  static async getpeerTutortats(): Promise<{
     total: number
     active: number
     byDepartment: Record<string, number>
     byYear: Record<string, number>
   }> {
     try {
-      const allPeerTutors = await this.getAllPeerTutors()
+      const allpeerTutor = await this.getAllpeerTutor()
       
       const stats = {
-        total: allPeerTutors.length,
-        active: allPeerTutors.length, // Assuming all are active for now
+        total: allpeerTutor.length,
+        active: allpeerTutor.length, // Assuming all are active for now
         byDepartment: {} as Record<string, number>,
         byYear: {} as Record<string, number>
       }
 
       // Count by department
-      allPeerTutors.forEach(pt => {
+      allpeerTutor.forEach(pt => {
         stats.byDepartment[pt.dept] = (stats.byDepartment[pt.dept] || 0) + 1
         stats.byYear[pt.year] = (stats.byYear[pt.year] || 0) + 1
       })
@@ -479,7 +486,7 @@ export class PeerTutorService {
   /**
    * Get peer tutor by ID
    */
-  static async getPeerTutorById(id: string): Promise<PeerTutor | null> {
+  static async getpeertutorsById(id: string): Promise<peertutors | null> {
     try {
       const supabase = createClient()
       
@@ -494,9 +501,9 @@ export class PeerTutorService {
         return null
       }
 
-      return data as PeerTutor
+      return data as peertutors
     } catch (error) {
-      console.error('Error in getPeerTutorById:', error)
+      console.error('Error in getpeertutorsById:', error)
       return null
     }
   }
@@ -508,20 +515,20 @@ export class PeerTutorService {
     dept: string, 
     year: string, 
     section: string,
-    peerTutorId?: string,
-    peerTutorCreatedAt?: string
+    peertutorsId?: string,
+    peertutorsCreatedAt?: string
   ): Promise<boolean> {
     try {
       const supabase = createClient()
 
-      let newPeerTutor: { id: string; created_at?: string } | null = null
+      let newpeertutors: { id: string; created_at?: string } | null = null
 
       // If peer tutor ID and created_at are provided, use them; otherwise fetch the newest one
-      if (peerTutorId && peerTutorCreatedAt) {
-        newPeerTutor = { id: peerTutorId }
+      if (peertutorsId && peertutorsCreatedAt) {
+        newpeertutors = { id: peertutorsId }
       } else {
         // Get the newly created peer tutor
-        const { data: fetchedPeerTutor, error: tutorError } = await supabase
+        const { data: fetchedpeertutors, error: tutorError } = await supabase
           .from('peer_tutors')
           .select('id, created_at')
           .eq('dept', dept)
@@ -531,22 +538,22 @@ export class PeerTutorService {
           .limit(1)
           .single()
 
-        if (tutorError || !fetchedPeerTutor) {
+        if (tutorError || !fetchedpeertutors) {
           console.error('Error getting new peer tutor:', tutorError)
           return false
         }
 
-        newPeerTutor = fetchedPeerTutor
+        newpeertutors = fetchedpeertutors
       }
 
-      // Calculate tomorrow (next day from today)
-      // When a new peer tutor is added, allocate classes starting from tomorrow
+      // Calculate allocateFromDate (today)
+      // When a new peer tutor is added, allocate classes starting from TODAY
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const tomorrowDateString = tomorrow.toISOString().split('T')[0]
+      const allocateFromDate = new Date(today)
+      // allocateFromDate.setDate(tomorrow.getDate() + 1) // REMOVED: Start from today
+      const allocateFromDateString = allocateFromDate.toISOString().split('T')[0]
 
       // Get all unique class_id and scheduled_date combinations for future classes
       // from any peer tutor in this section (we want to allocate the new tutor to all future classes)
@@ -564,7 +571,7 @@ export class PeerTutorService {
         .eq('dept', dept)
         .eq('year', year)
         .eq('section', section)
-        .gte('scheduled_date', tomorrowDateString)
+        .gte('scheduled_date', allocateFromDateString)
 
       if (classesError) {
         console.error('Error getting future scheduled classes:', classesError)
@@ -572,7 +579,7 @@ export class PeerTutorService {
       }
 
       if (!futureClasses || futureClasses.length === 0) {
-        console.log('No future scheduled classes found for new peer tutor')
+        // console.log('No future scheduled classes found for new peer tutor')
         return true // No future classes to assign
       }
 
@@ -609,11 +616,11 @@ export class PeerTutorService {
       const { data: existingClasses, error: existingError } = await supabase
         .from('scheduled_classes')
         .select('class_id, scheduled_date')
-        .eq('peer_tutor_id', newPeerTutor.id)
+        .eq('peer_tutor_id', newpeertutors.id)
         .eq('dept', dept)
         .eq('year', year)
         .eq('section', section)
-        .gte('scheduled_date', tomorrowDateString)
+        .gte('scheduled_date', allocateFromDateString)
 
       if (existingError) {
         console.error('Error checking existing classes for peer tutor:', existingError)
@@ -632,7 +639,7 @@ export class PeerTutorService {
       })
 
       if (classesToInsert.length === 0) {
-        console.log('New peer tutor already has all future scheduled classes')
+        // console.log('New peer tutor already has all future scheduled classes')
         return true
       }
 
@@ -647,7 +654,7 @@ export class PeerTutorService {
         year: classData.year,
         section: classData.section,
         faculty_id: classData.faculty_id,
-        peer_tutor_id: newPeerTutor.id,
+        peer_tutor_id: newpeertutors.id,
         topics: classData.topics || null
       }))
 
@@ -673,7 +680,7 @@ export class PeerTutorService {
                 year: classData.year,
                 section: classData.section,
                 faculty_id: classData.faculty_id,
-                peer_tutor_id: newPeerTutor.id,
+                peer_tutor_id: newpeertutors.id,
                 topics: classData.topics || null
               }])
 
@@ -681,7 +688,7 @@ export class PeerTutorService {
               if (individualError.code === '23505') {
                 // Unique constraint violation - this peer tutor already has this class-date
                 // This shouldn't happen due to our check above, but handle it gracefully
-                console.log(`Class ${classData.class_id} on ${classData.scheduled_date} already exists for this peer tutor`)
+                // console.log(`Class ${classData.class_id} on ${classData.scheduled_date} already exists for this peer tutor`)
                 successCount++
               } else {
                 console.error(`Failed to insert class ${classData.class_id} on ${classData.scheduled_date}:`, individualError)
@@ -694,12 +701,38 @@ export class PeerTutorService {
           }
         }
 
-        console.log(`Successfully allocated ${successCount} out of ${classesToInsert.length} classes to new peer tutor starting from ${tomorrowDateString}`)
+        // console.log(`Successfully allocated ${successCount} out of ${classesToInsert.length} classes to new peer tutor starting from ${allocateFromDateString}`)
         return successCount > 0
       }
 
       const insertedCount = count || recordsToInsert.length
-      console.log(`Successfully allocated ${insertedCount} classes to new peer tutor starting from ${tomorrowDateString}`)
+      // console.log(`Successfully allocated ${insertedCount} classes to new peer tutor starting from ${allocateFromDateString}`)
+
+      // CLEANUP: Remove "placeholder" scheduled classes (where peer_tutor_id is null)
+      // for the class_id/date combinations we just filled.
+      // This prevents duplicates where we have one row with tutor and one row with null.
+      if (classesToInsert.length > 0) {
+        const classIds = classesToInsert.map(c => c.class_id)
+        const scheduledDates = classesToInsert.map(c => c.scheduled_date)
+
+        const { error: cleanupError } = await supabase
+          .from('scheduled_classes')
+          .delete()
+          .is('peer_tutor_id', null)
+          .eq('dept', dept)
+          .eq('year', year)
+          .eq('section', section)
+          .in('class_id', classIds)
+          .in('scheduled_date', scheduledDates)
+        
+        if (cleanupError) {
+           console.error('Error cleaning up placeholder scheduled classes:', cleanupError)
+           // Don't return false, because the assignment itself succeeded.
+        } else {
+           // console.log('Successfully cleaned up placeholder scheduled classes')
+        }
+      }
+
       return true
     } catch (error) {
       console.error('Error in assignNewTutorToFutureClasses:', {
@@ -713,7 +746,7 @@ export class PeerTutorService {
     }
   }
 
-  static async transferPeerTutors(ids: string[], newSection: string): Promise<boolean> {
+  static async transferpeerTutor(ids: string[], newSection: string): Promise<boolean> {
     const supabase = createClient()
 
     try {
@@ -729,7 +762,7 @@ export class PeerTutorService {
 
       return true
     } catch (error) {
-      console.error('Error in transferPeerTutors:', error)
+      console.error('Error in transferpeerTutor:', error)
       return false
     }
   }

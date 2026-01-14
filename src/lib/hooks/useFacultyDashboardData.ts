@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
+import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 
 export interface RecentClassStats {
@@ -35,7 +35,7 @@ export interface DashboardStats {
   weeklyChange: number
   additionalClassesByYear: { year: string; count: number }[]
   totalAdditionalClasses: number
-  totalPeerTutors: number
+  totalpeerTutor: number
   totalStudents: number
   departmentName: string | undefined
   departmentId: string | undefined
@@ -95,8 +95,8 @@ export function useFacultyDashboardData(userEmail: string | undefined | null) {
       ]
 
       // 5. Get Tutor/Student Counts for Department
-      const allPeerTutors = await PeerTutorService.getPeerTutorsByDepartment(dept.name)
-      const totalPeerTutors = allPeerTutors.length
+      const allpeerTutor = await peertutorservice.getpeerTutorByDepartment(dept.name)
+      const totalpeerTutor = allpeerTutor.length
 
       const allStudents = await StudentService.getStudentsByDepartment(dept.name)
       const totalStudents = allStudents.length
@@ -248,7 +248,7 @@ export function useFacultyDashboardData(userEmail: string | undefined | null) {
         recentClasses,
         additionalClassesByYear,
         totalAdditionalClasses,
-        totalPeerTutors,
+        totalpeerTutor,
         totalStudents,
         departmentName: dept.name,
         departmentId: dept.id

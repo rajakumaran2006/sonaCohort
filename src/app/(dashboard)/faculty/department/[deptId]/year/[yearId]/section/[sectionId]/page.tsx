@@ -3,23 +3,25 @@
 
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
+import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useState, useEffect, useRef, Fragment, useMemo, useCallback, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import Image from 'next/image'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import AssignPeerTutorModal from '@/components/forms/AssignPeerTutorModal'
+import AssignpeertutorsModal from '@/components/forms/AssignPeerTutorModal'
 import AddStudentModal from '@/components/forms/AddStudentModal'
 import BulkImportExport from '@/components/forms/BulkImportExport'
 import ClassesImportExport from '@/components/forms/ClassesImportExport'
 import AssignmentImportModal from '@/components/forms/AssignmentImportModal'
-import PeerTutorImportModal from '@/components/forms/PeerTutorImportModal'
+import PeerTutorsImportModal from '@/components/forms/PeerTutorImportModal'
 import StudentImportModal from '@/components/forms/StudentImportModal'
 import DateAssignmentModal from '@/components/forms/DateAssignmentModal'
+import ClassImportModal from '@/components/forms/ClassImportModal'
 import { ClassService } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { AttendanceService } from '@/lib/services/attendanceService'
@@ -28,8 +30,11 @@ import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { ReportService } from '@/lib/services/reportService'
 import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
 
+
+
+
 import { createClient } from '@/utils/supabase/client'
-import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, Search, X, Eye } from 'lucide-react'
+import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, Search, X, Eye, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 
 
@@ -89,32 +94,37 @@ function createSheetWithHeader(
   return ws
 }
 
-interface PeerTutorWithStats extends PeerTutor 
+interface peertutorsWithStats extends peertutors 
 {
   classStats: {
     totalClasses: number
     completedClasses: number
     pendingClasses: number
+    upcomingClasses: number
+    overdueClasses: number
+    attendancePercentage: number
   }
   additionalClassesCount: number
 }
 
-interface PeerTutorsTabProps {
-  peerTutors: PeerTutor[]
+interface PeerTutorTabProps {
+  peerTutor: peertutors[]
   students: Student[]
   setIsModalOpen: (isOpen: boolean) => void
-  handleRemovePeerTutor: (tutorId: string, silent?: boolean) => Promise<{ success: boolean } | void>
-  onPeerTutorClick: (tutorId: string) => void
+  handleRemovepeertutors: (tutorId: string, silent?: boolean) => Promise<{ success: boolean } | void>
+  onpeertutorsClick: (tutorId: string) => void
   dept: string
   year: string
   section: string
   onRefresh: () => Promise<void>
 }
 
-function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerTutor, onPeerTutorClick, dept, year, section, onRefresh }: PeerTutorsTabProps) {
-  const [peerTutorsWithStats, setPeerTutorsWithStats] = useState<PeerTutorWithStats[]>([])
+function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertutors, onpeertutorsClick, dept, year, section, onRefresh }: PeerTutorTabProps) {
+  const [peerTutorWithStats, setpeerTutorWithStats] = useState<peertutorsWithStats[]>([])
+  const { user } = useAuth()
+
   const [loading, setLoading] = useState(true)
-  const [peerTutorStudentCounts, setPeerTutorStudentCounts] = useState<{[key: string]: number}>({})
+  const [peerTutortudentCounts, setpeerTutortudentCounts] = useState<{[key: string]: number}>({})
   const [sortBy, setSortBy] = useState<'name' | 'completed' | 'additional' | 'students'>('name')
   
   // Search state
@@ -126,11 +136,13 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [itemsToTransfer, setItemsToTransfer] = useState<Array<{id: string, name: string, email: string, hasAssignment: boolean}>>([])
   
+  
   // Import modal state
   const [showImportModal, setShowImportModal] = useState(false)
+  
   const handleTransfer = async (newSection: string, ids: string[]) => {
     try {
-      const success = await PeerTutorService.transferPeerTutors(ids, newSection)
+      const success = await peertutorservice.transferpeerTutor(ids, newSection)
       if (success) {
         // Refresh page or update local state
         await onRefresh()
@@ -142,14 +154,14 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
   }
 
   const openTransferModal = () => {
-    const selectedIds = Array.from(selectedPeerTutors)
-    const items = peerTutorsWithStats
+    const selectedIds = Array.from(selectedpeerTutor)
+    const items = peerTutorWithStats
       .filter(pt => selectedIds.includes(pt.id))
       .map(pt => ({
         id: pt.id,
         name: pt.name,
         email: pt.email,
-        hasAssignment: (peerTutorStudentCounts[pt.id] || 0) > 0
+        hasAssignment: (peerTutortudentCounts[pt.id] || 0) > 0
       }))
     
     setItemsToTransfer(items)
@@ -157,7 +169,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
   }
   const [showSortPopup, setShowSortPopup] = useState(false)
   const sortRef = useRef<HTMLDivElement>(null)
-  const [selectedPeerTutors, setSelectedPeerTutors] = useState<Set<string>>(new Set())
+  const [selectedpeerTutor, setSelectedpeerTutor] = useState<Set<string>>(new Set())
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<'selected' | 'single'>('selected')
   const [singleDeleteId, setSingleDeleteId] = useState<string | null>(null)
@@ -168,18 +180,18 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
 
 
   useEffect(() => {
-    const loadPeerTutorStats = async () => {
+    const loadpeerTutortats = async () => {
       setLoading(true)
       try {
         const tutorsWithStats = await Promise.all(
-          peerTutors.map(async (tutor) => {
-            const classStats = await ScheduledClassService.getPeerTutorClassStats(tutor.id)
+          peerTutor.map(async (tutor) => {
+            const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id)
             // Get all additional classes for this peer tutor
             // Note: Since additional_classes table doesn't store dept/year/section,
             // we count all additional classes for the peer tutor
             // This is correct because peer tutors are already filtered by section,
             // so their additional classes should logically belong to this section
-            const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+            const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
             
             // Debug logging
             console.log(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
@@ -191,28 +203,37 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
               matchesSection: tutor.dept === dept && tutor.year === year && tutor.section === section
             })
             
+            const attendancePercentage = classStats.totalClasses > 0 
+              ? Math.round(((classStats.completedClasses + additionalClasses.length) / classStats.totalClasses) * 100)
+              : 0
+            
             return {
               ...tutor,
-              classStats,
+              classStats: {
+                ...classStats,
+                upcomingClasses: classStats.upcomingClasses || 0,
+                overdueClasses: classStats.overdueClasses || 0,
+                attendancePercentage
+              },
               additionalClassesCount: additionalClasses.length
             }
           })
         )
-        setPeerTutorsWithStats(tutorsWithStats)
+        setpeerTutorWithStats(tutorsWithStats)
 
         // Calculate student counts for each peer tutor
         const studentCounts: {[key: string]: number} = {}
-        peerTutors.forEach(tutor => {
+        peerTutor.forEach(tutor => {
           const count = students.filter(student => student.assigned_peer_tutor_id === tutor.id).length
           studentCounts[tutor.id] = count
         })
-        setPeerTutorStudentCounts(studentCounts)
+        setpeerTutortudentCounts(studentCounts)
       } catch (error) {
         console.error('Error loading peer tutor stats:', error)
         // Fallback to original data without stats
-        setPeerTutorsWithStats(peerTutors.map(tutor => ({
+        setpeerTutorWithStats(peerTutor.map(tutor => ({
           ...tutor,
-          classStats: { totalClasses: 0, completedClasses: 0, pendingClasses: 0 },
+          classStats: { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0, attendancePercentage: 0 },
           additionalClassesCount: 0
         })))
       } finally {
@@ -220,14 +241,14 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
       }
     }
 
-    if (peerTutors.length > 0) {
-      loadPeerTutorStats()
+    if (peerTutor.length > 0) {
+      loadpeerTutortats()
     } else {
-      setPeerTutorsWithStats([])
-      setPeerTutorStudentCounts({})
+      setpeerTutorWithStats([])
+      setpeerTutortudentCounts({})
       setLoading(false)
     }
-  }, [peerTutors, students, dept, year, section])
+  }, [peerTutor, students, dept, year, section])
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -244,7 +265,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
   }, [])
 
   // Filter and sort peer tutors
-  const filteredAndSortedPeerTutors = [...peerTutorsWithStats]
+  const filteredAndSortedpeerTutor = [...peerTutorWithStats]
     .filter(tutor => {
       if (!searchQuery.trim()) return true
       const q = searchQuery.toLowerCase()
@@ -261,7 +282,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
         case 'additional':
           return (b.additionalClassesCount || 0) - (a.additionalClassesCount || 0)
         case 'students':
-          return (peerTutorStudentCounts[b.id] || 0) - (peerTutorStudentCounts[a.id] || 0)
+          return (peerTutortudentCounts[b.id] || 0) - (peerTutortudentCounts[a.id] || 0)
         case 'name':
         default:
           return a.name.localeCompare(b.name)
@@ -269,17 +290,17 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
     })
 
   // Keep backward compatibility
-  const sortedPeerTutors = filteredAndSortedPeerTutors
+  const sortedpeerTutor = filteredAndSortedpeerTutor
 
   // Export function for peer tutors (matches table order + header)
-  const exportPeerTutors = () => {
-    const rows = peerTutorsWithStats.map(tutor => ({
+  const exportpeerTutor = () => {
+    const rows = peerTutorWithStats.map(tutor => ({
       'Name': tutor.name,
       'Total Classes Allocated': tutor.classStats?.totalClasses || 0,
       'Completed Classes': tutor.classStats?.completedClasses || 0,
       'Pending Classes': tutor.classStats?.pendingClasses || 0,
       'Additional Classes Taken': tutor.additionalClassesCount || 0,
-      'Students Assigned': peerTutorStudentCounts[tutor.id] || 0
+      'Students Assigned': peerTutortudentCounts[tutor.id] || 0
     }))
 
     const headers = [
@@ -300,32 +321,32 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
 
   // Selection functions
   const handleSelectAll = () => {
-    if (selectedPeerTutors.size === sortedPeerTutors.length) {
-      setSelectedPeerTutors(new Set())
+    if (selectedpeerTutor.size === sortedpeerTutor.length) {
+      setSelectedpeerTutor(new Set())
     } else {
-      setSelectedPeerTutors(new Set(sortedPeerTutors.map(t => t.id)))
+      setSelectedpeerTutor(new Set(sortedpeerTutor.map(t => t.id)))
     }
   }
 
   const handleSelectOne = (tutorId: string) => {
-    const newSelected = new Set(selectedPeerTutors)
+    const newSelected = new Set(selectedpeerTutor)
     if (newSelected.has(tutorId)) {
       newSelected.delete(tutorId)
     } else {
       newSelected.add(tutorId)
     }
-    setSelectedPeerTutors(newSelected)
+    setSelectedpeerTutor(newSelected)
   }
 
   // Delete functions
   const handleBulkDelete = () => {
-    const idsToDelete = Array.from(selectedPeerTutors)
-    const items = peerTutorsWithStats
+    const idsToDelete = Array.from(selectedpeerTutor)
+    const items = peerTutorWithStats
       .filter(t => idsToDelete.includes(t.id))
       .map(t => ({
         name: t.name,
         email: t.email,
-        additionalInfo: `${peerTutorStudentCounts[t.id] || 0} student(s) assigned, ${t.classStats?.totalClasses || 0} total class(es)`
+        additionalInfo: `${peerTutortudentCounts[t.id] || 0} student(s) assigned, ${t.classStats?.totalClasses || 0} total class(es)`
       }))
     
     setItemsToDelete(items)
@@ -337,7 +358,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
 
   const confirmDelete = async () => {
     const idsToDelete = deleteTarget === 'selected' 
-      ? Array.from(selectedPeerTutors)
+      ? Array.from(selectedpeerTutor)
       : singleDeleteId ? [singleDeleteId] : []
 
     setIsDeleting(true)
@@ -345,7 +366,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
       let successCount = 0
       for (const id of idsToDelete) {
         // Pass true as second argument for silent deletion
-        const result = await handleRemovePeerTutor(id, true)
+        const result = await handleRemovepeertutors(id, true)
         if (result && result.success) successCount++
       }
       
@@ -375,7 +396,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
        })
     } finally {
       setIsDeleting(false)
-      setSelectedPeerTutors(new Set())
+      setSelectedpeerTutor(new Set())
       setSingleDeleteId(null)
       setShowDeleteModal(false)
       setIsDeleteMode(false)
@@ -385,88 +406,120 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
   const toggleDeleteMode = () => {
     setIsDeleteMode(!isDeleteMode)
     setIsTransferMode(false)
-    setSelectedPeerTutors(new Set())
+    setSelectedpeerTutor(new Set())
   }
 
   const toggleTransferMode = () => {
     setIsTransferMode(!isTransferMode)
     setIsDeleteMode(false)
-    setSelectedPeerTutors(new Set())
+    setSelectedpeerTutor(new Set())
   }
 
   const cancelTransferMode = () => {
     setIsTransferMode(false)
-    setSelectedPeerTutors(new Set())
+    setSelectedpeerTutor(new Set())
   }
 
   const cancelDeleteMode = () => {
     setIsDeleteMode(false)
-    setSelectedPeerTutors(new Set())
+    setSelectedpeerTutor(new Set())
   }
+
+
 
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Tutors / Students</h3>
-            <button className="text-gray-300 hover:text-gray-500 transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Card 1: Peer Tutor Count */}
+          <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+            <div className="flex justify-between items-start mb-4 relative z-10">
+              <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">PEER TUTORS</h3>
+            </div>
+            <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">
+              {peerTutor.length}
+            </div>
+            <div className="flex items-center text-blue-500 text-xs font-bold relative z-10">
+               <span>TOTAL COUNT</span>
+            </div>
           </div>
-          <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{peerTutors.length} <span className="text-gray-300 text-2xl font-normal">/</span> {Object.values(peerTutorStudentCounts).reduce((a, b) => a + b, 0)}</div>
-          <div className="flex items-center text-emerald-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
-             <span>ALLOCATED</span>
+          
+          {/* Card 2: Assigned Count */}
+          <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+            <div className="flex justify-between items-start mb-4 relative z-10">
+              <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">ASSIGNED</h3>
+            </div>
+            {(() => {
+              const assignedpeerTutorCount = peerTutor.filter(pt => (peerTutortudentCounts[pt.id] || 0) > 0).length
+              const notAssignedCount = peerTutor.length - assignedpeerTutorCount
+              
+              return (
+                <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">
+                  {assignedpeerTutorCount}<span className="text-gray-300 text-2xl font-normal">/</span>{notAssignedCount}
+                </div>
+              )
+            })()}
+            <div className="flex items-center text-emerald-500 text-xs font-bold relative z-10">
+               <span>ASSIGNED / NOT ASSIGNED</span>
+            </div>
           </div>
-        </div>
-        
-        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Classes</h3>
-            <button className="text-gray-300 hover:text-gray-500 transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
+  
+          {/* Card 3: Classes (Updated) */}
+          <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+            <div className="flex justify-between items-start mb-4 relative z-10">
+              <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">CLASSES</h3>
+            </div>
+            {(() => {
+              // Calculate upcoming and overdue across all tutors
+              const totalUpcoming = peerTutorWithStats.reduce((sum, pt) => sum + (pt.classStats?.upcomingClasses || 0), 0)
+              const totalOverdue = peerTutorWithStats.reduce((sum, pt) => sum + (pt.classStats?.overdueClasses || 0), 0)
+              
+              return (
+                <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10 flex items-baseline gap-2">
+                  <span className="text-black">{totalUpcoming}</span>
+                  <span className="text-gray-300 text-2xl font-normal">/</span>
+                  <span className="text-black">{totalOverdue}</span>
+                </div>
+              )
+            })()}
+            <div className="flex items-center text-xs font-bold relative z-10 gap-2">
+                 {/* Subtitle Removed as per user request */}
+                 <span className="text-yellow-400">UPCOMING / </span>
+                 <span className="text-red-400">PENDING</span>
+            </div>
           </div>
-          <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{peerTutorsWithStats.reduce((acc, t) => acc + (t.classStats?.totalClasses || 0), 0)}</div>
-          <div className="flex items-center text-blue-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
-             <span>SCHEDULED</span>
-          </div>
-        </div>
+  
+          {/* Card 4: Additional Classes */}
+          <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+            <div className="flex justify-between items-start mb-4 relative z-10">
+              <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">ADDITIONAL CLASSES</h3>
+            </div>
+            {(() => {
+              const totalAdditionalClasses = peerTutorWithStats.reduce((sum, pt) => sum + (pt.additionalClassesCount || 0), 0)
 
-        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Pending</h3>
-            <button className="text-gray-300 hover:text-gray-500 transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
-          </div>
-          <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{peerTutorsWithStats.reduce((acc, t) => acc + (t.classStats?.pendingClasses || 0), 0)}</div>
-          <div className="flex items-center text-orange-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
-             <span>REMAINING</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Additional Classes</h3>
-            <button className="text-gray-300 hover:text-gray-500 transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
-          </div>
-          <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{peerTutorsWithStats.reduce((acc, t) => acc + (t.additionalClassesCount || 0), 0)}</div>
-          <div className="flex items-center text-blue-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
-             <span>TOTAL CLASSES</span>
+              return (
+                <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">
+                  {totalAdditionalClasses}
+                </div>
+              )
+            })()}
+            <div className="flex items-center text-purple-500 text-xs font-bold relative z-10">
+               <span>TOTAL ADDITIONAL</span>
+            </div>
           </div>
         </div>
-      </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <div className="flex items-center gap-4">
-          <h3 className="text-lg font-medium text-gray-900">PEER TUTORS ({peerTutors.length})</h3>
+          <h3 className="text-lg font-medium text-gray-900">PEER TUTORS ({peerTutor.length})</h3>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           {!isDeleteMode && !isTransferMode && (
             <>
           {/* Search Bar */}
-          {peerTutors.length > 0 && (
+          {peerTutor.length > 0 && (
           <div className={`relative flex items-center transition-all duration-300 ease-in-out ${isSearchExpanded ? 'w-64' : 'w-10'}`}>
             {isSearchExpanded ? (
               <div className="absolute inset-0 flex items-center w-full">
@@ -502,10 +555,10 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
           )}
 
           {/* Divider */}
-          {peerTutors.length > 0 && <div className="h-8 w-[1px] bg-gray-200 mx-1"></div>}
+          {peerTutor.length > 0 && <div className="h-8 w-[1px] bg-gray-200 mx-1"></div>}
 
           {/* Sort Button - Icon Only */}
-          {peerTutors.length > 0 && (
+          {peerTutor.length > 0 && (
           <div className="relative" ref={sortRef}>
           <button
               onClick={() => setShowSortPopup(!showSortPopup)}
@@ -595,19 +648,8 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
             ADD
           </button>
 
-          {/* Transfer Button */}
-          {peerTutors.length > 0 && (
-          <button
-            onClick={toggleTransferMode}
-            className="h-12 px-6 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-100 text-sm font-medium transition-all flex items-center justify-center gap-2"
-          >
-            <ArrowUpRight className="w-4 h-4" />
-            TRANSFER
-          </button>
-          )}
-
           {/* Delete Button */}
-          {peerTutors.length > 0 && (
+          {peerTutor.length > 0 && (
           <button
             onClick={toggleDeleteMode}
             className="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 transition-all flex items-center justify-center group"
@@ -619,6 +661,17 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
           </button>
           )}
 
+          {/* Transfer Button */}
+          {peerTutor.length > 0 && (
+          <button
+            onClick={toggleTransferMode}
+            className="h-12 px-6 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-100 text-sm font-medium transition-all flex items-center justify-center gap-2"
+          >
+            <ArrowUpRight className="w-4 h-4" />
+            TRANSFER
+          </button>
+          )}
+
           {/* Import/Export Buttons */}
             <button
               onClick={() => setShowImportModal(true)}
@@ -627,9 +680,9 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
               <Upload className="w-4 h-4" />
               IMPORT
             </button>
-            {sortedPeerTutors.length > 0 && (
+            {sortedpeerTutor.length > 0 && (
               <button
-                onClick={exportPeerTutors}
+                onClick={exportpeerTutor}
                 className="h-12 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-sm"
               >
                 <Download className="w-4 h-4" />
@@ -640,13 +693,13 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
           )}
 
           {/* Delete Mode Actions */}
-          {isDeleteMode && selectedPeerTutors.size > 0 && (
+          {isDeleteMode && selectedpeerTutor.size > 0 && (
             <button
               onClick={handleBulkDelete}
               className="h-12 px-6 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2"
             >
               <Trash2 className="w-4 h-4" />
-              DELETE ({selectedPeerTutors.size})
+              DELETE ({selectedpeerTutor.size})
             </button>
           )}
           {isDeleteMode && (
@@ -659,13 +712,13 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
           )}
 
           {/* Transfer Mode Actions */}
-          {isTransferMode && selectedPeerTutors.size > 0 && (
+          {isTransferMode && selectedpeerTutor.size > 0 && (
             <button
               onClick={openTransferModal}
               className="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2"
             >
               <ArrowUpRight className="w-4 h-4" />
-              CONFIRM({selectedPeerTutors.size})
+              CONFIRM({selectedpeerTutor.size})
             </button>
           )}
 
@@ -683,7 +736,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
       {/* Loading State */}
       {loading ? (
         <TableSkeleton />
-      ) : sortedPeerTutors.length === 0 ? (
+      ) : sortedpeerTutor.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 bg-gray-50 rounded-lg">
            <Image src="/icons/student.png" alt="No peer tutors assigned" width={96} height={96} className="mx-auto opacity-60 grayscale" />
           <p className="text-lg font-semibold text-gray-900 mb-2">NO PEER TUTOR ASSIGNED</p>
@@ -693,21 +746,21 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
         <>
           {/* Mobile Card View */}
           <div className="block lg:hidden space-y-4">
-            {sortedPeerTutors.map((tutor) => (
+            {sortedpeerTutor.map((tutor) => (
               <div key={tutor.id} className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 border-b border-gray-200">
                   <div className="flex items-start gap-3">
                     {(isDeleteMode || isTransferMode) && (
                       <input
                         type="checkbox"
-                        checked={selectedPeerTutors.has(tutor.id)}
+                        checked={selectedpeerTutor.has(tutor.id)}
                         onChange={() => handleSelectOne(tutor.id)}
                         className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer mt-1"
                       />
                     )}
                     <div className="flex-1">
                       <button
-                        onClick={() => onPeerTutorClick(tutor.id)}
+                        onClick={() => onpeertutorsClick(tutor.id)}
                         className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors text-left w-full"
                       >
                         {tutor.name}
@@ -735,18 +788,31 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
                     </div>
                     
                     <div className="bg-gray-100 rounded-lg p-3">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Additional</p>
+                      <p className="text-xs text-purple-500 uppercase tracking-wide mb-1">Additional</p>
                       <p className="text-xl font-bold text-black">{tutor.additionalClassesCount || 0}</p>
                     </div>
                     
                     <div className="bg-gray-100 rounded-lg p-3 col-span-2">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Students Assigned</p>
-                      <p className="text-xl font-bold text-black">{peerTutorStudentCounts[tutor.id] || 0}</p>
+                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Attendance</p>
+                       <div className="flex items-center justify-between">
+                         <p className="text-xl font-bold text-black">{tutor.classStats.attendancePercentage}%</p>
+                         <div className="w-24 h-1.5 bg-white rounded-full overflow-hidden border border-gray-200">
+                           <div 
+                              className="h-full bg-emerald-500 rounded-full"
+                              style={{ width: `${Math.min(100, tutor.classStats.attendancePercentage)}%` }}
+                           ></div>
+                         </div>
+                       </div>
+                    </div>
+                    
+                    <div className="bg-gray-100 rounded-lg p-3 col-span-2">
+                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Students Assigned</p>
+                       <p className="text-xl font-bold text-black">{peerTutortudentCounts[tutor.id] || 0}</p>
                     </div>
                   </div>
                   
                   <button
-                    onClick={() => onPeerTutorClick(tutor.id)}
+                    onClick={() => onpeertutorsClick(tutor.id)}
                     className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-sm font-medium transition-colors duration-200"
                   >
                     View Details
@@ -765,7 +831,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
                 <th className="px-6 py-3 text-left w-10">
                   <input
                     type="checkbox"
-                    checked={selectedPeerTutors.size === sortedPeerTutors.length && sortedPeerTutors.length > 0}
+                    checked={selectedpeerTutor.size === sortedpeerTutor.length && sortedpeerTutor.length > 0}
                     onChange={handleSelectAll}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
                   />
@@ -792,26 +858,29 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
               <th className="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">
                 STUDENTS
               </th>
+              <th className="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider" title="(Completed Scheduled + Additional Classes) / Total Allocated Scheduled">
+                ATTENDANCE
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-                {sortedPeerTutors.map((tutor) => (
+                {sortedpeerTutor.map((tutor) => (
                 <tr key={tutor.id} className="group hover:bg-gray-50 transition-colors">
                   {(isDeleteMode || isTransferMode) && (
                     <td className="px-6 py-4 whitespace-nowrap">
                       <input
                         type="checkbox"
-                        checked={selectedPeerTutors.has(tutor.id)}
+                        checked={selectedpeerTutor.has(tutor.id)}
                         onChange={() => handleSelectOne(tutor.id)}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
                       />
                     </td>
                   )}
                   <td className="px-6 py-4 whitespace-nowrap">
-                     <div className="flex items-center cursor-pointer" onClick={() => onPeerTutorClick(tutor.id)}>
+                     <div className="flex items-center cursor-pointer" onClick={() => onpeertutorsClick(tutor.id)}>
                         <div className="flex-shrink-0 h-10 w-10">
                            <div className="w-10 h-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
-                                       <span className="text-gray-400 font-bold text-sm tracking-tighter">
+                                       <span className="text-white font-bold text-sm tracking-tighter">
                                          {tutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                        </span>
                                      </div>
@@ -849,7 +918,20 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm font-bold text-black">
-                      {peerTutorStudentCounts[tutor.id] || 0}
+                      {peerTutortudentCounts[tutor.id] || 0}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="text-xs font-bold text-gray-900">
+                        {tutor.classStats.attendancePercentage}%
+                      </div>
+                      <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500 rounded-full"
+                          style={{ width: `${Math.min(100, tutor.classStats.attendancePercentage)}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -881,14 +963,19 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
         onTransfer={handleTransfer}
         items={itemsToTransfer}
         type="peerTutors"
-        dept={dept}
+          dept={dept}
         year={year}
         currentSection={section}
       />
       
-      {/* Peer Tutor Import Modal */}
+
+      
+
+
+
+      {/* Import Modals */}
       {showImportModal && (
-        <PeerTutorImportModal
+        <PeerTutorsImportModal
           dept={dept}
           year={year}
           section={section}
@@ -906,7 +993,7 @@ function PeerTutorsTab({ peerTutors, students, setIsModalOpen, handleRemovePeerT
 
 interface StudentsTabProps {
   students: Student[]
-  peerTutors: PeerTutor[]
+  peerTutor: peertutors[]
   setIsStudentModalOpen: (isOpen: boolean) => void
   handleRemoveStudent: (studentId: string, silent?: boolean) => Promise<boolean | void>
   dept: string
@@ -915,10 +1002,10 @@ interface StudentsTabProps {
   onRefresh: () => Promise<void>
 }
 
-function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemoveStudent, dept, year, section, onRefresh }: StudentsTabProps) {
+function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveStudent, dept, year, section, onRefresh }: StudentsTabProps) {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>(students)
 
-  const [selectedPeerTutor, setSelectedPeerTutor] = useState<string>('all')
+  const [selectedpeertutors, setSelectedpeertutors] = useState<string>('all')
   const [showFilterPopup, setShowFilterPopup] = useState(false)
   const filterRef = useRef<HTMLDivElement>(null)
   
@@ -983,20 +1070,24 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
     // Apply search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      filtered = filtered.filter(student =>
-        student.name.toLowerCase().includes(q) ||
-        student.email.toLowerCase().includes(q) ||
-        student.section.toLowerCase().includes(q)
-      )
+      filtered = filtered.filter(student => {
+        const assignedpeertutors = peerTutor.find(tutor => tutor.id === student.assigned_peer_tutor_id)
+        return (
+          student.name.toLowerCase().includes(q) ||
+          student.email.toLowerCase().includes(q) ||
+          student.section.toLowerCase().includes(q) ||
+          assignedpeertutors?.name.toLowerCase().includes(q)
+        )
+      })
     }
 
     // Apply peer tutor filter
-    if (selectedPeerTutor !== 'all') {
-      filtered = filtered.filter(student => student.assigned_peer_tutor_id === selectedPeerTutor)
+    if (selectedpeertutors !== 'all') {
+      filtered = filtered.filter(student => student.assigned_peer_tutor_id === selectedpeertutors)
     }
 
     setFilteredStudents(filtered)
-  }, [students, selectedPeerTutor, searchQuery])
+  }, [students, selectedpeertutors, searchQuery])
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -1012,10 +1103,10 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
     }
   }, [])
 
-  const hasActiveFilters = selectedPeerTutor !== 'all'
+  const hasActiveFilters = selectedpeertutors !== 'all'
 
   const clearFilters = () => {
-    setSelectedPeerTutor('all')
+    setSelectedpeertutors('all')
   }
 
   // Basic sorting by name (can be enhanced with proper sort controls later)
@@ -1028,11 +1119,11 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
   // Export function for students (matches table order + header)
   const exportStudents = () => {
     const rows = filteredStudents.map(student => {
-      const assignedPeerTutor = peerTutors.find(tutor => tutor.id === student.assigned_peer_tutor_id)
+      const assignedpeertutors = peerTutor.find(tutor => tutor.id === student.assigned_peer_tutor_id)
       return {
         'Name': student.name,
         'Year & Section': `${student.year} - ${student.section}`,
-        'Assigned Peer Tutor': assignedPeerTutor?.name || 'Not assigned'
+        'Assigned Peer Tutor': assignedpeertutors?.name || 'Not assigned'
       }
     })
 
@@ -1069,11 +1160,11 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
     const items = students
       .filter(s => idsToDelete.includes(s.id))
       .map(s => {
-        const assignedPeerTutor = peerTutors.find(tutor => tutor.id === s.assigned_peer_tutor_id)
+        const assignedpeertutors = peerTutor.find(tutor => tutor.id === s.assigned_peer_tutor_id)
         return {
           name: s.name,
           email: s.email,
-          additionalInfo: `${s.year} - ${s.section}${assignedPeerTutor ? `, Assigned to: ${assignedPeerTutor.name}` : ''}`
+          additionalInfo: `${s.year} - ${s.section}${assignedpeertutors ? `, Assigned to: ${assignedpeertutors.name}` : ''}`
         }
       })
     
@@ -1166,7 +1257,6 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
           </div>
           <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{students.length}</div>
           <div className="flex items-center text-emerald-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
              <span>TOTAL</span>
           </div>
         </div>
@@ -1178,7 +1268,6 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
           </div>
           <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{students.filter(s => s.assigned_peer_tutor_id).length} <span className="text-gray-300 text-2xl font-normal">/</span> {students.length}</div>
           <div className="flex items-center text-blue-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
              <span>ALLOCATED</span>
           </div>
         </div>
@@ -1308,12 +1397,12 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">PEER TUTOR</label>
                       <select
-                        value={selectedPeerTutor}
-                        onChange={(e) => setSelectedPeerTutor(e.target.value)}
+                        value={selectedpeertutors}
+                        onChange={(e) => setSelectedpeertutors(e.target.value)}
                         className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       >
                         <option value="all">All Peer Tutors</option>
-                        {peerTutors.map(tutor => (
+                        {peerTutor.map(tutor => (
                           <option key={tutor.id} value={tutor.id}>{tutor.name}</option>
                         ))}
                       </select>
@@ -1394,7 +1483,7 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
           {/* Mobile Card View */}
           <div className="block lg:hidden space-y-4">
             {sortedStudents.map((student) => {
-              const assignedPeerTutor = peerTutors.find(tutor => tutor.id === student.assigned_peer_tutor_id)
+              const assignedpeertutors = peerTutor.find(tutor => tutor.id === student.assigned_peer_tutor_id)
               return (
                 <div key={student.id} className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
                   <div className="bg-gradient-to-r from-indigo-50 to-blue-50 px-4 py-3 border-b border-gray-200">
@@ -1422,9 +1511,9 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
                         Peer Tutor
                       </div>
                       <div className="flex-1">
-                        {assignedPeerTutor ? (
+                        {assignedpeertutors ? (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-gray-100 text-black border border-gray-200 uppercase tracking-wider">
-                            {assignedPeerTutor.name}
+                            {assignedpeertutors.name}
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-white text-gray-400 border border-gray-100 uppercase tracking-wider">
@@ -1476,7 +1565,7 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {sortedStudents.map((student) => {
-                  const assignedPeerTutor = peerTutors.find(tutor => tutor.id === student.assigned_peer_tutor_id)
+                  const assignedpeertutors = peerTutor.find(tutor => tutor.id === student.assigned_peer_tutor_id)
                   
                   return (
                     <tr key={student.id} className="group hover:bg-gray-50 transition-colors">
@@ -1510,7 +1599,7 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
 
                       {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {assignedPeerTutor ? (
+                        {assignedpeertutors ? (
                           <span className="inline-flex items-center px-3 py-1 rounded-md text-[10px] font-bold bg-gray-100 text-black border border-gray-200 uppercase tracking-widest shadow-sm">
                             Assigned
                           </span>
@@ -1523,9 +1612,9 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
 
                       {/* Assigned Peer Tutor */}
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {assignedPeerTutor ? (
+                        {assignedpeertutors ? (
                           <div className="flex flex-col items-center">
-                            <span className="text-sm font-bold text-gray-900">{assignedPeerTutor.name}</span>
+                            <span className="text-sm font-bold text-gray-900">{assignedpeertutors.name}</span>
                           </div>
                         ) : (
                           <span className="text-sm text-gray-400">-</span>
@@ -1583,9 +1672,9 @@ function StudentsTab({ students, peerTutors, setIsStudentModalOpen, handleRemove
   )
 }
 
-interface PeerTutorDetailViewProps {
-  peerTutorId: string
-  peerTutorName: string
+interface PeertutorsDetailViewProps {
+  peertutorsId: string
+  peertutorsName: string
   onBack: () => void
 }
 
@@ -1603,7 +1692,7 @@ interface SubjectAttendanceData {
   }[]
 }
 
-function PeerTutorDetailView({ peerTutorId, peerTutorName, onBack }: PeerTutorDetailViewProps) {
+function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack }: PeertutorsDetailViewProps) {
   const [loading, setLoading] = useState(true)
   const [subjectsData, setSubjectsData] = useState<SubjectAttendanceData[]>([])
 
@@ -1615,10 +1704,10 @@ function PeerTutorDetailView({ peerTutorId, peerTutorName, onBack }: PeerTutorDe
       const supabase = createClient()
 
       // Get students assigned to this peer tutor
-      const students = await AttendanceService.getStudentsForAttendance(peerTutorId)
+      const students = await AttendanceService.getStudentsForAttendance(peertutorsId)
       
       // Get all subjects assigned to this peer tutor
-      const subjects = await ReportService.getPeerTutorSubjects(peerTutorId)
+      const subjects = await ReportService.getpeerTutorubjects(peertutorsId)
       
       // Get all scheduled classes for this peer tutor
       const { data: scheduledClasses } = await supabase
@@ -1630,11 +1719,11 @@ function PeerTutorDetailView({ peerTutorId, peerTutorName, onBack }: PeerTutorDe
             subject_name
           )
         `)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .order('scheduled_date', { ascending: true })
 
       // Get all additional classes for this peer tutor
-      const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(peerTutorId)
+      const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsId)
 
       // Get all attendance records for scheduled classes
       const scheduledClassIds = (scheduledClasses || []).map(sc => sc.id)
@@ -1642,13 +1731,6 @@ function PeerTutorDetailView({ peerTutorId, peerTutorName, onBack }: PeerTutorDe
         .from('attendance')
         .select('scheduled_class_id, student_id, status')
         .in('scheduled_class_id', scheduledClassIds)
-
-      // Get attendance records for additional classes
-      const additionalClassIds = additionalClasses.map(ac => ac.id)
-      const { data: additionalAttendanceRecords } = await supabase
-        .from('additional_class_attendance')
-        .select('additional_class_id, student_id, status')
-        .in('additional_class_id', additionalClassIds)
 
       // Create attendance map: scheduled_class_id -> student_id -> status
       const attendanceMap = new Map<string, Map<string, 'P' | 'A'>>()
@@ -1658,6 +1740,15 @@ function PeerTutorDetailView({ peerTutorId, peerTutorName, onBack }: PeerTutorDe
         }
         attendanceMap.get(record.scheduled_class_id)!.set(record.student_id, record.status as 'P' | 'A')
       })
+
+      // Get all attendance records for additional classes
+      const additionalClassIds = additionalClasses.map(ac => ac.id)
+      const { data: additionalAttendanceRecords } = additionalClassIds.length > 0 
+        ? await supabase
+            .from('additional_class_attendance')
+            .select('additional_class_id, student_id, status')
+            .in('additional_class_id', additionalClassIds)
+        : { data: [] }
 
       // Create additional attendance map: additional_class_id -> student_id -> status
       const additionalAttendanceMap = new Map<string, Map<string, 'P' | 'A'>>()
@@ -1754,18 +1845,14 @@ function PeerTutorDetailView({ peerTutorId, peerTutorName, onBack }: PeerTutorDe
     } finally {
       setLoading(false)
     }
-  }, [peerTutorId])
+  }, [peertutorsId])
 
   useEffect(() => {
     loadDetailData()
   }, [loadDetailData])
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    )
+    return <TableSkeleton />
   }
 
   return (
@@ -1781,7 +1868,7 @@ function PeerTutorDetailView({ peerTutorId, peerTutorName, onBack }: PeerTutorDe
         <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-        <span className="text-gray-900 font-medium">{peerTutorName}</span>
+        <span className="text-gray-900 font-medium">{peertutorsName}</span>
       </div>
 
       {/* Subject Tables */}
@@ -1906,9 +1993,9 @@ interface GeneralTabProps {
   section: string
 }
 
-interface PeerTutorGeneralRow {
-  peerTutorName: string
-  peerTutorId: string
+interface peertutorsGeneralRow {
+  peertutorsName: string
+  peertutorsId: string
   classesAllocated: { completed: number; total: number }
   additionalClassesTaken: number
   attendancePercentage: number
@@ -1916,22 +2003,22 @@ interface PeerTutorGeneralRow {
 
 function GeneralTab({ dept, year, section }: GeneralTabProps) {
   const [loading, setLoading] = useState(true)
-  const [generalData, setGeneralData] = useState<PeerTutorGeneralRow[]>([])
-  const [selectedPeerTutor, setSelectedPeerTutor] = useState<string | null>(null)
-  const [selectedPeerTutorName, setSelectedPeerTutorName] = useState<string>('')
+  const [generalData, setGeneralData] = useState<peertutorsGeneralRow[]>([])
+  const [selectedpeertutors, setSelectedpeertutors] = useState<string | null>(null)
+  const [selectedpeertutorsName, setSelectedpeertutorsName] = useState<string>('')
 
   const loadGeneralData = useCallback(async () => {
     try {
       setLoading(true)
       
       // Get all peer tutors for this section
-      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      const peerTutor = await peertutorservice.getpeerTutorBySection(dept, year, section)
       
       // Get stats for each peer tutor
       const tutorsWithStats = await Promise.all(
-        peerTutors.map(async (tutor) => {
-          const classStats = await ScheduledClassService.getPeerTutorClassStats(tutor.id)
-          const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+        peerTutor.map(async (tutor) => {
+          const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id)
+          const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
           
           // Calculate attendance percentage
           // Formula: (completed classes + additional classes) / total classes allocated * 100
@@ -1942,8 +2029,8 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
             : 0
           
           return {
-            peerTutorName: tutor.name,
-            peerTutorId: tutor.id,
+            peertutorsName: tutor.name,
+            peertutorsId: tutor.id,
             classesAllocated: {
               completed: classStats.completedClasses,
               total: classStats.totalClasses
@@ -1970,21 +2057,17 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
 
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    )
+    return <TableSkeleton />
   }
 
-  if (selectedPeerTutor) {
+  if (selectedpeertutors) {
     return (
-      <PeerTutorDetailView
-        peerTutorId={selectedPeerTutor}
-        peerTutorName={selectedPeerTutorName}
+      <PeertutorsDetailView
+        peertutorsId={selectedpeertutors}
+        peertutorsName={selectedpeertutorsName}
         onBack={() => {
-          setSelectedPeerTutor(null)
-          setSelectedPeerTutorName('')
+          setSelectedpeertutors(null)
+          setSelectedpeertutorsName('')
         }}
       />
     )
@@ -2025,7 +2108,7 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
                 generalData.map((row, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
-                      <div className="text-sm font-medium text-gray-900">{row.peerTutorName}</div>
+                      <div className="text-sm font-medium text-gray-900">{row.peertutorsName}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-200">
                       <div className="text-sm font-semibold text-gray-900">
@@ -2046,8 +2129,8 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
                       <button
                         className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                         onClick={() => {
-                          setSelectedPeerTutor(row.peerTutorId)
-                          setSelectedPeerTutorName(row.peerTutorName)
+                          setSelectedpeertutors(row.peertutorsId)
+                          setSelectedpeertutorsName(row.peertutorsName)
                         }}
                       >
                         VIEW
@@ -2070,9 +2153,9 @@ interface AdvancedAttendanceTabProps {
   section: string
 }
 
-interface PeerTutorAttendanceRow {
+interface peertutorsAttendanceRow {
   sNo: number
-  peerTutorName: string
+  peertutorsName: string
   subject: string
   hour: number
   dateAttendance: { [date: string]: 'P' | 'A' | '' }
@@ -2082,7 +2165,7 @@ interface PeerTutorAttendanceRow {
 
 function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabProps) {
   const [loading, setLoading] = useState(true)
-  const [attendanceData, setAttendanceData] = useState<PeerTutorAttendanceRow[]>([])
+  const [attendanceData, setAttendanceData] = useState<peertutorsAttendanceRow[]>([])
   const [dates, setDates] = useState<string[]>([])
 
   const loadAttendanceData = useCallback(async () => {
@@ -2091,7 +2174,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
       const supabase = createClient()
 
       // Get all peer tutors for this section
-      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      const peerTutor = await peertutorservice.getpeerTutorBySection(dept, year, section)
       
       // Get all scheduled classes for this section
       const { data: scheduledClasses, error } = await supabase
@@ -2151,7 +2234,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
       }
 
       // Build attendance data rows
-      const rows: PeerTutorAttendanceRow[] = []
+      const rows: peertutorsAttendanceRow[] = []
       let sNo = 1
 
       // Group by peer tutor and subject
@@ -2173,13 +2256,13 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
       })
 
       // Create rows for each peer tutor-subject combination
-      peerTutors.forEach(tutor => {
+      peerTutor.forEach(tutor => {
         const subjectMap = tutorSubjectMap.get(tutor.id)
         if (!subjectMap || subjectMap.size === 0) {
           // Add row even if no subjects assigned
           rows.push({
             sNo: sNo++,
-            peerTutorName: tutor.name,
+            peertutorsName: tutor.name,
             subject: 'No subjects assigned',
             hour: 0,
             dateAttendance: {},
@@ -2206,7 +2289,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
 
             rows.push({
               sNo: sNo++,
-              peerTutorName: tutor.name,
+              peertutorsName: tutor.name,
               subject: subjectName,
               hour: totalHours,
               dateAttendance,
@@ -2234,11 +2317,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
 
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    )
+    return <AttendanceTabSkeleton />
   }
 
   return (
@@ -2299,7 +2378,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
                       {row.sNo}
                     </td>
                   <td className="px-4 py-3 text-sm font-semibold text-gray-900 border border-gray-200">
-                      <div>{row.peerTutorName}</div>
+                      <div>{row.peertutorsName}</div>
                       <div className="text-xs text-gray-500">{row.subject}</div>
                     </td>
                   <td className="px-4 py-3 text-center text-sm font-medium text-gray-900 border border-gray-200">
@@ -2339,7 +2418,7 @@ interface ImportExportTabProps {
 }
 
 function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: ImportExportTabProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'import' | 'export' | 'advanced'>('import')
+  const [activeSubTab, setActiveSubTab] = useState<'import' | 'export' | 'advanced'>('export')
   const [activeAdvancedTab, setActiveAdvancedTab] = useState<'general' | 'attendance' | 'nextTopicSheet' | 'mark'>('general')
 
   const dbYear = year
@@ -2347,7 +2426,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
 
   // React Query for Analytics
   const { data: analytics = {
-        totalPeerTutors: 0,
+        totalpeerTutor: 0,
         totalStudents: 0,
         totalClasses: 0,
         totalAttendanceRecords: 0,
@@ -2357,7 +2436,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
     queryKey: ['importExportAnalytics', dept, dbYear, dbSection],
     queryFn: async () => {
       const [tutors, sectionStudents, classes, scheduledClasses] = await Promise.all([
-        PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection),
+        peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection),
         StudentService.getStudentsBySection(dept, dbYear, dbSection),
         ClassService.getClassesByYearSection(dept, dbYear, dbSection),
         ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
@@ -2366,7 +2445,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       const assignedCount = sectionStudents.filter(s => s.assigned_peer_tutor_id).length
 
       return {
-        totalPeerTutors: tutors.length,
+        totalpeerTutor: tutors.length,
         totalStudents: sectionStudents.length,
         totalClasses: classes.length,
         totalAttendanceRecords: 0, // Will be calculated if needed
@@ -2378,7 +2457,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
 
   const handleExportPeerDetails = async () => {
     try {
-      const tutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
+      const tutors = await peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection)
       const students = await StudentService.getStudentsBySection(dept, dbYear, dbSection)
       const scheduledClasses = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
       
@@ -2402,7 +2481,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
         const totalClasses = tutorClasses.length
         
         // Get additional classes count
-        const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+        const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
         // Filter by current section (additional classes should have dept, year, section if they were created in the AttendanceTab)
         const sectionAdditionalClasses = additionalClasses.filter(() => {
           // Since additional classes might not have dept/year/section directly,
@@ -2430,14 +2509,14 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       XLSX.writeFile(wb, `peer_tutors_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
       console.error('Error exporting peer details:', error)
-      alert('Failed to export peer tutor details')
+      toast.error('Failed to export peer tutor details')
     }
   }
 
   const handleExportStudents = async () => {
     try {
       const sectionStudents = await StudentService.getStudentsBySection(dept, dbYear, dbSection)
-      const tutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
+      const tutors = await peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection)
       
       const exportData = sectionStudents.map(student => {
         const assignedTutor = tutors.find(t => t.id === student.assigned_peer_tutor_id)
@@ -2454,14 +2533,14 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       XLSX.writeFile(wb, `students_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
       console.error('Error exporting students:', error)
-      alert('Failed to export students')
+      toast.error('Failed to export students')
     }
   }
 
   const handleExportAssignments = async () => {
     try {
       const assignments = await AssignmentService.getAssignments(dept, dbYear, dbSection)
-      const tutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
+      const tutors = await peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection)
       const sectionStudents = await StudentService.getStudentsBySection(dept, dbYear, dbSection)
 
       const exportData = assignments.map(assignment => {
@@ -2485,7 +2564,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       XLSX.writeFile(wb, `assignments_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
       console.error('Error exporting assignments:', error)
-      alert('Failed to export assignments')
+      toast.error('Failed to export assignments')
     }
   }
 
@@ -2526,7 +2605,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       XLSX.writeFile(wb, `attendance_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
       console.error('Error exporting attendance:', error)
-      alert('Failed to export attendance records')
+      toast.error('Failed to export attendance records')
     }
   }
 
@@ -2546,9 +2625,8 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Peer Tutors</h3>
             <button className="text-gray-300 hover:text-gray-500 transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
           </div>
-          <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{analytics.totalPeerTutors}</div>
+          <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{analytics.totalpeerTutor}</div>
           <div className="flex items-center text-emerald-500 text-xs font-bold relative z-10">
-            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
             <span>TOTAL</span>
           </div>
         </div>
@@ -2560,7 +2638,6 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
           </div>
           <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{analytics.totalStudents}</div>
           <div className="flex items-center text-blue-500 text-xs font-bold relative z-10">
-            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
             <span>TOTAL</span>
           </div>
         </div>
@@ -2572,7 +2649,6 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
           </div>
           <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{analytics.assignedStudents}</div>
           <div className="flex items-center text-orange-500 text-xs font-bold relative z-10">
-            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
             <span>ALLOCATED</span>
           </div>
         </div>
@@ -2584,7 +2660,6 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
           </div>
           <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{analytics.totalClasses}</div>
           <div className="flex items-center text-purple-500 text-xs font-bold relative z-10">
-            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
             <span>TOTAL</span>
           </div>
         </div>
@@ -2596,7 +2671,6 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
           </div>
           <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{analytics.scheduledClasses}</div>
           <div className="flex items-center text-indigo-500 text-xs font-bold relative z-10">
-            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
             <span>CLASSES</span>
           </div>
         </div>
@@ -2606,16 +2680,6 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       <div className="bg-white rounded-[20px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-100">
           <nav className="flex space-x-8" aria-label="Import Export Tabs">
-            <button
-              onClick={() => setActiveSubTab('import')}
-              className={`pb-3 px-1 border-b-2 font-semibold text-sm uppercase tracking-wide transition-colors ${
-                activeSubTab === 'import'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300'
-              }`}
-            >
-              Import
-            </button>
             <button
               onClick={() => setActiveSubTab('export')}
               className={`pb-3 px-1 border-b-2 font-semibold text-sm uppercase tracking-wide transition-colors ${
@@ -2641,48 +2705,14 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
 
         {/* Tab Content */}
         <div className="p-6">
-          {activeSubTab === 'import' && (
-            <div>
-              <div className="mb-6">
-                <div className="flex items-center mb-2">
-                  <svg className="w-6 h-6 text-indigo-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-gray-900 uppercase">Import Data</h3>
-                </div>
-                <p className="text-sm text-gray-500">Upload Excel files to import peer tutors, students, and classes</p>
-              </div>
+          
 
-              <div className="space-y-6">
-                <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                  <BulkImportExport 
-                    dept={dept} 
-                    year={year} 
-                    section={section} 
-                    onImportComplete={onImportComplete}
-                  />
-                </div>
-                
-                <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                  <ClassesImportExport 
-                    dept={dept} 
-                    year={year} 
-                    section={section} 
-                    facultyId={facultyId}
-                    onImportComplete={onImportComplete}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+             
 
           {activeSubTab === 'export' && (
     <div>
       <div className="mb-6">
                 <div className="flex items-center mb-2">
-                  <svg className="w-6 h-6 text-green-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
                   <h3 className="text-lg font-semibold text-gray-900 uppercase">Export Data to Excel</h3>
                 </div>
                 <p className="text-sm text-gray-500">Select the data you want to export and download in Excel format</p>
@@ -2692,14 +2722,9 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
             {/* Export Peer Details */}
           <button
               onClick={handleExportPeerDetails}
-              className="group bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
+              className="bg-white border border-gray-200 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
-                <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13.5 3.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z" />
-                  </svg>
-                </div>
                 <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">XLSX</span>
               </div>
               <h4 className="text-sm font-bold text-gray-900 mb-1">PEER TUTOR DETAILS</h4>
@@ -2709,16 +2734,11 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
             {/* Export Students */}
             <button
               onClick={handleExportStudents}
-              className="group bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
+              className="bg-white border border-gray-200 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-        </div>
                 <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">XLSX</span>
-      </div>
+              </div>
               <h4 className="text-sm font-bold text-gray-900 mb-1">STUDENT DETAILS</h4>
               <p className="text-xs text-gray-500">Export all student information</p>
             </button>
@@ -2726,14 +2746,9 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
             {/* Export Assignments */}
             <button
               onClick={handleExportAssignments}
-              className="group bg-white hover:bg-purple-50 border border-gray-200 hover:border-purple-300 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
+              className="bg-white border border-gray-200 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                  <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
                 <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">XLSX</span>
               </div>
               <h4 className="text-sm font-bold text-gray-900 mb-1">ASSIGNMENTS</h4>
@@ -2743,14 +2758,9 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
             {/* Export Attendance */}
             <button
               onClick={handleExportAttendance}
-              className="group bg-white hover:bg-orange-50 border border-gray-200 hover:border-orange-300 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
+              className="bg-white border border-gray-200 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                </div>
                 <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">XLSX</span>
               </div>
               <h4 className="text-sm font-bold text-gray-900 mb-1">ATTENDANCE RECORDS</h4>
@@ -2848,7 +2858,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
 
   // --- State ---
   const [selectedStudent, setSelectedStudent] = useState<string>('')
-  const [selectedPeerTutor, setSelectedPeerTutor] = useState<string>('')
+  const [selectedpeertutors, setSelectedpeertutors] = useState<string>('')
   const [isDeleteMode, setIsDeleteMode] = useState(false)
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set())
   const [showUnassignAllModal, setShowUnassignAllModal] = useState(false)
@@ -2871,9 +2881,16 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
     queryFn: () => AssignmentService.getUnassignedStudents(dept, dbYear, dbSection)
   })
 
-  const { data: peerTutorsWithStudents = [], isLoading: loadingTutors } = useQuery({
-    queryKey: ['peerTutorsWithStudents', dept, dbYear, dbSection],
-    queryFn: () => AssignmentService.getPeerTutorsWithStudents(dept, dbYear, dbSection)
+  const { data: peerTutorWithStudents = [], isLoading: loadingTutors } = useQuery({
+    queryKey: ['peerTutorWithStudents', dept, dbYear, dbSection],
+    queryFn: () => AssignmentService.getpeerTutorWithStudents(dept, dbYear, dbSection)
+  })
+
+  // Check sync status across all sections
+  const { data: syncStatus, isLoading: loadingSync } = useQuery({
+    queryKey: ['yearSyncStatus', dept, dbYear],
+    queryFn: () => ClassService.getYearSyncStatus(dept, dbYear),
+    refetchInterval: 30000 // Check every 30s
   })
 
   const loading = loadingAssignments || loadingStats || loadingUnassigned || loadingTutors
@@ -2882,7 +2899,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
     queryClient.invalidateQueries({ queryKey: ['assignments', dept, dbYear, dbSection] })
     queryClient.invalidateQueries({ queryKey: ['assignmentStats', dept, dbYear, dbSection] })
     queryClient.invalidateQueries({ queryKey: ['unassignedStudents', dept, dbYear, dbSection] })
-    queryClient.invalidateQueries({ queryKey: ['peerTutorsWithStudents', dept, dbYear, dbSection] })
+    queryClient.invalidateQueries({ queryKey: ['peerTutorWithStudents', dept, dbYear, dbSection] })
     // Also invalidate students and peer tutors queries from parent scope if needed
     queryClient.invalidateQueries({ queryKey: ['students', dept, dbYear, dbSection] })
   }
@@ -2900,19 +2917,22 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
   }
 
   const handleManualAssign = async () => {
-    if (!selectedStudent || !selectedPeerTutor) return
+    if (!selectedStudent || !selectedpeertutors) return
 
     try {
-      const success = await AssignmentService.assignStudent(selectedStudent, selectedPeerTutor)
+      const success = await AssignmentService.assignStudent(selectedStudent, selectedpeertutors)
       if (success) {
         setSelectedStudent('')
-        setSelectedPeerTutor('')
+        setSelectedpeertutors('')
         invalidateQueries()
       }
     } catch (error) {
       console.error('Error manually assigning student:', error)
     }
   }
+
+  const [showBulkUnassignModal, setShowBulkUnassignModal] = useState(false)
+  const [isBulkUnassigning, setIsBulkUnassigning] = useState(false)
 
 
 
@@ -2944,7 +2964,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
   }
 
   const toggleSelectAll = () => {
-    const allStudentIds = peerTutorsWithStudents.flatMap(({ students }) => 
+    const allStudentIds = peerTutorWithStudents.flatMap(({ students }) => 
       students.map(s => s.id)
     )
     
@@ -2955,21 +2975,27 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
     }
   }
 
-  const handleBulkUnassign = async () => {
+  const handleBulkUnassign = () => {
     if (selectedStudents.size === 0) return
+    setShowBulkUnassignModal(true)
+  }
 
-    if (confirm(`Are you sure you want to unassign ${selectedStudents.size} student(s)?`)) {
-      try {
-        for (const studentId of selectedStudents) {
-          await AssignmentService.unassignStudent(studentId)
-          invalidateQueries()
-        }
-        setSelectedStudents(new Set())
-        setIsDeleteMode(false)
-        invalidateQueries()
-      } catch (error) {
-        console.error('Error bulk unassigning students:', error)
+  const confirmBulkUnassign = async () => {
+    setIsBulkUnassigning(true)
+    try {
+      for (const studentId of selectedStudents) {
+        await AssignmentService.unassignStudent(studentId)
       }
+      setSelectedStudents(new Set())
+      setIsDeleteMode(false)
+      invalidateQueries()
+      toast.success(`Successfully unassigned ${selectedStudents.size} student(s)`)
+      setShowBulkUnassignModal(false)
+    } catch (error) {
+      console.error('Error bulk unassigning students:', error)
+      toast.error('Failed to unassign some students')
+    } finally {
+        setIsBulkUnassigning(false)
     }
   }
 
@@ -2983,15 +3009,15 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
         students: Array<{name: string, email: string}>
       }>()
 
-      peerTutorsWithStudents.forEach(({ peerTutor, students }) => {
-        if (!groupedAssignments.has(peerTutor.id)) {
-          groupedAssignments.set(peerTutor.id, {
-            tutorName: peerTutor.name,
-            tutorEmail: peerTutor.email,
+      peerTutorWithStudents.forEach(({ peertutors, students }) => {
+        if (!groupedAssignments.has(peertutors.id)) {
+          groupedAssignments.set(peertutors.id, {
+            tutorName: peertutors.name,
+            tutorEmail: peertutors.email,
             students: []
           })
         }
-        const group = groupedAssignments.get(peerTutor.id)!
+        const group = groupedAssignments.get(peertutors.id)!
         students.forEach(student => {
           group.students.push({
             name: student.name,
@@ -3090,7 +3116,6 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
             </div>
             <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{stats.assignedStudents}</div>
             <div className="flex items-center text-emerald-500 text-xs font-bold relative z-10">
-              <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
               <span>ALLOCATED</span>
             </div>
           </div>
@@ -3102,7 +3127,6 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
             </div>
             <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{stats.unassignedStudents}</div>
             <div className="flex items-center text-orange-500 text-xs font-bold relative z-10">
-              <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
               <span>REMAINING</span>
             </div>
           </div>
@@ -3114,7 +3138,6 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
             </div>
             <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{stats?.averageStudentsPerTutor || 0}</div>
             <div className="flex items-center text-blue-500 text-xs font-bold relative z-10">
-              <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
               <span>AVERAGE</span>
             </div>
           </div>
@@ -3124,9 +3147,8 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
               <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Assignment Rate</h3>
               <button className="text-gray-300 hover:text-gray-500 transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
             </div>
-            <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{stats?.totalPeerTutors && stats?.totalStudents ? Math.round((stats.assignedStudents / stats.totalStudents) * 100) : 0}%</div>
+            <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{stats?.totalpeerTutor && stats?.totalStudents ? Math.round((stats.assignedStudents / stats.totalStudents) * 100) : 0}%</div>
             <div className="flex items-center text-purple-500 text-xs font-bold relative z-10">
-              <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
               <span>COMPLETION</span>
             </div>
           </div>
@@ -3170,20 +3192,20 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">CHOOSE PEER TUTOR</label>
                 <select
-                  value={selectedPeerTutor}
-                  onChange={(e) => setSelectedPeerTutor(e.target.value)}
+                  value={selectedpeertutors}
+                  onChange={(e) => setSelectedpeertutors(e.target.value)}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
                   <option value="">Choose a peer tutor...</option>
-                  {peerTutorsWithStudents.map(({ peerTutor }) => (
-                    <option key={peerTutor.id} value={peerTutor.id}>{peerTutor.name}</option>
+                  {peerTutorWithStudents.map(({ peertutors }) => (
+                    <option key={peertutors.id} value={peertutors.id}>{peertutors.name}</option>
                   ))}
                 </select>
               </div>
               <div className="sm:self-end">
               <button
                 onClick={handleManualAssign}
-                disabled={!selectedStudent || !selectedPeerTutor}
+                disabled={!selectedStudent || !selectedpeertutors}
                   className="w-full sm:w-auto h-10 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-8 rounded-xl text-sm font-medium transition-all shadow-sm"
               >
                 Assign
@@ -3208,7 +3230,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                   <Upload className="w-4 h-4" />
                   IMPORT
                 </button>
-                {peerTutorsWithStudents.some(({ students }) => students.length > 0) && (
+                {peerTutorWithStudents.some(({ students }) => students.length > 0) && (
                   <button
                     onClick={handleExportAssignments}
                     className="h-10 px-5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
@@ -3221,14 +3243,15 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
             )}
             {isDeleteMode && selectedStudents.size > 0 && (
               <button
-                onClick={handleBulkUnassign}
-                className="h-10 px-5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
-              >
+                  type="button"
+                  onClick={handleBulkUnassign}
+                  className="h-10 px-5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
+                >
                 <Trash2 className="w-4 h-4" />
                 <span>Unassign ({selectedStudents.size})</span>
               </button>
             )}
-            {peerTutorsWithStudents.some(({ students }) => students.length > 0) && (
+            {peerTutorWithStudents.some(({ students }) => students.length > 0) && (
               <button
                 onClick={toggleDeleteMode}
                 className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-700 transition-all flex items-center justify-center group shadow-sm"
@@ -3240,7 +3263,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
           </div>
         </div>
         
-        {peerTutorsWithStudents.length === 0 ? (
+        {peerTutorWithStudents.length === 0 ? (
           <div className="p-8 text-center flex flex-col items-center">
                 <Image src="/icons/student.png" alt="No assignments found" width={96} height={96} className="mx-auto opacity-60 grayscale" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">NO ASSIGNMENTS FOUND</h3>
@@ -3256,7 +3279,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                       <th className="px-3 sm:px-4 md:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
                         <input
                           type="checkbox"
-                          checked={selectedStudents.size > 0 && selectedStudents.size === peerTutorsWithStudents.flatMap(({ students }) => students).length}
+                          checked={selectedStudents.size > 0 && selectedStudents.size === peerTutorWithStudents.flatMap(({ students }) => students).length}
                           onChange={toggleSelectAll}
                           className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500 cursor-pointer"
                         />
@@ -3277,20 +3300,20 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {peerTutorsWithStudents.flatMap(({ peerTutor, students }) => {
+                  {peerTutorWithStudents.flatMap(({ peertutors, students }) => {
                     if (students.length === 0) {
                       return [
-                        <tr key={`${peerTutor.id}-empty`} className="hover:bg-gray-50">
+                        <tr key={`${peertutors.id}-empty`} className="hover:bg-gray-50">
                           {isDeleteMode && <td className="px-3 sm:px-4 md:px-6 py-4"></td>}
                           <td className="px-3 sm:px-4 md:px-6 py-4 text-center align-middle border-r border-gray-200">
                             <div className="flex flex-col items-center justify-center min-w-0">
                               <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mb-2">
                                 <span className="text-sm font-bold text-gray-600">
-                                  {peerTutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                  {peertutors.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                 </span>
                               </div>
                               <div className="text-sm font-medium text-gray-900 break-words text-center px-1 max-w-full">
-                                {peerTutor.name}
+                                {peertutors.name}
                               </div>
                             </div>
                           </td>
@@ -3299,7 +3322,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                               className="text-xs sm:text-sm text-gray-500 break-words text-center px-1 min-w-0 max-w-full" 
                               style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                             >
-                              {peerTutor.email}
+                              {peertutors.email}
                             </div>
                           </td>
                           <td colSpan={isDeleteMode ? 2 : 3} className="px-3 sm:px-4 md:px-6 py-4 text-center">
@@ -3309,7 +3332,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                       ]
                     }
                     return students.map((student, index) => (
-                      <tr key={`${peerTutor.id}-${student.id}`} className="hover:bg-gray-50">
+                      <tr key={`${peertutors.id}-${student.id}`} className="hover:bg-gray-50">
                         {isDeleteMode && (
                           <td className="px-3 sm:px-4 md:px-6 py-4 text-center">
                             <input
@@ -3329,11 +3352,11 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                               <div className="flex flex-col items-center justify-center min-w-0">
                                 <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mb-2">
                                   <span className="text-sm font-bold text-gray-600">
-                                    {peerTutor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                    {peertutors.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                   </span>
                                 </div>
                                 <div className="text-sm font-medium text-gray-900 break-words text-center px-1 max-w-full">
-                                  {peerTutor.name}
+                                  {peertutors.name}
                                 </div>
                               </div>
                             </td>
@@ -3345,7 +3368,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                                 className="text-xs sm:text-sm text-gray-500 break-words text-center px-1 min-w-0 max-w-full" 
                                 style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                               >
-                                {peerTutor.email}
+                                {peertutors.email}
                               </div>
                             </td>
                           </>
@@ -3379,6 +3402,43 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
           </div>
         )}
       </div>
+      
+      {/* Bulk Unassign Confirmation Modal - Different from Unassign All */}
+      {showBulkUnassignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                Unassign Selected Students?
+              </h3>
+              <p className="text-sm text-gray-600 text-center mb-6">
+                Are you sure you want to unassign {selectedStudents.size} student(s)?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowBulkUnassignModal(false)}
+                  disabled={isBulkUnassigning}
+                  className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBulkUnassign}
+                  disabled={isBulkUnassigning}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  type="button"
+                >
+                   {isBulkUnassigning ? 'Processing...' : 'Unassign'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Unassign All Confirmation Modal */}
       {showUnassignAllModal && (
@@ -3444,6 +3504,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showDateAssignmentModal, setShowDateAssignmentModal] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showClassImportModal, setShowClassImportModal] = useState(false)
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'scheduled'>('all')
   const [filterByClass, setFilterByClass] = useState<string>('')
   /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -3456,13 +3517,17 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   })
   const [filteredSubjects, setFilteredSubjects] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isSubjectFilterOpen, setIsSubjectFilterOpen] = useState(false)
   
   // Delete mode state
   const [isDeleteMode, setIsDeleteMode] = useState(false)
   const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set())
   const [selectedScheduledGroups, setSelectedScheduledGroups] = useState<Set<string>>(new Set())
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showScheduledDeleteModal, setShowScheduledDeleteModal] = useState(false)
   const [subjectsToDelete, setSubjectsToDelete] = useState<Array<{name: string, canDelete: boolean, reason?: string}>>([])
+  const [isDeletingSubjects, setIsDeletingSubjects] = useState(false)
+  const [isDeletingScheduled, setIsDeletingScheduled] = useState(false)
 
   // Use raw values directly for database operations
   const dbYear = year
@@ -3484,6 +3549,11 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   const { data: querySubjects = [], isLoading: loadingSubjectsList } = useQuery({
     queryKey: ['allSubjects'],
     queryFn: () => ClassService.getAllUniqueSubjects()
+  })
+
+  const { data: syncStatus, isLoading: loadingSync } = useQuery({
+    queryKey: ['yearSyncStatus', dept, dbYear],
+    queryFn: () => ClassService.getYearSyncStatus(dept, dbYear)
   })
 
   // Derived loading state
@@ -3602,7 +3672,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
       const subjectRows = getSubjectsWithAllocations().map((s) => ({
         'Name': s.name,
         'Classes Allocated': s.classesAllocated,
-        'Peer Tutors Allocated': s.peerTutorsAllocated,
+        'Peer Tutors Allocated': s.peerTutorAllocated,
         'Status': s.isScheduled ? 'Scheduled' : 'Not scheduled'
       }))
 
@@ -3647,11 +3717,13 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     setSelectedScheduledGroups(newSelected)
   }
 
-  const handleBulkDeleteScheduledGroups = async () => {
-    if (!confirm(`Are you sure you want to delete ${selectedScheduledGroups.size} scheduled class groups?`)) {
-      return
-    }
+  const handleBulkDeleteScheduledGroups = () => {
+    if (selectedScheduledGroups.size === 0) return
+    setShowScheduledDeleteModal(true)
+  }
 
+  const confirmBulkDeleteScheduledGroups = async () => {
+    setIsDeletingScheduled(true)
     try {
       const groups = getGroupedScheduledClasses()
       const groupsToDelete = groups.filter(g => 
@@ -3670,9 +3742,13 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
       invalidateQueries()
       setSelectedScheduledGroups(new Set())
       setIsDeleteMode(false)
+      setShowScheduledDeleteModal(false)
+      toast.success(`Successfully deleted ${groupsToDelete.length} scheduled class group(s)`)
     } catch (error) {
       console.error('Error deleting scheduled groups:', error)
-      alert('Failed to delete scheduled groups')
+      toast.error('Failed to delete scheduled groups')
+    } finally {
+        setIsDeletingScheduled(false)
     }
   }
 
@@ -3715,6 +3791,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   const confirmBulkDelete = async () => {
     const deletableSubjects = subjectsToDelete.filter(s => s.canDelete)
     
+    setIsDeletingSubjects(true)
     try {
       for (const subject of deletableSubjects) {
         // Find all classes for this subject
@@ -3730,9 +3807,12 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
       setIsDeleteMode(false)
       setSelectedSubjects(new Set())
       invalidateQueries()
+      toast.success(`Successfully deleted ${deletableSubjects.length} subject(s)`)
     } catch (error) {
       console.error('Error deleting subjects:', error)
-      alert('Failed to delete some subjects. Please try again.')
+      toast.error('Failed to delete some subjects. Please try again.')
+    } finally {
+      setIsDeletingSubjects(false)
     }
   }
 
@@ -3749,14 +3829,14 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     const subjectMap = new Map<string, {
       name: string,
       classesAllocated: number,
-      peerTutorsAllocated: number,
+      peerTutorAllocated: number,
       isScheduled: boolean
     }>()
 
     // Process all classes
     classes.forEach(classItem => {
       const scheduledForClass = scheduledClasses.filter(sc => sc.class_id === classItem.id)
-      const uniquePeerTutors = new Set(scheduledForClass.map(sc => sc.peer_tutor_id))
+      const uniquepeerTutor = new Set(scheduledForClass.map(sc => sc.peer_tutor_id))
       // Count unique scheduled dates for this class
       const uniqueScheduledDates = new Set(scheduledForClass.map(sc => sc.scheduled_date))
       
@@ -3764,7 +3844,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
         subjectMap.set(classItem.subject_name, {
           name: classItem.subject_name,
           classesAllocated: 0,
-          peerTutorsAllocated: 0,
+          peerTutorAllocated: 0,
           isScheduled: false
         })
       }
@@ -3772,7 +3852,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
       const subjectData = subjectMap.get(classItem.subject_name)!
       // Add the count of unique scheduled dates instead of total scheduled class entries
       subjectData.classesAllocated += uniqueScheduledDates.size
-      subjectData.peerTutorsAllocated = Math.max(subjectData.peerTutorsAllocated, uniquePeerTutors.size)
+      subjectData.peerTutorAllocated = Math.max(subjectData.peerTutorAllocated, uniquepeerTutor.size)
       subjectData.isScheduled = scheduledForClass.length > 0 || subjectData.isScheduled
     })
 
@@ -3853,7 +3933,6 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
           </div>
           <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{classes.length}</div>
           <div className="flex items-center text-emerald-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
              <span>TOTAL</span>
           </div>
         </div>
@@ -3865,7 +3944,6 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
           </div>
           <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{scheduledClasses.length}</div>
           <div className="flex items-center text-blue-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
              <span>TOTAL ALLOCATED</span>
           </div>
         </div>
@@ -3879,7 +3957,6 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
             {scheduledClasses.filter((sc: any) => sc.completion_status === 'pending' || sc.completion_status === 'not_started').length}
           </div>
           <div className="flex items-center text-orange-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
              <span>REMAINING</span>
           </div>
         </div>
@@ -3893,7 +3970,6 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
             {classes.length > 0 ? (scheduledClasses.length / classes.length).toFixed(1) : '0'}
           </div>
           <div className="flex items-center text-purple-500 text-xs font-bold relative z-10">
-             <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
              <span>AVERAGE</span>
           </div>
         </div>
@@ -3903,8 +3979,17 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
         <div className="px-6 py-5 border-b border-gray-100">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-3">
                 SUBJECTS ({classes.length}) - SCHEDULED ({getGroupedScheduledClasses().length})
+                {!loadingSync && syncStatus && (
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
+                    syncStatus.isSynced 
+                      ? 'bg-gray-50 text-black-600 border-black-100' 
+                      : 'bg-gray-50 text-black-600 border-black-100'
+                  }`}>
+                    {syncStatus.isSynced ? 'Synced' : 'Not Synced'}
+                  </span>
+                )}
               </h3>
             </div>
             
@@ -3918,9 +4003,21 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  <span>ADD SUBJECT</span>
+                  <span>ADD</span>
                 </button>
               )}
+
+              {!isDeleteMode && (
+                <button
+                  onClick={() => setShowClassImportModal(true)}
+                  className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>IMPORT</span>
+                </button>
+              )}
+
+
               
               {!isDeleteMode && classes.length > 0 && (
                 <button
@@ -3930,7 +4027,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  <span>ASSIGN DATES</span>
+                  <span>ASSIGN</span>
                 </button>
               )}
               
@@ -3946,6 +4043,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
+
                   
                   <button
                     onClick={() => setShowExportModal(true)}
@@ -3959,6 +4057,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
               {/* Delete Mode Actions */}
               {isDeleteMode && (activeSubTab === 'all' ? selectedSubjects.size > 0 : selectedScheduledGroups.size > 0) && (
                 <button
+                  type="button"
                   onClick={activeSubTab === 'all' ? handleBulkDelete : handleBulkDeleteScheduledGroups}
                   className="h-12 px-6 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2"
                 >
@@ -4070,7 +4169,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                           {subject.classesAllocated}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                          {subject.peerTutorsAllocated}
+                          {subject.peerTutorAllocated}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <span className="inline-flex px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-600 border border-gray-200">
@@ -4096,19 +4195,68 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                 <div>
                   {/* Filter and Sort Controls */}
                   <div className="mb-6 w-48 flex flex-col sm:flex-row gap-4 mx-4 my-4">
-                    <div className="flex-1">
-                      <select
-                        value={filterByClass}
-                        onChange={(e) => setFilterByClass(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">All Subjects</option>
-                        {getUniqueSubjects().map((subject) => (
-                          <option key={subject} value={subject}>
-                            {subject}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="flex-1 relative">
+                      {isSubjectFilterOpen && (
+                        <div className="fixed inset-0 z-10" onClick={() => setIsSubjectFilterOpen(false)} />
+                      )}
+                      <div className="relative z-20">
+                        <button
+                          type="button"
+                          onClick={() => setIsSubjectFilterOpen(!isSubjectFilterOpen)}
+                          className="relative w-full bg-white border border-gray-300 rounded-[20px] shadow-sm pl-4 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        >
+                          <span className="block truncate text-gray-700 font-medium">
+                            {filterByClass || 'All Subjects'}
+                          </span>
+                          <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                            <ChevronDown className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                          </span>
+                        </button>
+
+                        {isSubjectFilterOpen && (
+                          <div className="absolute mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                            <div
+                              className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 text-gray-900"
+                              onClick={() => {
+                                setFilterByClass('')
+                                setIsSubjectFilterOpen(false)
+                              }}
+                            >
+                              <span className={`block truncate ${filterByClass === '' ? 'font-semibold' : 'font-normal'}`}>
+                                All Subjects
+                              </span>
+                              {filterByClass === '' && (
+                                <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-blue-600">
+                                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </span>
+                              )}
+                            </div>
+                            {getUniqueSubjects().map((subject) => (
+                              <div
+                                key={subject}
+                                className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 text-gray-900"
+                                onClick={() => {
+                                  setFilterByClass(subject)
+                                  setIsSubjectFilterOpen(false)
+                                }}
+                              >
+                                <span className={`block truncate ${filterByClass === subject ? 'font-semibold' : 'font-normal'}`}>
+                                  {subject}
+                                </span>
+                                {filterByClass === subject && (
+                                  <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-blue-600">
+                                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     </div>
 
@@ -4201,28 +4349,34 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
         </div>
       </div>
 
-      {/* Add Class Modal */}
+      {/* Add Class Modal - Redesigned */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Add New Class</h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full p-8 animate-in zoom-in-95 duration-300 border border-white/20">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Add New Class</h3>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">
+                  Create a new subject entry
+                </p>
+              </div>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="p-2 rounded-full hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition-all duration-200"
               >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddClass} className="space-y-4">
+            <form onSubmit={handleAddClass} className="space-y-6">
               <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
                   Subject Name
                 </label>
-                <div className="relative">
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                  </div>
                   <input
                     type="text"
                     value={newClass.subject_name}
@@ -4234,55 +4388,56 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                       }
                     }}
                     onKeyDown={handleKeyDown}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Type to search subjects (e.g., 'DB' for 'DBMS')"
+                    className="block w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    placeholder="Search or enter subject name..."
                     required
                     autoComplete="off"
                   />
                   {loadingSubjects && (
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
                     </div>
                   )}
                 </div>
                 
                 {/* Autocomplete Suggestions */}
                 {showSuggestions && filteredSubjects.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                  <div className="absolute z-20 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-auto custom-scrollbar">
                     {filteredSubjects.slice(0, 10).map((subject, index) => (
                       <div
                         key={index}
                         onClick={() => handleSubjectSelect(subject)}
-                        className={`px-3 py-2 cursor-pointer text-sm border-b border-gray-100 last:border-b-0 ${
+                        className={`px-4 py-3 cursor-pointer text-sm font-medium border-b border-gray-50 last:border-b-0 transition-colors ${
                           index === selectedSuggestionIndex 
-                            ? 'bg-blue-100 text-blue-900' 
-                            : 'hover:bg-blue-50 text-gray-900'
+                            ? 'bg-blue-50 text-blue-700' 
+                            : 'hover:bg-gray-50 text-gray-700'
                         }`}
                       >
-                        <span>{subject}</span>
+                        {subject}
                       </div>
                     ))}
                     {filteredSubjects.length > 10 && (
-                      <div className="px-3 py-2 text-xs text-gray-500 bg-gray-50">
-                        Showing first 10 of {filteredSubjects.length} results
+                      <div className="px-4 py-2 text-[10px] font-bold text-gray-400 bg-gray-50/50 uppercase tracking-wider text-center">
+                        And {filteredSubjects.length - 10} more matches
                       </div>
                     )}
                   </div>
                 )}
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-50">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors duration-200"
+                  className="px-6 py-2.5 text-[11px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 rounded-xl transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors duration-200"
+                  className="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center gap-2"
                 >
+                  <Plus className="w-4 h-4" />
                   Add Class
                 </button>
               </div>
@@ -4297,6 +4452,19 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
         onClose={() => setShowDateAssignmentModal(false)}
         onSuccess={() => {
           invalidateQueries() // Reload classes after successful date assignment
+        }}
+        dept={dept}
+        year={dbYear}
+        section={dbSection}
+        faculty_id={departmentId}
+      />
+
+      {/* Class Import Modal */}
+      <ClassImportModal
+        isOpen={showClassImportModal}
+        onClose={() => setShowClassImportModal(false)}
+        onSuccess={() => {
+          invalidateQueries() // Reload classes after successful import
         }}
         dept={dept}
         year={dbYear}
@@ -4356,62 +4524,103 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
           </div>
         </div>
       )}
+      
+      {/* Scheduled Classes Delete Confirmation Modal */}
+      {showScheduledDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                Delete Scheduled Classes?
+              </h3>
+              <p className="text-sm text-gray-600 text-center mb-6">
+                Are you sure you want to delete {selectedScheduledGroups.size} scheduled class group(s)?
+                This action cannot be undone.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowScheduledDeleteModal(false)}
+                  disabled={isDeletingScheduled}
+                  className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBulkDeleteScheduledGroups}
+                  disabled={isDeletingScheduled}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  type="button"
+                >
+                  {isDeletingScheduled ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
             {/* Header */}
-            <div className="px-8 py-6 border-b border-gray-200">
-              <div className="flex items-center justify-center w-16 h-16 mx-auto bg-red-100 rounded-full mb-4">
-                <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 text-center">
+            <div className="px-8 pt-10 pb-6 text-center border-b border-gray-50">
+              <h3 className="text-2xl  text-left font-black text-gray-900 uppercase tracking-tight">
                 Delete Subjects
               </h3>
-              <p className="text-sm text-gray-500 text-center mt-2">
-                Review the subjects below before confirming deletion
+              <p className="text-[10px] font-bold text-left text-gray-400 uppercase tracking-[0.2em] mt-2">
+                Review the items below before permanent removal
               </p>
             </div>
 
             {/* Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto px-8 py-6">
-              {/* Subjects Table */}
-              <div className="space-y-3">
+            <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
+              <div className="space-y-4">
                 {subjectsToDelete.map((subject, index) => (
                   <div
                     key={index}
-                    className={`rounded-lg border-2 p-4 transition-all ${
+                    className={`rounded-2xl border-2 p-5 transition-all duration-200 group ${
                       subject.canDelete
-                        ? 'bg-white border-gray-200'
-                        : 'bg-red-50 border-red-200'
+                        ? 'bg-white border-gray-100 hover:border-gray-200 shadow-sm'
+                        : 'bg-red-50/50 border-red-100'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <p className="text-base font-semibold text-gray-900 truncate">
+                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">
                           {subject.name}
                         </p>
                         {!subject.canDelete && subject.reason && (
-                          <div className="flex items-start gap-2 mt-2">
-                            <svg className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <div className="flex items-start gap-2 mt-2 bg-red-50 p-2.5 rounded-xl border border-red-100/50">
+                            <svg className="w-3.5 h-3.5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
-                            <span className="text-sm text-red-700 font-medium">
-                              Cannot delete: {subject.reason}
+                            <span className="text-[10px] text-red-700 font-bold uppercase tracking-tight">
+                              CANNOT DELETE: {subject.reason}
                             </span>
                           </div>
                         )}
                       </div>
                       <div className="flex-shrink-0">
                         {subject.canDelete ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white text-gray-700 border border-gray-300">
-                            Can delete
+                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-100">
+                            Safe to delete
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
-                            Cannot delete
+                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-600 border border-red-200">
+                            Protected
                           </span>
                         )}
                       </div>
@@ -4422,41 +4631,49 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
             </div>
 
             {/* Footer - Summary and Actions */}
-            <div className="px-8 py-6 border-t border-gray-200 bg-gray-50">
+            <div className="px-8 py-8 border-t border-gray-100 bg-gray-50/50">
               {/* Summary Stats */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <div className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wide">Total selected</div>
-                  <div className="text-2xl font-bold text-gray-900">{subjectsToDelete.length}</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+                <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm transition-all duration-300">
+                  <div className="text-[9px] text-gray-400 font-black uppercase tracking-[0.15em] mb-2">Total Selected</div>
+                  <div className="text-2xl font-black text-gray-900">{subjectsToDelete.length}</div>
                 </div>
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <div className="text-xs text-green-600 font-medium mb-1 uppercase tracking-wide">Will be deleted</div>
-                  <div className="text-2xl font-bold text-green-600">
+                <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm transition-all duration-300">
+                  <div className="text-[9px] text-emerald-500 font-black uppercase tracking-[0.15em] mb-2">To be Deleted</div>
+                  <div className="text-2xl font-black text-emerald-600">
                     {subjectsToDelete.filter(s => s.canDelete).length}
                   </div>
                 </div>
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <div className="text-xs text-red-600 font-medium mb-1 uppercase tracking-wide">Cannot be deleted</div>
-                  <div className="text-2xl font-bold text-red-600">
+                <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm transition-all duration-300">
+                  <div className="text-[9px] text-red-500 font-black uppercase tracking-[0.15em] mb-2">Cannot Delete</div>
+                  <div className="text-2xl font-black text-red-600">
                     {subjectsToDelete.filter(s => !s.canDelete).length}
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row justify-end gap-3">
+              <div className="flex flex-col sm:flex-row justify-end gap-4">
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="w-full sm:w-auto px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all"
+                  className="px-8 py-3 text-[11px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-100 rounded-xl transition-all"
                 >
                   Cancel
                 </button>
                 {subjectsToDelete.some(s => s.canDelete) && (
                   <button
                     onClick={confirmBulkDelete}
-                    className="w-full sm:w-auto px-6 py-3 text-sm font-medium text-white bg-red-600 border border-transparent rounded-xl hover:bg-red-700 transition-all"
+                    disabled={isDeletingSubjects}
+                    className="px-10 py-3 text-[11px] font-black text-white bg-red-600 uppercase tracking-widest hover:bg-red-700 rounded-xl transition-all shadow-lg shadow-red-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Delete {subjectsToDelete.filter(s => s.canDelete).length} Subject(s)
+                    {isDeletingSubjects ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      `Confirm Deletion (${subjectsToDelete.filter(s => s.canDelete).length})`
+                    )}
                   </button>
                 )}
               </div>
@@ -4483,13 +4700,13 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
 
   const [selectedClass, setSelectedClass] = useState<string>('')
 
-  const [peerTutorAttendance, setPeerTutorAttendance] = useState<any[]>([])
-  const [selectedPeerTutor, setSelectedPeerTutor] = useState<any>(null)
+  const [peertutorsAttendance, setpeertutorsAttendance] = useState<any[]>([])
+  const [selectedpeertutors, setSelectedpeertutors] = useState<any>(null)
   const [studentDetails, setStudentDetails] = useState<any[]>([])
   const [view, setView] = useState<'classes' | 'peer-tutors' | 'students'>('classes')
   const [expandedClassRows, setExpandedClassRows] = useState<Set<string>>(new Set())
-  const [expandedPeerTutorRows, setExpandedPeerTutorRows] = useState<Set<string>>(new Set())
-  const [peerTutorStudentDetails, setPeerTutorStudentDetails] = useState<Map<string, any[]>>(new Map())
+  const [expandedpeertutorsRows, setExpandedpeertutorsRows] = useState<Set<string>>(new Set())
+  const [peerTutortudentDetails, setpeerTutortudentDetails] = useState<Map<string, any[]>>(new Map())
   const [presentScheduledClassIds, setPresentScheduledClassIds] = useState<Set<string>>(new Set())
   // React Query for Scheduled Classes
   const { data: scheduledClasses = [], isLoading: loadingScheduled } = useQuery({
@@ -4506,12 +4723,12 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
     queryKey: ['additionalClasses', dept, dbYear, dbSection],
     queryFn: async () => {
       // Get all peer tutors for this section
-      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, dbYear, dbSection)
+      const peerTutor = await peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection)
       
       // Get additional classes for all peer tutors
       const allAdditionalClasses = await Promise.all(
-        peerTutors.map(async (tutor) => {
-          const classes = await AdditionalClassService.getAdditionalClassesByPeerTutor(tutor.id)
+        peerTutor.map(async (tutor) => {
+          const classes = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
           return classes.map(cls => ({
             ...cls,
             peer_tutor: {
@@ -4584,14 +4801,14 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   })
 
 
-  const loadPeerTutorAttendanceForClass = async (classIdOrSubject: string, isAdditional: boolean = false) => {
+  const loadpeertutorsAttendanceForClass = async (classIdOrSubject: string, isAdditional: boolean = false) => {
     try {
       setLoading(true)
       const supabase = createClient()
       
       console.log('Loading peer tutor attendance for class:', classIdOrSubject, 'isAdditional:', isAdditional)
       
-      const peerTutorAttendanceList: any[] = []
+      const peertutorsAttendanceList: any[] = []
       
       if (isAdditional) {
         // Handle additional class
@@ -4603,7 +4820,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         
         // For additional classes, the peer tutor is always present (they created it)
         // Show attendance records from additional_class_attendance
-        peerTutorAttendanceList.push({
+        peertutorsAttendanceList.push({
           scheduled_class_id: additionalClass.id,
           peer_tutor_id: additionalClass.peer_tutor_id,
           peer_tutor_name: additionalClass.peer_tutor.name,
@@ -4685,8 +4902,8 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         // Process scheduled classes to create peer tutor attendance list
         if (allScheduledClasses) {
           allScheduledClasses.forEach(scheduledClass => {
-            const peerTutor = scheduledClass.peer_tutor
-            if (peerTutor) {
+            const peertutors = scheduledClass.peer_tutor
+            if (peertutors) {
               const completionStatus = scheduledClass.completion_status || 'not_started'
               const hasAttendanceRecord = attendanceByScheduledClass.has(scheduledClass.id)
               
@@ -4701,11 +4918,11 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                   : 'absent'
               }
               
-              peerTutorAttendanceList.push({
+              peertutorsAttendanceList.push({
                 scheduled_class_id: scheduledClass.id,
-                peer_tutor_id: peerTutor.id,
-                peer_tutor_name: peerTutor.name,
-                peer_tutor_email: peerTutor.email,
+                peer_tutor_id: peertutors.id,
+                peer_tutor_name: peertutors.name,
+                peer_tutor_email: peertutors.email,
                 attendance_status: attendanceStatus,
                 completion_status: completionStatus,
                 present_count: attendanceStatus === 'present' ? 1 : 0,
@@ -4718,8 +4935,8 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         }
       }
 
-      console.log('Peer tutor attendance for class:', peerTutorAttendanceList)
-      setPeerTutorAttendance(peerTutorAttendanceList)
+      console.log('Peer tutor attendance for class:', peertutorsAttendanceList)
+      setpeertutorsAttendance(peertutorsAttendanceList)
       
     } catch (error) {
       console.error('Error loading peer tutor attendance:', error)
@@ -4728,28 +4945,28 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
     }
   }
 
-  const handlePeerTutorClick = async (peerTutor: any) => {
-    const isExpanded = expandedPeerTutorRows.has(peerTutor.peer_tutor_id)
+  const handlepeertutorsClick = async (peertutors: any) => {
+    const isExpanded = expandedpeertutorsRows.has(peertutors.peer_tutor_id)
     
     if (isExpanded) {
       // Collapse
-      const newExpanded = new Set(expandedPeerTutorRows)
-      newExpanded.delete(peerTutor.peer_tutor_id)
-      setExpandedPeerTutorRows(newExpanded)
+      const newExpanded = new Set(expandedpeertutorsRows)
+      newExpanded.delete(peertutors.peer_tutor_id)
+      setExpandedpeertutorsRows(newExpanded)
     } else {
       // Expand and load student details if not already loaded
-      const newExpanded = new Set(expandedPeerTutorRows)
-      newExpanded.add(peerTutor.peer_tutor_id)
-      setExpandedPeerTutorRows(newExpanded)
+      const newExpanded = new Set(expandedpeertutorsRows)
+      newExpanded.add(peertutors.peer_tutor_id)
+      setExpandedpeertutorsRows(newExpanded)
       
       // Load student details if not already cached
-      if (!peerTutorStudentDetails.has(peerTutor.peer_tutor_id)) {
-        await loadStudentDetailsForPeerTutor(peerTutor.scheduled_class_id, peerTutor.peer_tutor_id)
+      if (!peerTutortudentDetails.has(peertutors.peer_tutor_id)) {
+        await loadStudentDetailsForpeertutors(peertutors.scheduled_class_id, peertutors.peer_tutor_id)
       }
     }
   }
   
-  const loadStudentDetailsForPeerTutor = async (scheduledClassId: string, peerTutorId: string) => {
+  const loadStudentDetailsForpeertutors = async (scheduledClassId: string, peertutorsId: string) => {
     try {
       const supabase = createClient()
       
@@ -4782,9 +4999,9 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         }
         
         // Cache the student details
-        const newMap = new Map(peerTutorStudentDetails)
-        newMap.set(peerTutorId, studentDetailsList)
-        setPeerTutorStudentDetails(newMap)
+        const newMap = new Map(peerTutortudentDetails)
+        newMap.set(peertutorsId, studentDetailsList)
+        setpeerTutortudentDetails(newMap)
         return
       }
       
@@ -4800,7 +5017,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           )
         `)
         .eq('scheduled_class_id', scheduledClassId)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
       
       if (error) {
         console.error('Error loading student details:', error)
@@ -4817,23 +5034,23 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       }))
       
       // Cache the student details
-      const newMap = new Map(peerTutorStudentDetails)
-      newMap.set(peerTutorId, students)
-      setPeerTutorStudentDetails(newMap)
+      const newMap = new Map(peerTutortudentDetails)
+      newMap.set(peertutorsId, students)
+      setpeerTutortudentDetails(newMap)
     } catch (error) {
-      console.error('Error in loadStudentDetailsForPeerTutor:', error)
+      console.error('Error in loadStudentDetailsForpeertutors:', error)
     }
   }
 
   const handleBackToClasses = () => {
     setView('classes')
     setSelectedClass('')
-    setPeerTutorAttendance([])
+    setpeertutorsAttendance([])
   }
 
-  const handleBackToPeerTutors = () => {
+  const handleBackTopeerTutor = () => {
     setView('peer-tutors')
-    setSelectedPeerTutor(null)
+    setSelectedpeertutors(null)
     setStudentDetails([])
   }
 
@@ -4841,7 +5058,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
     try {
       const selectedScheduledClass = scheduledClasses.find(sc => sc.id === selectedClass)
       if (!selectedScheduledClass) {
-        alert('Please select a class first')
+        toast.error('Please select a class first')
         return
       }
 
@@ -4849,14 +5066,14 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       const supabase = createClient()
 
       // Filter peer tutors by attendance status
-      const presentPeerTutors = peerTutorAttendance.filter(pt => pt.attendance_status === 'present')
-      const absentPeerTutors = peerTutorAttendance.filter(pt => pt.attendance_status === 'absent')
+      const presentpeerTutor = peertutorsAttendance.filter(pt => pt.attendance_status === 'present')
+      const absentpeerTutor = peertutorsAttendance.filter(pt => pt.attendance_status === 'absent')
 
       // Sheet 1: Present Peer Tutors with Student Attendance
-      if (presentPeerTutors.length > 0) {
+      if (presentpeerTutor.length > 0) {
         const presentDataWithStudents: any[] = []
 
-        for (const pt of presentPeerTutors) {
+        for (const pt of presentpeerTutor) {
           // Get student attendance for this peer tutor
           const { data: studentAttendance } = await supabase
             .from('attendance')
@@ -4907,8 +5124,8 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       }
 
       // Sheet 2: Absent Peer Tutors
-      if (absentPeerTutors.length > 0) {
-        const absentData = absentPeerTutors.map(pt => ({
+      if (absentpeerTutor.length > 0) {
+        const absentData = absentpeerTutor.map(pt => ({
           'Peer Tutor Name': pt.peer_tutor_name,
           'Peer Tutor Email': pt.peer_tutor_email,
           'Subject': selectedScheduledClass.class?.subject_name || 'Unknown',
@@ -4927,10 +5144,10 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       const summaryData = [{
         'Subject': selectedScheduledClass.class?.subject_name || 'Unknown',
         'Date': new Date(selectedScheduledClass.scheduled_date).toLocaleDateString('en-GB'),
-        'Total Peer Tutors': peerTutorAttendance.length,
-        'Present': presentPeerTutors.length,
-        'Absent': absentPeerTutors.length,
-        'Pending': peerTutorAttendance.filter(pt => pt.attendance_status === 'pending').length
+        'Total Peer Tutors': peertutorsAttendance.length,
+        'Present': presentpeerTutor.length,
+        'Absent': absentpeerTutor.length,
+        'Pending': peertutorsAttendance.filter(pt => pt.attendance_status === 'pending').length
       }]
       const summaryWs = XLSX.utils.json_to_sheet(summaryData)
       XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
@@ -4940,7 +5157,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       XLSX.writeFile(wb, fileName)
     } catch (error) {
       console.error('Error exporting attendance:', error)
-      alert('Failed to export attendance. Please try again.')
+      toast.error('Failed to export attendance. Please try again.')
     }
   }
 
@@ -4986,8 +5203,8 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           }
 
           allScheduledClasses.forEach(sc => {
-            const peerTutor = sc.peer_tutor
-            if (peerTutor) {
+            const peertutors = sc.peer_tutor
+            if (peertutors) {
               const completionStatus = sc.completion_status || 'not_started'
               const hasAttendanceRecord = attendanceByScheduledClass.has(sc.id)
               let attendanceStatus = 'pending'
@@ -4999,8 +5216,8 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
               allAttendanceData.push({
                 'Subject': scheduledClass.class?.subject_name || 'Unknown',
                 'Date': new Date(scheduledClass.scheduled_date).toLocaleDateString('en-GB'),
-                'Peer Tutor Name': peerTutor.name,
-                'Peer Tutor Email': peerTutor.email,
+                'Peer Tutor Name': peertutors.name,
+                'Peer Tutor Email': peertutors.email,
                 'Attendance Status': attendanceStatus.charAt(0).toUpperCase() + attendanceStatus.slice(1),
                 'Completion Status': completionStatus,
                 'Department': dept,
@@ -5017,7 +5234,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       XLSX.writeFile(wb, `all_attendance_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
       console.error('Error exporting all attendance:', error)
-      alert('Failed to export all attendance. Please try again.')
+      toast.error('Failed to export all attendance. Please try again.')
     }
   }
 
@@ -5077,7 +5294,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
     const handleClassSelect = async (classIdOrSubject: string) => {
       setSelectedClass(classIdOrSubject)
       setView('peer-tutors')
-      await loadPeerTutorAttendanceForClass(classIdOrSubject, false)
+      await loadpeertutorsAttendanceForClass(classIdOrSubject, false)
     }
 
     return (
@@ -5092,14 +5309,17 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
             </p>
           </div>
           
-          {uniqueClasses.length > 0 && (
-            <button
-              onClick={handleExportAllAttendance}
-              className="h-10 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
-            >
-              EXPORT
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+
+            {uniqueClasses.length > 0 && (
+              <button
+                onClick={handleExportAllAttendance}
+                className="h-10 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
+              >
+                EXPORT
+              </button>
+            )}
+          </div>
         </div>
         {uniqueClasses.length > 0 ? (
           <div className="bg-white rounded-[20px] border border-gray-100 shadow-sm overflow-hidden">
@@ -5348,7 +5568,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           </div>
           
           {/* Export Button */}
-          {peerTutorAttendance.length > 0 && (
+          {peertutorsAttendance.length > 0 && (
             <button
               onClick={handleExportClassAttendance}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2 flex-shrink-0"
@@ -5362,26 +5582,26 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           )}
         </div>
 
-        {peerTutorAttendance.length > 0 ? (
+        {peertutorsAttendance.length > 0 ? (
           <>
             {/* Mobile Card View */}
             <div className="block lg:hidden space-y-3">
-              {peerTutorAttendance.map((peerTutor) => (
+              {peertutorsAttendance.map((peertutors) => (
                 <div
-                  key={peerTutor.peer_tutor_id}
-                  onClick={() => handlePeerTutorClick(peerTutor)}
+                  key={peertutors.peer_tutor_id}
+                  onClick={() => handlepeertutorsClick(peertutors)}
                   className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-all cursor-pointer"
                 >
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 border-b border-gray-200">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-sm font-medium text-blue-600">
-                          {peerTutor.peer_tutor_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                          {peertutors.peer_tutor_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-semibold text-gray-900 truncate">{peerTutor.peer_tutor_name}</h4>
-                        <p className="text-xs text-gray-600 truncate">{peerTutor.peer_tutor_email}</p>
+                        <h4 className="text-sm font-semibold text-gray-900 truncate">{peertutors.peer_tutor_name}</h4>
+                        <p className="text-xs text-gray-600 truncate">{peertutors.peer_tutor_email}</p>
                       </div>
                     </div>
                   </div>
@@ -5390,20 +5610,20 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        peerTutor.attendance_status === 'present' 
+                        peertutors.attendance_status === 'present' 
                           ? 'bg-green-100 text-green-800' 
-                          : peerTutor.attendance_status === 'pending'
+                          : peertutors.attendance_status === 'pending'
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {peerTutor.attendance_status === 'present' ? 'Present' : peerTutor.attendance_status === 'pending' ? 'Pending' : 'Absent'}
+                        {peertutors.attendance_status === 'present' ? 'Present' : peertutors.attendance_status === 'pending' ? 'Pending' : 'Absent'}
                       </span>
                     </div>
                     
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        handlePeerTutorClick(peerTutor)
+                        handlepeertutorsClick(peertutors)
                       }}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-sm font-medium transition-colors duration-200"
                     >
@@ -5419,7 +5639,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
             <div className="px-6 py-4 border-b border-gray-200">
               <h4 className="text-md font-medium text-gray-900">Peer Tutor Attendance Summary</h4>
               <p className="text-sm text-gray-600 mt-1">
-                {peerTutorAttendance.length} peer tutors
+                {peertutorsAttendance.length} peer tutors
               </p>
             </div>
             <div className="overflow-x-auto">
@@ -5441,49 +5661,49 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {peerTutorAttendance.map((peerTutor) => (
+                  {peertutorsAttendance.map((peertutors) => (
                     <>
-                      <tr key={peerTutor.peer_tutor_id} className="hover:bg-gray-50 cursor-pointer">
+                      <tr key={peertutors.peer_tutor_id} className="hover:bg-gray-50 cursor-pointer">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                               <span className="text-sm font-medium text-blue-600">
-                                {peerTutor.peer_tutor_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                                {peertutors.peer_tutor_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
                               </span>
                             </div>
                             <div className="text-sm font-medium text-gray-900">
-                              {peerTutor.peer_tutor_name}
+                              {peertutors.peer_tutor_name}
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">{peerTutor.peer_tutor_email}</div>
+                          <div className="text-sm text-gray-500">{peertutors.peer_tutor_email}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            peerTutor.attendance_status === 'present' 
+                            peertutors.attendance_status === 'present' 
                               ? 'bg-green-100 text-green-800' 
-                              : peerTutor.attendance_status === 'pending'
+                              : peertutors.attendance_status === 'pending'
                               ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-red-100 text-red-800'
                           }`}>
-                            {peerTutor.attendance_status === 'present' ? 'Present' : peerTutor.attendance_status === 'pending' ? 'Pending' : 'Absent'}
+                            {peertutors.attendance_status === 'present' ? 'Present' : peertutors.attendance_status === 'pending' ? 'Pending' : 'Absent'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-gray-900">
-                              {peerTutorStudentDetails.get(peerTutor.peer_tutor_id)?.length || 0} Student{(peerTutorStudentDetails.get(peerTutor.peer_tutor_id)?.length || 0) !== 1 ? 's' : ''}
+                              {peerTutortudentDetails.get(peertutors.peer_tutor_id)?.length || 0} Student{(peerTutortudentDetails.get(peertutors.peer_tutor_id)?.length || 0) !== 1 ? 's' : ''}
                             </span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handlePeerTutorClick(peerTutor)
+                                handlepeertutorsClick(peertutors)
                               }}
                               className="ml-4 text-gray-500 hover:text-gray-700"
-                              aria-label={expandedPeerTutorRows.has(peerTutor.peer_tutor_id) ? 'Collapse' : 'Expand'}
+                              aria-label={expandedpeertutorsRows.has(peertutors.peer_tutor_id) ? 'Collapse' : 'Expand'}
                             >
-                              {expandedPeerTutorRows.has(peerTutor.peer_tutor_id) ? (
+                              {expandedpeertutorsRows.has(peertutors.peer_tutor_id) ? (
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                               ) : (
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -5492,11 +5712,11 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                           </div>
                         </td>
                       </tr>
-                      {expandedPeerTutorRows.has(peerTutor.peer_tutor_id) && (() => {
-                        const students = peerTutorStudentDetails.get(peerTutor.peer_tutor_id) || []
+                      {expandedpeertutorsRows.has(peertutors.peer_tutor_id) && (() => {
+                        const students = peerTutortudentDetails.get(peertutors.peer_tutor_id) || []
                         if (students.length === 0) {
                           return (
-                            <tr key={`${peerTutor.peer_tutor_id}-expanded`} className="bg-gray-50">
+                            <tr key={`${peertutors.peer_tutor_id}-expanded`} className="bg-gray-50">
                               <td colSpan={4} className="px-6 py-4">
                                 <div className="text-sm text-gray-500 text-center">No student attendance records found.</div>
                               </td>
@@ -5504,7 +5724,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                           )
                         }
                         return (
-                          <tr key={`${peerTutor.peer_tutor_id}-expanded`} className="bg-gray-50">
+                          <tr key={`${peertutors.peer_tutor_id}-expanded`} className="bg-gray-50">
                             <td colSpan={4} className="px-6 py-4">
                               <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200">
@@ -5601,12 +5821,12 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   // Students Popup View
   if (view === 'students') {
     // Use the peer tutor's specific scheduled class ID
-    const selectedScheduledClass = scheduledClasses.find(sc => sc.id === selectedPeerTutor?.scheduled_class_id)
+    const selectedScheduledClass = scheduledClasses.find(sc => sc.id === selectedpeertutors?.scheduled_class_id)
     
     return (
       <div>
         {/* Backdrop */}
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={handleBackToPeerTutors}></div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={handleBackTopeerTutor}></div>
         
         {/* Popup */}
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
@@ -5615,7 +5835,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
                 <button
-                  onClick={handleBackToPeerTutors}
+                  onClick={handleBackTopeerTutor}
                   className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors duration-200"
                 >
                   <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -5624,7 +5844,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                 </button>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm sm:text-base lg:text-lg font-medium text-gray-900 truncate">
-                    {selectedPeerTutor?.peer_tutor_name} - Student Details
+                    {selectedpeertutors?.peer_tutor_name} - Student Details
                   </h3>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">
                     {selectedScheduledClass?.class.subject_name} | 
@@ -5637,18 +5857,18 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                   </p>
                   <div className="mt-2">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      selectedPeerTutor?.attendance_status === 'present' 
+                      selectedpeertutors?.attendance_status === 'present' 
                         ? 'bg-green-100 text-green-800' 
-                        : selectedPeerTutor?.attendance_status === 'pending'
+                        : selectedpeertutors?.attendance_status === 'pending'
                         ? 'bg-yellow-100 text-yellow-800'
                         : 'bg-red-100 text-red-800'
                     }`}>
-                      Peer Tutor: {selectedPeerTutor?.attendance_status === 'present' ? 'Present' : selectedPeerTutor?.attendance_status === 'pending' ? 'Pending' : 'Absent'}
+                      Peer Tutor: {selectedpeertutors?.attendance_status === 'present' ? 'Present' : selectedpeertutors?.attendance_status === 'pending' ? 'Pending' : 'Absent'}
                     </span>
                 </div>
               </div>
               <button
-                onClick={handleBackToPeerTutors}
+                onClick={handleBackTopeerTutor}
                   className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors duration-200"
               >
                   <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -5837,6 +6057,60 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
 
 
 
+
+interface BreadcrumbSelectProps {
+  value: string
+  options: { [key: string]: string }
+  onChange: (value: string) => void
+  className?: string
+}
+
+function BreadcrumbSelect({ value, options, onChange, className = '' }: BreadcrumbSelectProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div className="relative inline-block" ref={containerRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1 transition-colors ${className}`}
+      >
+        <span>{options[value] || value}</span>
+        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 min-w-[120px] bg-white border border-gray-100 rounded-lg shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+          {Object.entries(options).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => {
+                onChange(key)
+                setIsOpen(false)
+              }}
+              className={`w-full text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider hover:bg-gray-50 transition-colors whitespace-nowrap ${
+                key === value ? 'text-blue-600 bg-blue-50' : 'text-gray-600'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SectionPage() {
   return (
     <FacultyProtectedRoute>
@@ -5882,9 +6156,9 @@ function SectionContent() {
   })
 
   // Peer Tutors Query
-  const { data: peerTutors = [], isLoading: isPeerTutorsLoading } = useQuery({
-    queryKey: ['peerTutors', department?.name, yearIdStr, sectionIdStr],
-    queryFn: () => PeerTutorService.getPeerTutorsBySection(
+  const { data: peerTutor = [], isLoading: ispeerTutorLoading } = useQuery({
+    queryKey: ['peerTutor', department?.name, yearIdStr, sectionIdStr],
+    queryFn: () => peertutorservice.getpeerTutorBySection(
       department?.name || '',
       yearIdStr,
       sectionIdStr
@@ -5903,12 +6177,12 @@ function SectionContent() {
     enabled: !!department?.name && !!yearIdStr && !!sectionIdStr
   })
 
-  const isLoading = isDepartmentLoading || isPeerTutorsLoading || isStudentsLoading
+  const isLoading = isDepartmentLoading || ispeerTutorLoading || isStudentsLoading
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
+
   
 
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -5972,23 +6246,7 @@ function SectionContent() {
     }
   }, [searchParams])
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownOpen) {
-        const target = event.target as Element
-        // Check if the click is outside any dropdown
-        if (!target.closest('[data-dropdown]')) {
-          setDropdownOpen(null)
-        }
-      }
-    }
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [dropdownOpen])
 
 
 
@@ -6004,48 +6262,27 @@ function SectionContent() {
     'C': 'Section C'
   }
 
-  // Mock data for dropdown options
-  const yearOptions = [
-    { id: '2', name: '2nd Year' },
-    { id: '3', name: '3rd Year' },
-    { id: '4', name: '4th Year' }
-  ]
-
-  const sectionOptions = [
-    { id: 'A', name: 'Section A' },
-    { id: 'B', name: 'Section B' },
-    { id: 'C', name: 'Section C' }
-  ]
-
-
-
-
-
-  const handleDropdownToggle = (dropdown: string) => {
-    setDropdownOpen(dropdownOpen === dropdown ? null : dropdown)
-  }
-
-  const handleYearChange = (newYearId: string) => {
-    router.push(`/faculty/department/${deptIdStr}/year/${newYearId}/section/${sectionIdStr}`)
-    setDropdownOpen(null)
-  }
-
-  const handleSectionChange = (newSectionId: string) => {
-    router.push(`/faculty/department/${deptIdStr}/year/${yearIdStr}/section/${newSectionId}`)
-    setDropdownOpen(null)
-  }
-
-  const handleBackToDashboard = () => {
+  // Mock data for dropdown options REMOVED
+  
+  const onBackToDashboard = () => {
     router.push('/faculty/dashboard')
   }
+
+
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['department'] }),
-        queryClient.invalidateQueries({ queryKey: ['peerTutors'] }),
-        queryClient.invalidateQueries({ queryKey: ['students'] })
+        queryClient.invalidateQueries({ queryKey: ['peerTutor'] }),
+        queryClient.invalidateQueries({ queryKey: ['students'] }),
+        // Invalidate Assign tab queries
+        queryClient.invalidateQueries({ queryKey: ['assignments'] }),
+        queryClient.invalidateQueries({ queryKey: ['assignmentStats'] }),
+        queryClient.invalidateQueries({ queryKey: ['unassignedStudents'] }),
+        queryClient.invalidateQueries({ queryKey: ['peerTutorWithStudents'] }),
+        queryClient.invalidateQueries({ queryKey: ['yearSyncStatus'] })
       ])
 
     } finally {
@@ -6053,47 +6290,72 @@ function SectionContent() {
     }
   }
 
-  const handlePeerTutorAssigned = () => {
-    queryClient.invalidateQueries({ queryKey: ['peerTutors'] })
+  const handlepeertutorsAssigned = () => {
+    queryClient.invalidateQueries({ queryKey: ['peerTutor'] })
+    queryClient.invalidateQueries({ queryKey: ['peerTutorWithStudents'] })
+    queryClient.invalidateQueries({ queryKey: ['assignmentStats'] })
+    queryClient.invalidateQueries({ queryKey: ['unassignedStudents'] })
   }
 
   const handleStudentAdded = () => {
     queryClient.invalidateQueries({ queryKey: ['students'] })
+    queryClient.invalidateQueries({ queryKey: ['unassignedStudents'] })
+    queryClient.invalidateQueries({ queryKey: ['assignmentStats'] })
   }
 
-  const handleRemovePeerTutor = async (tutorId: string, silent: boolean = false) => {
+  const [showForceDeleteModal, setShowForceDeleteModal] = useState(false)
+  const [tutorToForceDelete, setTutorToForceDelete] = useState<{id: string, message: string} | null>(null)
+  
+  const handleForceDeleteConfirm = async () => {
+    if (!tutorToForceDelete) return
+    
+    const forceResult = await peertutorservice.removepeertutors(tutorToForceDelete.id, true)
+    
+    if (forceResult.success) {
+      toast.success(forceResult.message)
+      // Refresh logic would go here if needed, but the original logic returned true/false to caller
+      // Since this is async/modal based now, we can't return to caller immediately.
+      // We must assume the UI updates via react-query invalidation.
+      handlepeertutorsAssigned() // Re-use this to invalidate queries
+    } else {
+      toast.error(forceResult.message)
+    }
+    
+    setShowForceDeleteModal(false)
+    setTutorToForceDelete(null)
+  }
+
+  const handleRemovepeertutors = async (tutorId: string, silent: boolean = false) => {
     try {
-      const result = await PeerTutorService.removePeerTutor(tutorId)
+      // When silent mode is true (called from bulk delete modal after confirmation),
+      // always use forceDelete to delete peer tutor along with all related data
+      const result = await peertutorservice.removepeertutors(tutorId, silent)
       if (result.success) {
-        // Data reload should be handled by caller via onRefresh
         if (!silent) toast.success(result.message)
         return { success: true }
       } else {
-        // Check if the error is about assigned students
+        // Check if the error is about assigned students (only happens when forceDelete is false)
         if (result.message.includes('students are still assigned')) {
-          const forceDelete = confirm(`${result.message}\n\nDo you want to force delete this peer tutor? This will unassign all students.`)
-          if (forceDelete) {
-            const forceResult = await PeerTutorService.removePeerTutor(tutorId, true)
-            if (forceResult.success) {
-              if (!silent) toast.success(forceResult.message)
-              return { success: true }
-            } else {
-              if (!silent) toast.error(forceResult.message)
-              return { success: false }
-            }
-          }
-           return { success: false }
+           // Instead of confirm(), show Modal
+           setTutorToForceDelete({
+             id: tutorId,
+             message: result.message
+           })
+           setShowForceDeleteModal(true)
+           // We return false here because we haven't deleted yet. The Modal will handle the rest.
+           return { success: false, pendingConfirmation: true } 
         } else {
           if (!silent) toast.error(result.message)
           return { success: false }
         }
       }
     } catch (error) {
-      console.error('Error removing peer tutor:', error)
-      if (!silent) toast.error('An unexpected error occurred while deleting the peer tutor.')
-      return { success: false }
+       console.error('Error removing peer tutor:', error)
+       if (!silent) toast.error('Failed to remove peer tutor')
+       return { success: false }
     }
   }
+
 
   const handleRemoveStudent = async (studentId: string, silent: boolean = false) => {
     try {
@@ -6112,7 +6374,7 @@ function SectionContent() {
     }
   }
 
-  const handlePeerTutorClick = (tutorId: string) => {
+  const handlepeertutorsClick = (tutorId: string) => {
     router.push(`/faculty/peer-tutor/${tutorId}`)
   }
 
@@ -6135,7 +6397,7 @@ function SectionContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F8FAFC]">
       {/* Sidebar */}
       <FacultySidebar
         isOpen={isSidebarOpen}
@@ -6143,225 +6405,159 @@ function SectionContent() {
       />
 
       {/* Main content */}
-      <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden transition-all duration-300 ease-in-out`}>
+      <div className={`${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col transition-all duration-300 w-full lg:w-auto`}>
         {isLoading ? (
           <SectionPageSkeleton />
         ) : (
           <>
-        {/* Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200 h-16 w-full">
-          <div className={`max-w-full mx-auto h-full flex items-center ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center">
-                <button
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 lg:hidden"
-                >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
-                <div className="ml-2 lg:ml-0">
-                  <h1 className="text-2xl roboto-condensed-title text-gray-900">
-                    {department?.name} - {yearNames[yearIdStr] || yearIdStr} - {sectionNames[sectionIdStr] || sectionIdStr}
-                  </h1>
+            {/* Header */}
+            <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 h-20 flex items-center px-8">
+              <div className="flex justify-between items-center w-full">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-xl font-black text-gray-900 uppercase tracking-tight">
+                      {yearNames[yearIdStr] || yearIdStr} <span className="text-gray-300 mx-2">/</span> {department?.name || 'Loading'}
+                    </h1>
+                  </div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">
+                    SECTION {sectionIdStr} MANAGEMENT & ACADEMIC OVERVIEW
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <AnimatedRefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+                  <BackButton href={`/faculty/department/${deptIdStr}/year/${yearIdStr}`} />
                 </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <AnimatedRefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
-                <BackButton />
+            </header>
+
+            {/* Main Content */}
+            <main className="flex-1 p-8 max-w-[1600px] mx-auto w-full">
+              {/* Breadcrumb */}
+              <nav className="flex items-center gap-2 mb-8 text-[11px] font-bold uppercase tracking-widest">
+                <button 
+                onClick={onBackToDashboard}
+                  className="text-gray-400 hover:text-blue-600 transition-colors"
+                >
+                  DASHBOARD
+                </button>
+                <span className="text-gray-300">/</span>
+                <BreadcrumbSelect 
+                  value={yearIdStr}
+                  options={yearNames}
+                  onChange={(newYear) => router.push(`/faculty/department/${deptIdStr}/year/${newYear}`)}
+                  className="text-gray-400 hover:text-blue-600"
+                />
+                <span className="text-gray-300">/</span>
+                <BreadcrumbSelect 
+                  value={sectionIdStr}
+                  options={sectionNames}
+                  onChange={(newSection) => router.push(`/faculty/department/${deptIdStr}/year/${yearIdStr}/section/${newSection}`)}
+                  className="text-blue-600"
+                />
+              </nav>
+
+              <div className="bg-white rounded-[20px] shadow-sm border border-gray-200">
+                {/* Tabs */}
+                <div className="bg-white sticky top-0 z-10 border-b border-gray-100 rounded-t-[20px]">
+                  <nav className="flex space-x-2 px-4 sm:px-6 py-3 overflow-x-auto no-scrollbar" aria-label="Tabs">
+                    {[
+                      { id: 'peer-tutors', label: 'PEER TUTORS' },
+                      { id: 'students', label: 'STUDENTS' },
+                      { id: 'assign', label: 'ASSIGN' },
+                      { id: 'classes', label: 'CLASSES' },
+                      { id: 'attendance', label: 'ATTENDANCE' },
+                      { id: 'import-export', label: 'IMPORT/EXPORT' }
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap ${
+                          activeTab === tab.id
+                            ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105' 
+                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+
+                {/* Tab Content */}
+                <div className="p-4 sm:p-6">
+                  {activeTab === 'peer-tutors' ? (
+                    <PeerTutorTab 
+                      peerTutor={peerTutor} 
+                      students={students}
+                      setIsModalOpen={setIsModalOpen} 
+                      handleRemovepeertutors={handleRemovepeertutors}
+                      onpeertutorsClick={handlepeertutorsClick}
+                      dept={department?.name || 'Computer Science'}
+                      year={yearIdStr}
+                      section={sectionIdStr}
+                      onRefresh={handleRefresh}
+                    />
+                  ) : activeTab === 'students' ? (
+                    <StudentsTab 
+                      students={students} 
+                      peerTutor={peerTutor}
+                      setIsStudentModalOpen={setIsStudentModalOpen} 
+                      handleRemoveStudent={handleRemoveStudent}
+                      dept={department?.name || 'Computer Science'}
+                      year={yearIdStr}
+                      section={sectionIdStr}
+                      onRefresh={handleRefresh}
+                    />
+                  ) : activeTab === 'assign' ? (
+                    <AssignTab 
+                      dept={department?.name || 'Computer Science'} 
+                      year={yearIdStr} 
+                      section={sectionIdStr} 
+                    />
+                  ) : activeTab === 'classes' ? (
+                    <ClassesTab 
+                      dept={department?.name || 'Computer Science'} 
+                      year={yearIdStr} 
+                      section={sectionIdStr}
+                      departmentId={department?.id || deptIdStr}
+                    />
+                  ) : activeTab === 'attendance' ? (
+                    <AttendanceTab 
+                      dept={department?.name || 'Computer Science'} 
+                      year={yearIdStr} 
+                      section={sectionIdStr}
+                    />
+                  ) : activeTab === 'import-export' ? (
+                    <ImportExportTab 
+                      dept={department?.name || 'Computer Science'} 
+                      year={yearIdStr} 
+                      section={sectionIdStr}
+                      facultyId={department?.id || deptIdStr}
+                      onImportComplete={handleBulkImportComplete}
+                    />
+                  ) : null}
+                </div>
               </div>
-            </div>
-          </div>
-        </header>
-        {/* Main Content */}
-        <main className="flex-1">
-          <div className={`max-w-full mx-auto py-6 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
-            {/* Interactive Breadcrumb */}
-            <div className="mb-4">
-              <nav className="flex" aria-label="Breadcrumb">
-                <ol className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
-                  <li>
-                    <div className="flex items-center">
-                      <button
-                        onClick={handleBackToDashboard}
-                        className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors duration-200"
-                      >
-                        DASHBOARD
-                      </button>
-                    </div>
-                  </li>
-                  <li>
-                    <div data-dropdown className="flex items-center relative">
-                      <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" />
-                      </svg>
-                      <button
-                        onClick={() => handleDropdownToggle('year')}
-                        className="ml-2 sm:ml-4 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors duration-200 flex items-center"
-                      >
-                        {yearNames[yearIdStr]}
-                        <svg className="ml-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                      {dropdownOpen === 'year' && (
-                        <div data-dropdown className="absolute top-full left-0 mt-1 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-50">
-                          <div className="py-1">
-                            {yearOptions.map((year) => (
-                              <button
-                                key={year.id}
-                                onClick={() => handleYearChange(year.id)}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200"
-                              >
-                                {year.name}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                  <li>
-                    <div data-dropdown className="flex items-center relative">
-                      <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" />
-                      </svg>
-                      <button
-                        onClick={() => handleDropdownToggle('section')}
-                        className="ml-2 sm:ml-4 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors duration-200 flex items-center"
-                      >
-                        {sectionNames[sectionIdStr]}
-                        <svg className="ml-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                      {dropdownOpen === 'section' && (
-                        <div data-dropdown className="absolute top-full left-0 mt-1 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-50">
-                          <div className="py-1">
-                            {sectionOptions.map((section) => (
-                              <button
-                                key={section.id}
-                                onClick={() => handleSectionChange(section.id)}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200"
-                              >
-                                {section.name}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                </ol>
-              </nav>
-            </div>
-          <div className="bg-white rounded-lg shadow">
-            {/* Tabs */}
-            <div className="bg-white sticky top-0 z-10 border-b border-gray-100">
-              <nav className="flex space-x-2 px-4 sm:px-6 py-3 overflow-x-auto no-scrollbar" aria-label="Tabs">
-                {[
-                  { id: 'peer-tutors', label: 'PEER TUTORS' },
-                  { id: 'students', label: 'STUDENTS' },
-                  { id: 'assign', label: 'ASSIGN' },
-                  { id: 'classes', label: 'CLASSES' },
-                  { id: 'attendance', label: 'ATTENDANCE' },
-                  { id: 'import-export', label: 'IMPORT/EXPORT' }
-                ].map((tab) => (
-                   <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap ${
-                      activeTab === tab.id
-                        ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105' 
-                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </nav>
-            </div>
+            </main>
 
-            {/* Tab Content */}
-            <div className="p-4 sm:p-6">
-              {activeTab === 'peer-tutors' ? (
-                <PeerTutorsTab 
-                  peerTutors={peerTutors} 
-                  students={students}
-                  setIsModalOpen={setIsModalOpen} 
-                  handleRemovePeerTutor={handleRemovePeerTutor}
-                  onPeerTutorClick={handlePeerTutorClick}
-                  dept={department?.name || 'Computer Science'}
-                  year={yearId}
-                  section={sectionId}
-                  onRefresh={handleRefresh}
-                />
-              ) : activeTab === 'students' ? (
-                <StudentsTab 
-                  students={students} 
-                  peerTutors={peerTutors}
-                  setIsStudentModalOpen={setIsStudentModalOpen} 
-                  handleRemoveStudent={handleRemoveStudent}
-                  dept={department?.name || 'Computer Science'}
-                  year={yearId}
-                  section={sectionId}
-                  onRefresh={handleRefresh}
-                />
-              ) : activeTab === 'assign' ? (
-                <AssignTab 
-                  dept={department?.name || 'Computer Science'} 
-                  year={yearId} 
-                  section={sectionId} 
-                />
-              ) : activeTab === 'classes' ? (
-                <ClassesTab 
-                  dept={department?.name || 'Computer Science'} 
-                  year={yearId} 
-                  section={sectionId}
-                  departmentId={department?.id || deptId} // Pass the department ID
-                />
-              ) : activeTab === 'attendance' ? (
-                <AttendanceTab 
-                  dept={department?.name || 'Computer Science'} 
-                  year={yearId} 
-                  section={sectionId}
-                />
-              ) : activeTab === 'import-export' ? (
-                <ImportExportTab 
-                  dept={department?.name || 'Computer Science'} 
-                  year={yearId} 
-                  section={sectionId}
-                  facultyId={department?.id || deptId}
-                  onImportComplete={handleBulkImportComplete}
-                />
-              ) : null}
-            </div>
-          </div>
-          </div>
-        </main>
+            {/* Modals */}
+            <AssignpeertutorsModal
+              isOpen={isModalOpen}
+              onClose={() => setIsModalOpen(false)}
+              onSuccess={handlepeertutorsAssigned}
+              dept={department?.name || ''}
+              year={yearIdStr}
+              section={sectionIdStr}
+            />
 
-      {/* Modals */}
-      <AssignPeerTutorModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={handlePeerTutorAssigned}
-        dept={department?.name || ''} // ← This will now be the actual department
-        year={yearIdStr}        // ← "2" (raw value for storage)
-        section={sectionIdStr}  // ← "A" (raw value for storage)
-      />
-
-      <AddStudentModal
-        isOpen={isStudentModalOpen}
-        onClose={() => setIsStudentModalOpen(false)}
-        onSuccess={handleStudentAdded}
-        dept={department?.name || ''} // ← This will now be the actual department
-        year={yearIdStr}        // ← "2" (raw value for storage)
-        section={sectionIdStr}  // ← "A" (raw value for storage)
-      />
-
-      {/* Delete Confirmation Modal */}
-
+            <AddStudentModal
+              isOpen={isStudentModalOpen}
+              onClose={() => setIsStudentModalOpen(false)}
+              onSuccess={handleStudentAdded}
+              dept={department?.name || ''}
+              year={yearIdStr}
+              section={sectionIdStr}
+            />
           </>
         )}
       </div>

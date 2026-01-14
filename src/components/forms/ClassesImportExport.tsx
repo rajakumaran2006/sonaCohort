@@ -5,6 +5,7 @@ import { ClassService } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { useAuth } from '@/lib/auth/AuthContext'
 import * as XLSX from 'xlsx'
+import { toast } from 'sonner'
 
 interface ClassesImportExportProps {
   dept: string
@@ -166,7 +167,7 @@ export default function ClassesImportExport({
       
     } catch (error) {
       console.error('Error exporting data:', error)
-      alert('Error exporting data. Please try again.')
+      toast.error('Error exporting data. Please try again.')
     } finally {
       setIsExporting(false)
     }
@@ -177,7 +178,7 @@ export default function ClassesImportExport({
     if (!file) return
 
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      alert('Please select an Excel file (.xlsx or .xls).')
+      toast.warning('Please select an Excel file (.xlsx or .xls).')
       return
     }
 
@@ -210,7 +211,7 @@ export default function ClassesImportExport({
       
     } catch (error) {
       console.error('Error reading Excel file:', error)
-      alert('Error reading Excel file. Please check the file format and try again.')
+      toast.error('Error reading Excel file. Please check the file format and try again.')
     } finally {
       setIsImporting(false)
       // Reset file input
@@ -363,7 +364,7 @@ export default function ClassesImportExport({
       
       // Validate section is not 'ALL' before processing
       if (!section || section.trim().toUpperCase() === 'ALL') {
-        alert('Cannot import classes with section "ALL". Please navigate to a specific section page.')
+        toast.warning('Cannot import classes with section "ALL". Please navigate to a specific section page.')
         setIsImporting(false)
         return
       }
@@ -465,7 +466,7 @@ export default function ClassesImportExport({
       
     } catch (error) {
       console.error('Error importing classes:', error)
-      alert('Error importing classes. Please try again.')
+      toast.error('Error importing classes. Please try again.')
     } finally {
       setIsImporting(false)
     }
@@ -583,7 +584,7 @@ export default function ClassesImportExport({
 
       {/* Import Preview Modal */}
       {showImportPreview && importPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Import Preview</h3>
@@ -693,7 +694,7 @@ export default function ClassesImportExport({
 
       {/* Import Result Modal */}
       {showImportResult && importResult && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Import Results</h3>

@@ -10,7 +10,7 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
-  signInWithMicrosoft: (mode?: UserMode) => Promise<void>
+  signInWithMicrosoft: () => Promise<void>
   signOut: () => Promise<void>
   userMode: UserMode
   setUserMode: (mode: UserMode) => void
@@ -25,7 +25,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [userMode, setUserMode] = useState<UserMode>('admin')
+  const [userMode, setUserModeState] = useState<UserMode>('admin')
+
+  // Load userMode from localStorage on mount
+  useEffect(() => {
+    const savedMode = localStorage.getItem('user_mode') as UserMode
+    if (savedMode && ['admin', 'faculty', 'peer', 'student'].includes(savedMode)) {
+      setUserModeState(savedMode)
+    }
+  }, [])
+
+  const setUserMode = (mode: UserMode) => {
+    setUserModeState(mode)
+    localStorage.setItem('user_mode', mode)
+  }
 
   // Backward compatibility
   const isFacultyMode = userMode === 'faculty'
@@ -38,13 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getInitialSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
-        console.log('AuthContext: Initial session:', session)
-        console.log('AuthContext: Session error:', error)
-        console.log('AuthContext: Session user:', session?.user)
-        console.log('AuthContext: Setting loading to false')
         
         if (session?.user) {
-          console.log('Setting user and session from initial session')
           setSession(session)
           setUser(session.user)
         } else {
@@ -86,29 +94,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signInWithMicrosoft = async (mode: UserMode = 'admin') => {
+  const signInWithMicrosoft = async () => {
     try {
       const supabase = createClient()
-      let redirectPath = '/admin/dashboard'
       
-      switch (mode) {
-        case 'faculty':
-          redirectPath = '/faculty/dashboard'
-          break
-        case 'peer':
-          redirectPath = '/peer/dashboard'
-          break
-        case 'student':
-          redirectPath = '/student/dashboard'
-          break
-        default:
-          redirectPath = '/admin/dashboard'
-      }
-      
+      // Redirect to callback which will handle role detection
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'azure',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${redirectPath}`,
+          redirectTo: `${window.location.origin}/auth/callback`,
           scopes: 'email openid profile User.Read User.ReadBasic.All offline_access',
           queryParams: {
             prompt: 'select_account',
@@ -119,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error
     } catch (error) {
       console.error('Error signing in with Microsoft:', error)
+      throw error
     }
   }
 
@@ -126,12 +121,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const supabase = createClient()
       const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      if (error) {
+        // Check for AuthSessionMissingError - if session is missing, we're effectively signed out
+        const isSessionMissing = 
+          error.name === 'AuthSessionMissingError' || 
+          error.message === 'Auth session missing!'
+          
+        if (!isSessionMissing) {
+          throw error
+        }
+      }
       
       // Clear user state
       setUser(null)
       setSession(null)
-    } catch (error) {
+    } catch (error: any) {
+      // Handle case where it might throw directly
+      const isSessionMissing = 
+        error?.name === 'AuthSessionMissingError' || 
+        error?.message === 'Auth session missing!'
+
+      if (isSessionMissing) {
+        console.log('Auth session missing during sign out, clearing local state')
+        setUser(null)
+        setSession(null)
+        return
+      }
+
       console.error('Error signing out:', error)
       throw error
     }

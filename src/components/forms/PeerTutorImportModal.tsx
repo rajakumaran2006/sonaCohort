@@ -2,14 +2,15 @@
 
 import { useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { X, Upload, AlertCircle, CheckCircle, Download } from 'lucide-react'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 import { createClient } from '@/utils/supabase/client'
+import { toast } from 'sonner'
 
-interface PeerTutorImportModalProps {
+interface peertutorsImportModalProps {
   dept: string
   year: string
   section: string
@@ -19,8 +20,9 @@ interface PeerTutorImportModalProps {
 
 
 
-interface ProcessedPeerTutor {
-  peerTutor: PeerTutor | null
+interface Processedpeertutors {
+  peertutors: peertutors | null
+  microsoftUser?: { displayName: string; mail: string; userPrincipalName: string } | null
   name: string
   email?: string
   foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated'
@@ -29,16 +31,16 @@ interface ProcessedPeerTutor {
   section?: string
 }
 
-export default function PeerTutorImportModal({
+export default function peertutorsImportModal({
   dept,
   year,
   section,
   onClose,
   onSuccess
-}: PeerTutorImportModalProps) {
+}: peertutorsImportModalProps) {
   const { user } = useAuth()
   const [isProcessing, setIsProcessing] = useState(false)
-  const [processedData, setProcessedData] = useState<ProcessedPeerTutor[]>([])
+  const [processedData, setProcessedData] = useState<Processedpeertutors[]>([])
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -54,13 +56,13 @@ export default function PeerTutorImportModal({
     try {
       setIsProcessing(true)
       
-      let peerTutors: PeerTutor[] = []
+      let peerTutor: peertutors[] = []
       if (dept && year && section) {
-        peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+        peerTutor = await peertutorservice.getpeerTutorBySection(dept, year, section)
       } else {
-        peerTutors = await PeerTutorService.getAllPeerTutors()
+        peerTutor = await peertutorservice.getAllpeerTutor()
         if (dept) {
-          peerTutors = peerTutors.filter(pt => pt.dept === dept)
+          peerTutor = peerTutor.filter(pt => pt.dept === dept)
         }
       }
       
@@ -68,12 +70,12 @@ export default function PeerTutorImportModal({
         ['Peer Tutor Name', 'Peer Tutor Email', 'Year', 'Section']
       ]
       
-      peerTutors.forEach(pt => {
+      peerTutor.forEach(pt => {
         exportData.push([pt.name, pt.email, pt.year, pt.section])
       })
       
       // If we are exporting a blank template because no data exists, add an example row
-      if (peerTutors.length === 0) {
+      if (peerTutor.length === 0) {
         exportData.push(['Example Name', 'example@sonatech.ac.in', '2', 'A'])
       }
       
@@ -95,7 +97,7 @@ export default function PeerTutorImportModal({
       
     } catch (error) {
       console.error('Error exporting peer tutors:', error)
-      alert('Error exporting data. Please try again.')
+      toast.error('Error exporting data. Please try again.')
     } finally {
       setIsProcessing(false)
     }
@@ -111,40 +113,49 @@ export default function PeerTutorImportModal({
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
       const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[]
       
-      const rows = jsonData.slice(1)
+      const existingpeerTutor = await peertutorservice.getAllpeerTutor()
       
-      const existingPeerTutors = await PeerTutorService.getAllPeerTutors()
+      const processed: Processedpeertutors[] = []
+
+      // Helper for case-insensitive column lookup
+      const getValue = (row: Record<string, unknown>, targetKey: string) => {
+        const key = Object.keys(row).find(k => k.toLowerCase().trim() === targetKey.toLowerCase().trim())
+        return key ? row[key] : undefined
+      }
       
-      const processed: ProcessedPeerTutor[] = []
-      
-      for (const row of rows) {
-        if (row.length === 0 || row.every(cell => !cell)) continue
+      for (const row of jsonData) {
+        // Try multiple variations for column names
+        const name = (getValue(row, 'Peer Tutor Name') || getValue(row, 'Name') || getValue(row, 'Peer Tutor') || '') as string
+        const email = (getValue(row, 'Peer Tutor Email') || getValue(row, 'Email') || getValue(row, 'Mail') || '') as string
+        const rowYear = (getValue(row, 'Year') || year || '') as string
+        const rowSection = (getValue(row, 'Section') || section || '') as string
+
+        const cleanName = name?.toString().trim() || ''
+        const cleanEmail = email?.toString().trim() || ''
+        const cleanYear = rowYear?.toString().trim() || ''
+        const cleanSection = rowSection?.toString().trim() || ''
         
-        const name = row[0]?.toString().trim() || ''
-        const email = row[1]?.toString().trim() || ''
-        const rowYear = row[2]?.toString().trim() || year || ''
-        const rowSection = row[3]?.toString().trim() || section || ''
-        
-        if (!name && !email) continue
+        if (!cleanName && !cleanEmail) continue
         
         // Use the year and section from the row, or fallback to props
-        const targetYear = rowYear
-        const targetSection = rowSection
+        const targetYear = cleanYear
+        const targetSection = cleanSection
         
         if (!targetYear || !targetSection) {
-          console.warn(`Missing year or section for ${name || email}`)
+          console.warn(`Missing year or section for ${cleanName || cleanEmail}`)
         }
         
-        const result = await findPeerTutor(existingPeerTutors, name, email, targetYear, targetSection)
+        const result = await findpeertutors(existingpeerTutor, cleanName, cleanEmail, targetYear, targetSection)
         
         processed.push({
-          peerTutor: result.tutor,
-          name: result.tutor?.name || name || 'Unknown',
-          email: result.tutor?.email || email,
+          peertutors: result.tutor,
+          microsoftUser: result.microsoftUser,
+          name: result.tutor?.name || result.microsoftUser?.displayName || cleanName || 'Unknown',
+          email: result.tutor?.email || result.microsoftUser?.mail || cleanEmail,
           foundIn: result.foundIn,
-          status: result.foundIn === 'allocated' ? 'allocated' : (result.tutor ? 'valid' : 'missing'),
+          status: result.foundIn === 'allocated' ? 'allocated' : (result.tutor || result.microsoftUser ? 'valid' : 'missing'),
           year: targetYear,
           section: targetSection
         })
@@ -155,7 +166,7 @@ export default function PeerTutorImportModal({
       
     } catch (error) {
       console.error('Error processing file:', error)
-      alert('Error processing file. Please check the format and try again.')
+      toast.error('Error processing file. Please check the format and try again.')
     } finally {
       setIsProcessing(false)
       if (fileInputRef.current) {
@@ -164,15 +175,20 @@ export default function PeerTutorImportModal({
     }
   }
 
-  const findPeerTutor = async (
-    tutors: PeerTutor[],
+  // Check if a peer tutor exists - does NOT create anything, just checks
+  const findpeertutors = async (
+    tutors: peertutors[],
     name?: string,
     email?: string,
     targetYear?: string,
     targetSection?: string
-  ): Promise<{ tutor: PeerTutor | null, foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated' }> => {
+  ): Promise<{ 
+    tutor: peertutors | null, 
+    microsoftUser: { displayName: string; mail: string; userPrincipalName: string } | null,
+    foundIn: 'local' | 'microsoft' | 'not_found' | 'allocated' 
+  }> => {
     if (!name && !email) {
-      return { tutor: null, foundIn: 'not_found' }
+      return { tutor: null, microsoftUser: null, foundIn: 'not_found' }
     }
 
     // Check if email already exists in other roles (students, faculty/admin)
@@ -188,7 +204,7 @@ export default function PeerTutorImportModal({
       
       if (studentExists) {
         console.log(`❌ Email "${email}" already allocated as STUDENT`)
-        return { tutor: null, foundIn: 'allocated' }
+        return { tutor: null, microsoftUser: null, foundIn: 'allocated' }
       }
       
       // Check faculty table (admins)
@@ -200,7 +216,7 @@ export default function PeerTutorImportModal({
       
       if (facultyExists) {
         console.log(`❌ Email "${email}" already allocated as FACULTY/ADMIN`)
-        return { tutor: null, foundIn: 'allocated' }
+        return { tutor: null, microsoftUser: null, foundIn: 'allocated' }
       }
     }
 
@@ -211,7 +227,7 @@ export default function PeerTutorImportModal({
         (!targetYear || pt.year === targetYear) &&
         (!targetSection || pt.section === targetSection)
       )
-      if (match) return { tutor: match, foundIn: 'local' }
+      if (match) return { tutor: match, microsoftUser: null, foundIn: 'local' }
     }
     
     if (email) {
@@ -220,30 +236,29 @@ export default function PeerTutorImportModal({
         (!targetYear || pt.year === targetYear) &&
         (!targetSection || pt.section === targetSection)
       )
-      if (match) return { tutor: match, foundIn: 'local' }
+      if (match) return { tutor: match, microsoftUser: null, foundIn: 'local' }
     }
     
-    // Search Microsoft Graph by Email
-    if (email && user?.id) {
+    // Search Microsoft Graph by Email - DON'T CREATE, just find
+    if (email) {
       const microsoftUser = await MicrosoftGraphService.getUserByEmail(email)
       
       if (microsoftUser) {
-        const newTutor = await PeerTutorService.createFromMicrosoftUser(
-          microsoftUser,
-          user.id,
-          dept,
-          targetYear || year || '',
-          targetSection || section || ''
-        )
-        
-        if (newTutor) {
-          return { tutor: newTutor, foundIn: 'microsoft' }
+        // Return the Microsoft user data for later creation
+        return { 
+          tutor: null, 
+          microsoftUser: {
+            displayName: microsoftUser.displayName,
+            mail: microsoftUser.mail || microsoftUser.userPrincipalName,
+            userPrincipalName: microsoftUser.userPrincipalName
+          }, 
+          foundIn: 'microsoft' 
         }
       }
     }
 
-    // Search Microsoft Graph by Name (Exact Match)
-    if (name && user?.id) {
+    // Search Microsoft Graph by Name (Exact Match) - DON'T CREATE, just find
+    if (name) {
       // Search for users with this name (Graph API searches are "startsWith")
       const microsoftUsers = await MicrosoftGraphService.searchUsers(name)
       
@@ -263,25 +278,24 @@ export default function PeerTutorImportModal({
               
             if (studentExists) {
                console.log(`❌ Name "${name}" (Email: ${exactMatch.mail}) already allocated as STUDENT`)
-               return { tutor: null, foundIn: 'allocated' }
+               return { tutor: null, microsoftUser: null, foundIn: 'allocated' }
             }
          }
 
-        const newTutor = await PeerTutorService.createFromMicrosoftUser(
-          exactMatch,
-          user.id,
-          dept,
-          targetYear || year || '',
-          targetSection || section || ''
-        )
-        
-        if (newTutor) {
-          return { tutor: newTutor, foundIn: 'microsoft' }
+        // Return the Microsoft user data for later creation
+        return { 
+          tutor: null, 
+          microsoftUser: {
+            displayName: exactMatch.displayName,
+            mail: exactMatch.mail || exactMatch.userPrincipalName,
+            userPrincipalName: exactMatch.userPrincipalName
+          }, 
+          foundIn: 'microsoft' 
         }
       }
     }
     
-    return { tutor: null, foundIn: 'not_found' }
+    return { tutor: null, microsoftUser: null, foundIn: 'not_found' }
   }
 
   const handleImport = async () => {
@@ -293,18 +307,51 @@ export default function PeerTutorImportModal({
       const validTutors = processedData.filter(p => p.status === 'valid')
       
       if (validTutors.length === 0) {
-        alert('No valid peer tutors to import.')
+        toast.warning('No valid peer tutors to import.')
         return
       }
       
-      alert(`Successfully imported ${validTutors.length} peer tutor(s)!`)
+      let createdCount = 0
+      let existingCount = 0
+      
+      // Now actually create the peer tutors from Microsoft users
+      for (const item of validTutors) {
+        if (item.peertutors) {
+          // Already exists in local database
+          existingCount++
+        } else if (item.microsoftUser) {
+          // Create from Microsoft user
+          const newTutor = await peertutorservice.createFromMicrosoftUser(
+            {
+              displayName: item.microsoftUser.displayName,
+              mail: item.microsoftUser.mail,
+              userPrincipalName: item.microsoftUser.userPrincipalName,
+              id: ''
+            },
+            user.id,
+            dept,
+            item.year || year || '',
+            item.section || section || ''
+          )
+          
+          if (newTutor) {
+            createdCount++
+          }
+        }
+      }
+      
+      if (createdCount > 0) {
+        toast.success(`Successfully imported ${createdCount} new peer tutor(s)!${existingCount > 0 ? ` (${existingCount} already existed)` : ''}`)
+      } else if (existingCount > 0) {
+        toast.info(`All ${existingCount} peer tutor(s) already exist in the system.`)
+      }
       
       onSuccess()
       onClose()
       
     } catch (error) {
       console.error('Error importing peer tutors:', error)
-      alert('Error importing peer tutors. Please try again.')
+      toast.error('Error importing peer tutors. Please try again.')
     } finally {
       setIsProcessing(false)
     }
@@ -341,7 +388,7 @@ export default function PeerTutorImportModal({
   const hasMissing = processedData.some(p => p.status === 'missing')
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-8 py-6 border-b border-gray-200 flex items-center justify-between">
@@ -495,7 +542,7 @@ export default function PeerTutorImportModal({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {processedData.map((pt: ProcessedPeerTutor, idx) => (
+                      {processedData.map((pt: Processedpeertutors, idx) => (
                         <tr key={idx} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">{pt.name}</div>

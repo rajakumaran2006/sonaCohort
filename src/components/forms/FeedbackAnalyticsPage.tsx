@@ -1,29 +1,156 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
 import { FeedbackForm } from '@/lib/services/feedbackService'
 import { FeedbackAnalyticsService, ResponseAnalytics, StudentResponseAnalytics } from '@/lib/services/feedbackAnalyticsService'
 import { DepartmentService } from '@/lib/services/departmentService'
 import StarRating from '@/components/ui/StarRating'
-import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import Chart, {TrendChart, SparklineChart } from '@/components/ui/Chart'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui'
+import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import jsPDF from 'jspdf'
+import * as XLSX from 'xlsx'
+import { Star, Users, Clock, TrendingUp, TrendingDown, Download, Filter, X, UserX } from 'lucide-react'
 
 // Helper functions
 const formatCompletionTime = (seconds: number): string => {
   if (seconds < 60) return `${Math.round(seconds)}s`
-  return `${(seconds / 60).toFixed(1)} min`
+  return `${(seconds / 60).toFixed(1)}m`
 }
 
 const getDeltaColor = (delta: number): string => {
-  if (delta > 0) return 'text-green-600'
-  if (delta < 0) return 'text-red-600'
+  if (delta > 0) return 'text-emerald-500'
+  if (delta < 0) return 'text-red-500'
   return 'text-gray-900'
+}
+
+const getSatisfactionColor = (score: number): string => {
+  if (score >= 4) return 'text-emerald-500'
+  if (score >= 3) return 'text-yellow-500'
+  return 'text-red-500'
+}
+
+const getStarColor = (rating: number): string => {
+  if (rating === 5) return 'bg-emerald-500'
+  if (rating === 4) return 'bg-blue-500'
+  if (rating === 3) return 'bg-yellow-500'
+  if (rating === 2) return 'bg-orange-500'
+  return 'bg-red-500'
 }
 
 interface FeedbackAnalyticsPageProps {
   form: FeedbackForm
+}
+
+// Satisfaction Arc Component
+function SatisfactionArc({ score, maxScore = 5 }: { score: number; maxScore?: number }) {
+  const percentage = (score / maxScore) * 100
+  const strokeDasharray = 283 // Circumference of circle with r=45
+  const strokeDashoffset = strokeDasharray - (strokeDasharray * percentage * 0.5) / 100
+  
+  return (
+    <div className="relative w-32 h-16 mx-auto">
+      <svg viewBox="0 0 100 50" className="w-full h-full">
+        {/* Background arc */}
+        <path
+          d="M 5 50 A 45 45 0 0 1 95 50"
+          fill="none"
+          stroke="#E5E7EB"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+        {/* Foreground arc */}
+        <path
+          d="M 5 50 A 45 45 0 0 1 95 50"
+          fill="none"
+          stroke={score >= 4 ? '#10B981' : score >= 3 ? '#F59E0B' : '#EF4444'}
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray="141"
+          strokeDashoffset={141 - (141 * percentage) / 100}
+          className="transition-all duration-1000 ease-out"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-end justify-center pb-1">
+        <span className="text-2xl font-bold text-gray-900">{score.toFixed(1)}</span>
+        <span className="text-sm text-gray-500 ml-0.5">/5</span>
+      </div>
+    </div>
+  )
+}
+
+// Rating Distribution Bar Component
+function RatingDistributionBar({ 
+  rating, 
+  count, 
+  total, 
+  maxCount 
+}: { 
+  rating: number
+  count: number
+  total: number
+  maxCount: number
+}) {
+  const percentage = total > 0 ? (count / total) * 100 : 0
+  const barWidth = maxCount > 0 ? (count / maxCount) * 100 : 0
+  
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 w-16">
+        <span className="text-sm font-medium text-gray-700">{rating}</span>
+        <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+      </div>
+      <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+        <div 
+          className={`h-full rounded-full transition-all duration-700 ease-out ${getStarColor(rating)}`}
+          style={{ width: `${barWidth}%` }}
+        />
+      </div>
+      <div className="w-16 text-right">
+        <span className="text-sm font-medium text-gray-900">{count}</span>
+        <span className="text-xs text-gray-500 ml-1">({percentage.toFixed(0)}%)</span>
+      </div>
+    </div>
+  )
+}
+
+// Mini Trend Chart
+function MiniTrendChart({ data }: { data: Array<{ date: string; responses: number }> }) {
+  if (data.length === 0) return null
+  
+  const maxResponses = Math.max(...data.map(d => d.responses), 1)
+  const points = data.slice(-14).map((d, i, arr) => {
+    const x = (i / Math.max(arr.length - 1, 1)) * 100
+    const y = 100 - (d.responses / maxResponses) * 80
+    return `${x},${y}`
+  }).join(' ')
+  
+  return (
+    <div className="h-12 w-full">
+      <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="none">
+        {/* Area fill */}
+        <polygon
+          points={`0,100 ${points} 100,100`}
+          fill="url(#gradient)"
+          opacity="0.3"
+        />
+        {/* Line */}
+        <polyline
+          points={points}
+          fill="none"
+          stroke="#3B82F6"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <defs>
+          <linearGradient id="gradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3B82F6" />
+            <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  )
 }
 
 export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPageProps) {
@@ -31,18 +158,26 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [trends, setTrends] = useState<Array<{ date: string; responses: number }>>([])
-  // Analytics filters (default All time, per user choice)
+  
+  // Filter state
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('')
-  
-  // Filter state
   const [selectedYear, setSelectedYear] = useState<string>('')
   const [selectedSection, setSelectedSection] = useState<string>('')
   const [showFilters, setShowFilters] = useState(false)
   const [years, setYears] = useState<Array<{id: string, name: string}>>([])
   const [sections, setSections] = useState<Array<{id: string, name: string}>>([])
   const filterDropdownRef = useRef<HTMLDivElement>(null)
+  const [pendingStudents, setPendingStudents] = useState<Array<{
+    id: string
+    name: string
+    email: string
+    year: string
+    section: string
+    register_number?: string
+  }>>([])  
+  const [loadingPending, setLoadingPending] = useState(false)
 
   const loadAnalytics = useCallback(async () => {
     try {
@@ -84,7 +219,18 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     }
   }, [])
 
-  // Close filter dropdown when clicking outside
+  const loadPendingStudents = useCallback(async () => {
+    try {
+      setLoadingPending(true)
+      const pending = await FeedbackAnalyticsService.getPendingStudents(form.id)
+      setPendingStudents(pending)
+    } catch (err) {
+      console.error('Error loading pending students:', err)
+    } finally {
+      setLoadingPending(false)
+    }
+  }, [form.id])
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
@@ -105,18 +251,15 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     loadAnalytics()
     loadTrends()
     loadYearsAndSections()
-  }, [loadAnalytics, loadTrends, loadYearsAndSections])
+    loadPendingStudents()
+  }, [loadAnalytics, loadTrends, loadYearsAndSections, loadPendingStudents])
 
   useEffect(() => {
-    // Skip initial load to avoid double fetching since the first useEffect handles it?
-    // Actually, initial state of startDate/endDate is empty, so this won't trigger change unless set.
-    // But we need to refetch if these change.
     if (startDate || endDate || selectedQuestionId) {
       loadAnalytics()
     }
   }, [startDate, endDate, selectedQuestionId, loadAnalytics])
 
-  // Filter student responses based on selected year and section
   const getFilteredResponses = (): StudentResponseAnalytics[] => {
     if (!analytics) return []
     
@@ -136,6 +279,34 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
   const handleClearFilters = () => {
     setSelectedYear('')
     setSelectedSection('')
+    setStartDate('')
+    setEndDate('')
+    setSelectedQuestionId('')
+  }
+
+  const exportPendingStudents = () => {
+    if (pendingStudents.length === 0) {
+      toast.warning('No pending students to export')
+      return
+    }
+
+    const worksheetData = pendingStudents.map((student, index) => ({
+      'S.No': index + 1,
+      'Name': student.name,
+      'Email': student.email,
+      'Register Number': student.register_number || '-',
+      'Year': student.year,
+      'Section': student.section
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(worksheetData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Pending Students')
+    
+    const fileName = `pending-students-${form.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`
+    XLSX.writeFile(wb, fileName)
+    
+    toast.success(`Exported ${pendingStudents.length} pending students`)
   }
 
   const exportToPDF = () => {
@@ -144,53 +315,34 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     const filteredResponses = getFilteredResponses()
     
     if (filteredResponses.length === 0) {
-      alert('No responses to export. Please adjust your filters.')
+      toast.warning('No responses to export. Please adjust your filters.')
       return
     }
 
     const doc = new jsPDF()
     
-    // Header
     doc.setFontSize(16)
     doc.text('Feedback Analytics Report', 14, 15)
     
     doc.setFontSize(10)
     doc.text(`Form: ${form.name}`, 14, 22)
     doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 27)
+    doc.text(`Total Responses: ${analytics.totalResponses}`, 14, 32)
+    doc.text(`Satisfaction Score: ${analytics.satisfactionScore.toFixed(1)}/5.0`, 14, 37)
     
-    // Filters info
-    let filterInfo = 'Filters: '
-    if (selectedYear || selectedSection) {
-      if (selectedYear) filterInfo += `Year: ${selectedYear}`
-      if (selectedYear && selectedSection) filterInfo += ' | '
-      if (selectedSection) filterInfo += `Section: ${selectedSection}`
-    } else {
-      filterInfo += 'All'
-    }
-    // Append analytics filters (date range and question)
-    const dateInfo = (startDate || endDate) ? ` | Date: ${startDate || '—'} to ${endDate || '—'}` : ' | Date: All time'
-    const questionInfo = selectedQuestionId && analytics?.questionAnalytics?.length
-      ? ` | Question: ${analytics.questionAnalytics[0]?.questionText?.slice(0, 60) || selectedQuestionId}`
-      : ''
-    doc.text(filterInfo + dateInfo + questionInfo, 14, 32)
+    let yPos = 47
     
-    let yPos = 42
-    
-    // Process each student
     filteredResponses.forEach((student) => {
-      // Check if we need a new page
       if (yPos > 250) {
         doc.addPage()
         yPos = 20
       }
       
-      // Student header
       doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
       doc.text(`${student.studentName} - Year: ${student.year}, Section: ${student.section}`, 14, yPos)
       yPos += 8
       
-      // Student responses
       doc.setFontSize(10)
       doc.setFont('helvetica', 'normal')
       
@@ -203,7 +355,6 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
         const questionText = `Q${qIndex + 1}: ${response.questionText}`
         const answerText = `A${qIndex + 1}: ${String(response.answer)}`
         
-        // Split long text into multiple lines
         const questionLines = doc.splitTextToSize(questionText, 180)
         const answerLines = doc.splitTextToSize(answerText, 180)
         
@@ -216,586 +367,517 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
         doc.setFont('helvetica', 'normal')
       })
       
-      // Add spacing between students
       yPos += 5
     })
     
-    // Save PDF
     const fileName = `feedback-analytics-${form.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`
     doc.save(fileName)
   }
 
-  const getSatisfactionColor = (score: number): string => {
-    if (score >= 4) return 'text-green-600'
-    if (score >= 3) return 'text-yellow-600'
-    return 'text-red-600'
-  }
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" />
-      </div>
-    )
+    return <TableSkeleton />
   }
 
   if (error) {
     return (
-      <Card className="text-center py-8">
-        <CardContent>
-          <div className="text-red-600 mb-4 font-medium">{error}</div>
-          <button
-            onClick={loadAnalytics}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Retry
-          </button>
-        </CardContent>
-      </Card>
+      <div className="bg-white rounded-[20px] p-8 text-center border border-gray-200">
+        <div className="text-red-600 mb-4 font-medium">{error}</div>
+        <button
+          onClick={loadAnalytics}
+          className="px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors text-sm font-medium"
+        >
+          Retry
+        </button>
+      </div>
     )
   }
 
   if (!analytics) {
     return (
-      <Card className="text-center py-8">
-        <CardContent>
-          <div className="text-gray-600">No analytics data available</div>
-        </CardContent>
-      </Card>
+      <div className="bg-white rounded-[20px] p-8 text-center border border-gray-200">
+        <div className="text-gray-600">No analytics data available</div>
+      </div>
     )
   }
 
+  const filteredResponses = getFilteredResponses()
+
   return (
-    <div className="space-y-6">
-      {/* Global Analytics Filters (do not change table structure) */}
-      <Card className="border border-gray-200 shadow-sm">
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">End date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Per‑question</label>
-              <select
-                value={selectedQuestionId}
-                onChange={(e) => setSelectedQuestionId(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All questions</option>
-                {analytics?.questionAnalytics?.map((q) => (
-                  <option key={q.questionId} value={q.questionId}>
-                    {q.questionText.length > 60 ? q.questionText.slice(0, 57) + '…' : q.questionText}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setStartDate(''); setEndDate(''); setSelectedQuestionId('') }}
-                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200 transition-colors"
-              >
-                Clear filters
-              </button>
-            </div>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Filters Bar */}
+      <div className="bg-white rounded-[20px] p-4 border border-gray-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
-        </CardContent>
-      </Card>
-      {/* Header Stats - Clean Minimal Design */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Responses & Response Rate */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardContent className="p-6">
-            <div className="space-y-2">
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Responses</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-gray-900">
-                  {analytics.totalResponses}/{analytics.totalStudents}
-                </p>
-                <span className="text-sm text-gray-600">
-                  ({analytics.totalStudents > 0 ? analytics.responseRate.toFixed(1) : '0.0'}%)
-                </span>
-              </div>
-              {trends.length > 0 && (
-                <div className="mt-3">
-                  <SparklineChart data={trends} height={20} ariaLabel="30 day responses sparkline" />
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Average Completion Time */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardContent className="p-6">
-            <div className="space-y-2">
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Avg. Completion</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {analytics.totalResponses > 0 ? formatCompletionTime(analytics.averageCompletionTime) : '0 min'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Satisfaction Score */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardContent className="p-6">
-            <div className="space-y-2">
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Satisfaction</p>
-              <p className={`text-3xl font-bold ${analytics.totalResponses > 0 ? getSatisfactionColor(analytics.satisfactionScore) : 'text-gray-900'}`}>
-                {analytics.totalResponses > 0 ? `${analytics.satisfactionScore.toFixed(1)}/5.0` : '0.0/5.0'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Delta Score */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardContent className="p-6">
-            <div className="space-y-2">
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Delta Score</p>
-              <p className={`text-3xl font-bold ${analytics.totalResponses > 0 ? getDeltaColor(analytics.satisfactionDelta) : 'text-gray-900'}`}>
-                {analytics.totalResponses > 0 
-                  ? `${analytics.satisfactionDelta > 0 ? '+' : ''}${analytics.satisfactionDelta.toFixed(1)}%`
-                  : '0.0%'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Per-Question</label>
+            <select
+              value={selectedQuestionId}
+              onChange={(e) => setSelectedQuestionId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All questions</option>
+              {analytics?.questionAnalytics?.map((q) => (
+                <option key={q.questionId} value={q.questionId}>
+                  {q.questionText.length > 40 ? q.questionText.slice(0, 37) + '…' : q.questionText}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={handleClearFilters}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-2"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Response Trends */}
-      {trends.length > 0 && (
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle>Response Trends</CardTitle>
-            <CardDescription>Daily response count over the last 30 days</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TrendChart data={trends} title="Daily Response Count" />
-          </CardContent>
-        </Card>
-      )}
+      {/* Stats Cards - Modern Design */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Responses Card */}
+        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 group">
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Responses</h3>
+            <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+              <Users className="w-4 h-4 text-gray-400" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="text-4xl font-extrabold text-gray-900">{analytics.totalResponses}</span>
+            <span className="text-lg text-gray-400">/ {analytics.totalStudents}</span>
+          </div>
+          <div className="flex items-center text-blue-500 text-xs font-bold">
+            <span>{analytics.totalStudents > 0 ? analytics.responseRate.toFixed(1) : '0.0'}% RESPONSE RATE</span>
+          </div>
+          {trends.length > 0 && (
+            <div className="mt-4">
+              <MiniTrendChart data={trends} />
+            </div>
+          )}
+        </div>
 
-      {/* Question Analytics */}
+        {/* Completion Time Card */}
+        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 group">
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Avg. Completion</h3>
+            <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+              <Clock className="w-4 h-4 text-gray-400" />
+            </div>
+          </div>
+          <div className="text-4xl font-extrabold text-gray-900 mb-2">
+            {analytics.totalResponses > 0 ? formatCompletionTime(analytics.averageCompletionTime) : '0s'}
+          </div>
+          <div className="flex items-center text-gray-500 text-xs font-bold">
+            <span>AVERAGE TIME</span>
+          </div>
+        </div>
+
+        {/* Satisfaction Card with Arc */}
+        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 group">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Satisfaction</h3>
+            <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+              <Star className="w-4 h-4 text-gray-400" />
+            </div>
+          </div>
+          <SatisfactionArc score={analytics.totalResponses > 0 ? analytics.satisfactionScore : 0} />
+          <div className="flex items-center justify-center text-xs font-bold mt-2">
+            <div className="flex items-center gap-1">
+              {[1,2,3,4,5].map((star) => (
+                <Star 
+                  key={star} 
+                  className={`w-3 h-3 ${star <= Math.round(analytics.satisfactionScore) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} 
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Pending Students Card */}
+        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 group">
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Pending</h3>
+            <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+              <UserX className="w-4 h-4 text-orange-500" />
+            </div>
+          </div>
+          <div className="text-4xl font-extrabold text-orange-500 mb-2">
+            {loadingPending ? '...' : pendingStudents.length}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-500">NOT SUBMITTED</span>
+            <button
+              onClick={exportPendingStudents}
+              disabled={pendingStudents.length === 0 || loadingPending}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                pendingStudents.length === 0 || loadingPending
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+              }`}
+            >
+              <Download className="w-3 h-3" />
+              Export
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Question Analytics - Modern Cards */}
       {analytics.questionAnalytics.length > 0 && (
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle>Question Analytics</CardTitle>
-            <CardDescription>Detailed analysis for each question in the feedback form</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {analytics.questionAnalytics.map((question, index) => (
-                <div key={question.questionId} className="border border-gray-200 rounded-lg p-6 bg-gray-50">
-                  <div className="mb-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <h4 className="text-base font-semibold text-gray-900">
-                        {index + 1}. {question.questionText}
-                      </h4>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+        <div className="bg-white rounded-[20px] border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Question Analytics</h3>
+            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest mt-1">
+              Detailed breakdown for each question
+            </p>
+          </div>
+          
+          <div className="divide-y divide-gray-100">
+            {analytics.questionAnalytics.map((question, index) => (
+              <div key={question.questionId} className="p-6 hover:bg-gray-50/50 transition-colors">
+                {/* Question Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+                        {index + 1}
+                      </span>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                         question.questionType === 'star_rating' 
                           ? 'bg-yellow-100 text-yellow-800'
                           : question.questionType === 'multiple_choice'
                           ? 'bg-blue-100 text-blue-800'
-                          : 'bg-green-100 text-green-800'
+                          : 'bg-emerald-100 text-emerald-800'
                       }`}>
-                        {question.questionType === 'star_rating' ? 'Star Rating' :
-                         question.questionType === 'multiple_choice' ? 'Multiple Choice' : 'Text'}
+                        {question.questionType === 'star_rating' ? '★ Rating' :
+                         question.questionType === 'multiple_choice' ? 'Choice' : 'Text'}
                       </span>
-                      <span className="text-sm text-gray-600">
-                        {question.totalResponses} {question.totalResponses === 1 ? 'response' : 'responses'}
+                      <span className="text-xs text-gray-500 font-medium">
+                        {question.totalResponses} responses
                       </span>
                     </div>
+                    <h4 className="text-base font-semibold text-gray-900">{question.questionText}</h4>
                   </div>
+                </div>
 
-                  {/* Star Rating Analytics */}
-                  {question.questionType === 'star_rating' && question.averageRating && (
-                    <div className="space-y-4 mt-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="flex items-center space-x-3 bg-white rounded-lg p-4 border border-gray-200">
-                          <span className="text-sm font-medium text-gray-700">Average</span>
-                          <div className="flex items-center space-x-2">
-                            <StarRating value={question.averageRating} onChange={() => {}} disabled={true} />
-                            <span className="text-base font-semibold text-gray-900">{question.averageRating.toFixed(1)} / 5.0</span>
-                          </div>
+                {/* Star Rating Analytics */}
+                {question.questionType === 'star_rating' && question.averageRating && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+                    {/* Average & Median */}
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-900 mb-1">
+                          {question.averageRating.toFixed(1)}
                         </div>
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <div className="text-sm text-gray-700">Median</div>
-                          <div className="text-lg font-semibold text-gray-900">{question.medianRating?.toFixed(1) ?? '—'}</div>
+                        <div className="flex items-center justify-center gap-0.5 mb-2">
+                          {[1,2,3,4,5].map((star) => (
+                            <Star 
+                              key={star} 
+                              className={`w-4 h-4 ${star <= Math.round(question.averageRating!) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} 
+                            />
+                          ))}
+                        </div>
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          Average Rating
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <span className="text-sm font-medium text-gray-600">
+                            Median: {question.medianRating?.toFixed(1) ?? '—'}
+                          </span>
                         </div>
                       </div>
-                      
-                      {question.ratingDistribution && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="bg-white rounded-lg p-4 border border-gray-200">
-                            <Chart 
-                              data={question.ratingDistribution} 
-                              title="Rating Distribution" 
-                              type="bar"
-                              colors={['#F59E0B', '#F59E0B', '#F59E0B', '#F59E0B', '#F59E0B']}
+                    </div>
+
+                    {/* Rating Distribution Bars */}
+                    <div className="lg:col-span-2 bg-gray-50 rounded-xl p-4">
+                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">
+                        Rating Distribution
+                      </div>
+                      <div className="space-y-2">
+                        {question.ratingDistribution && (() => {
+                          const total = Object.values(question.ratingDistribution).reduce((a, b) => a + b, 0)
+                          const maxCount = Math.max(...Object.values(question.ratingDistribution))
+                          return [5, 4, 3, 2, 1].map((rating) => (
+                            <RatingDistributionBar
+                              key={rating}
+                              rating={rating}
+                              count={question.ratingDistribution![rating] || 0}
+                              total={total}
+                              maxCount={maxCount}
                             />
+                          ))
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Multiple Choice Analytics */}
+                {question.questionType === 'multiple_choice' && question.optionDistribution && (
+                  <div className="mt-4 bg-gray-50 rounded-xl p-4">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">
+                      Option Distribution
+                    </div>
+                    <div className="space-y-2">
+                      {Object.entries(question.optionDistribution).map(([option, count]) => {
+                        const total = Object.values(question.optionDistribution!).reduce((a, b) => a + b, 0)
+                        const percentage = total > 0 ? (count / total) * 100 : 0
+                        return (
+                          <div key={option} className="flex items-center gap-3">
+                            <div className="w-32 text-sm font-medium text-gray-700 truncate">{option}</div>
+                            <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-blue-500 rounded-full transition-all duration-700 ease-out"
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                            <div className="w-20 text-right">
+                              <span className="text-sm font-medium text-gray-900">{count}</span>
+                              <span className="text-xs text-gray-500 ml-1">({percentage.toFixed(0)}%)</span>
+                            </div>
                           </div>
-                          <div className="bg-white rounded-lg p-4 border border-gray-200">
-                            <Chart 
-                              data={question.ratingDistribution} 
-                              title="Rating Breakdown" 
-                              type="pie"
-                              colors={['#F59E0B', '#FBBF24', '#FCD34D', '#FDE68A', '#FEF3C7']}
-                            />
-                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Text Analytics */}
+                {question.questionType === 'text' && question.textResponses && (
+                  <div className="mt-4 bg-gray-50 rounded-xl p-4">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">
+                      Text Responses ({question.textResponses.length})
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      {question.textResponses.slice(0, 5).map((response, idx) => (
+                        <div key={idx} className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200">
+                          &quot;{response}&quot;
+                        </div>
+                      ))}
+                      {question.textResponses.length > 5 && (
+                        <div className="text-sm text-gray-500 italic pt-2">
+                          ... and {question.textResponses.length - 5} more responses
                         </div>
                       )}
                     </div>
-                  )}
-
-                  {/* Multiple Choice Analytics */}
-                  {question.questionType === 'multiple_choice' && question.optionDistribution && (
-                    <div className="space-y-4 mt-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <div className="text-sm text-gray-700">Top option</div>
-                          <div className="text-lg font-semibold text-gray-900">{(question as { topOption?: { option?: string } }).topOption?.option ?? '—'}</div>
-                          {question.totalResponses > 0 && (
-                            <div className="text-xs text-gray-600">
-                              {(question as { topOption?: { count?: number; percent?: number } }).topOption?.count ?? 0} · {((question as { topOption?: { count?: number; percent?: number } }).topOption?.percent ?? 0).toFixed(0)}%
-                            </div>
-                          )}
-                        </div>
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <div className="text-sm text-gray-700">Distinct options</div>
-                          <div className="text-lg font-semibold text-gray-900">{(question as { distinctOptionCount?: number }).distinctOptionCount ?? 0}</div>
-                        </div>
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <div className="text-sm text-gray-700">Total selections</div>
-                          <div className="text-lg font-semibold text-gray-900">{question.totalResponses}</div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <Chart 
-                            data={question.optionDistribution} 
-                            title="Option Distribution" 
-                            type="bar"
-                            colors={['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']}
-                          />
-                        </div>
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <Chart 
-                            data={question.optionDistribution} 
-                            title="Response Breakdown" 
-                            type="pie"
-                            colors={['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Text Analytics */}
-                  {question.questionType === 'text' && question.textResponses && (
-                    <div className="space-y-4 mt-4">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <div className="text-sm text-gray-700">Total text responses</div>
-                          <div className="text-lg font-semibold text-gray-900">{question.textResponses.length}</div>
-                        </div>
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <div className="text-sm text-gray-700">Top keywords</div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {(question as { topKeywords?: string[] }).topKeywords?.length ? (
-                              (question as { topKeywords?: string[] }).topKeywords!.map((kw: string, i: number) => (
-                                <span key={i} className="px-2 py-0.5 text-xs rounded-md bg-gray-100 text-gray-700">{kw}</span>
-                              ))
-                            ) : (
-                              <span className="text-xs text-gray-500">—</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <Chart
-                            data={(question as { responseLengthHistogram?: Record<string, number> }).responseLengthHistogram || {}}
-                            title="Response Lengths"
-                            type="bar"
-                            colors={["#6B7280"]}
-                          />
-                        </div>
-                      </div>
-                      <div className="bg-white rounded-lg p-4 border border-gray-200">
-                        <span className="text-sm font-medium text-gray-700">
-                          {question.textResponses.length} {question.textResponses.length === 1 ? 'text response' : 'text responses'}
-                        </span>
-                        <div className="max-h-48 overflow-y-auto space-y-2 mt-3" aria-label="Representative quotes">
-                          {question.textResponses.slice(0, 10).map((response, idx) => (
-                            <div key={idx} className="text-sm text-gray-700 bg-gray-50 p-3 rounded-md border border-gray-200">
-                              &quot;{response}&quot;
-                            </div>
-                          ))}
-                          {question.textResponses.length > 10 && (
-                            <div className="text-sm text-gray-500 italic pt-2">
-                              ... and {question.textResponses.length - 10} more {question.textResponses.length - 10 === 1 ? 'response' : 'responses'}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Student Responses Table */}
-      {analytics.studentResponses.length > 0 && (() => {
-        const filteredResponses = getFilteredResponses()
-        return (
-          <Card className="border border-gray-200 shadow-sm">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Student Responses</CardTitle>
-                  <CardDescription>
-                    {filteredResponses.length} {filteredResponses.length === 1 ? 'student has' : 'students have'} submitted feedback
-                    {((selectedYear || selectedSection) && filteredResponses.length !== analytics.studentResponses.length) && (
-                      <span className="ml-2 text-xs text-gray-500">
-                        (filtered from {analytics.studentResponses.length} total)
-                      </span>
-                    )}
-                  </CardDescription>
-                  {/* Active filter badges */}
-                  {(selectedYear || selectedSection) && (
-                    <div className="flex items-center gap-2 mt-2">
-                      {selectedYear && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
-                          Year: {selectedYear}
-                          <button
-                            onClick={() => setSelectedYear('')}
-                            className="ml-1 text-blue-600 hover:text-blue-800"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      )}
-                      {selectedSection && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
-                          Section: {selectedSection}
-                          <button
-                            onClick={() => setSelectedSection('')}
-                            className="ml-1 text-blue-600 hover:text-blue-800"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      )}
-                      {(selectedYear || selectedSection) && (
-                        <button
-                          onClick={handleClearFilters}
-                          className="text-xs text-gray-600 hover:text-gray-800 underline"
+      {analytics.studentResponses.length > 0 && (
+        <div className="bg-white rounded-[20px] border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                  Student Responses ({filteredResponses.length})
+                </h3>
+                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest mt-1">
+                  Individual feedback submissions
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Filter Dropdown */}
+                <div className="relative" ref={filterDropdownRef}>
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl transition-colors gap-2 ${
+                      (selectedYear || selectedSection)
+                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Filter className="w-4 h-4" />
+                    Filter
+                  </button>
+                  
+                  {showFilters && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg z-50 border border-gray-200 p-4 space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Year</label>
+                        <select
+                          value={selectedYear}
+                          onChange={(e) => setSelectedYear(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          Clear all
-                        </button>
-                      )}
+                          <option value="">All Years</option>
+                          {years.map((year) => (
+                            <option key={year.id} value={year.name}>{year.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Section</label>
+                        <select
+                          value={selectedSection}
+                          onChange={(e) => setSelectedSection(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">All Sections</option>
+                          {sections.map((section) => (
+                            <option key={section.id} value={section.name}>{section.name}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2" ref={filterDropdownRef}>
-                  {/* Filter Button */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowFilters(!showFilters)}
-                      className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        (selectedYear || selectedSection)
-                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                      </svg>
-                      Filter
-                    </button>
-                    
-                    {/* Filter Dropdown */}
-                    {showFilters && (
-                      <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg z-50 border border-gray-200">
-                        <div className="p-4 space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
-                            <select
-                              value={selectedYear}
-                              onChange={(e) => setSelectedYear(e.target.value)}
-                              className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                              <option value="">All Years</option>
-                              {years.map((year) => (
-                                <option key={year.id} value={year.name}>{year.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                            <select
-                              value={selectedSection}
-                              onChange={(e) => setSelectedSection(e.target.value)}
-                              className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                              <option value="">All Sections</option>
-                              {sections.map((section) => (
-                                <option key={section.id} value={section.name}>{section.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                
+                {/* Export Button */}
+                <button
+                  onClick={exportToPDF}
+                  disabled={filteredResponses.length === 0}
+                  className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl transition-colors gap-2 ${
+                    filteredResponses.length === 0
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                  }`}
+                >
+                  <Download className="w-4 h-4" />
+                  Export PDF
+                </button>
               </div>
-            </CardHeader>
-            <CardContent className="p-2">
-              {filteredResponses.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <p className="text-sm font-medium">No students match the selected filters</p>
-                  <button
-                    onClick={handleClearFilters}
-                    className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
-                  >
-                    Clear filters
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Table Toolbar with Export Button */}
-                  <div className="flex items-center justify-end mb-2 px-2">
-                    <button
-                      onClick={exportToPDF}
-                      disabled={filteredResponses.length === 0}
-                      className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                        filteredResponses.length === 0
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      <svg className="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Export PDF
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto max-h-96">
-                    <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Student
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Year/Section
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Submitted
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Completion Time
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Satisfaction Score
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredResponses.map((student) => (
-                        <tr key={student.studentId} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            <div>
-                              <div className="text-xs font-medium text-gray-900">
-                                {student.studentName}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {student.studentEmail}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            <div className="text-xs text-gray-900">
-                              {student.year} / {student.section}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            <div className="text-xs text-gray-900">
-                              {new Date(student.submittedAt).toLocaleDateString()}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(student.submittedAt).toLocaleTimeString()}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            <div className="text-xs text-gray-900">
-                              {formatCompletionTime(student.completionTime)}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            {student.satisfactionScore ? (
-                              <div className="flex items-center space-x-1">
-                                <StarRating
-                                  value={student.satisfactionScore}
-                                  onChange={() => {}}
-                                  disabled={true}
-                                />
-                                <span className={`text-xs font-medium ${getSatisfactionColor(student.satisfactionScore)}`}>
-                                  {student.satisfactionScore.toFixed(1)}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-gray-500">N/A</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )
-      })()}
-
-      {/* Empty State for Student Responses */}
-      {analytics.studentResponses.length === 0 && (
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle>Student Responses</CardTitle>
-            <CardDescription>No student responses available yet</CardDescription>
-          </CardHeader>
-          <CardContent className="text-center py-12">
-            <div className="text-gray-500">
-              <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-sm font-medium">Waiting for student submissions</p>
             </div>
-          </CardContent>
-        </Card>
+            
+            {/* Active Filters */}
+            {(selectedYear || selectedSection) && (
+              <div className="flex items-center gap-2 mt-3">
+                {selectedYear && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-blue-100 text-blue-800">
+                    Year: {selectedYear}
+                    <button onClick={() => setSelectedYear('')} className="ml-1 text-blue-600 hover:text-blue-800">×</button>
+                  </span>
+                )}
+                {selectedSection && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-blue-100 text-blue-800">
+                    Section: {selectedSection}
+                    <button onClick={() => setSelectedSection('')} className="ml-1 text-blue-600 hover:text-blue-800">×</button>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-100">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="pl-6 py-4 text-left">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Student</span>
+                  </th>
+                  <th className="px-4 py-4 text-center">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year / Section</span>
+                  </th>
+                  <th className="px-4 py-4 text-center">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Submitted</span>
+                  </th>
+                  <th className="px-4 py-4 text-center">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Time</span>
+                  </th>
+                  <th className="pr-6 py-4 text-right">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Satisfaction</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredResponses.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-gray-500">
+                      <p className="text-sm font-medium">No students match the selected filters</p>
+                      <button
+                        onClick={handleClearFilters}
+                        className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Clear filters
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredResponses.map((student) => (
+                    <tr key={student.studentId} className="hover:bg-gray-50 transition-colors">
+                      <td className="pl-6 py-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{student.studentName}</div>
+                          <div className="text-xs text-gray-500">{student.studentEmail}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="text-sm font-medium text-gray-700">
+                          {student.year} / {student.section}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="text-sm text-gray-900">{new Date(student.submittedAt).toLocaleDateString()}</div>
+                        <div className="text-xs text-gray-500">{new Date(student.submittedAt).toLocaleTimeString()}</div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="text-sm font-medium text-gray-900">
+                          {formatCompletionTime(student.completionTime)}
+                        </span>
+                      </td>
+                      <td className="pr-6 py-4 text-right">
+                        {student.satisfactionScore ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center gap-0.5">
+                              {[1,2,3,4,5].map((star) => (
+                                <Star 
+                                  key={star} 
+                                  className={`w-3 h-3 ${star <= Math.round(student.satisfactionScore!) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} 
+                                />
+                              ))}
+                            </div>
+                            <span className={`text-sm font-bold ${getSatisfactionColor(student.satisfactionScore)}`}>
+                              {student.satisfactionScore.toFixed(1)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">N/A</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {analytics.studentResponses.length === 0 && (
+        <div className="bg-white rounded-[20px] border border-gray-200 shadow-sm p-12 text-center">
+          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <Users className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Responses Yet</h3>
+          <p className="text-sm text-gray-500">Waiting for student submissions</p>
+        </div>
       )}
     </div>
   )

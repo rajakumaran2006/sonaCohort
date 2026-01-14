@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     // Get admin email from department
     // Prioritize the admin email set in the department record
-    const adminEmail = department.admin_email || process.env.ADMIN_EMAIL || 'admin@peertutors.edu'
+    const adminEmail = department.admin_email || process.env.ADMIN_EMAIL || 'admin@peerTutor.edu'
 
     // Generate exports
     const exportFiles = await ExportGenerationService.generateExports(

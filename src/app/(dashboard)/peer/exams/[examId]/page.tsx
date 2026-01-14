@@ -1,5 +1,6 @@
 'use client'
 
+import { toast } from 'sonner'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
@@ -7,7 +8,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { ExamService } from '@/lib/services/examService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
@@ -23,7 +24,7 @@ import { Card, CardHeader, CardTitle, CardContent, LoadingOverlay, StudentPerfor
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
-import { ArrowLeft, Edit, Save, X, Plus, Upload, Download, Filter } from 'lucide-react'
+import { ArrowLeft, Edit, Save, X, Plus, Upload, Download, Filter, Calendar, Users, Activity, ChevronLeft, Search, Clock, CheckCircle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { Input } from '@/components/ui'
@@ -59,11 +60,11 @@ function PeerExamDetailsContent() {
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
   // Fetch peer tutor info
-  const { data: peerTutorInfo, isLoading: isTutorLoading } = useQuery({
+  const { data: peertutorsInfo, isLoading: isTutorLoading } = useQuery({
     queryKey: ['peer-tutor-info', user?.email],
     queryFn: async () => {
       if (!user?.email) return null
-      return await PeerTutorAuthService.getPeerTutorByEmail(user.email)
+      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
     },
     enabled: !!user?.email,
     staleTime: 5 * 60 * 1000,
@@ -79,12 +80,12 @@ function PeerExamDetailsContent() {
 
   // Fetch students assigned to peer tutor
   const { data: students, isLoading: isStudentsLoading } = useQuery({
-    queryKey: ['peer-tutor-students', peerTutorInfo?.id],
+    queryKey: ['peer-tutor-students', peertutorsInfo?.id],
     queryFn: async () => {
-      if (!peerTutorInfo?.id) return []
-      return await AssignmentService.getStudentsByPeerTutor(peerTutorInfo.id)
+      if (!peertutorsInfo?.id) return []
+      return await AssignmentService.getStudentsBypeertutors(peertutorsInfo.id)
     },
-    enabled: !!peerTutorInfo?.id,
+    enabled: !!peertutorsInfo?.id,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -99,27 +100,27 @@ function PeerExamDetailsContent() {
 
   // Initialize subjects from classes if none exist
   useEffect(() => {
-    if (exam && peerTutorInfo && examSubjects && examSubjects.length === 0) {
+    if (exam && peertutorsInfo && examSubjects && examSubjects.length === 0) {
       ExamSubjectService.initializeSubjectsFromClasses(
         examId,
-        peerTutorInfo.id,
-        peerTutorInfo.dept,
-        peerTutorInfo.year,
-        peerTutorInfo.section
+        peertutorsInfo.id,
+        peertutorsInfo.dept,
+        peertutorsInfo.year,
+        peertutorsInfo.section
       ).then(() => {
         refetchSubjects()
       })
     }
-  }, [exam, peerTutorInfo, examSubjects, examId, refetchSubjects])
+  }, [exam, peertutorsInfo, examSubjects, examId, refetchSubjects])
 
   // Fetch existing exam marks
   const { data: existingMarks, isLoading: isMarksLoading } = useQuery({
-    queryKey: ['exam-marks', examId, peerTutorInfo?.id],
+    queryKey: ['exam-marks', examId, peertutorsInfo?.id],
     queryFn: async () => {
-      if (!examId || !peerTutorInfo?.id) return []
-      return await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutorInfo.id, examId)
+      if (!examId || !peertutorsInfo?.id) return []
+      return await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutorsInfo.id, examId)
     },
-    enabled: !!examId && !!peerTutorInfo?.id,
+    enabled: !!examId && !!peertutorsInfo?.id,
     staleTime: 1 * 60 * 1000, // Reduced stale time for better real-time updates
     refetchOnWindowFocus: true, // Refetch when window gains focus
   })
@@ -202,9 +203,9 @@ function PeerExamDetailsContent() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['peer-tutor-info', user?.email] }),
         queryClient.invalidateQueries({ queryKey: ['exam-details', examId] }),
-        queryClient.invalidateQueries({ queryKey: ['peer-tutor-students', peerTutorInfo?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['peer-tutor-students', peertutorsInfo?.id] }),
         queryClient.invalidateQueries({ queryKey: ['exam-subjects', examId] }),
-        queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peerTutorInfo?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsInfo?.id] }),
       ])
       refetchSubjects()
       setLastRefresh(new Date())
@@ -228,7 +229,7 @@ function PeerExamDetailsContent() {
   }
 
   const handleSave = async () => {
-    if (!examId || !peerTutorInfo?.id || !students || !examSubjects) return
+    if (!examId || !peertutorsInfo?.id || !students || !examSubjects) return
 
     setIsSaving(true)
     try {
@@ -240,7 +241,7 @@ function PeerExamDetailsContent() {
           if (studentMarks) {
             marksToSave.push({
               exam_id: examId,
-              peer_tutor_id: peerTutorInfo.id,
+              peer_tutor_id: peertutorsInfo.id,
               student_id: student.id,
               exam_subject_id: subject.id,
               marks: studentMarks,
@@ -255,15 +256,15 @@ function PeerExamDetailsContent() {
         setIsEditing(false)
         // Invalidate queries for both peer tutor and faculty views
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peerTutorInfo.id] }),
+          queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsInfo.id] }),
           queryClient.invalidateQueries({ queryKey: ['exam-marks', examId] }), // For faculty view
         ])
       } else {
-        alert('Failed to save marks. Please try again.')
+        toast.error('Failed to save marks. Please try again.')
       }
     } catch (error) {
       console.error('Error saving marks:', error)
-      alert('An error occurred while saving marks')
+      toast.error('An error occurred while saving marks')
     } finally {
       setIsSaving(false)
     }
@@ -271,7 +272,7 @@ function PeerExamDetailsContent() {
 
   const handleCancel = () => {
     // Reload existing marks
-    queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peerTutorInfo?.id] })
+    queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsInfo?.id] })
     setIsEditing(false)
   }
 
@@ -300,13 +301,13 @@ function PeerExamDetailsContent() {
   }, [isEditing, students, examSubjects])
 
   const handleAddSubject = async () => {
-    if (!newSubjectName.trim() || !examId || !peerTutorInfo?.id) return
+    if (!newSubjectName.trim() || !examId || !peertutorsInfo?.id) return
 
     const subject = await ExamSubjectService.addExamSubject({
       exam_id: examId,
       subject_name: newSubjectName.trim(),
       is_custom: true,
-      created_by: peerTutorInfo.id,
+      created_by: peertutorsInfo.id,
     })
 
     if (subject) {
@@ -315,13 +316,13 @@ function PeerExamDetailsContent() {
       queryClient.invalidateQueries({ queryKey: ['exam-subjects', examId] })
       refetchSubjects()
     } else {
-      alert('Failed to add subject')
+      toast.error('Failed to add subject')
     }
   }
 
   // Excel export function
   const handleExportToExcel = async () => {
-    if (!exam || !peerTutorInfo || !students || !examSubjects || students.length === 0 || examSubjects.length === 0) return
+    if (!exam || !peertutorsInfo || !students || !examSubjects || students.length === 0 || examSubjects.length === 0) return
 
     try {
       // Get exam subjects
@@ -332,10 +333,10 @@ function PeerExamDetailsContent() {
       
       // Add header rows with exam information
       exportData.push(['Subjects Export Report'])
-      exportData.push(['Department:', peerTutorInfo.dept])
-      exportData.push(['Year:', peerTutorInfo.year])
-      exportData.push(['Section:', peerTutorInfo.section])
-      exportData.push(['Peer Tutor:', peerTutorInfo.name])
+      exportData.push(['Department:', peertutorsInfo.dept])
+      exportData.push(['Year:', peertutorsInfo.year])
+      exportData.push(['Section:', peertutorsInfo.section])
+      exportData.push(['Peer Tutor:', peertutorsInfo.name])
       exportData.push(['Generated on:', new Date().toLocaleDateString()])
       exportData.push([]) // Empty row
       
@@ -344,7 +345,7 @@ function PeerExamDetailsContent() {
       exportData.push(headerRow)
       
       // Get marks for all students
-      const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutorInfo.id, examId)
+      const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutorsInfo.id, examId)
       
       // Organize marks by student and subject
       const marksByStudentSubject: Record<string, Record<string, string>> = {}
@@ -373,13 +374,13 @@ function PeerExamDetailsContent() {
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Exam Marks')
       
       // Generate filename
-      const filename = `Exam_${exam.name.replace(/[^a-zA-Z0-9]/g, '_')}_${peerTutorInfo.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
+      const filename = `Exam_${exam.name.replace(/[^a-zA-Z0-9]/g, '_')}_${peertutorsInfo.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
       
       // Write file
       XLSX.writeFile(workbook, filename)
     } catch (error) {
       console.error('Error exporting to Excel:', error)
-      alert('Error exporting to Excel. Please try again.')
+      toast.error('Error exporting to Excel. Please try again.')
     }
   }
 
@@ -469,7 +470,7 @@ function PeerExamDetailsContent() {
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />
-        <div className="transition-all duration-300 lg:ml-64 min-h-screen flex flex-col overflow-hidden">
+        <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
           <PageHeader
             title="EXAM DETAILS"
             lastRefresh={lastRefresh}
@@ -488,14 +489,14 @@ function PeerExamDetailsContent() {
     )
   }
 
-  if (!exam || !peerTutorInfo) {
+  if (!exam || !peertutorsInfo) {
     return (
       <div className="min-h-screen bg-gray-50">
         <PeerSidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />
-        <div className="transition-all duration-300 lg:ml-64 min-h-screen flex flex-col overflow-hidden">
+        <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
           <PageHeader
             title="EXAM DETAILS"
             lastRefresh={lastRefresh}
@@ -537,401 +538,437 @@ function PeerExamDetailsContent() {
       />
 
       {/* Main Content */}
-      <div className="transition-all duration-300 lg:ml-64 min-h-screen flex flex-col overflow-hidden">
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
         {/* Top Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200 w-full">
-          <div className="flex items-center justify-between py-4 w-full px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center flex-1">
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 mr-2"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              
-              {/* Breadcrumbs */}
-              <nav className="flex items-center space-x-2 text-sm text-gray-500">
-                <button
-                  onClick={() => router.push('/peer/exams')}
-                  className="hover:text-gray-700 transition-colors"
-                >
-                  Exams
-                </button>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-                <span className="text-gray-900 font-medium">{exam.name}</span>
-              </nav>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="secondary"
-                onClick={() => router.push('/peer/exams')}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-            </div>
-          </div>
-        </header>
+        <PageHeader
+          title={exam.name}
+          subtitle="Manage student marks and view performance analytics"
+          lastRefresh={lastRefresh}
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
+          onToggleSidebar={() => setIsSidebarOpen(true)}
+          isSidebarCollapsed={isSidebarCollapsed}
+        >
+          <Button
+            variant="outline"
+            className="hidden sm:flex"
+            onClick={() => router.push('/peer/exams')}
+          >
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Back to Exams
+          </Button>
+        </PageHeader>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="w-full py-8 px-4 sm:px-6 lg:px-8">
-            {/* Exam Info Card */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="text-xl">{exam.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Created</p>
-                    <p className="text-base text-gray-900 mt-1">
-                      {new Date(exam.created_at).toLocaleDateString()}
-                    </p>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="max-w-[1600px] mx-auto space-y-8">
+            
+            {/* Stats Grid */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6">
+              {/* Total Students */}
+              <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                <div className="p-3 sm:p-5">
+                  <div className="flex items-center justify-between mb-1 sm:mb-2">
+                    <div className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Total Students
+                    </div>
+                    <Users className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Students</p>
-                    <p className="text-base text-gray-900 mt-1">
-                      {students?.length || 0} student(s) assigned
-                    </p>
+                  <div className="text-xl sm:text-3xl font-bold text-gray-900">
+                    {students?.length || 0}
+                  </div>
+                  <div className="mt-1 sm:mt-2 flex items-center text-[10px] sm:text-xs text-blue-600">
+                    <span className="font-semibold uppercase">Assigned</span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Marks Table Card */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xl">Student Marks</CardTitle>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Manage marks for all assigned students
-                    </p>
+              {/* Created Date */}
+              <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                <div className="p-3 sm:p-5">
+                  <div className="flex items-center justify-between mb-1 sm:mb-2">
+                    <div className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Created On
+                    </div>
+                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                   </div>
-                  <div className="flex items-center space-x-3 flex-wrap gap-2">
-                    {/* Filter Dropdown */}
-                    <div className="relative" ref={filterRef}>
-                      <button
-                        onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                        className={`inline-flex items-center justify-center p-2 transition-colors hover:bg-gray-100 rounded ${
-                          sortBy !== 'name' ? 'text-blue-600' : 'text-gray-600'
-                        }`}
-                        title="Sort students"
-                      >
-                        <Filter className="h-5 w-5" />
-                      </button>
+                  <div className="text-sm sm:text-3xl font-bold text-gray-900">
+                    {new Date(exam.created_at).toLocaleDateString()}
+                  </div>
+                  <div className="mt-1 sm:mt-2 flex items-center text-[10px] sm:text-xs text-gray-500">
+                    <span className="font-semibold uppercase">Exam Date</span>
+                  </div>
+                </div>
+              </div>
 
-                      {/* Filter Dropdown */}
-                      {showFilterDropdown && (
-                        <div className="absolute left-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
-                          <div className="p-4">
-                            <h4 className="text-sm font-medium text-gray-900 mb-3">Sort Students By</h4>
-                            
-                            <div className="space-y-2">
-                              <button
-                                onClick={() => {
-                                  setSortBy('name')
-                                  setShowFilterDropdown(false)
-                                }}
-                                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                                  sortBy === 'name'
-                                    ? 'bg-blue-100 text-blue-700 font-medium'
-                                    : 'text-gray-700 hover:bg-gray-100'
-                                }`}
-                              >
-                                Name (A-Z)
-                              </button>
-                              
-                              <button
-                                onClick={() => {
-                                  setSortBy('avg')
-                                  setShowFilterDropdown(false)
-                                }}
-                                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                                  sortBy === 'avg'
-                                    ? 'bg-blue-100 text-blue-700 font-medium'
-                                    : 'text-gray-700 hover:bg-gray-100'
-                                }`}
-                              >
-                                Average (High to Low)
-                              </button>
-                            </div>
-                          </div>
+              {/* Max Marks */}
+              <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                <div className="p-3 sm:p-5">
+                  <div className="flex items-center justify-between mb-1 sm:mb-2">
+                    <div className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Max Marks
+                    </div>
+                    <Activity className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
+                  </div>
+                  <div className="text-xl sm:text-3xl font-bold text-gray-900">
+                    {exam.max_marks || 100}
+                  </div>
+                  <div className="mt-1 sm:mt-2 flex items-center text-[10px] sm:text-xs text-purple-600">
+                    <span className="font-semibold uppercase">Total Points</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Marks Table Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+               <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/30">
+                  <div className="flex flex-col gap-3 sm:gap-4">
+                     <div className="flex items-center justify-between">
+                        <div>
+                           <h3 className="text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider">Student Marks</h3>
+                           <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Manage marks for all assigned students</p>
                         </div>
-                      )}
-                    </div>
-                    
-                    {!isEditing ? (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setIsEditing(true)}
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit Marks
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={handleCancel}
-                          disabled={isSaving}
+                     </div>
+
+                     <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+                        {/* Sort Filter */}
+                        <div className="relative" ref={filterRef}>
+                           <button
+                              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                              className={`px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-200 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all hover:bg-gray-50 flex items-center gap-1.5 sm:gap-2 ${
+                                 sortBy !== 'name' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-gray-600'
+                              }`}
+                           >
+                              <Filter className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                              <span>Sort</span>
+                           </button>
+
+                           {showFilterDropdown && (
+                              <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-44 sm:w-48 bg-white rounded-xl shadow-lg border border-gray-100 z-20 overflow-hidden">
+                                 <div className="p-2 space-y-1">
+                                    <button
+                                       onClick={() => {
+                                          setSortBy('name')
+                                          setShowFilterDropdown(false)
+                                       }}
+                                       className={`w-full text-left px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors ${
+                                          sortBy === 'name' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
+                                       }`}
+                                    >
+                                       Name (A-Z)
+                                    </button>
+                                    <button
+                                       onClick={() => {
+                                          setSortBy('avg')
+                                          setShowFilterDropdown(false)
+                                       }}
+                                       className={`w-full text-left px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors ${
+                                          sortBy === 'avg' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
+                                       }`}
+                                    >
+                                       Average (High-Low)
+                                    </button>
+                                 </div>
+                              </div>
+                           )}
+                        </div>
+
+                        {!isEditing ? (
+                           <button
+                              onClick={() => setIsEditing(true)}
+                              className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-black text-white rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-gray-800 transition-all flex items-center gap-1.5 sm:gap-2"
+                           >
+                              <Edit className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                              <span className="hidden xs:inline">Edit Marks</span>
+                              <span className="xs:hidden">Edit</span>
+                           </button>
+                        ) : (
+                           <>
+                              <button
+                                 onClick={handleCancel}
+                                 disabled={isSaving}
+                                 className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-1.5 sm:gap-2"
+                              >
+                                 <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                 <span className="hidden sm:inline">Cancel</span>
+                              </button>
+                              <button
+                                 onClick={handleSave}
+                                 disabled={isSaving}
+                                 className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-black text-white rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-gray-800 transition-all flex items-center gap-1.5 sm:gap-2"
+                              >
+                                 <Save className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                 <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
+                                 <span className="sm:hidden">{isSaving ? '...' : 'Save'}</span>
+                              </button>
+                           </>
+                        )}
+                        
+                        <div className="h-6 sm:h-8 w-px bg-gray-200 mx-0.5 sm:mx-1 hidden sm:block"></div>
+
+                        <button
+                           onClick={() => setShowImportModal(true)}
+                           disabled={!examSubjects || examSubjects.length === 0}
+                           className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-1.5 sm:gap-2"
                         >
-                          <X className="h-4 w-4 mr-2" />
-                          Cancel
-                        </Button>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={handleSave}
-                          loading={isSaving}
-                          disabled={isSaving}
+                           <Upload className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                           <span className="hidden sm:inline">Import</span>
+                        </button>
+
+                        <button
+                           onClick={() => setShowAddSubjectModal(true)}
+                           className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-1.5 sm:gap-2"
                         >
-                          <Save className="h-4 w-4 mr-2" />
-                          Save
-                        </Button>
-                      </>
-                    )}
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowImportModal(true)}
-                      disabled={!examSubjects || examSubjects.length === 0}
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Import Marks
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowAddSubjectModal(true)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Subject
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleExportToExcel}
-                      className="inline-flex items-center bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
-                      disabled={!students || !examSubjects || students.length === 0 || examSubjects.length === 0}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
-                    </Button>
+                           <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                           <span className="hidden sm:inline">Add Subject</span>
+                        </button>
+
+                        <button
+                           onClick={handleExportToExcel}
+                           disabled={!students || !examSubjects || students.length === 0 || examSubjects.length === 0}
+                           className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-green-600 text-white rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-green-700 transition-all flex items-center gap-1.5 sm:gap-2 shadow-sm"
+                        >
+                           <Download className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                           <span className="hidden sm:inline">Export</span>
+                        </button>
+                     </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {students && examSubjects && students.length > 0 && examSubjects.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 sm:mx-0">
-                    <div className="inline-block min-w-full align-middle">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                            <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[150px] sm:min-w-[200px] px-2 sm:px-4">
-                            Student Name
-                          </TableHead>
-                          {examSubjects.map((subject) => (
-                              <TableHead key={subject.id} className="min-w-[120px] sm:min-w-[150px] px-2 sm:px-4">
-                                <span className="text-xs sm:text-sm">{subject.subject_name}</span>
-                            </TableHead>
-                          ))}
-                            <TableHead className="min-w-[80px] sm:min-w-[100px] bg-gray-50 font-semibold px-2 sm:px-4">
-                              <span className="text-xs sm:text-sm">AVG</span>
-                            </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                          {sortedStudents.map((student) => {
-                            const avg = calculateStudentAverage(student.id)
-                            return (
-                          <TableRow key={student.id}>
-                                <TableCell className="sticky left-0 bg-white z-10 font-medium text-gray-900 min-w-[150px] sm:min-w-[200px] px-2 sm:px-4">
-                                  <span className="text-xs sm:text-sm">{student.name}</span>
-                            </TableCell>
-                            {examSubjects.map((subject) => (
-                                  <TableCell key={subject.id} className="min-w-[120px] sm:min-w-[150px] px-2 sm:px-4">
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={marksData[student.id]?.[subject.id]?.[markField] || ''}
-                                    onChange={(e) => {
-                                      const value = e.target.value
-                                      // Allow "40/100" format or just "40"
-                                      handleMarkChange(student.id, subject.id, markField, value)
-                                    }}
-                                        className="w-full px-1.5 sm:px-2 py-1 text-xs sm:text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder={`e.g., 40`}
-                                  />
-                                ) : (
-                                      <div className="text-xs sm:text-sm">
-                                    {marksData[student.id]?.[subject.id]?.[markField] ? (
-                                      <span className="font-medium">
-                                        {marksData[student.id][subject.id][markField]}/{exam?.max_marks || 100}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400">0/{exam?.max_marks || 100}</span>
-                                    )}
+               </div>
+
+               {/* Mobile Card View */}
+               <div className="md:hidden">
+                 {students && examSubjects && students.length > 0 && examSubjects.length > 0 ? (
+                   <div className="divide-y divide-gray-100">
+                     {sortedStudents.map((student) => {
+                       const avg = calculateStudentAverage(student.id)
+                       return (
+                         <div key={student.id} className="p-4">
+                           {/* Student Header */}
+                           <div className="flex items-center justify-between mb-3">
+                             <div className="flex items-center gap-2.5">
+                               <div className="w-8 h-8 rounded-lg bg-[#2c3e50] flex items-center justify-center text-white text-xs font-bold">
+                                 {student.name.substring(0, 2).toUpperCase()}
+                               </div>
+                               <span className="text-xs font-bold text-gray-900 uppercase tracking-wide">{student.name}</span>
+                             </div>
+                             <span className={`text-xs font-black px-2 py-1 rounded-lg ${
+                               avg >= 75 ? 'bg-green-100 text-green-700' :
+                               avg >= 50 ? 'bg-blue-100 text-blue-700' :
+                               avg > 0 ? 'bg-yellow-100 text-yellow-700' :
+                               'bg-gray-100 text-gray-500'
+                             }`}>
+                               {avg > 0 ? `${avg.toFixed(1)}%` : '-'}
+                             </span>
+                           </div>
+                           
+                           {/* Subject Marks Grid */}
+                           <div className="grid grid-cols-2 gap-2">
+                             {examSubjects.map((subject) => (
+                               <div key={subject.id} className="bg-gray-50 rounded-lg p-2.5">
+                                 <div className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide mb-1 truncate">
+                                   {subject.subject_name}
+                                 </div>
+                                 {isEditing ? (
+                                   <input
+                                     type="text"
+                                     value={marksData[student.id]?.[subject.id]?.[markField] || ''}
+                                     onChange={(e) => handleMarkChange(student.id, subject.id, markField, e.target.value)}
+                                     className="w-full px-2 py-1.5 text-center text-xs font-bold border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all bg-white"
+                                     placeholder="-"
+                                   />
+                                 ) : (
+                                   <div className={`text-sm font-bold text-center ${
+                                     marksData[student.id]?.[subject.id]?.[markField] ? 'text-gray-900' : 'text-gray-400'
+                                   }`}>
+                                     {marksData[student.id]?.[subject.id]?.[markField] || '-'}
+                                   </div>
+                                 )}
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                       )
+                     })}
+                   </div>
+                 ) : (
+                   <div className="text-center py-12 px-4">
+                     <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                       <Search className="w-5 h-5 text-gray-400" />
+                     </div>
+                     <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-1">No Data Found</h3>
+                     <p className="text-[10px] text-gray-500">
+                       {!students || students.length === 0
+                         ? 'No students assigned to you yet'
+                         : 'No subjects found. Add a subject to get started.'}
+                     </p>
+                   </div>
+                 )}
+               </div>
+
+               {/* Desktop Table View */}
+               <div className="hidden md:block overflow-x-auto">
+                 {students && examSubjects && students.length > 0 && examSubjects.length > 0 ? (
+                   <Table>
+                     <TableHeader>
+                       <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                         <TableHead className="py-4 pl-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest min-w-[200px]">Student Name</TableHead>
+                         {examSubjects.map((subject) => (
+                           <TableHead key={subject.id} className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest min-w-[120px]">
+                             {subject.subject_name}
+                           </TableHead>
+                         ))}
+                         <TableHead className="py-4 pr-6 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest min-w-[100px]">Average</TableHead>
+                       </TableRow>
+                     </TableHeader>
+                     <TableBody>
+                       {sortedStudents.map((student) => {
+                         const avg = calculateStudentAverage(student.id)
+                         return (
+                           <TableRow key={student.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                             <TableCell className="py-4 pl-6 font-medium text-gray-900">
+                               <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-lg bg-[#2c3e50] flex items-center justify-center text-white text-xs font-bold">
+                                     {student.name.substring(0, 2).toUpperCase()}
                                   </div>
-                                )}
-                              </TableCell>
-                            ))}
-                                <TableCell className="min-w-[80px] sm:min-w-[100px] bg-gray-50 font-semibold text-gray-900 px-2 sm:px-4">
-                                  <span className="text-xs sm:text-sm">{avg > 0 ? avg.toFixed(2) : '-'}</span>
-                                </TableCell>
-                          </TableRow>
-                            )
-                          })}
-                      </TableBody>
-                    </Table>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <p className="text-gray-500">
-                      {!students || students.length === 0
-                        ? 'No students assigned to you yet'
-                        : 'No subjects found. Add a subject to get started.'}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                                  <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">{student.name}</span>
+                               </div>
+                             </TableCell>
+                             {examSubjects.map((subject) => (
+                               <TableCell key={subject.id} className="py-4 text-center">
+                                 {isEditing ? (
+                                    <div className="flex justify-center">
+                                       <input
+                                         type="text"
+                                         value={marksData[student.id]?.[subject.id]?.[markField] || ''}
+                                         onChange={(e) => handleMarkChange(student.id, subject.id, markField, e.target.value)}
+                                         className="w-20 px-2 py-1 text-center text-xs font-bold border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+                                         placeholder="-"
+                                       />
+                                    </div>
+                                 ) : (
+                                   <span className={`text-xs font-bold ${marksData[student.id]?.[subject.id]?.[markField] ? 'text-gray-900' : 'text-gray-400'}`}>
+                                     {marksData[student.id]?.[subject.id]?.[markField] || '-'}
+                                   </span>
+                                 )}
+                               </TableCell>
+                             ))}
+                             <TableCell className="py-4 pr-6 text-right">
+                               <span className={`text-xs font-black px-2 py-1 rounded-lg ${
+                                 avg >= 75 ? 'bg-gray-100 text-green-700' :
+                                 avg >= 50 ? 'bg-blue-100 text-blue-700' :
+                                 avg > 0 ? 'bg-yellow-100 text-yellow-700' :
+                                 'bg-gray-100 text-gray-500'
+                               }`}>
+                                 {avg > 0 ? `${avg.toFixed(1)}%` : '-'}
+                               </span>
+                             </TableCell>
+                           </TableRow>
+                         )
+                       })}
+                     </TableBody>
+                   </Table>
+                 ) : (
+                   <div className="text-center py-12">
+                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                       <Search className="w-6 h-6 text-gray-400" />
+                     </div>
+                     <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-1">No Data Found</h3>
+                     <p className="text-xs text-gray-500">
+                       {!students || students.length === 0
+                         ? 'No students assigned to you yet'
+                         : 'No subjects found. Add a subject to get started.'}
+                     </p>
+                   </div>
+                 )}
+               </div>
+            </div>
 
             {/* Performance Analytics Section */}
             {students && examSubjects && students.length > 0 && examSubjects.length > 0 && (
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle className="text-xl">Performance Analytics</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {/* Line Chart */}
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-4">Student Performance Chart</h3>
-                      <div className="bg-white p-4 rounded-lg border border-gray-200">
-                        <StudentPerformanceChart
-                          students={sortedStudents.map(student => {
-                            const avg = calculateStudentAverage(student.id)
-                            const marks = examSubjects.map(subject => {
-                              const markValue = marksData[student.id]?.[subject.id]?.[markField]
-                              if (markValue) {
-                                const markStr = String(markValue)
-                                const numericValue = parseFloat(markStr.split('/')[0])
-                                return isNaN(numericValue) ? 0 : numericValue
-                              }
-                              return 0
-                            })
-                            return {
-                              studentName: student.name,
-                              marks,
-                              average: avg
-                            }
-                          })}
-                          subjectNames={examSubjects.map(s => s.subject_name)}
-                          maxMarks={exam?.max_marks || 100}
-                        />
-                      </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                 {/* Chart Card */}
+                 <div className="bg-white rounded-xl sm:rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                    <div className="p-4 sm:p-6 border-b border-gray-100 bg-gray-50/30">
+                       <h3 className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-[0.15em]">Performance Trend</h3>
                     </div>
+                    <div className="p-4 sm:p-6">
+                       <div className="h-[220px] sm:h-[280px]">
+                         <StudentPerformanceChart
+                           students={sortedStudents.map(student => {
+                             const avg = calculateStudentAverage(student.id)
+                             const marks = examSubjects.map(subject => {
+                               const markValue = marksData[student.id]?.[subject.id]?.[markField]
+                               if (markValue) {
+                                 const markStr = String(markValue)
+                                 const numericValue = parseFloat(markStr.split('/')[0])
+                                 return isNaN(numericValue) ? 0 : numericValue
+                               }
+                               return 0
+                             })
+                             return {
+                               studentName: student.name,
+                               marks,
+                               average: avg
+                             }
+                           })}
+                           subjectNames={examSubjects.map(s => s.subject_name)}
+                           maxMarks={exam?.max_marks || 100}
+                         />
+                       </div>
+                    </div>
+                 </div>
 
-                    {/* Ranked Table */}
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-4">Student Priority Ranking (ML Analysis)</h3>
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="min-w-[60px]">Rank</TableHead>
-                              <TableHead>Student Name</TableHead>
-                              <TableHead className="min-w-[100px]">Priority</TableHead>
-                              <TableHead className="min-w-[100px]">Average</TableHead>
-                              <TableHead>Key Subjects</TableHead>
-                              <TableHead>Reasons</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {attentionItems.length > 0 ? (
-                              attentionItems.map((item, index) => {
-                                const priorityColors = {
-                                  high: 'bg-red-100 text-red-800',
-                                  medium: 'bg-yellow-100 text-yellow-800',
-                                  low: 'bg-green-100 text-green-800'
+                 {/* AI Insights Card */}
+                 <div className="bg-white rounded-xl sm:rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                    <div className="p-4 sm:p-6 border-b border-gray-100 bg-gray-50/30">
+                       <h3 className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-[0.15em]">AI Priority Insights</h3>
+                    </div>
+                    
+                    <div className="p-4 sm:p-6">
+                       <div className="space-y-2 sm:space-y-3 max-h-[220px] sm:max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
+                          {attentionItems.length > 0 ? (
+                             attentionItems.map((item, index) => {
+                                const priorityStyles = {
+                                   high: 'bg-red-50 border-red-200 text-red-700',
+                                   medium: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+                                   low: 'bg-green-50 border-green-200 text-green-700'
                                 }
                                 
-                                const criticalSubjects = item.subjects.filter(s => s.status === 'critical').map(s => s.subjectName)
-                                const warningSubjects = item.subjects.filter(s => s.status === 'warning').map(s => s.subjectName)
-                                
                                 return (
-                                  <TableRow key={item.studentId}>
-                                    <TableCell className="font-semibold text-gray-900">
-                                      #{index + 1}
-                                    </TableCell>
-                                    <TableCell className="font-medium text-gray-900">
-                                      {item.studentName}
-                                    </TableCell>
-                                    <TableCell>
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[item.priority]}`}>
-                                        {item.priority.toUpperCase()}
-                                      </span>
-                                    </TableCell>
-                                    <TableCell className="font-semibold">
-                                      {item.averagePercentage.toFixed(2)}%
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="flex flex-wrap gap-1">
-                                        {criticalSubjects.length > 0 && (
-                                          <span className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded border border-red-200">
-                                            {criticalSubjects.join(', ')}
-                                          </span>
-                                        )}
-                                        {warningSubjects.length > 0 && (
-                                          <span className="text-xs px-2 py-1 bg-yellow-50 text-yellow-700 rounded border border-yellow-200">
-                                            {warningSubjects.join(', ')}
-                                          </span>
-                                        )}
-                                        {criticalSubjects.length === 0 && warningSubjects.length === 0 && (
-                                          <span className="text-xs text-gray-500">All subjects performing well</span>
-                                        )}
+                                   <div key={item.studentId} className="p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200 bg-white hover:shadow-sm transition-all">
+                                      <div className="flex justify-between items-start mb-2 sm:mb-3 gap-2">
+                                         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                            <span className="text-[9px] sm:text-[10px] font-black bg-gray-100 text-gray-600 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full flex-shrink-0">{index + 1}</span>
+                                            <h4 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wide truncate">{item.studentName}</h4>
+                                         </div>
+                                         <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider rounded-lg border flex-shrink-0 ${priorityStyles[item.priority]}`}>
+                                            {item.priority}
+                                         </span>
                                       </div>
-                                    </TableCell>
-                                    <TableCell className="text-sm text-gray-600 max-w-md">
-                                      <div className="space-y-1">
-                                        {item.reasons.slice(0, 2).map((reason, idx) => (
-                                          <div key={idx} className="text-xs">• {reason}</div>
-                                        ))}
-                                        {item.reasons.length > 2 && (
-                                          <div className="text-xs text-gray-400">+{item.reasons.length - 2} more</div>
-                                        )}
+                                      
+                                      <div className="space-y-1.5 sm:space-y-2 pl-7 sm:pl-9">
+                                         {item.reasons.map((reason, idx) => (
+                                            <div key={idx} className="flex items-start gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-600">
+                                               <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-gray-400 mt-1 sm:mt-1.5 flex-shrink-0"></div>
+                                               <span className="leading-tight">{reason}</span>
+                                            </div>
+                                         ))}
                                       </div>
-                                    </TableCell>
-                                  </TableRow>
+                                   </div>
                                 )
-                              })
-                            ) : (
-                              <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                                  No performance data available
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
+                             })
+                          ) : (
+                             <div className="text-center py-8 sm:py-12">
+                                <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-500 mx-auto mb-2 sm:mb-3" />
+                                <p className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wide">All Good!</p>
+                                <p className="text-[10px] sm:text-xs text-gray-500 mt-1.5 sm:mt-2">No students require immediate attention based on current performance.</p>
+                             </div>
+                          )}
+                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                 </div>
+              </div>
             )}
           </div>
         </main>
@@ -978,10 +1015,10 @@ function PeerExamDetailsContent() {
           isOpen={showImportModal}
           onClose={() => setShowImportModal(false)}
           examId={examId}
-          peerTutorId={peerTutorInfo?.id || ''}
+          peertutorsId={peertutorsInfo?.id || ''}
           availableSubjects={examSubjects}
           onImportComplete={() => {
-            queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peerTutorInfo?.id] })
+            queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsInfo?.id] })
             refetchSubjects()
           }}
         />

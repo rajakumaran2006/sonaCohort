@@ -77,7 +77,7 @@ export function calculateAscendScore(
 /**
  * Calculate Ascend score for a peer tutor based on all their students' marks
  */
-export function calculatePeerTutorAscendScore(
+export function calculatepeertutorsAscendScore(
   allStudentsMarks: Record<string, Record<string, Record<string, number | string>>>,
   maxMarks: number
 ): number {

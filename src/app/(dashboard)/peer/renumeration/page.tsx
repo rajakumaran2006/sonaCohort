@@ -6,8 +6,8 @@ import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { RenumerationService, PeerTutorRenumeration, RenumerationField } from '@/lib/services/renumerationService'
-import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+import { RenumerationService, peertutorsRenumeration, RenumerationField } from '@/lib/services/renumerationService'
+import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 
 
 export default function PeerRenumerationPage() {
@@ -22,7 +22,7 @@ function PeerRenumerationContent() {
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const [renumerations, setRenumerations] = useState<PeerTutorRenumeration[]>([])
+  const [renumerations, setRenumerations] = useState<peertutorsRenumeration[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState<string | null>(null)
   const [fieldResponses, setFieldResponses] = useState<Record<string, Record<string, string | number | boolean | null>>>({})
@@ -47,17 +47,17 @@ function PeerRenumerationContent() {
     }
   }
 
-  const loadPeerTutorData = useCallback(async () => {
+  const loadpeertutorsData = useCallback(async () => {
     if (!user?.email) return
 
     setLoading(true)
     try {
       // Get peer tutor information
-      const tutorInfo = await PeerTutorAuthService.getPeerTutorByEmail(user.email)
+      const tutorInfo = await peertutorsAuthService.getpeertutorsByEmail(user.email)
       if (tutorInfo) {
         
         // Get renumeration data and filter out rejected items
-        const renumerationData = await RenumerationService.getPeerTutorRenumeration(tutorInfo.id)
+        const renumerationData = await RenumerationService.getpeertutorsRenumeration(tutorInfo.id)
         const filteredData = renumerationData.filter(r => r.status !== 'rejected')
         setRenumerations(filteredData)
         
@@ -77,14 +77,14 @@ function PeerRenumerationContent() {
 
   useEffect(() => {
     if (user) {
-      loadPeerTutorData()
+      loadpeertutorsData()
     }
-  }, [user, loadPeerTutorData])
+  }, [user, loadpeertutorsData])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await loadPeerTutorData()
+      await loadpeertutorsData()
       setLastRefresh(new Date())
     } finally {
       setTimeout(() => setIsRefreshing(false), 500)
@@ -127,7 +127,7 @@ function PeerRenumerationContent() {
       
       if (success) {
         alert('Renumeration response submitted successfully!')
-        loadPeerTutorData() // Reload data to show updated status
+        loadpeertutorsData() // Reload data to show updated status
       } else {
         alert('Failed to submit renumeration response. Please try again.')
       }
@@ -139,7 +139,7 @@ function PeerRenumerationContent() {
     }
   }
 
-  const renderField = (renumeration: PeerTutorRenumeration, field: RenumerationField) => {
+  const renderField = (renumeration: peertutorsRenumeration, field: RenumerationField) => {
 
     const rawValue = fieldResponses[renumeration.id]?.[field.field_name]
     // Handle null/undefined and ensure boolean values are converted to string for input compatibility
@@ -160,9 +160,16 @@ function PeerRenumerationContent() {
       case 'number':
         return (
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={value}
-            onChange={(e) => handleFieldChange(renumeration.id, field.field_name, e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value
+              if (val === '' || /^\d+$/.test(val)) {
+                handleFieldChange(renumeration.id, field.field_name, val)
+              }
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder={`Enter ${field.field_name}`}
             disabled={renumeration.status !== 'pending' || !renumeration.template?.is_active}
@@ -234,7 +241,7 @@ function PeerRenumerationContent() {
       <PeerSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+      <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
         {/* Top Header */}
         <PageHeader
           title="RENUMERATION"

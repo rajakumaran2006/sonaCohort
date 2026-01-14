@@ -68,7 +68,7 @@ export function calculatePendingClassAlert(
       const cls = event.item;
       
       // Determine if the class is completed
-      // Logic copied from ScheduledClassService.getPeerTutorClassStatus
+      // Logic copied from ScheduledClassService.getpeertutorsClassStatus
       const isCompleted = 
         cls.completion_status === 'completed' || 
         (cls.attendance_completed && cls.topics_completed) ||

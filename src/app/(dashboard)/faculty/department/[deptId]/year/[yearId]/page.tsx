@@ -6,8 +6,9 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ClassService } from '@/lib/services/classService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
+import { peertutorservice } from '@/lib/services/peerTutorService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
+import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { 
@@ -17,6 +18,7 @@ import {
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { BackButton } from '@/components/ui/BackButton'
 import { YearSectionGraph } from '@/components/ui/YearSectionGraph'
+import { YearPageSkeleton } from '@/components/skeletons/YearPageSkeleton'
 
 export default function YearPage() {
   return (
@@ -41,7 +43,7 @@ function YearContent() {
   const [loading, setLoading] = useState(true)
   const [yearStats, setYearStats] = useState<{
     totalStudents: number
-    totalPeerTutors: number
+    totalpeerTutor: number
     assignedStudents: number
     unassignedStudents: number
     averageStudentsPerTutor: number
@@ -108,7 +110,8 @@ function YearContent() {
 
       // Load sections and their stats
       const sections = await ClassService.getSectionsForYear(facultyDeptName, yearId as string)
-      console.log('Year Page - Sections found:', sections)
+      const allAdditionalClasses = await AdditionalClassService.getAllAdditionalClassesForDepartment(facultyDeptName)
+      console.log('Year Page - Data found:', { sections, additionalCount: allAdditionalClasses.length })
       
       // Ensure all standard sections (A, B, C) are included
       const allSections = ['A', 'B', 'C']
@@ -116,21 +119,31 @@ function YearContent() {
       
       const sectionData = await Promise.all(
         uniqueSections.map(async (section) => {
-          const tutors = await PeerTutorService.getPeerTutorsBySection(facultyDeptName, yearId as string, section)
-          const { completed, pending } = await ScheduledClassService.getPeerTutorClassStatus(facultyDeptName, yearId as string, section)
+          const tutors = await peertutorservice.getpeerTutorBySection(facultyDeptName, yearId as string, section)
+          const { completed, pending } = await ScheduledClassService.getpeertutorsClassStatus(facultyDeptName, yearId as string, section)
+          
+          const sectionAdditional = allAdditionalClasses.filter(c => {
+            const tutor = (c as any).peer_tutors
+            const tutorData = Array.isArray(tutor) ? tutor[0] : tutor
+            const y = c.year || tutorData?.year || ''
+            return y.toString() === yearId && tutorData?.section === section
+          })
+
+          const totalCompleted = completed.length + sectionAdditional.length
           
           console.log(`Year Page - Section ${section} data:`, {
             tutorsCount: tutors.length,
-            completedCount: completed.length,
-            pendingCount: pending.length
+            completedCount: totalCompleted,
+            pendingCount: pending.length,
+            additionalCount: sectionAdditional.length
           })
           
           return {
             section,
             tutors: tutors.length,
-            completed: completed.length,
+            completed: totalCompleted,
             pending: pending.length,
-            description: `${tutors.length} tutors · ${completed.length} completed · ${pending.length} pending`
+            description: `${tutors.length} tutors · ${totalCompleted} completed · ${pending.length} pending`
           }
         })
       )
@@ -170,14 +183,26 @@ function YearContent() {
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
         <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex items-center justify-center`}>
-          <div className="text-center">
-            <div className="relative w-20 h-20 mx-auto mb-6">
-              <div className="absolute inset-0 rounded-full border-4 border-blue-50/50"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+        
+        <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col transition-all duration-300`}>
+          {/* Header Skeleton */}
+          <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 h-20 flex items-center px-8">
+            <div className="flex justify-between items-center w-full">
+              <div>
+                <div className="flex items-center gap-3">
+                  <div className="h-6 w-48 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <div className="h-3 w-64 bg-gray-200 rounded animate-pulse mt-2"></div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                <div className="h-10 w-20 bg-gray-200 rounded-lg animate-pulse"></div>
+              </div>
             </div>
-            <p className="text-gray-500 font-medium uppercase tracking-widest text-xs">Initializing Department Data</p>
-          </div>
+          </header>
+
+          {/* Skeleton Loading State */}
+          <YearPageSkeleton />
         </div>
       </div>
     )
@@ -203,7 +228,7 @@ function YearContent() {
             </div>
             <div className="flex items-center gap-4">
               <AnimatedRefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
-              <BackButton />
+              <BackButton href="/faculty/dashboard" />
             </div>
           </div>
         </header>
@@ -218,7 +243,7 @@ function YearContent() {
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             {/* Left Column: Stats & Graph */}
-            <div className="xl:col-span-2 space-y-8">
+            <div className="xl:col-span-2 flex flex-col gap-8">
               {/* Main Stats */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Total Peer Tutors Card */}
@@ -226,7 +251,7 @@ function YearContent() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Peer Tutors</p>
-                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{yearStats?.totalPeerTutors}</p>
+                      <p className="text-3xl font-bold text-gray-900 tracking-tight">{yearStats?.totalpeerTutor}</p>
                     </div>
                     <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
                       <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -235,11 +260,7 @@ function YearContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                     <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                      </svg>
                       Across All Sections
                     </p>
                   </div>
@@ -259,11 +280,7 @@ function YearContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                     <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
                       Academic Population
                     </p>
                   </div>
@@ -271,12 +288,14 @@ function YearContent() {
               </div>
 
               {/* Graph */}
-              <YearSectionGraph data={sectionStats.map(s => ({
-                section: s.section,
-                tutors: s.tutors,
-                completed: s.completed,
-                pending: s.pending
-              }))} />
+              <div className="flex-1 min-h-[400px]">
+                <YearSectionGraph data={sectionStats.map(s => ({
+                  section: s.section,
+                  tutors: s.tutors,
+                  completed: s.completed,
+                  pending: s.pending
+                }))} />
+              </div>
             </div>
 
             {/* Right Column: Sections List */}
@@ -303,7 +322,7 @@ function YearContent() {
                       className="w-full bg-white p-6 rounded-[28px] border border-gray-100 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden text-left"
                     >
                       <div className="flex items-center gap-6 relative z-10">
-                        <div className="w-20 h-20 rounded-2xl bg-gray-50 flex items-center justify-center group-hover:bg-gray-900 group-hover:text-gray-400 transition-all duration-500 text-4xl font-black text-gray-900 italic">
+                        <div className="w-20 h-20 rounded-2xl bg-gray-50 flex items-center justify-center group-hover:bg-gray-900 group-hover:text-white transition-all duration-500 text-4xl font-black text-gray-900 italic">
                           {section.section}
                         </div>
                         <div className="flex-1">
@@ -311,7 +330,6 @@ function YearContent() {
                             <h4 className="text-lg font-black text-gray-900 uppercase tracking-tight">SECTION {section.section}</h4>
                             <ArrowUpRight className="w-5 h-5 text-gray-300 group-hover:text-gray-900 transition-all" />
                           </div>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 italic">{section.description}</p>
                           
                           <div className="grid grid-cols-3 gap-3">
                             <div className="bg-gray-50/50 rounded-xl p-2 group-hover:bg-blue-50/30 transition-colors">

@@ -26,7 +26,7 @@ const robotoCondensed = Roboto_Condensed({
 
 export const metadata: Metadata = {
   title: "Peer Tutor",
-  description: "Sign in to your PeerTutors account",
+  description: "Sign in to your peerTutor account",
 };
 
 import { Toaster } from 'sonner';
@@ -37,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

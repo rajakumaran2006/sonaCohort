@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { toast } from 'sonner'
 import Image from 'next/image'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
@@ -11,8 +12,8 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { Class } from '@/lib/services/classService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
-import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
-import { PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
+import { peertutors } from '@/lib/services/peerTutorService'
 import { ReportService } from '@/lib/services/reportService'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
@@ -48,7 +49,7 @@ function PeerClassesContent() {
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const [peerTutorInfo, setPeerTutorInfo] = useState<PeerTutor | null>(null)
+  const [peertutorsInfo, setpeertutorsInfo] = useState<peertutors | null>(null)
   const [selectedClass, setSelectedClass] = useState<Class | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'scheduled' | 'additional'>('scheduled')
@@ -58,8 +59,7 @@ function PeerClassesContent() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   
   // Filter states
-  const [filterYear, setFilterYear] = useState('')
-  const [filterSection, setFilterSection] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
   const [filterSubject, setFilterSubject] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -71,7 +71,7 @@ function PeerClassesContent() {
     queryKey: ['peer-tutor-info', user?.email],
     queryFn: async () => {
       if (!user?.email) return null
-      return await PeerTutorAuthService.getPeerTutorByEmail(user.email)
+      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
     },
     enabled: !!user?.email,
     initialData: null,
@@ -83,7 +83,7 @@ function PeerClassesContent() {
     queryKey: ['assigned-students', tutorInfoData?.id],
     queryFn: async () => {
        if (!tutorInfoData?.id) return []
-       return await AssignmentService.getStudentsByPeerTutor(tutorInfoData.id)
+       return await AssignmentService.getStudentsBypeertutors(tutorInfoData.id)
     },
     enabled: !!tutorInfoData?.id,
     initialData: [],
@@ -92,13 +92,14 @@ function PeerClassesContent() {
 
   // Fetch scheduled classes with caching
   const { data: scheduledClassesData, isLoading: scheduledLoading, refresh: refreshScheduled, isRefreshing: isScheduledRefreshing } = useCachedData({
-    queryKey: ['scheduled-classes-by-peer', tutorInfoData?.dept, tutorInfoData?.year, tutorInfoData?.section],
+    queryKey: ['scheduled-classes-by-peer', tutorInfoData?.id, tutorInfoData?.dept, tutorInfoData?.year, tutorInfoData?.section],
     queryFn: async () => {
       if (!tutorInfoData?.dept || !tutorInfoData?.year || !tutorInfoData?.section) return []
       return await ScheduledClassService.getScheduledClassesByDate(
         tutorInfoData.dept,
         tutorInfoData.year,
-        tutorInfoData.section
+        tutorInfoData.section,
+        tutorInfoData.id
       )
     },
     enabled: !!tutorInfoData?.dept && !!tutorInfoData?.year && !!tutorInfoData?.section,
@@ -163,7 +164,7 @@ function PeerClassesContent() {
   // Set peer tutor info when data is available
   useEffect(() => {
     if (tutorInfoData) {
-      setPeerTutorInfo(tutorInfoData)
+      setpeertutorsInfo(tutorInfoData)
     }
   }, [tutorInfoData])
 
@@ -182,16 +183,18 @@ function PeerClassesContent() {
     }
 
     // Apply filters
-    if (filterYear) filtered = filtered.filter(classItem => classItem.year === filterYear)
-    if (filterSection) filtered = filtered.filter(classItem => classItem.section === filterSection)
+    if (filterStatus) filtered = filtered.filter(classItem => classItem.completionStatus === filterStatus)
     if (filterSubject) filtered = filtered.filter(classItem => classItem.subject_name === filterSubject)
 
     return filtered
-  }, [classes, searchTerm, filterYear, filterSection, filterSubject])
+  }, [classes, searchTerm, filterStatus, filterSubject])
 
   // Get unique values for filter dropdowns
-  const getUniqueYears = () => [...new Set(classes.map(c => c.year))].sort().map(y => ({ label: `Year ${y}`, value: y }))
-  const getUniqueSections = () => [...new Set(classes.map(c => c.section))].sort().map(s => ({ label: `Section ${s}`, value: s }))
+  const getStatusOptions = () => [
+    { label: 'Pending', value: 'pending' },
+    { label: 'Completed', value: 'completed' },
+    { label: 'Upcoming', value: 'upcoming' }
+  ]
   const getUniqueSubjects = () => [...new Set(classes.map(c => c.subject_name))].sort().map(s => ({ label: s, value: s }))
 
   const handleClassClick = (classItem: ClassWithStatus) => {
@@ -199,7 +202,7 @@ function PeerClassesContent() {
       const scheduledDate = new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
       })
-      alert(`You can only manage this class on ${scheduledDate}. Today is not the scheduled day.`)
+      toast.warning(`You can only manage this class on ${scheduledDate}. Today is not the scheduled day.`)
       return
     }
     
@@ -219,7 +222,10 @@ function PeerClassesContent() {
   }
   
   const handleExportData = () => {
-     if (filteredClasses.length === 0) return
+     if (filteredClasses.length === 0) {
+        toast.warning('No responses to export. Please adjust your filters.')
+        return
+     }
      
      const exportData = filteredClasses.map(c => ({
         'Subject': c.subject_name,
@@ -230,10 +236,14 @@ function PeerClassesContent() {
         'Status': c.completionStatus || 'N/A'
      }))
      
-     const ws = XLSX.utils.json_to_sheet(exportData)
-     const wb = XLSX.utils.book_new()
-     XLSX.utils.book_append_sheet(wb, ws, "Classes")
-     XLSX.writeFile(wb, `Classes_Export_${new Date().toISOString().split('T')[0]}.xlsx`)
+     try {
+       const ws = XLSX.utils.json_to_sheet(exportData)
+       const wb = XLSX.utils.book_new()
+       XLSX.utils.book_append_sheet(wb, ws, "Classes")
+       XLSX.writeFile(wb, `Classes_Export_${new Date().toISOString().split('T')[0]}.xlsx`)
+     } catch (error) {
+       toast.error('Error exporting to Excel. Please try again.')
+     }
   }
 
   const loadClassDetails = async (classItem: ClassWithStatus) => {
@@ -249,9 +259,12 @@ function PeerClassesContent() {
           topics: report.topics || '',
           attendance: report.attendance_records || []
         }))
+      } else {
+        toast.error('No data to export')
       }
     } catch (error) {
       console.error('Error loading class details:', error)
+      toast.error('An error occurred while saving marks')
     } finally {
       setLoadingClassDetails(prev => {
         const newSet = new Set(prev)
@@ -296,7 +309,7 @@ function PeerClassesContent() {
     <div className="min-h-screen bg-gray-50">
       <PeerSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
         <PageHeader
           title={activeTab === 'scheduled' ? "My Classes" : "Additional Classes"}
           subtitle="Manage your scheduled sessions and attendance"
@@ -305,32 +318,34 @@ function PeerClassesContent() {
           isRefreshing={isScheduledRefreshing}
           onToggleSidebar={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
-        >
-          {true && (
-             <div className="flex bg-gray-100/80 p-1 rounded-xl">
-               <button
-                 onClick={() => setActiveTab('scheduled')}
-                 className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ${
-                   activeTab === 'scheduled'
-                     ? 'bg-white text-blue-600 shadow-sm'
-                     : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
-                 }`}
-               >
-                 Scheduled Classes
-               </button>
-               <button
-                 onClick={() => setActiveTab('additional')}
-                 className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ${
-                   activeTab === 'additional'
-                     ? 'bg-white text-blue-600 shadow-sm'
-                     : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
-                 }`}
-               >
-                 Additional Classes
-               </button>
-             </div>
-          )}
-        </PageHeader>
+        />
+
+        <div className="px-4 sm:px-6 lg:px-8 mt-4 sm:mt-6">
+          <div className="bg-white rounded-lg sm:rounded-xl border border-gray-100 shadow-sm">
+            <nav className="flex space-x-2 p-2 overflow-x-auto no-scrollbar" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('scheduled')}
+                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap ${
+                  activeTab === 'scheduled'
+                    ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                SCHEDULED
+              </button>
+              <button
+                onClick={() => setActiveTab('additional')}
+                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap ${
+                  activeTab === 'additional'
+                    ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                ADDITIONAL
+              </button>
+            </nav>
+          </div>
+        </div>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-[1600px] mx-auto space-y-8">
@@ -343,60 +358,57 @@ function PeerClassesContent() {
               <>
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Completed Classes */}
-                  <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm relative overflow-hidden group">
-                    <div className="flex justify-between items-start mb-4">
-                       <div>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Completed</p>
-                          <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.completed}</p>
-                       </div>
-                       <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-green-50 transition-colors">
-                          <CheckCircle className="w-4 h-4 text-gray-400 group-hover:text-green-500 transition-colors" />
-                       </div>
+                  {/* Total Classes */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Total Classes
+                        </div>
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {stats.total}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-blue-600">
+                        <span className="font-semibold uppercase">All Scheduled</span>
+                      </div>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-gray-50">
-                       <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-                          <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Marked Verified</span>
-                       </div>
+                  </div>
+
+                  {/* Completed Classes */}
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Completed
+                        </div>
+                        <CheckCircle className="w-4 h-4 text-gray-400" />
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {stats.completed}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-green-600">
+                        <span className="font-semibold uppercase">Marked Verified</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Pending Classes */}
-                  <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm relative overflow-hidden group">
-                    <div className="flex justify-between items-start mb-4">
-                       <div>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Pending</p>
-                          <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.pending}</p>
-                       </div>
-                       <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-amber-50 transition-colors">
-                          <Clock className="w-4 h-4 text-gray-400 group-hover:text-amber-500 transition-colors" />
-                       </div>
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-gray-50">
-                       <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
-                          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Action Required</span>
-                       </div>
-                    </div>
-                  </div>
-
-                  {/* Total Classes */}
-                  <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm relative overflow-hidden group">
-                    <div className="flex justify-between items-start mb-4">
-                       <div>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total</p>
-                          <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.total}</p>
-                       </div>
-                       <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-blue-50 transition-colors">
-                          <Calendar className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                       </div>
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-gray-50">
-                       <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">All Scheduled</span>
-                       </div>
+                  <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Pending
+                        </div>
+                        <Clock className="w-4 h-4 text-gray-400" />
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900">
+                        {stats.pending}
+                      </div>
+                      <div className="mt-2 flex items-center text-xs text-amber-600">
+                        <span className="font-semibold uppercase">Action Required</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -404,8 +416,8 @@ function PeerClassesContent() {
                 {/* Filters & Table Section */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="p-5 border-b border-gray-100 bg-gray-50/30">
-                    <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
-                        <div className="relative w-full xl:max-w-sm">
+                        <div className="flex flex-col lg:flex-row xl:flex-row gap-4 justify-between items-start lg:items-center">
+                        <div className="relative w-full lg:max-w-sm">
                            <input
                              type="text"
                              value={searchTerm}
@@ -416,21 +428,13 @@ function PeerClassesContent() {
                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                         </div>
                         
-                        <div className="flex flex-wrap gap-3 w-full xl:w-auto">
+                        <div className="flex flex-wrap gap-3 w-full lg:w-auto">
                            <div className="w-full sm:w-auto sm:min-w-[140px]">
                              <FilterDropdown
-                                value={filterYear}
-                                onChange={setFilterYear}
-                                options={getUniqueYears()}
-                                placeholder="Year"
-                             />
-                           </div>
-                           <div className="w-full sm:w-auto sm:min-w-[140px]">
-                             <FilterDropdown
-                                value={filterSection}
-                                onChange={setFilterSection}
-                                options={getUniqueSections()}
-                                placeholder="Section"
+                                value={filterStatus}
+                                onChange={setFilterStatus}
+                                options={getStatusOptions()}
+                                placeholder="Status"
                              />
                            </div>
                            <div className="w-full sm:w-auto sm:min-w-[160px]">
@@ -447,11 +451,10 @@ function PeerClassesContent() {
                                <ExportButton onClick={handleExportData} disabled={filteredClasses.length === 0} />
                              </div>
                              
-                             {(filterYear || filterSection || filterSubject || searchTerm) && (
+                             {(filterStatus || filterSubject || searchTerm) && (
                                 <button 
                                   onClick={() => {
-                                     setFilterYear('')
-                                     setFilterSection('')
+                                     setFilterStatus('')
                                      setFilterSubject('')
                                      setSearchTerm('')
                                   }}
@@ -465,182 +468,349 @@ function PeerClassesContent() {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto rounded-xl border border-gray-100">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                          <TableHead className="py-4 pl-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</TableHead>
-                          <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</TableHead>
-                          <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</TableHead>
-                          <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Class</TableHead>
-                          <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</TableHead>
-                          <TableHead className="py-4 pr-6 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredClasses.length > 0 ? (
-                          filteredClasses.map((classItem) => (
-                             <>
-                             <TableRow key={classItem.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
-                                <TableCell className="py-4 pl-6">
-                                   <p className="text-xs font-bold text-gray-900 leading-tight">{classItem.subject_name}</p>
-                                </TableCell>
-                                <TableCell className="py-4 text-center">
-                                   <p className="text-xs font-bold text-gray-900">
-                                      {new Date(classItem.scheduled_date || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                   </p>
-                                   <p className="text-[10px] text-gray-400 font-medium uppercase mt-0.5">
-                                      {new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'short' })}
-                                   </p>
-                                </TableCell>
-                                <TableCell className="py-4 text-center">
-                                   <span className="px-2 py-1 rounded-md bg-gray-50 text-[10px] font-bold text-gray-600 uppercase tracking-wider border border-gray-100">
-                                      {classItem.dept}
-                                   </span>
-                                </TableCell>
-                                <TableCell className="py-4 text-center">
-                                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                      {classItem.year} - {classItem.section}
-                                   </span>
-                                </TableCell>
-                                <TableCell className="py-4 text-center">
-                                   <StatusBadge status={classItem.completionStatus || 'not_started'} />
-                                </TableCell>
-                                <TableCell className="py-4 pr-6 text-right">
-                                   <div className="flex items-center justify-end gap-2">
-                                      {classItem.isEditable ? (
-                                         <button
-                                            onClick={() => handleClassClick(classItem)}
-                                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all"
-                                         >
-                                            Manage
-                                         </button>
-                                      ) : (
-                                         <button
-                                            disabled
-                                            className="px-3 py-1.5 rounded-lg bg-gray-50 text-gray-400 text-[10px] font-bold uppercase tracking-wider cursor-not-allowed flex items-center gap-1 ml-auto border border-gray-100"
-                                         >
-                                            <Lock size={10} /> Locked
-                                         </button>
-                                      )}
-                                      
-                                      {classItem.completionStatus === 'completed' && (
-                                         <button
-                                            onClick={() => toggleRowExpansion(classItem.id, classItem)}
-                                            className={`p-1.5 rounded-lg border transition-colors ${
-                                               expandedRows.has(classItem.id) 
-                                                  ? 'bg-blue-50 border-blue-200 text-blue-600' 
-                                                  : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
-                                            }`}
-                                         >  
-                                            {loadingClassDetails.has(classItem.id) ? (
-                                              <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                                            ) : (
-                                              <ChevronDown size={16} className={`transition-transform duration-200 ${expandedRows.has(classItem.id) ? 'rotate-180' : ''}`} />
-                                            )}
-                                         </button>
-                                      )}
-                                   </div>
-                                </TableCell>
-                             </TableRow>
-                             {expandedRows.has(classItem.id) && (
-                                <TableRow className="bg-gray-50/30 hover:bg-gray-50/30">
-                                   <TableCell colSpan={6} className="p-4 sm:p-6">
-                                      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                                         <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-4">Class Details</h4>
-                                         
-                                         {classDetails.get(classItem.id)?.topics && (
-                                            <div className="mb-6">
-                                               <p className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Topics Covered</p>
-                                               <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                                  {classDetails.get(classItem.id)?.topics}
-                                               </p>
-                                            </div>
-                                         )}
-                                         
-                                         {classDetails.get(classItem.id)?.attendance && classDetails.get(classItem.id)!.attendance.length > 0 ? (
-                                            <div>
-                                               <div className="flex items-center justify-between mb-3">
-                                                  <p className="text-xs font-bold text-gray-900 uppercase tracking-wide">Attendance List</p>
-                                                  <div className="flex gap-4">
-                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Present ({classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'present').length})</span>
-                                                     </div>
-                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Absent ({classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'absent').length})</span>
-                                                     </div>
-                                                  </div>
-                                               </div>
-                                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                  {classDetails.get(classItem.id)!.attendance.map((record, idx) => (
-                                                     <div 
-                                                        key={idx} 
-                                                        className={`flex items-center justify-between p-3 rounded-lg border ${
-                                                           record.status === 'present' 
-                                                              ? 'bg-green-50/50 border-green-100' 
-                                                              : 'bg-red-50/50 border-red-100'
-                                                        }`}
-                                                     >
-                                                        <div>
-                                                           <p className="text-xs font-bold text-gray-900">{String(record.student_name || record.student_id || '')}</p>
-                                                           {record.student_email ? <p className="text-[10px] text-gray-500">{String(record.student_email)}</p> : null}
-                                                        </div>
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                                                           record.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                                        }`}>
-                                                           {String(record.status)}
-                                                        </span>
-                                                     </div>
-                                                  ))}
-                                               </div>
-                                            </div>
-                                         ) : (
-                                            <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                                               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No attendance records found</p>
-                                            </div>
-                                         )}
-                                      </div>
-                                   </TableCell>
-                                </TableRow>
-                             )}
-                             </>
-                          ))
-                        ) : (
-                          <TableRow>
-                             <TableCell colSpan={6} className="px-6 py-12 text-center">
-                                {!shouldShowClasses ? (
-                                   <div className="flex flex-col items-center justify-center">
-                                      <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-                                         <Image src="/icons/search.png" alt="No Students" width={48} height={48} className="opacity-40" />
-                                      </div>
-                                      <h3 className="text-lg font-black text-gray-900 uppercase tracking-widest mb-2">
-                                         No Students Assigned
-                                      </h3>
-                                      <p className="text-sm text-gray-500 max-w-md font-medium">
-                                         You currently don&apos;t have any students assigned to you. Once students are allocated, your class schedule will appear here.
-                                      </p>
-                                   </div>
+                  {/* Mobile Card View */}
+                  <div className="block md:hidden space-y-3 px-4">
+                    {filteredClasses.length > 0 ? (
+                      filteredClasses.map((classItem) => (
+                        <div key={classItem.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          {/* Card Header */}
+                          <div className="p-4 border-b border-gray-100">
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-bold text-gray-900 uppercase mb-1 leading-tight">
+                                  {classItem.subject_name}
+                                </h3>
+                                <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                                  <span className="font-semibold">{classItem.dept}</span>
+                                  <span>•</span>
+                                  <span>{classItem.year}-{classItem.section}</span>
+                                </div>
+                              </div>
+                              <StatusBadge status={classItem.completionStatus || 'not_started'} />
+                            </div>
+                            
+                            {/* Date */}
+                            <div className="flex items-center gap-2 text-xs">
+                              <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                              <span className="font-bold text-gray-900">
+                                {new Date(classItem.scheduled_date || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-medium uppercase">
+                                ({new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'short' })})
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Card Actions */}
+                          <div className="p-3 bg-gray-50/50 flex items-center gap-2">
+                            {classItem.isEditable ? (
+                              <button
+                                onClick={() => handleClassClick(classItem)}
+                                className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold uppercase tracking-wider shadow-sm transition-all"
+                              >
+                                Manage Class
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-400 text-xs font-bold uppercase tracking-wider cursor-not-allowed flex items-center justify-center gap-2"
+                              >
+                                <Lock size={14} />
+                                Locked
+                              </button>
+                            )}
+                            
+                            {classItem.completionStatus === 'completed' && (
+                              <button
+                                onClick={() => toggleRowExpansion(classItem.id, classItem)}
+                                className={`px-3 py-2.5 rounded-lg border transition-colors ${
+                                  expandedRows.has(classItem.id) 
+                                    ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                                    : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                                }`}
+                              >  
+                                {loadingClassDetails.has(classItem.id) ? (
+                                  <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
                                 ) : (
-                                   <div className="flex flex-col items-center justify-center">
-                                      <div className="w-12 h-12 bg-gray-50 rounded-[2rem] flex items-center justify-center mb-3">
-                                         <Search className="w-5 h-5 text-gray-300" />
-                                      </div>
-                                      <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">No classes found</p>
-                                      <p className="text-[10px] text-gray-400 mt-1">Try adjusting your filters or search terms</p>
-                                   </div>
+                                  <ChevronDown size={18} className={`transition-transform duration-200 ${expandedRows.has(classItem.id) ? 'rotate-180' : ''}`} />
                                 )}
-                             </TableCell>
-                          </TableRow>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Expanded Details */}
+                          {expandedRows.has(classItem.id) && (
+                            <div className="p-4 border-t border-gray-100 bg-white">
+                              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-4">Class Details</h4>
+                              
+                              {classDetails.get(classItem.id)?.topics && (
+                                <div className="mb-4">
+                                  <p className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Topics Covered</p>
+                                  <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                    {classDetails.get(classItem.id)?.topics}
+                                  </p>
+                                </div>
+                              )}
+                              
+                              {classDetails.get(classItem.id)?.attendance && classDetails.get(classItem.id)!.attendance.length > 0 ? (
+                                <div>
+                                  <div className="flex items-center justify-between mb-3">
+                                    <p className="text-xs font-bold text-gray-900 uppercase tracking-wide">Attendance</p>
+                                    <div className="flex gap-3">
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                        <span className="text-[10px] font-bold text-gray-500">
+                                          {classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'present').length}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                        <span className="text-[10px] font-bold text-gray-500">
+                                          {classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'absent').length}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {classDetails.get(classItem.id)!.attendance.map((record, idx) => (
+                                      <div 
+                                        key={idx} 
+                                        className="flex items-center justify-between p-3 rounded-lg border bg-gray-50/50 border-gray-100"
+                                      >
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-xs font-bold text-gray-900 truncate">{String(record.student_name || record.student_id || '')}</p>
+                                          {record.student_email ? <p className="text-[10px] text-gray-500 truncate">{String(record.student_email)}</p> : null}
+                                        </div>
+                                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded uppercase tracking-wider ml-2 whitespace-nowrap ${
+                                          record.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                        }`}>
+                                          {String(record.status)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No attendance records found</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+                        {!shouldShowClasses ? (
+                          <div className="flex flex-col items-center justify-center">
+                            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                              <Image src="/icons/search.png" alt="No Students" width={40} height={40} className="opacity-40" />
+                            </div>
+                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-2">
+                              No Students Assigned
+                            </h3>
+                            <p className="text-xs text-gray-500 max-w-md font-medium">
+                              You currently don&apos;t have any students assigned to you. Once students are allocated, your class schedule will appear here.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center">
+                            <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                              <Search className="w-5 h-5 text-gray-300" />
+                            </div>
+                            <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">No classes found</p>
+                            <p className="text-[10px] text-gray-400 mt-1">Try adjusting your filters or search terms</p>
+                          </div>
                         )}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto sm:rounded-xl sm:border sm:border-gray-100">
+                    <div className="min-w-full inline-block align-middle">
+                      <div className="overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                              <TableHead className="py-3 sm:py-4 pl-4 sm:pl-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</TableHead>
+                              <TableHead className="py-3 sm:py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</TableHead>
+                              <TableHead className="py-3 sm:py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</TableHead>
+                              <TableHead className="hidden lg:table-cell py-3 sm:py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Class</TableHead>
+                              <TableHead className="py-3 sm:py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</TableHead>
+                              <TableHead className="py-3 sm:py-4 pr-4 sm:pr-6 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredClasses.length > 0 ? (
+                              filteredClasses.map((classItem) => (
+                                 <React.Fragment key={classItem.id}>
+                                 <TableRow className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                                    <TableCell className="py-3 sm:py-4 pl-4 sm:pl-6">
+                                       <p className="text-xs font-bold text-gray-900 uppercase leading-tight">{classItem.subject_name}</p>
+                                    </TableCell>
+                                    <TableCell className="py-3 sm:py-4 text-center">
+                                       <p className="text-xs font-bold text-gray-900">
+                                          {new Date(classItem.scheduled_date || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                       </p>
+                                       <p className="text-[10px] text-gray-400 font-medium uppercase mt-0.5">
+                                          {new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'short' })}
+                                       </p>
+                                    </TableCell>
+                                    <TableCell className="py-3 sm:py-4 text-center">
+                                       <span className="px-2 py-1 rounded-md bg-gray-50 text-[10px] font-bold text-gray-600 uppercase tracking-wider border border-gray-100">
+                                          {classItem.dept}
+                                       </span>
+                                    </TableCell>
+                                    <TableCell className="hidden lg:table-cell py-3 sm:py-4 text-center">
+                                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                          {classItem.year} - {classItem.section}
+                                       </span>
+                                    </TableCell>
+                                    <TableCell className="py-3 sm:py-4 text-center">
+                                       <StatusBadge status={classItem.completionStatus || 'not_started'} />
+                                    </TableCell>
+                                    <TableCell className="py-3 sm:py-4 pr-4 sm:pr-6 text-right">
+                                       <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                                          {classItem.isEditable ? (
+                                             <button
+                                                onClick={() => handleClassClick(classItem)}
+                                                className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all"
+                                             >
+                                                Manage
+                                             </button>
+                                          ) : (
+                                             <button
+                                                disabled
+                                                className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-gray-50 text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider cursor-not-allowed flex items-center gap-1 ml-auto border border-gray-100"
+                                             >
+                                                <Lock size={10} /> <span className="hidden xs:inline">Locked</span>
+                                             </button>
+                                          )}
+                                          
+                                          {classItem.completionStatus === 'completed' && (
+                                             <button
+                                                onClick={() => toggleRowExpansion(classItem.id, classItem)}
+                                                className={`p-1.5 rounded-lg border transition-colors ${
+                                                   expandedRows.has(classItem.id) 
+                                                      ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                                                      : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                                                }`}
+                                             >  
+                                                {loadingClassDetails.has(classItem.id) ? (
+                                                  <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                                                ) : (
+                                                  <ChevronDown size={16} className={`transition-transform duration-200 ${expandedRows.has(classItem.id) ? 'rotate-180' : ''}`} />
+                                                )}
+                                             </button>
+                                          )}
+                                       </div>
+                                    </TableCell>
+                                 </TableRow>
+                                 {expandedRows.has(classItem.id) && (
+                                    <TableRow className="bg-gray-50/30 hover:bg-gray-50/30">
+                                       <TableCell colSpan={6} className="p-3 sm:p-4 md:p-6">
+                                          <div className="bg-white rounded-lg sm:rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+                                             <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-4">Class Details</h4>
+                                             
+                                             {classDetails.get(classItem.id)?.topics && (
+                                                <div className="mb-6">
+                                                   <p className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Topics Covered</p>
+                                                   <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-100">
+                                                      {classDetails.get(classItem.id)?.topics}
+                                                   </p>
+                                                </div>
+                                             )}
+                                             
+                                             {classDetails.get(classItem.id)?.attendance && classDetails.get(classItem.id)!.attendance.length > 0 ? (
+                                                <div>
+                                                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+                                                      <p className="text-xs font-bold text-gray-900 uppercase tracking-wide">Attendance List</p>
+                                                      <div className="flex gap-3 sm:gap-4">
+                                                         <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Present ({classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'present').length})</span>
+                                                         </div>
+                                                         <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Absent ({classDetails.get(classItem.id)!.attendance.filter(r => r.status === 'absent').length})</span>
+                                                         </div>
+                                                      </div>
+                                                   </div>
+                                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                                                      {classDetails.get(classItem.id)!.attendance.map((record, idx) => (
+                                                         <div 
+                                                            key={idx} 
+                                                            className={`flex items-center justify-between p-2.5 sm:p-3 rounded-lg border ${
+                                                               record.status === 'present' 
+                                                                  ? 'bg-gray-50/50 border-black-100' 
+                                                                  : 'bg-gray-50/50 border-black-100'
+                                                            }`}
+                                                         >
+                                                            <div className="min-w-0 flex-1">
+                                                               <p className="text-xs font-bold text-gray-900 truncate">{String(record.student_name || record.student_id || '')}</p>
+                                                               {record.student_email ? <p className="text-[10px] text-gray-500 truncate">{String(record.student_email)}</p> : null}
+                                                            </div>
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ml-2 whitespace-nowrap ${
+                                                               record.status === 'present' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+                                                            }`}>
+                                                               {String(record.status)}
+                                                            </span>
+                                                         </div>
+                                                      ))}
+                                                   </div>
+                                                </div>
+                                             ) : (
+                                                <div className="text-center py-6 sm:py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No attendance records found</p>
+                                                </div>
+                                             )}
+                                          </div>
+                                       </TableCell>
+                                    </TableRow>
+                                  )}
+                               </React.Fragment>
+                               ))
+                            ) : (
+                              <TableRow>
+                                 <TableCell colSpan={6} className="px-4 sm:px-6 py-12 text-center">
+                                    {!shouldShowClasses ? (
+                                       <div className="flex flex-col items-center justify-center">
+                                          <div className="w-20 sm:w-24 h-20 sm:h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4 sm:mb-6">
+                                             <Image src="/icons/search.png" alt="No Students" width={48} height={48} className="opacity-40" />
+                                          </div>
+                                          <h3 className="text-base sm:text-lg font-black text-gray-900 uppercase tracking-widest mb-2">
+                                             No Students Assigned
+                                          </h3>
+                                          <p className="text-xs sm:text-sm text-gray-500 max-w-md font-medium px-4">
+                                             You currently don&apos;t have any students assigned to you. Once students are allocated, your class schedule will appear here.
+                                          </p>
+                                       </div>
+                                    ) : (
+                                       <div className="flex flex-col items-center justify-center">
+                                          <div className="w-12 h-12 bg-gray-50 rounded-[2rem] flex items-center justify-center mb-3">
+                                             <Search className="w-5 h-5 text-gray-300" />
+                                          </div>
+                                          <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">No classes found</p>
+                                          <p className="text-[10px] text-gray-400 mt-1">Try adjusting your filters or search terms</p>
+                                       </div>
+                                    )}
+                                 </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </>
-            ) : peerTutorInfo ? (
-              <AdditionalClassesTab peerTutorInfo={peerTutorInfo} assignedStudents={assignedStudents || []} />
+            ) : peertutorsInfo ? (
+              <AdditionalClassesTab 
+                peertutorsInfo={peertutorsInfo} 
+                assignedStudents={assignedStudents || []}
+                scheduledClasses={classes}
+              />
             ) : null}
           </div>
         </main>

@@ -2,11 +2,12 @@
 
 import { useState, useRef } from 'react'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
 import * as XLSX from 'xlsx'
+import { toast } from 'sonner'
 
 interface BulkImportExportProps {
   dept: string
@@ -17,16 +18,16 @@ interface BulkImportExportProps {
 
 interface ImportPreview {
   validAssignments: Array<{
-    peerTutorEmail: string
-    peerTutorName: string
+    peerTutorsEmail: string
+    peerTutorsName: string
     studentEmail: string
     studentName: string
     status: 'valid'
     reason: string
   }>
   invalidAssignments: Array<{
-    peerTutorEmail: string
-    peerTutorName: string
+    peerTutorsEmail: string
+    peerTutorsName: string
     studentEmail: string
     studentName: string
     status: 'invalid'
@@ -60,7 +61,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       const assignments = await AssignmentService.getAssignmentsBySection(dept, year, section)
       
       // Get peer tutors and students data
-      const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+      const peerTutor = await peertutorservice.getpeerTutorBySection(dept, year, section)
       const students = await StudentService.getStudentsBySection(dept, year, section)
       
       // Create data array - only emails as requested
@@ -70,12 +71,12 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
       // Add existing assignments
       assignments.forEach(assignment => {
-        const peerTutor = peerTutors.find(pt => pt.id === assignment.peer_tutor_id)
+        const peerTutors = peerTutor.find(pt => pt.id === assignment.peer_tutor_id)
         const student = students.find(s => s.id === assignment.student_id)
         
-        if (peerTutor && student) {
+        if (peerTutors && student) {
           exportData.push([
-            peerTutor.email,
+            peerTutors.email,
             student.email
           ])
         }
@@ -98,7 +99,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
     } catch (error) {
       console.error('Error exporting data:', error)
-      alert('Error exporting data. Please try again.')
+      toast.error('Error exporting data. Please try again.')
     } finally {
       setIsExporting(false)
     }
@@ -109,7 +110,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
     if (!file) return
 
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      alert('Please select an Excel file (.xlsx or .xls).')
+      toast.warning('Please select an Excel file (.xlsx or .xls).')
       return
     }
 
@@ -120,19 +121,16 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
       const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][]
-      
-      // Skip header row
-      const rows = jsonData.slice(1) as string[][]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[]
       
       // Validate and preview data
-      const preview = await validateImportData(rows)
+      const preview = await validateImportData(jsonData)
       setImportPreview(preview)
       setShowImportPreview(true)
       
     } catch (error) {
       console.error('Error reading Excel file:', error)
-      alert('Error reading Excel file. Please check the file format and try again.')
+      toast.error('Error reading Excel file. Please check the file format and try again.')
     } finally {
       setIsImporting(false)
       // Reset file input
@@ -142,7 +140,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
     }
   }
 
-  const validateImportData = async (rows: string[][]): Promise<ImportPreview> => {
+  const validateImportData = async (rows: Record<string, unknown>[]): Promise<ImportPreview> => {
     const validAssignments: ImportPreview['validAssignments'] = []
     const invalidAssignments: ImportPreview['invalidAssignments'] = []
     
@@ -152,32 +150,38 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
     }
     
     // Get existing peer tutors and students
-    const existingPeerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+    const existingpeerTutor = await peertutorservice.getpeerTutorBySection(dept, year, section)
     const existingStudents = await StudentService.getStudentsBySection(dept, year, section)
+
+    // Helper for case-insensitive column lookup
+    const getValue = (row: Record<string, unknown>, targetKey: string) => {
+      const key = Object.keys(row).find(k => k.toLowerCase().trim() === targetKey.toLowerCase().trim())
+      return key ? row[key] : undefined
+    }
     
     for (const row of rows) {
-      if (row.length < 2) continue
       
-      const [peerTutorEmail, studentEmail] = row
+      const peerTutorsEmail = (getValue(row, 'Peer Tutor Email') || getValue(row, 'Peer Tutor') || getValue(row, 'Tutor Email')) as string
+      const studentEmail = (getValue(row, 'Student Email') || getValue(row, 'Student') || getValue(row, 'Email')) as string
       
-      if (!peerTutorEmail || !studentEmail) continue
+      if (!peerTutorsEmail || !studentEmail) continue
       
-      let peerTutor: PeerTutor | undefined | null = existingPeerTutors.find(pt => pt.email.toLowerCase() === peerTutorEmail.toLowerCase())
+      let peerTutors: peertutors | undefined | null = existingpeerTutor.find(pt => pt.email.toLowerCase() === peerTutorsEmail.toLowerCase())
       let student: Student | undefined | null = existingStudents.find(s => s.email.toLowerCase() === studentEmail.toLowerCase())
       
       // If peer tutor not found locally, check Microsoft Graph and create if exists
-      if (!peerTutor) {
-        const microsoftPeerTutor = await MicrosoftGraphService.getUserByEmail(peerTutorEmail)
-        if (microsoftPeerTutor) {
-          peerTutor = await PeerTutorService.createFromMicrosoftUser(
-            microsoftPeerTutor,
+      if (!peerTutors) {
+        const microsoftpeerTutors = await MicrosoftGraphService.getUserByEmail(peerTutorsEmail)
+        if (microsoftpeerTutors) {
+          peerTutors = await peertutorservice.createFromMicrosoftUser(
+            microsoftpeerTutors,
             user.id,
             dept,
             year,
             section
           )
-          if (peerTutor) {
-            console.log(`Auto-created peer tutor: ${peerTutor.name} (${peerTutor.email})`)
+          if (peerTutors) {
+            console.log(`Auto-created peer tutor: ${peerTutors.name} (${peerTutors.email})`)
           }
         }
       }
@@ -200,10 +204,10 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       }
       
       // Check if peer tutor was found or created
-      if (!peerTutor) {
+      if (!peerTutors) {
         invalidAssignments.push({
-          peerTutorEmail,
-          peerTutorName: 'Unknown',
+          peerTutorsEmail,
+          peerTutorsName: 'Unknown',
           studentEmail,
           studentName: 'Unknown',
           status: 'invalid',
@@ -215,8 +219,8 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       // Check if student was found or created
       if (!student) {
         invalidAssignments.push({
-          peerTutorEmail,
-          peerTutorName: peerTutor.name,
+          peerTutorsEmail,
+          peerTutorsName: peerTutors.name,
           studentEmail,
           studentName: 'Unknown',
           status: 'invalid',
@@ -226,11 +230,11 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       }
       
       // Check if peer tutor is also a student (conflict)
-      const isPeerTutorAlsoStudent = await StudentService.isStudent(peerTutorEmail)
-      if (isPeerTutorAlsoStudent) {
+      const ispeerTutorsAlsoStudent = await StudentService.isStudent(peerTutorsEmail)
+      if (ispeerTutorsAlsoStudent) {
         invalidAssignments.push({
-          peerTutorEmail,
-          peerTutorName: peerTutor.name,
+          peerTutorsEmail,
+          peerTutorsName: peerTutors.name,
           studentEmail,
           studentName: student.name,
           status: 'invalid',
@@ -239,12 +243,12 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
         continue
       }
       
-      // Check if student is also a peer tutor (conflict)
-      const isStudentAlsoPeerTutor = await PeerTutorService.isAlreadyPeerTutor(studentEmail)
-      if (isStudentAlsoPeerTutor) {
+      // Check if student is already a peer tutor (conflict)
+      const isStudentAlsopeerTutors = await peertutorservice.isAlreadypeertutors(studentEmail)
+      if (isStudentAlsopeerTutors) {
         invalidAssignments.push({
-          peerTutorEmail,
-          peerTutorName: peerTutor.name,
+          peerTutorsEmail,
+          peerTutorsName: peerTutors.name,
           studentEmail,
           studentName: student.name,
           status: 'invalid',
@@ -254,11 +258,11 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       }
       
       // Check if already assigned
-      const existingAssignment = await AssignmentService.getAssignmentByStudentAndTutor(student.id, peerTutor.id)
+      const existingAssignment = await AssignmentService.getAssignmentByStudentAndTutor(student.id, peerTutors.id)
       if (existingAssignment) {
         invalidAssignments.push({
-          peerTutorEmail,
-          peerTutorName: peerTutor.name,
+          peerTutorsEmail,
+          peerTutorsName: peerTutors.name,
           studentEmail,
           studentName: student.name,
           status: 'invalid',
@@ -268,8 +272,8 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       }
       
       validAssignments.push({
-        peerTutorEmail,
-        peerTutorName: peerTutor.name,
+        peerTutorsEmail,
+        peerTutorsName: peerTutors.name,
         studentEmail,
         studentName: student.name,
         status: 'valid',
@@ -300,15 +304,15 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       for (const assignment of importPreview.validAssignments) {
         try {
           // Get peer tutor and student IDs (they should exist since validation passed)
-          const peerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
+          const peerTutor = await peertutorservice.getpeerTutorBySection(dept, year, section)
           const students = await StudentService.getStudentsBySection(dept, year, section)
           
-          const peerTutor = peerTutors.find(pt => pt.email.toLowerCase() === assignment.peerTutorEmail.toLowerCase())
+          const peerTutors = peerTutor.find(pt => pt.email.toLowerCase() === assignment.peerTutorsEmail.toLowerCase())
           const student = students.find(s => s.email.toLowerCase() === assignment.studentEmail.toLowerCase())
           
-          if (peerTutor && student) {
+          if (peerTutors && student) {
             const success = await AssignmentService.createAssignment({
-              peer_tutor_id: peerTutor.id,
+              peer_tutor_id: peerTutors.id,
               student_id: student.id,
               department: dept,
               year: year,
@@ -319,13 +323,13 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
             if (success) {
               results.added++
             } else {
-              results.errors.push(`Failed to assign ${assignment.studentEmail} to ${assignment.peerTutorEmail}`)
+              results.errors.push(`Failed to assign ${assignment.studentEmail} to ${assignment.peerTutorsEmail}`)
             }
           } else {
-            results.errors.push(`Could not find peer tutor or student for assignment: ${assignment.studentEmail} to ${assignment.peerTutorEmail}`)
+            results.errors.push(`Could not find peer tutor or student for assignment: ${assignment.studentEmail} to ${assignment.peerTutorsEmail}`)
           }
         } catch (error) {
-          results.errors.push(`Failed to assign ${assignment.studentEmail} to ${assignment.peerTutorEmail}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          results.errors.push(`Failed to assign ${assignment.studentEmail} to ${assignment.peerTutorsEmail}: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
       }
       
@@ -344,7 +348,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       
     } catch (error) {
       console.error('Error importing assignments:', error)
-      alert('Error importing assignments. Please try again.')
+      toast.error('Error importing assignments. Please try again.')
     } finally {
       setIsImporting(false)
     }
@@ -447,7 +451,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
 
       {/* Import Preview Modal */}
       {showImportPreview && importPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl p-8 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
@@ -527,7 +531,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {assignment.peerTutorEmail}
+                            {assignment.peerTutorsEmail}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {assignment.studentEmail}
@@ -550,7 +554,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {assignment.peerTutorEmail}
+                            {assignment.peerTutorsEmail}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {assignment.studentEmail}
@@ -590,7 +594,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
 
       {/* Import Result Modal */}
       {showImportResult && importResult && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Import Results</h3>

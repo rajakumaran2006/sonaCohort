@@ -5,10 +5,21 @@ import Image from 'next/image'
 import { AttendanceRecord } from '@/lib/services/attendanceService'
 import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
 import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import DatePicker from '@/components/ui/DatePicker'
 import * as XLSX from 'xlsx'
 import { Plus, Trash2, FileDown, ChevronDown, CheckCircle, XCircle, Calendar, User, FileText } from 'lucide-react'
+import { toast } from 'sonner'
 
-interface PeerTutorInfo {
+// Helper to parse "YYYY-MM-DD" as a local date (prevents timezone shifts)
+const parseLocalDate = (dateStr: string) => {
+  if (!dateStr) return new Date()
+  // Handle if dateStr already has time or T, but mainly expecting YYYY-MM-DD
+  const cleanDate = dateStr.split('T')[0]
+  const [y, m, d] = cleanDate.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+interface peertutorsInfo {
   id: string
   name: string
 }
@@ -20,11 +31,12 @@ interface Student {
 }
 
 interface AdditionalClassesTabProps {
-  peerTutorInfo: PeerTutorInfo
+  peertutorsInfo: peertutorsInfo
   assignedStudents: Student[]
+  scheduledClasses?: { scheduled_date?: string }[]
 }
 
-export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }: AdditionalClassesTabProps) {
+export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents, scheduledClasses = [] }: AdditionalClassesTabProps) {
   // const { user } = useAuth() // keeping user if it might be needed, or remove if truly unused. The error said 'user' is assigned but never used.
 
   const [additionalClasses, setAdditionalClasses] = useState<AdditionalClassWithAttendance[]>([])
@@ -44,25 +56,46 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
+  const disabledDates = React.useMemo(() => {
+    const dates = new Set<string>()
+    
+    // Add scheduled classes dates
+    scheduledClasses.forEach(c => {
+      if (c.scheduled_date) {
+        dates.add(c.scheduled_date.split('T')[0])
+      }
+    })
+    
+    // Add existing additional classes dates
+    additionalClasses.forEach(c => {
+      if (c.class_date) {
+        dates.add(c.class_date.split('T')[0])
+      }
+    })
+    
+    // Convert YYYY-MM-DD strings to local Date objects for the DatePicker
+    return Array.from(dates).map(d => parseLocalDate(d))
+  }, [scheduledClasses, additionalClasses])
+
   const loadAdditionalClasses = useCallback(async () => {
-    if (!peerTutorInfo?.id) return
+    if (!peertutorsInfo?.id) return
 
     setLoading(true)
     try {
-      const classes = await AdditionalClassService.getAdditionalClassesByPeerTutor(peerTutorInfo.id)
+      const classes = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsInfo.id)
       setAdditionalClasses(classes)
     } catch (error) {
       console.error('Error loading additional classes:', error)
     } finally {
       setLoading(false)
     }
-  }, [peerTutorInfo?.id])
+  }, [peertutorsInfo?.id])
 
   useEffect(() => {
-    if (peerTutorInfo) {
+    if (peertutorsInfo) {
       loadAdditionalClasses()
     }
-  }, [peerTutorInfo, loadAdditionalClasses])
+  }, [peertutorsInfo, loadAdditionalClasses])
 
   useEffect(() => {
     if (assignedStudents && assignedStudents.length > 0) {
@@ -77,11 +110,11 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
   }, [assignedStudents])
 
   const loadAvailableSubjects = async () => {
-    if (!peerTutorInfo?.id) return
+    if (!peertutorsInfo?.id) return
 
     setLoadingSubjects(true)
     try {
-      const subjects = await AdditionalClassService.getAvailableSubjectsForPeerTutor(peerTutorInfo.id)
+      const subjects = await AdditionalClassService.getAvailableSubjectsForpeertutors(peertutorsInfo.id)
       setAvailableSubjects(subjects)
     } catch (error) {
       console.error('Error loading available subjects:', error)
@@ -92,7 +125,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
 
   const handleAddClass = () => {
     if (assignedStudents.length === 0) {
-      alert("You need assigned students to create an additional class")
+      toast.warning("You need assigned students to create an additional class")
       return
     }
 
@@ -113,19 +146,19 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
 
   const handleSaveClass = async () => {
     if (!newClass.subject.trim() || !newClass.topic.trim() || !newClass.date) {
-      alert('Please fill in all required fields')
+      toast.error('Please fill in all required fields')
       return
     }
 
-    if (!peerTutorInfo?.id) {
-      alert('Peer tutor information not available')
+    if (!peertutorsInfo?.id) {
+      toast.error('Peer tutor information not available')
       return
     }
 
     setSaving(true)
     try {
       const additionalClass = await AdditionalClassService.createAdditionalClass(
-        peerTutorInfo.id,
+        peertutorsInfo.id,
         newClass.subject,
         newClass.topic,
         newClass.date,
@@ -142,11 +175,11 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
           students: []
         })
       } else {
-        alert('Error creating additional class. Please try again.')
+        toast.error('Error creating additional class. Please try again.')
       }
     } catch (error) {
       console.error('Error saving additional class:', error)
-      alert('Error saving additional class. Please try again.')
+      toast.error('Error saving additional class. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -190,7 +223,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
 
   const handleDeleteClick = () => {
     if (selectedClasses.size === 0) {
-      alert('Please select at least one class to delete')
+      toast.warning('Please select at least one class to delete')
       return
     }
     setShowDeleteModal(true)
@@ -214,7 +247,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
       
     } catch (error) {
       console.error('Error deleting classes:', error)
-      alert('Error deleting classes. Please try again.')
+      toast.error('Error deleting classes. Please try again.')
     } finally {
 
     }
@@ -237,7 +270,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
       let totalPresentCountOverall = 0
       let totalStudentCountOverall = 0
 
-      exportData.push(['Peer Tutor Name', peerTutorInfo?.name || 'N/A'])
+      exportData.push(['Peer Tutor Name', peertutorsInfo?.name || 'N/A'])
       exportData.push([])
 
       Object.keys(groupedBySubject).forEach((subject) => {
@@ -256,7 +289,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
           const totalCount = classItem.attendance_records.length
 
           exportData.push([
-            new Date(classItem.class_date).toLocaleDateString('en-GB'),
+            parseLocalDate(classItem.class_date).toLocaleDateString('en-GB'),
             classItem.topic,
             presentCount,
             absentCount,
@@ -291,7 +324,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
       const workbook = XLSX.utils.book_new()
       const worksheet = XLSX.utils.aoa_to_sheet(exportData)
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Additional Classes Report')
-      const fileName = `Additional_Classes_${peerTutorInfo?.name?.replace(/\s+/g, '_') || 'Report'}_${new Date().toISOString().split('T')[0]}.xlsx`
+      const fileName = `Additional_Classes_${peertutorsInfo?.name?.replace(/\s+/g, '_') || 'Report'}_${new Date().toISOString().split('T')[0]}.xlsx`
       XLSX.writeFile(workbook, fileName)
     } catch (error) {
       console.error('Error exporting to Excel:', error)
@@ -374,15 +407,13 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
 
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Date</label>
-              <div className="relative">
-                 <input
-                   type="date"
-                   value={newClass.date}
-                   onChange={(e) => setNewClass(prev => ({ ...prev, date: e.target.value }))}
-                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl text-sm font-medium transition-all outline-none"
-                 />
-                 <Calendar className="absolute left-3.5 top-3 text-gray-400 pointer-events-none" size={16} />
-              </div>
+              <DatePicker
+                value={newClass.date}
+                onChange={(date) => setNewClass(prev => ({ ...prev, date }))}
+                disabledDates={disabledDates}
+                placeholder="Select date"
+                className="w-full"
+              />
             </div>
           </div>
 
@@ -472,7 +503,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${
                            deleteMode 
                               ? 'bg-gray-100 text-gray-600 border-gray-200' 
-                              : 'text-gray-400 hover:text-red-500 border-transparent hover:bg-red-50'
+                              : 'text-red-500 hover:text-red-600 border-red-200 bg-red-50 hover:bg-red-100'
                         }`}
                       >
                         <Trash2 size={14} /> <span>{deleteMode ? 'Cancel' : 'Delete'}</span>
@@ -492,109 +523,219 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
          </div>
 
          {additionalClasses.length > 0 ? (
-            <div className="overflow-x-auto">
-               <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-100">
-                     <tr>
-                        {deleteMode && <th className="px-6 py-3 w-10"></th>}
-                        <th className="px-6 py-3 w-10"></th>
-                        <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</th>
-                        <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Topic</th>
-                        <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
-                        <th className="px-6 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Attendance</th>
-                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                     {additionalClasses.map((classItem) => {
-                        const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
-                        const totalCount = classItem.attendance_records.length
-                        const isExpanded = expandedRows.has(classItem.id)
-                        const isSelected = selectedClasses.has(classItem.id)
+            <>
+               {/* Mobile Card View */}
+               <div className="md:hidden divide-y divide-gray-100">
+                  {additionalClasses.map((classItem) => {
+                     const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
+                     const totalCount = classItem.attendance_records.length
+                     const isExpanded = expandedRows.has(classItem.id)
+                     const isSelected = selectedClasses.has(classItem.id)
 
-                        return (
-                           <React.Fragment key={classItem.id}>
-                              <tr className={`hover:bg-gray-50/80 transition-colors group ${isSelected ? 'bg-blue-50/30' : ''}`}>
-                                 {deleteMode && (
-                                    <td className="px-6 py-4 text-center">
-                                       <input
-                                          type="checkbox"
-                                          checked={isSelected}
-                                          onChange={() => toggleClassSelection(classItem.id)}
-                                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                                       />
-                                    </td>
-                                 )}
-                                 <td className="px-6 py-4">
+                     return (
+                        <div key={classItem.id} className={`p-4 ${isSelected ? 'bg-blue-50/30' : ''}`}>
+                           <div className="flex items-start gap-3">
+                              {deleteMode && (
+                                 <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleClassSelection(classItem.id)}
+                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer mt-1"
+                                 />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                 <div className="flex items-center justify-between gap-2 mb-2">
+                                    <h4 className="text-sm font-bold text-gray-900 truncate">{classItem.subject_name}</h4>
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                       <span className="text-xs font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-100">{presentCount}</span>
+                                       <span className="text-[9px] font-medium text-gray-400">of</span>
+                                       <span className="text-xs font-bold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">{totalCount}</span>
+                                    </div>
+                                 </div>
+                                 <p className="text-xs font-medium text-gray-600 mb-2 truncate">{classItem.topic}</p>
+                                 <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
+                                       {parseLocalDate(classItem.class_date).toLocaleDateString()}
+                                    </span>
                                     <button
                                        onClick={() => toggleRowExpand(classItem.id)}
-                                       className={`p-1.5 rounded-lg border transition-all ${
+                                       className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
                                           isExpanded 
-                                             ? 'bg-blue-50 border-blue-200 text-blue-600' 
-                                             : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300'
+                                             ? 'bg-blue-50 border border-blue-200 text-blue-600' 
+                                             : 'bg-gray-50 border border-gray-200 text-gray-500 hover:text-gray-700'
                                        }`}
-                                    >  
-                                       <ChevronDown size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                    >
+                                       <span>Details</span>
+                                       <ChevronDown size={12} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                                     </button>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                    <p className="text-sm font-bold text-gray-900">{classItem.subject_name}</p>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                    <p className="text-sm font-medium text-gray-600">{classItem.topic}</p>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                    <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
-                                       {new Date(classItem.class_date).toLocaleDateString()}
-                                    </span>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                    <div className="flex items-center justify-center gap-2">
-                                       <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100">{presentCount}</span>
-                                       <span className="text-[10px] font-medium text-gray-400 uppercase">of</span>
-                                       <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{totalCount}</span>
-                                    </div>
-                                 </td>
-                              </tr>
-                              {isExpanded && (
-                                 <tr className="bg-gray-50/50 shadow-inner">
-                                    <td colSpan={deleteMode ? 6 : 5} className="px-6 py-6 ring-2 ring-transparent">
-                                       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm max-w-4xl mx-auto">
-                                          <div className="flex items-center gap-2 mb-4">
-                                             <User size={16} className="text-gray-400" />
-                                             <h4 className="text-xs font-bold text-gray-900 uppercase tracking-widest">Student Attendance Detail</h4>
-                                          </div>
-                                          
-                                          {classItem.attendance_records.length > 0 ? (
-                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                {classItem.attendance_records.map((record) => (
-                                                   <div key={record.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-sm transition-all">
-                                                      <div className="overflow-hidden">
-                                                         <p className="text-xs font-bold text-gray-900 truncate">{record.student_name}</p>
-                                                         <p className="text-[10px] text-gray-400 truncate">{record.student_email}</p>
-                                                      </div>
-                                                      <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded ${
-                                                         record.status === 'present' 
-                                                            ? 'bg-green-100 text-green-700' 
-                                                            : 'bg-red-100 text-red-700'
-                                                      }`}>
-                                                         {record.status}
-                                                      </span>
-                                                   </div>
-                                                ))}
+                                 </div>
+                              </div>
+                           </div>
+                           
+                           {isExpanded && (
+                              <div className="mt-4 bg-gray-50 rounded-xl border border-gray-200 p-4">
+                                 <div className="flex items-center gap-2 mb-3">
+                                    <User size={14} className="text-gray-400" />
+                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">Student Attendance</h4>
+                                 </div>
+                                 
+                                 {classItem.attendance_records.length > 0 ? (
+                                    <div className="space-y-2">
+                                       {classItem.attendance_records.map((record) => (
+                                          <div key={record.id} className="flex items-center justify-between p-2.5 rounded-lg border border-gray-100 bg-white">
+                                             <div className="overflow-hidden flex-1 min-w-0 mr-2">
+                                                <p className="text-xs font-bold text-gray-900 truncate">{record.student_name}</p>
+                                                <p className="text-[10px] text-gray-400 truncate">{record.student_email}</p>
                                              </div>
-                                          ) : (
-                                             <p className="text-sm text-gray-400 italic">No attendance records found.</p>
-                                          )}
+                                             <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded flex-shrink-0 ${
+                                                record.status === 'present' 
+                                                   ? 'bg-green-600 text-white' 
+                                                   : 'bg-red-600 text-white'
+                                             }`}>
+                                                {record.status}
+                                             </span>
+                                          </div>
+                                       ))}
+                                    </div>
+                                 ) : (
+                                    <p className="text-xs text-gray-400 italic">No attendance records found.</p>
+                                 )}
+                              </div>
+                           )}
+                        </div>
+                     )
+                  })}
+               </div>
+
+               {/* Desktop Table View */}
+               <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full">
+                     <thead className="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                           {deleteMode && <th className="px-6 py-3 w-10"></th>}
+                           <th className="px-6 py-3 w-10"></th>
+                           <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</th>
+                           <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Topic</th>
+                           <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
+                           <th className="px-6 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Attendance</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-50">
+                        {additionalClasses.map((classItem) => {
+                           const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
+                           const totalCount = classItem.attendance_records.length
+                           const isExpanded = expandedRows.has(classItem.id)
+                           const isSelected = selectedClasses.has(classItem.id)
+
+                           return (
+                              <React.Fragment key={classItem.id}>
+                                 <tr className={`hover:bg-gray-50/80 transition-colors group ${isSelected ? 'bg-blue-50/30' : ''}`}>
+                                    {deleteMode && (
+                                       <td className="px-6 py-4 text-center">
+                                          <input
+                                             type="checkbox"
+                                             checked={isSelected}
+                                             onChange={() => toggleClassSelection(classItem.id)}
+                                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                                          />
+                                       </td>
+                                    )}
+                                    <td className="px-6 py-4">
+                                       <button
+                                          onClick={() => toggleRowExpand(classItem.id)}
+                                          className={`p-1.5 rounded-lg border transition-all ${
+                                             isExpanded 
+                                                ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                                                : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300'
+                                          }`}
+                                       >  
+                                          <ChevronDown size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                       </button>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                       <p className="text-sm font-bold text-gray-900">{classItem.subject_name}</p>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                       <p className="text-sm font-medium text-gray-600">{classItem.topic}</p>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                       <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
+                                          {parseLocalDate(classItem.class_date).toLocaleDateString()}
+                                       </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                       <div className="flex items-center justify-center gap-2">
+                                          <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100">{presentCount}</span>
+                                          <span className="text-[10px] font-medium text-gray-400 uppercase">of</span>
+                                          <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{totalCount}</span>
                                        </div>
                                     </td>
                                  </tr>
-                              )}
-                           </React.Fragment>
-                        )
-                     })}
-                  </tbody>
-               </table>
-            </div>
+                                  {isExpanded && (
+                                     <tr className="bg-gray-50/30">
+                                        <td colSpan={deleteMode ? 6 : 5} className="px-6 py-6">
+                                           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                                              {/* Class Details Header */}
+                                              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-4">Class Details</p>
+                                              
+                                              {/* Topics Covered Section */}
+                                              <div className="mb-6">
+                                                 <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Topics Covered</h4>
+                                                 <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                                    {classItem.topic}
+                                                 </p>
+                                              </div>
+                                              
+                                              {/* Attendance List Section */}
+                                              {classItem.attendance_records.length > 0 ? (
+                                                 <div>
+                                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                                                       <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Attendance List</h4>
+                                                       <div className="flex gap-4">
+                                                          <div className="flex items-center gap-2">
+                                                             <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Present ({classItem.attendance_records.filter(r => r.status === 'present').length})</span>
+                                                          </div>
+                                                          <div className="flex items-center gap-2">
+                                                             <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Absent ({classItem.attendance_records.filter(r => r.status === 'absent').length})</span>
+                                                          </div>
+                                                       </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                       {classItem.attendance_records.map((record) => (
+                                                          <div key={record.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50">
+                                                             <div className="overflow-hidden min-w-0 flex-1 mr-2">
+                                                                <p className="text-xs font-bold text-gray-900 truncate">{record.student_name}</p>
+                                                                <p className="text-[10px] text-gray-400 truncate">{record.student_email}</p>
+                                                             </div>
+                                                             <span className={`text-[9px] font-bold uppercase px-2.5 py-1 rounded flex-shrink-0 ${
+                                                                record.status === 'present' 
+                                                                   ? 'bg-green-600 text-white' 
+                                                                   : 'bg-red-600 text-white'
+                                                             }`}>
+                                                                {record.status}
+                                                             </span>
+                                                          </div>
+                                                       ))}
+                                                    </div>
+                                                 </div>
+                                              ) : (
+                                                 <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No attendance records found</p>
+                                                 </div>
+                                              )}
+                                           </div>
+                                        </td>
+                                     </tr>
+                                  )}
+                              </React.Fragment>
+                           )
+                        })}
+                     </tbody>
+                  </table>
+               </div>
+            </>
          ) : (
             <div className="py-20 flex flex-col items-center justify-center text-center">
                <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
@@ -620,7 +761,7 @@ export default function AdditionalClassesTab({ peerTutorInfo, assignedStudents }
           return {
              name: item?.subject_name || 'Unknown Subject',
              email: item?.topic || 'Unknown Topic',
-             additionalInfo: new Date(item?.class_date || '').toLocaleDateString()
+             additionalInfo: parseLocalDate(item?.class_date || '').toLocaleDateString()
           }
         })}
         type="all"

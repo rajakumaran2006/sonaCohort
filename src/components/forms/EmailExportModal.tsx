@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X, Mail, Download, CheckCircle2 } from 'lucide-react'
 import { EmailService, ExportOption, AVAILABLE_EXPORTS } from '@/lib/services/emailService'
+import { toast } from 'sonner'
 
 interface EmailExportModalProps {
   isOpen: boolean
@@ -44,7 +45,7 @@ export default function EmailExportModal({
 
   const handleGenerateAndSend = async () => {
     if (selectedExports.size === 0) {
-      alert('Please select at least one export')
+      toast.warning('Please select at least one export')
       return
     }
 
@@ -72,19 +73,19 @@ export default function EmailExportModal({
         
         // Show success message with admin email
         setTimeout(() => {
-          alert(`Email sent successfully to ${result.adminEmail}!`)
+          toast.success(`Email sent successfully to ${result.adminEmail}!`)
           setStep('select')
           setSelectedExports(new Set())
           onClose()
         }, 2000)
       } else {
         // Show error
-        alert(`Failed to send email: ${result.error}`)
+        toast.error(`Failed to send email: ${result.error}`)
         setStep('select')
       }
     } catch (error) {
       console.error('Error sending email:', error)
-      alert('An error occurred while sending the email. Please try again.')
+      toast.error('An error occurred while sending the email. Please try again.')
       setStep('select')
     }
   }

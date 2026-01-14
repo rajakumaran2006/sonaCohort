@@ -3,7 +3,9 @@ import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   // Check if the request is for protected routes
-  const isProtectedRoute = req.nextUrl.pathname.startsWith('/admin') || req.nextUrl.pathname.startsWith('/faculty')
+  const isProtectedRoute = req.nextUrl.pathname.startsWith('/admin') || 
+                          req.nextUrl.pathname.startsWith('/faculty') || 
+                          req.nextUrl.pathname.startsWith('/peer')
   
   // Get all cookies and check for any Supabase auth cookies
   const cookies = req.cookies.getAll()
@@ -13,7 +15,6 @@ export async function middleware(req: NextRequest) {
   
   // If accessing protected route without Supabase auth cookies, redirect to login
   if (isProtectedRoute && !hasSupabaseAuth) {
-    console.log('Middleware: No Supabase auth cookies found, redirecting to login')
     return NextResponse.redirect(new URL('/login', req.url))
   }
   
@@ -27,5 +28,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/login', '/faculty/:path*', '/admin/:path*', '/auth/callback']
+  matcher: ['/login', '/faculty/:path*', '/admin/:path*', '/peer/:path*', '/auth/callback']
 }

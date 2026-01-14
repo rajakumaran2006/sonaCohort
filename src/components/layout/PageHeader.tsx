@@ -35,18 +35,18 @@ export default function PageHeader({
   const displayTagline = tagline || subtitle
 
   return (
-    <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 h-20 flex items-center px-8">
-      <div className="flex justify-between items-center w-full">
+    <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 min-h-[5rem] h-auto py-2 flex items-center px-4 lg:px-8 transition-all duration-300">
+      <div className="flex flex-row justify-between items-center w-full">
         <div>
-          {onToggleSidebar && (
-            <button
-              onClick={onToggleSidebar}
-              className="lg:hidden p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 mr-2 absolute left-2"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-          )}
           <div className="flex items-center gap-3">
+            {onToggleSidebar && (
+              <button
+                onClick={onToggleSidebar}
+                className="lg:hidden p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 relative items-center justify-center flex -ml-2 mr-1"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+            )}
             <h1 className="text-xl font-black text-gray-900 uppercase tracking-tight">
               {title}
               {context && (
@@ -58,26 +58,21 @@ export default function PageHeader({
             </h1>
           </div>
           {displayTagline && (
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">
+            <p className="hidden md:block text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">
               {displayTagline}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          {children}
+        <div className="flex items-center gap-4 w-auto">
           {showRefresh && onRefresh && (
             <div className="flex flex-col items-end">
               <AnimatedRefreshButton 
                 onRefresh={onRefresh}
                 isRefreshing={isRefreshing}
               />
-              {lastRefresh && (
-                <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-1 whitespace-nowrap">
-                  Last updated: {lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
             </div>
           )}
+          {children}
         </div>
       </div>
     </header>

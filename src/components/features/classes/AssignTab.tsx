@@ -3,10 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { AssignmentService, AssignmentStats, Assignment } from '@/lib/services/assignmentService'
 import { StudentService, Student } from '@/lib/services/studentService'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { Upload, Download } from 'lucide-react'
 import AssignmentImportModal from '@/components/forms/AssignmentImportModal'
-import PeerTutorMappingExport from '@/components/forms/PeerTutorMappingExport'
 
 interface AssignTabProps {
   dept: string
@@ -37,14 +36,14 @@ const getAvatarColor = (name: string): string => {
 export default function AssignTab({ dept, year, section }: AssignTabProps) {
   const [stats, setStats] = useState<AssignmentStats>({
     totalStudents: 0,
-    totalPeerTutors: 0,
+    totalPEERSTUTOR: 0,
     assignedStudents: 0,
     unassignedStudents: 0,
     averageStudentsPerTutor: 0
   })
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([])
-  const [peerTutors, setPeerTutors] = useState<PeerTutor[]>([])
+  const [PEERSTUTOR, setPEERSTUTOR] = useState<peertutors[]>([])
   const [loading, setLoading] = useState(true)
   const [autoAssigning, setAutoAssigning] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -57,13 +56,13 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
         AssignmentService.getAssignmentStats(dept, year, section),
         AssignmentService.getAssignments(dept, year, section),
         StudentService.getStudentsBySection(dept, year, section),
-        PeerTutorService.getPeerTutorsBySection(dept, year, section)
+        PEERSTUTORervice.getPEERSTUTORBySection(dept, year, section)
       ])
 
       setStats(statsData)
       setAssignments(assignmentsData)
       setUnassignedStudents(studentsData.filter(s => !s.assigned_peer_tutor_id && !s.peer_tutor))
-      setPeerTutors(tutorsData)
+      setPEERSTUTOR(tutorsData)
     } catch (error) {
       console.error('Error loading assignment data:', error)
     } finally {
@@ -89,9 +88,9 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
     }
   }
 
-  const handleManualAssign = async (studentId: string, peerTutorId: string) => {
+  const handleManualAssign = async (studentId: string, peertutorsId: string) => {
     try {
-      const success = await AssignmentService.assignStudent(studentId, peerTutorId)
+      const success = await AssignmentService.assignStudent(studentId, peertutorsId)
       if (success) {
         await loadData() // Reload data
       }
@@ -154,7 +153,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-green-600">Peer Tutors</p>
-              <p className="text-3xl font-bold text-green-900">{stats.totalPeerTutors}</p>
+              <p className="text-3xl font-bold text-green-900">{stats.totalPEERSTUTOR}</p>
             </div>
           </div>
         </div>
@@ -194,7 +193,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
           <div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Automatic Assignment</h3>
             <p className="text-gray-600">
-              Distribute <span className="font-semibold text-blue-600">{stats.unassignedStudents}</span> unassigned students among <span className="font-semibold text-green-600">{stats.totalPeerTutors}</span> peer tutors
+              Distribute <span className="font-semibold text-blue-600">{stats.unassignedStudents}</span> unassigned students among <span className="font-semibold text-green-600">{stats.totalPEERSTUTOR}</span> peer tutors
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -220,7 +219,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
 
             <button
               onClick={handleAutoAssign}
-              disabled={autoAssigning || stats.unassignedStudents === 0 || stats.totalPeerTutors === 0}
+              disabled={autoAssigning || stats.unassignedStudents === 0 || stats.totalPEERSTUTOR === 0}
               className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:shadow-none"
             >
               {autoAssigning ? (
@@ -250,7 +249,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
       )}
 
       {showExportModal && (
-        <PeerTutorMappingExport
+        <peertutorsMappingExport
           dept={dept}
           year={year}
           section={section}
@@ -262,7 +261,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
       <div className="space-y-6">
         <h3 className="text-xl font-semibold text-gray-900">Peer Tutor Assignments</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {peerTutors.map((tutor) => {
+          {PEERSTUTOR.map((tutor) => {
             const assignedStudents = getStudentsByTutor(tutor.id)
             return (
               <div key={tutor.id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow duration-200">
@@ -356,7 +355,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
                     defaultValue=""
                   >
                     <option value="">Assign to...</option>
-                    {peerTutors.map((tutor) => (
+                    {PEERSTUTOR.map((tutor) => (
                       <option key={tutor.id} value={tutor.id}>
                         {tutor.name}
                       </option>

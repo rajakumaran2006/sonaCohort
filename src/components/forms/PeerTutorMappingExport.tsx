@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import * as XLSX from 'xlsx'
 
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
+import { toast } from 'sonner'
 
-interface PeerTutorMappingExportProps {
+interface peertutorsMappingExportProps {
   dept: string
   year: string
   section: string
@@ -23,21 +24,21 @@ interface ExportHeader {
   date: string
 }
 
-interface PeerTutorWithStudents {
-  peerTutor: PeerTutor
+interface peertutorsWithStudents {
+  peertutors: peertutors
   students: Student[]
 }
 
 interface YearSectionGroup {
   year: string
   section: string
-  peerTutorsWithStudents: PeerTutorWithStudents[]
+  peerTutorWithStudents: peertutorsWithStudents[]
 }
 
-export default function PeerTutorMappingExport({ 
+export default function peertutorsMappingExport({ 
   dept, 
   onClose 
-}: PeerTutorMappingExportProps) {
+}: peertutorsMappingExportProps) {
   const [isExporting, setIsExporting] = useState(false)
   const [header, setHeader] = useState<ExportHeader>({
     collegeName: 'SONA COLLEGE OF TECHNOLOGY (Autonomous)',
@@ -54,10 +55,10 @@ export default function PeerTutorMappingExport({
       setIsExporting(true)
 
       // Get peer tutors with their assigned students, grouped by year/section
-      const yearSectionGroups = await getPeerTutorsWithStudents()
+      const yearSectionGroups = await getpeerTutorWithStudents()
       
       if (yearSectionGroups.length === 0) {
-        alert('No peer tutor assignments found for this department.')
+        toast.warning('No peer tutor assignments found for this department.')
         setIsExporting(false)
         return
       }
@@ -68,7 +69,7 @@ export default function PeerTutorMappingExport({
       // Create a worksheet for each year/section combination
       for (const group of yearSectionGroups) {
         // Create worksheet data for this year/section
-        const worksheetData = createWorksheetData(group.peerTutorsWithStudents)
+        const worksheetData = createWorksheetData(group.peerTutorWithStudents)
         
         // Create worksheet
         const ws = XLSX.utils.aoa_to_sheet(worksheetData)
@@ -92,23 +93,23 @@ export default function PeerTutorMappingExport({
       onClose()
     } catch (error) {
       console.error('Error exporting peer tutor mapping:', error)
-      alert('Error exporting data. Please try again.')
+      toast.error('Error exporting data. Please try again.')
     } finally {
       setIsExporting(false)
     }
   }
 
-  const getPeerTutorsWithStudents = async (): Promise<YearSectionGroup[]> => {
+  const getpeerTutorWithStudents = async (): Promise<YearSectionGroup[]> => {
     try {
       // Get all students for the department
       const allStudents = await StudentService.getAllStudents()
       const departmentStudents = allStudents.filter(s => s.dept === dept && !s.peer_tutor)
       
       // Get all peer tutors for the department
-      const allPeerTutors = await PeerTutorService.getAllPeerTutors()
-      const departmentPeerTutors = allPeerTutors.filter(pt => pt.dept === dept)
+      const allpeerTutor = await peertutorservice.getAllpeerTutor()
+      const departmentpeerTutor = allpeerTutor.filter(pt => pt.dept === dept)
       
-      if (departmentStudents.length === 0 && departmentPeerTutors.length === 0) {
+      if (departmentStudents.length === 0 && departmentpeerTutor.length === 0) {
         return []
       }
       
@@ -122,8 +123,8 @@ export default function PeerTutorMappingExport({
       })
       
       // Add combinations from peer tutors (in case there are peer tutors without students)
-      departmentPeerTutors.forEach(peerTutor => {
-        const key = `${peerTutor.year}|${peerTutor.section}`
+      departmentpeerTutor.forEach(peertutors => {
+        const key = `${peertutors.year}|${peertutors.section}`
         yearSectionSet.add(key)
       })
       
@@ -139,44 +140,44 @@ export default function PeerTutorMappingExport({
         )
         
         // Get peer tutors for this year/section
-        const sectionPeerTutors = departmentPeerTutors.filter(pt => 
+        const sectionpeerTutor = departmentpeerTutor.filter(pt => 
           pt.year === yearValue && pt.section === sectionValue
         )
         
         // Create mapping of peer tutors to their assigned students
-        const peerTutorsWithStudents: PeerTutorWithStudents[] = []
+        const peerTutorWithStudents: peertutorsWithStudents[] = []
         
-        for (const peerTutor of sectionPeerTutors) {
+        for (const peertutors of sectionpeerTutor) {
           // Find students assigned to this peer tutor
           const assignedStudents = sectionStudents.filter(student => 
-            student.assigned_peer_tutor_id === peerTutor.id
+            student.assigned_peer_tutor_id === peertutors.id
           )
           
-          peerTutorsWithStudents.push({
-            peerTutor,
+          peerTutorWithStudents.push({
+            peertutors,
             students: assignedStudents
           })
         }
         
         // Also include peer tutors that have no students assigned
-        const peerTutorIdsWithStudents = new Set(peerTutorsWithStudents.map(pts => pts.peerTutor.id))
-        const unassignedPeerTutors = sectionPeerTutors.filter(pt => 
-          !peerTutorIdsWithStudents.has(pt.id)
+        const peertutorsIdsWithStudents = new Set(peerTutorWithStudents.map(pts => pts.peertutors.id))
+        const unassignedpeerTutor = sectionpeerTutor.filter(pt => 
+          !peertutorsIdsWithStudents.has(pt.id)
         )
         
-        for (const peerTutor of unassignedPeerTutors) {
-          peerTutorsWithStudents.push({
-            peerTutor,
+        for (const peertutors of unassignedpeerTutor) {
+          peerTutorWithStudents.push({
+            peertutors,
             students: []
           })
         }
         
         // Only add group if it has peer tutors
-        if (peerTutorsWithStudents.length > 0) {
+        if (peerTutorWithStudents.length > 0) {
           yearSectionGroups.push({
             year: yearValue,
             section: sectionValue,
-            peerTutorsWithStudents
+            peerTutorWithStudents
           })
         }
       }
@@ -196,7 +197,7 @@ export default function PeerTutorMappingExport({
     }
   }
 
-  const createWorksheetData = (peerTutorsWithStudents: PeerTutorWithStudents[]): (string | number)[][] => {
+  const createWorksheetData = (peerTutorWithStudents: peertutorsWithStudents[]): (string | number)[][] => {
     const data: (string | number)[][] = []
     
     // Add header rows (rows 1-8)
@@ -215,13 +216,13 @@ export default function PeerTutorMappingExport({
     // Add data rows
     let serialNumber = 1
     
-    peerTutorsWithStudents.forEach(({ peerTutor, students }) => {
+    peerTutorWithStudents.forEach(({ peertutors, students }) => {
       if (students.length === 0) {
         // If no students assigned, still show the peer tutor
         data.push([
           serialNumber,
-          peerTutor.name,
-          `${peerTutor.year}/${peerTutor.section}`,
+          peertutors.name,
+          `${peertutors.year}/${peertutors.section}`,
           0,
           'No students assigned'
         ])
@@ -230,8 +231,8 @@ export default function PeerTutorMappingExport({
         // Show peer tutor as parent row
         data.push([
           serialNumber,
-          peerTutor.name,
-          `${peerTutor.year}/${peerTutor.section}`,
+          peertutors.name,
+          `${peertutors.year}/${peertutors.section}`,
           students.length,
           students[0].name // First student in the same row
         ])
@@ -301,7 +302,7 @@ export default function PeerTutorMappingExport({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">

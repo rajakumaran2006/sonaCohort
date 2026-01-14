@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Image from 'next/image'
-import { PeerTutorService, PeerTutorAssignment } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutorsAssignment } from '@/lib/services/peerTutorService'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { Search, X, Loader2, User, Mail, Check, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -46,8 +46,8 @@ export default function AssignPeerTutorModal({
     setIsSearching(true)
     setError(null)
     
-    try {
-      const results = await PeerTutorService.searchAvailableStudents(searchQuery)
+    try { 
+      const results = await peertutorservice.searchAvailableStudents(searchQuery)
       setSearchResults(results)
     } catch {
       setError('Failed to search for students. Please try again.')
@@ -78,7 +78,7 @@ export default function AssignPeerTutorModal({
     setError(null)
 
     try {
-      const assignments: PeerTutorAssignment[] = Array.from(selectedStudents).map(emailKey => {
+      const assignments: peertutorsAssignment[] = Array.from(selectedStudents).map(emailKey => {
         const student = selectedStudentObjects.get(emailKey)
         if (!student) {
           throw new Error(`Student object not found for email: ${emailKey}`)
@@ -96,7 +96,7 @@ export default function AssignPeerTutorModal({
 
       // Assign all peer tutors
       const results = await Promise.allSettled(
-        assignments.map(assignment => PeerTutorService.assignPeerTutor(assignment))
+        assignments.map(assignment => peertutorservice.assignpeertutors(assignment))
       )
       
       const successful = results.filter(result => result.status === 'fulfilled' && result.value).length

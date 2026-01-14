@@ -1,7 +1,7 @@
 import React from 'react'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 
-export default function PeerTutorPageSkeleton() {
+export default function peertutorsPageSkeleton() {
   return (
     <div className="flex flex-col h-full w-full bg-gray-50">
           {/* Stats Cards Skeleton */}

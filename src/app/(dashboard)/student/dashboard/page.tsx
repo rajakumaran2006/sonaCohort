@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { StudentService, StudentWithPeerTutor } from '@/lib/services/studentService'
+import { StudentService, StudentWithpeertutors } from '@/lib/services/studentService'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
 import FeedbackSubmissionModal from '@/components/forms/FeedbackSubmissionModal'
 import StudentSidebar from '@/components/layout/StudentSidebar'
@@ -16,7 +16,7 @@ interface FeedbackFormWithStatus extends FeedbackForm {
 export default function StudentDashboard() {
   const { user } = useAuth()
   const router = useRouter()
-  const [student, setStudent] = useState<StudentWithPeerTutor | null>(null)
+  const [student, setStudent] = useState<StudentWithpeertutors | null>(null)
   const [feedbackForms, setFeedbackForms] = useState<FeedbackFormWithStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
@@ -55,7 +55,7 @@ export default function StudentDashboard() {
 
       try {
         // Get all students and find the one matching the current user
-        const allStudents = await StudentService.getAllStudentsWithPeerTutors()
+        const allStudents = await StudentService.getAllStudentsWithpeerTutor()
         const currentStudent = allStudents.find(s => s.email === user.email)
         
         if (currentStudent) {
@@ -126,7 +126,7 @@ export default function StudentDashboard() {
       <StudentSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden flex-1`}>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden flex-1 w-full lg:w-auto`}>
         {/* Header */}
         <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
           <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center">

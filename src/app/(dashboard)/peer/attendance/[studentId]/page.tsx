@@ -4,9 +4,22 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
+import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { AttendanceService } from '@/lib/services/attendanceService'
-import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
+import { 
+  ArrowLeft, 
+  BookOpen, 
+  CheckCircle, 
+  XCircle, 
+  Percent, 
+  Calendar,
+  Clock,
+  User
+} from 'lucide-react'
 
 export default function StudentAttendancePage() {
   return (
@@ -45,7 +58,9 @@ function StudentAttendanceContent() {
   const router = useRouter()
   const studentId = params.studentId as string
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isSidebarCollapsed] = useSidebarCollapsed()
+  
   const [studentInfo, setStudentInfo] = useState<{
     id: string
     name: string
@@ -54,6 +69,7 @@ function StudentAttendanceContent() {
     year: string
     section: string
   } | null>(null)
+  
   const [attendanceRecords, setAttendanceRecords] = useState<StudentAttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
@@ -64,6 +80,7 @@ function StudentAttendanceContent() {
     attendanceRate: 0
   })
 
+  // Keep existing fetch logic
   const getStudentInfo = useCallback(async (studentId: string) => {
     try {
       const supabase = (await import('@/utils/supabase/client')).createClient()
@@ -91,20 +108,15 @@ function StudentAttendanceContent() {
 
     setLoading(true)
     try {
-      // Get peer tutor information
-      const tutorInfo = await PeerTutorAuthService.getPeerTutorByEmail(user.email)
+      const tutorInfo = await peertutorsAuthService.getpeertutorsByEmail(user.email)
       if (tutorInfo) {
-
-        // Get student information
         const studentData = await getStudentInfo(studentId)
         if (studentData) {
           setStudentInfo(studentData)
 
-          // Get attendance records for this student
           const records = await AttendanceService.getStudentAttendanceHistory(studentId, tutorInfo.id)
           setAttendanceRecords(records)
 
-          // Calculate summary
           const totalClasses = records.length
           const completedClasses = records.filter(record => 
             record.scheduled_classes?.scheduled_date && 
@@ -140,265 +152,289 @@ function StudentAttendanceContent() {
     router.push('/peer/attendance')
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading student attendance data...</p>
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-widest">Loading Records...</p>
         </div>
-      </div>
-    )
-  }
+      )
+    }
 
-  if (!studentInfo) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
+    if (!studentInfo) {
+      return (
+        <div className="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <XCircle className="w-8 h-8 text-red-500" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Student not found</h3>
-          <p className="text-gray-500 mb-4">The requested student could not be found.</p>
+          <h3 className="text-lg font-black text-gray-900 mb-2 uppercase tracking-wide">Student Not Found</h3>
+          <p className="text-gray-500 mb-6 text-sm">The requested student could not be found or you don't have permission to view their records.</p>
           <button
             onClick={handleBack}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="w-full px-4 py-3 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-gray-800 transition-colors"
           >
             Back to Attendance
           </button>
         </div>
+      )
+    }
+
+    return (
+      <div className="max-w-[1600px] mx-auto space-y-8">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Classes Completed */}
+          <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Classes
+                </div>
+                <BookOpen className="w-4 h-4 text-gray-400" />
+              </div>
+              <div className="flex items-baseline gap-1">
+                <div className="text-3xl font-bold text-gray-900">{summary.completedClasses}</div>
+                <span className="text-sm font-bold text-gray-400">/ {summary.totalClasses}</span>
+              </div>
+              <div className="mt-2 flex items-center text-xs text-blue-600">
+                <span className="font-semibold uppercase">Classes Completed</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Present Count */}
+          <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Present
+                </div>
+                <CheckCircle className="w-4 h-4 text-gray-400" />
+              </div>
+              <div className="text-3xl font-bold text-gray-900">
+                {summary.presentCount}
+              </div>
+              <div className="mt-2 flex items-center text-xs text-green-600">
+                <span className="font-semibold uppercase">Classes Attended</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Absent Count */}
+          <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Absent
+                </div>
+                <XCircle className="w-4 h-4 text-gray-400" />
+              </div>
+              <div className="text-3xl font-bold text-gray-900">
+                {summary.absentCount}
+              </div>
+              <div className="mt-2 flex items-center text-xs text-red-600">
+                <span className="font-semibold uppercase">Classes Missed</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Attendance Rate */}
+          <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Rate
+                </div>
+                <Percent className="w-4 h-4 text-gray-400" />
+              </div>
+              <div className="text-3xl font-bold text-gray-900">
+                {summary.attendanceRate}%
+              </div>
+              <div className="w-full bg-gray-100 h-1.5 rounded-full mt-4 overflow-hidden">
+                <div 
+                  className={`h-full rounded-full ${
+                    summary.attendanceRate >= 75 ? 'bg-green-500' : 
+                    summary.attendanceRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`} 
+                  style={{ width: `${summary.attendanceRate}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Attendance Records */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+           <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div>
+                <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Attendance Records</h3>
+                <p className="text-[10px] font-medium text-gray-400 mt-1 uppercase tracking-wider">
+                  {attendanceRecords.length} Total Record(s) Found
+                </p>
+              </div>
+           </div>
+           
+           {/* Mobile View (Cards) */}
+           <div className="md:hidden">
+              {attendanceRecords.length > 0 ? (
+                <div className="divide-y divide-gray-100">
+                  {attendanceRecords.map((record) => (
+                    <div key={record.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-bold text-gray-900">{record.classes?.subject_name || 'N/A'}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+                            <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-bold">{record.classes?.dept || 'N/A'}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Year {record.classes?.year}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">Sec {record.classes?.section}</span>
+                          </div>
+                        </div>
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                          record.status === 'present' 
+                            ? 'bg-green-600 text-white' 
+                            : 'bg-red-600 text-white'
+                        }`}>
+                          {record.status}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <div className="text-[10px] font-bold text-gray-700 uppercase">
+                            {record.scheduled_classes?.scheduled_date 
+                              ? new Date(record.scheduled_classes.scheduled_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
+                              : 'N/A'
+                            }
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-400">
+                          <Clock className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="uppercase">{new Date(record.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-12 text-center px-4">
+                  <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <User className="w-5 h-5 text-gray-300" />
+                  </div>
+                  <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">No Records Found</p>
+                  <p className="text-[10px] text-gray-400 mt-1 uppercase">This student has no attendance records yet.</p>
+                </div>
+              )}
+           </div>
+
+           {/* Desktop View (Table) */}
+           <div className="hidden md:block overflow-x-auto">
+             <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                    <TableHead className="py-4 pl-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject Information</TableHead>
+                    <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date & Time</TableHead>
+                    <TableHead className="py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</TableHead>
+                    <TableHead className="py-4 pr-6 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Last Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {attendanceRecords.length > 0 ? (
+                    attendanceRecords.map((record) => (
+                      <TableRow key={record.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                        <TableCell className="py-4 pl-6">
+                           <div>
+                             <p className="text-xs font-bold text-gray-900 mb-0.5">{record.classes?.subject_name || 'N/A'}</p>
+                             <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{record.classes?.dept || 'N/A'}</span>
+                                <span>•</span>
+                                <span>Year {record.classes?.year}</span>
+                                <span>•</span>
+                                <span>Sec {record.classes?.section}</span>
+                             </div>
+                           </div>
+                        </TableCell>
+                        <TableCell className="py-4 text-center">
+                           <div className="flex flex-col items-center">
+                              <div className="text-xs font-bold text-gray-700 uppercase">
+                                {record.scheduled_classes?.scheduled_date 
+                                  ? new Date(record.scheduled_classes.scheduled_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
+                                  : record.classes?.created_at 
+                                    ? new Date(record.classes.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
+                                    : 'N/A'
+                                }
+                              </div>
+                              <div className="text-[10px] font-medium text-gray-400 mt-1 uppercase">
+                                 {record.scheduled_classes?.scheduled_date 
+                                    ? new Date(record.scheduled_classes.scheduled_date).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
+                                    : 'UNKNOWN DAY'
+                                 }
+                              </div>
+                           </div>
+                        </TableCell>
+                        <TableCell className="py-4 text-center">
+                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                              record.status === 'present' 
+                                ? 'bg-green-600 text-white border border-green-100' 
+                                : 'bg-red-600 text-white border border-red-100'
+                            }`}>
+                              {record.status}
+                           </span>
+                        </TableCell>
+                        <TableCell className="py-4 pr-6 text-right">
+                           <div className="flex items-center justify-end gap-1.5 text-[10px] font-medium text-gray-400">
+                             <Clock className="w-3 h-3" />
+                             {new Date(record.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                           </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                       <TableCell colSpan={4} className="py-12 text-center">
+                          <div className="flex flex-col items-center justify-center">
+                             <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                                <User className="w-5 h-5 text-gray-300" />
+                             </div>
+                             <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">No Records Found</p>
+                             <p className="text-[10px] text-gray-400 mt-1">This student has no attendance records yet.</p>
+                          </div>
+                       </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+             </Table>
+           </div>
+        </div>
+
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-gray-50">
       <PeerSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-64 overflow-y-auto">
-        {/* Header */}
-        <header className="bg-white shadow flex-shrink-0">
-          <div className="px-4 sm:px-6 lg:px-8">
-            <div className="py-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <button
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 lg:hidden"
-                  >
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                  </button>
-                  <div className="ml-4">
-                    {/* Breadcrumb */}
-                    <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
-                      <button
-                        onClick={handleBack}
-                        className="hover:text-gray-700 transition-colors"
-                      >
-                        Attendance
-                      </button>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                      <span className="text-gray-900 font-medium">{studentInfo.name}</span>
-                    </nav>
-                    
-                    <h1 className="text-2xl font-bold text-gray-900">
-                      {studentInfo.name} - Attendance History
-                    </h1>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {studentInfo.email} • {studentInfo.dept} - {studentInfo.year} - {studentInfo.section}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleBack}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-                >
-                  Back to Attendance
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
+        <PageHeader
+          title={studentInfo?.name || (loading ? 'Loading...' : 'Not Found')}
+          context="Attendance History"
+          tagline={studentInfo ? `${studentInfo.dept} • Year ${studentInfo.year} • Section ${studentInfo.section}` : ''}
+          onToggleSidebar={() => setIsSidebarOpen(true)}
+          isSidebarCollapsed={isSidebarCollapsed}
+        >
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:text-gray-900 transition-all shadow-sm text-xs font-bold uppercase tracking-wider"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+        </PageHeader>
 
-        {/* Main Content */}
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Classes Completed */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <div className="flex items-center">
-                <div className="p-3 bg-blue-500 rounded-xl">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Classes Completed</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {summary.completedClasses}/{summary.totalClasses}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Present Count */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <div className="flex items-center">
-                <div className="p-3 bg-green-500 rounded-xl">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Present</p>
-                  <p className="text-2xl font-bold text-gray-900">{summary.presentCount}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Absent Count */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <div className="flex items-center">
-                <div className="p-3 bg-red-500 rounded-xl">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Absent</p>
-                  <p className="text-2xl font-bold text-gray-900">{summary.absentCount}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Attendance Rate */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <div className="flex items-center">
-                <div className="p-3 bg-yellow-500 rounded-xl">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">Attendance Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">{summary.attendanceRate}%</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Attendance Records Table */}
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Detailed Attendance Records</h3>
-              <p className="text-sm text-gray-600">
-                {attendanceRecords.length} record(s) found
-              </p>
-            </div>
-            
-            {attendanceRecords.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Subject
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Updated
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {attendanceRecords.map((record) => (
-                      <tr key={record.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {record.classes?.subject_name || 'N/A'}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {record.classes ? `${record.classes.dept} - ${record.classes.year} - ${record.classes.section}` : 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {record.scheduled_classes?.scheduled_date 
-                              ? new Date(record.scheduled_classes.scheduled_date).toLocaleDateString('en-US', {
-                                  weekday: 'short',
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                })
-                              : record.classes?.created_at 
-                                ? new Date(record.classes.created_at).toLocaleDateString('en-US', {
-                                    weekday: 'short',
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric'
-                                  })
-                                : 'N/A'
-                            }
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            record.status === 'present' 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {record.status === 'present' ? (
-                              <>
-                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                                Present
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
-                                Absent
-                              </>
-                            )}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
-                            {new Date(record.updated_at).toLocaleString()}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No attendance records found</h3>
-                <p className="text-gray-500">This student has no attendance records yet.</p>
-              </div>
-            )}
-          </div>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {renderContent()}
         </main>
       </div>
     </div>

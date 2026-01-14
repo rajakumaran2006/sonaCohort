@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/client'
 import { FeedbackForm, FeedbackResponseWithDetails, FeedbackAnswerWithDetails } from './feedbackService'
+import { FacultyService } from './facultyService'
 
 export interface ResponseAnalytics {
   totalResponses: number
@@ -224,17 +225,32 @@ export class FeedbackAnalyticsService {
       filteredResponses = filteredResponses.filter(r => (r.student?.section || '') === filters.section)
     }
 
-    // Get total student count
-    const { count: totalStudents, error: studentCountError } = await supabase
-      .from('peer_students')
-      .select('*', { count: 'exact', head: true })
-      .eq('peer_tutor', false)
+    // Get faculty department to filter student count
+    const facultyDept = await FacultyService.getFacultyDepartment(formData.faculty_id)
+    const departmentName = facultyDept?.name
 
-    if (studentCountError) {
-      console.error('Error getting student count:', studentCountError)
+    if (!departmentName) {
+        console.warn('Could not determine department for analytics student count')
+        // Fallback or return early? For now let's set totalStudents to 0 to be strict
     }
 
-    const totalStudentsCount = totalStudents || 0
+    let totalStudentsCount = 0
+
+    if (departmentName) {
+      const studentQuery = supabase
+        .from('peer_students')
+        .select('*', { count: 'exact', head: true })
+        .eq('peer_tutor', false)
+        .eq('dept', departmentName)
+      
+      const { count: totalStudents, error: studentCountError } = await studentQuery
+
+      if (studentCountError) {
+        console.error('Error getting student count:', studentCountError)
+      } else {
+        totalStudentsCount = totalStudents || 0
+      }
+    }
     const totalResponses = filteredResponses?.length || 0
     const responseRate = totalStudentsCount > 0 ? (totalResponses / totalStudentsCount) * 100 : 0
 
@@ -585,6 +601,82 @@ export class FeedbackAnalyticsService {
       return Object.entries(trends).map(([date, responses]) => ({ date, responses }))
     } catch (error) {
       console.error('Error in getResponseTrendsRange:', error)
+      return []
+    }
+  }
+
+  /**
+   * Get students who haven't submitted feedback for a form
+   */
+  static async getPendingStudents(formId: string): Promise<{
+    id: string
+    name: string
+    email: string
+    year: string
+    section: string
+    register_number?: string
+  }[]> {
+    try {
+      const supabase = createClient()
+
+      // Get current user to identify department
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError || !user) {
+        console.warn('Authentication required/failed to get pending students', authError)
+        return []
+      }
+      
+      let departmentName = ''
+      
+      if (user?.email) {
+        // Get faculty department
+        const facultyDept = await FacultyService.verifyFacultyAccess(user.email, supabase)
+        if (facultyDept) {
+          departmentName = facultyDept.name
+        }
+      }
+
+      if (!departmentName) {
+        console.warn('Could not determine department for pending students. Enforcing strict filtering.')
+        return []
+      }
+
+      // Get all students who have submitted feedback for this form
+      const { data: submittedResponses, error: responsesError } = await supabase
+        .from('feedback_responses')
+        .select('student_id')
+        .eq('feedback_form_id', formId)
+
+      if (responsesError) {
+        console.error('Error getting submitted responses:', responsesError)
+        return []
+      }
+
+      const submittedStudentIds = new Set(submittedResponses?.map(r => r.student_id) || [])
+
+      // Get all students (non peer tutors) strict filter by department
+      const { data: allStudents, error: studentsError } = await supabase
+        .from('peer_students')
+        .select('id, name, email, year, section, register_number')
+        .eq('peer_tutor', false)
+        .eq('dept', departmentName)
+        .order('name', { ascending: true })
+
+      if (studentsError) {
+        // Log the error properly
+        console.error('Error getting all students:', JSON.stringify(studentsError))
+        return []
+      }
+
+      // Filter out students who have already submitted
+      const pendingStudents = (allStudents || []).filter(
+        student => !submittedStudentIds.has(student.id)
+      )
+
+      return pendingStudents
+    } catch (error) {
+      console.error('Error in getPendingStudents:', error)
       return []
     }
   }

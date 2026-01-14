@@ -8,14 +8,17 @@ import { cn } from '@/lib/utils/index'
 interface BackButtonProps {
   className?: string
   onClick?: () => void
+  href?: string
 }
 
-export const BackButton: React.FC<BackButtonProps> = ({ className, onClick }) => {
+export const BackButton: React.FC<BackButtonProps> = ({ className, onClick, href }) => {
   const router = useRouter()
 
   const handleBack = () => {
     if (onClick) {
       onClick()
+    } else if (href) {
+      router.push(href)
     } else {
       router.back()
     }

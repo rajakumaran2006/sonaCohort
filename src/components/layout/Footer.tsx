@@ -18,12 +18,12 @@ export default function Footer() {
             <div className="flex items-center mb-4">
               <Image 
                 src="/logo.png" 
-                alt="PeerTutors" 
+                alt="peerTutor" 
                 width={32}
                 height={32}
                 className="mr-2"
               />
-              <span className="font-title text-xl">PeerTutors</span>
+              <span className="font-title text-xl">peerTutor</span>
             </div>
             <p className="text-gray-300 mb-4 max-w-md">
               Connect with peers, share knowledge, and learn together in a collaborative environment. 
@@ -109,7 +109,7 @@ export default function Footer() {
                 <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                info@peertutors.com
+                info@peerTutor.com
               </li>
               <li className="flex items-center">
                 <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -132,7 +132,7 @@ export default function Footer() {
         <div className="border-t border-gray-800 mt-8 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-400 text-sm">
-              © 2024 PeerTutors. All rights reserved.
+              © 2024 peerTutor. All rights reserved.
             </p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors duration-200">

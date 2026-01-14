@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService, AdditionalClass } from '@/lib/services/additionalClassService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
+import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 import { FeedbackService } from '@/lib/services/feedbackService'
 import { RenumerationService } from '@/lib/services/renumerationService'
@@ -39,8 +39,17 @@ interface RecentClass {
   percentage: number
 }
 
+interface TodayClassSummary {
+  year: string
+  subject_name: string
+  totalClasses: number
+  completedClasses: number
+  percentage: number
+  completion_status: 'completed' | 'pending'
+}
+
 interface TodaysClassesStats {
-  classes: ScheduledClassWithDetails[]
+  classes: TodayClassSummary[]
   total: number
   completed: number
   percentage: number
@@ -59,7 +68,7 @@ interface DashboardStats {
   weeklyChange: number
   additionalClassesByYear: { year: string; count: number }[]
   totalAdditionalClasses: number
-  totalPeerTutors: number
+  totalpeerTutor: number
   totalStudents: number
   todaysClasses: TodaysClassesStats
   newFeedbackCount: number
@@ -80,7 +89,7 @@ const initialStats: DashboardStats = {
   weeklyChange: 0,
   additionalClassesByYear: [],
   totalAdditionalClasses: 0,
-  totalPeerTutors: 0,
+  totalpeerTutor: 0,
   totalStudents: 0,
   todaysClasses: { classes: [], total: 0, completed: 0, percentage: 0 },
   newFeedbackCount: 0,
@@ -164,14 +173,14 @@ function FacultyDashboardContent() {
       const [
         { completed, pending },
         additionalClasses,
-        allPeerTutors,
+        allpeerTutor,
         allStudents,
         feedbackForms,
         renumerationSubmissions
       ] = await Promise.all([
         ScheduledClassService.getAllClassesForDepartment(department.name),
         AdditionalClassService.getAllAdditionalClassesForDepartment(department.name),
-        PeerTutorService.getPeerTutorsByDepartment(department.name),
+        peertutorservice.getpeerTutorByDepartment(department.name),
         StudentService.getStudentsByDepartment(department.name),
         FeedbackService.getFeedbackFormsByFaculty(user.id),
         RenumerationService.getRenumerationSubmissions(user.id)
@@ -204,12 +213,20 @@ function FacultyDashboardContent() {
       })
 
       // --- Process Stats ---
-      const totalClasses = allClasses.length
-      const completedCount = completed.length
+      const totalScheduled = allClasses.length
+      const completedScheduled = completed.length
+      const totalAdditional = additionalClasses.length
       
-      const inProgressCount = pending.filter(c => c.completion_status === 'pending').length
+      // Total Taken (Completed Scheduled + All Additional)
+      const totalTaken = completedScheduled + totalAdditional
       
-      const attendanceRate = totalClasses > 0 ? Math.round((completedCount / totalClasses) * 100) : 0
+      // Total Allocated (Scheduled Classes Only)
+      const totalAllocated = totalScheduled
+      
+      // Total Cumulative (Scheduled + Additional)
+      const totalCumulativeClasses = totalScheduled + totalAdditional
+      
+      const attendanceRate = totalAllocated > 0 ? Math.round((totalTaken / totalAllocated) * 100) : 0
 
       // Additional Classes Logic
       const totalAdditionalClasses = additionalClasses.length
@@ -229,7 +246,7 @@ function FacultyDashboardContent() {
       ]
 
       // Tutor/Student Counts
-      const totalPeerTutors = allPeerTutors.length
+      const totalpeerTutor = allpeerTutor.length
       const totalStudents = allStudents.length
 
       // Weekly Activity & Comparison
@@ -283,10 +300,10 @@ function FacultyDashboardContent() {
       }
 
       // Year Stats - Calculate based on total scheduled classes with completion percentage
-      const yearCounts: Record<string, { total: number; completed: number }> = { 
-        '2': { total: 0, completed: 0 }, 
-        '3': { total: 0, completed: 0 }, 
-        '4': { total: 0, completed: 0 } 
+      const yearCounts: Record<string, { allocated: number; cumulative: number; completed: number }> = { 
+        '2': { allocated: 0, cumulative: 0, completed: 0 }, 
+        '3': { allocated: 0, cumulative: 0, completed: 0 }, 
+        '4': { allocated: 0, cumulative: 0, completed: 0 } 
       }
       
       allClasses.forEach(cls => {
@@ -297,59 +314,115 @@ function FacultyDashboardContent() {
         else if (yStr.includes('4')) normalizedYear = '4'
         
         if (normalizedYear && yearCounts[normalizedYear] !== undefined) {
-          yearCounts[normalizedYear].total++
+          yearCounts[normalizedYear].allocated++
+          yearCounts[normalizedYear].cumulative++
           if (cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)) {
             yearCounts[normalizedYear].completed++
           }
         }
       })
+
+      // Include additional classes in the 'completed' count for each year
+      additionalClasses.forEach((cls: AdditionalClass & { peer_tutors?: { year: string } }) => {
+           let y = cls.year || (cls.peer_tutors ? cls.peer_tutors.year : '')
+           y = y.toString()
+           let normalizedYear = ''
+           if (y.includes('2')) normalizedYear = '2'
+           else if (y.includes('3')) normalizedYear = '3'
+           else if (y.includes('4')) normalizedYear = '4'
+           
+           if (normalizedYear && yearCounts[normalizedYear] !== undefined) {
+             yearCounts[normalizedYear].cumulative++
+             yearCounts[normalizedYear].completed++
+           }
+      })
       
       const yearStats = [
         { 
           year: '2', 
-          count: yearCounts['2'].total, 
-          percentage: yearCounts['2'].total > 0 ? (yearCounts['2'].completed / yearCounts['2'].total) * 100 : 0 
+          count: yearCounts['2'].cumulative, 
+          percentage: yearCounts['2'].allocated > 0 ? (yearCounts['2'].completed / yearCounts['2'].allocated) * 100 : 0 
         },
         { 
           year: '3', 
-          count: yearCounts['3'].total, 
-          percentage: yearCounts['3'].total > 0 ? (yearCounts['3'].completed / yearCounts['3'].total) * 100 : 0 
+          count: yearCounts['3'].cumulative, 
+          percentage: yearCounts['3'].allocated > 0 ? (yearCounts['3'].completed / yearCounts['3'].allocated) * 100 : 0 
         },
         { 
           year: '4', 
-          count: yearCounts['4'].total, 
-          percentage: yearCounts['4'].total > 0 ? (yearCounts['4'].completed / yearCounts['4'].total) * 100 : 0 
+          count: yearCounts['4'].cumulative, 
+          percentage: yearCounts['4'].allocated > 0 ? (yearCounts['4'].completed / yearCounts['4'].allocated) * 100 : 0 
         },
       ]
 
-      // Recent Classes - show only last 3 previous individual sessions (excluding today)
+      // Recent Classes - group by year and date, showing combined completion percentage
       const todayDate = new Date()
       todayDate.setHours(0, 0, 0, 0)
       
-      const recentClasses = allClasses
+      const pastClasses = allClasses
         .filter(cls => {
           const d = new Date(cls.scheduled_date)
           d.setHours(0,0,0,0)
           return d.getTime() < todayDate.getTime()
         })
-        .map(cls => ({
-          subject_name: cls.class?.subject_name || 'Individual Session',
-          year: cls.year,
-          scheduled_date: cls.scheduled_date,
-          percentage: cls.completion_status === 'completed' ? 100 : (cls.attendance_completed || cls.topics_completed ? 50 : 0)
-        }))
+      
+      // Group by year + date
+      const groupedByYearDate: Record<string, { 
+        year: string, 
+        scheduled_date: string, 
+        subject_names: Set<string>,
+        totalClasses: number, 
+        completedClasses: number 
+      }> = {}
+      
+      pastClasses.forEach(cls => {
+        const dateKey = new Date(cls.scheduled_date).toISOString().split('T')[0]
+        const yearStr = cls.year?.toString() || ''
+        let normalizedYear = ''
+        if (yearStr.includes('2')) normalizedYear = '2'
+        else if (yearStr.includes('3')) normalizedYear = '3'
+        else if (yearStr.includes('4')) normalizedYear = '4'
+        
+        const groupKey = `${normalizedYear}-${dateKey}`
+        
+        if (!groupedByYearDate[groupKey]) {
+          groupedByYearDate[groupKey] = {
+            year: normalizedYear,
+            scheduled_date: cls.scheduled_date,
+            subject_names: new Set(),
+            totalClasses: 0,
+            completedClasses: 0
+          }
+        }
+        
+        groupedByYearDate[groupKey].subject_names.add(cls.class?.subject_name || 'Session')
+        groupedByYearDate[groupKey].totalClasses++
+        if (cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)) {
+          groupedByYearDate[groupKey].completedClasses++
+        }
+      })
+      
+      // Convert to array and sort by date (most recent first)
+      const recentClasses = Object.values(groupedByYearDate)
+        .sort((a, b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime())
         .slice(0, 3)
+        .map(group => ({
+          subject_name: Array.from(group.subject_names).join(', '),
+          year: group.year,
+          scheduled_date: group.scheduled_date,
+          percentage: group.totalClasses > 0 ? Math.round((group.completedClasses / group.totalClasses) * 100) : 0
+        }))
 
       const attendanceBreakdown = [
-        { name: 'Completed', value: attendanceRate, color: '#10B981' },
-        { name: 'Pending', value: 100 - attendanceRate, color: '#F59E0B' },
+        { name: 'Completed', value: Math.min(100, attendanceRate), color: '#10B981' },
+        { name: 'Pending', value: Math.max(0, 100 - attendanceRate), color: '#F59E0B' },
         { name: 'Cancelled', value: 0, color: '#EF4444' }
       ].filter(i => i.value > 0)
 
       return {
-        totalClasses,
-        completedClasses: completedCount,
-        inProgressClasses: inProgressCount,
+        totalClasses: totalCumulativeClasses,
+        completedClasses: totalTaken,
+        inProgressClasses: pending.length,
         attendanceRate,
         currentWeekTotal,
         weeklyChange,
@@ -358,8 +431,8 @@ function FacultyDashboardContent() {
         attendanceBreakdown,
         recentClasses,
         additionalClassesByYear,
-        totalAdditionalClasses,
-        totalPeerTutors,
+        totalAdditionalClasses: totalAdditional,
+        totalpeerTutor,
         totalStudents,
         newFeedbackCount,
         newRenumerationCount,
@@ -375,14 +448,55 @@ function FacultyDashboardContent() {
           const totalCount = todayClasses.length
           let completedCount = 0
           
+          // Group by year for display
+          const groupedByYear: Record<string, { 
+            year: string, 
+            subject_names: Set<string>,
+            totalClasses: number, 
+            completedClasses: number 
+          }> = {}
+          
           todayClasses.forEach(cls => {
             if (cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)) {
               completedCount++
             }
+            
+            const yearStr = cls.year?.toString() || ''
+            let normalizedYear = ''
+            if (yearStr.includes('2')) normalizedYear = '2'
+            else if (yearStr.includes('3')) normalizedYear = '3'
+            else if (yearStr.includes('4')) normalizedYear = '4'
+            
+            if (!groupedByYear[normalizedYear]) {
+              groupedByYear[normalizedYear] = {
+                year: normalizedYear,
+                subject_names: new Set(),
+                totalClasses: 0,
+                completedClasses: 0
+              }
+            }
+            
+            groupedByYear[normalizedYear].subject_names.add(cls.class?.subject_name || 'Session')
+            groupedByYear[normalizedYear].totalClasses++
+            if (cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)) {
+              groupedByYear[normalizedYear].completedClasses++
+            }
           })
           
+          // Convert to array and calculate percentage per group
+          const groupedClasses = Object.values(groupedByYear)
+            .sort((a, b) => parseInt(a.year) - parseInt(b.year))
+            .map(group => ({
+              year: group.year,
+              subject_name: Array.from(group.subject_names).join(', '),
+              totalClasses: group.totalClasses,
+              completedClasses: group.completedClasses,
+              percentage: group.totalClasses > 0 ? Math.round((group.completedClasses / group.totalClasses) * 100) : 0,
+              completion_status: group.completedClasses === group.totalClasses ? 'completed' : 'pending'
+            }))
+          
           return {
-            classes: todayClasses,
+            classes: groupedClasses,
             total: totalCount,
             completed: completedCount,
             percentage: totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
@@ -429,7 +543,9 @@ function FacultyDashboardContent() {
       />
 
       {/* Content Container */}
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col`}>
+      <div 
+        suppressHydrationWarning
+        className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
         {isLoading ? (
              <FacultyDashboardSkeleton />
         ) : (
@@ -463,7 +579,7 @@ function FacultyDashboardContent() {
                           {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                         </p>
                         <h3 className="text-3xl font-bold tracking-tight mb-4 leading-tight">
-                         DEPT ALLOCATED<br/>
+                         DEPT OVERVIEW<br/>
                           <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">{department?.name}</span>
                         </h3>
                         <div className="flex items-center gap-4 mt-8">
@@ -490,9 +606,8 @@ function FacultyDashboardContent() {
                              <Users className="w-3.5 h-3.5 text-gray-400" />
                           </div>
                         </div>
-                        <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{stats.totalPeerTutors} / {stats.totalStudents}</div>
-                        <div className="flex items-center text-[10px] text-emerald-600 font-black tracking-widest bg-emerald-50 w-fit px-3 py-1.5 rounded-xl border border-emerald-100/50">
-                          <ArrowUpRight className="w-3 h-3 mr-1.5" />
+                        <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{stats.totalpeerTutor} / {stats.totalStudents}</div>
+                        <div className="flex items-center text-[10px] text-black font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
                           <span>ALLOCATED</span>
                         </div>
                       </Card>
@@ -505,8 +620,7 @@ function FacultyDashboardContent() {
                           </div>
                         </div>
                         <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{stats.totalAdditionalClasses}</div>
-                        <div className="flex items-center text-[10px] text-blue-600 font-black tracking-widest bg-blue-50 w-fit px-3 py-1.5 rounded-xl border border-blue-100/50">
-                          <ArrowUpRight className="w-3 h-3 mr-1.5" />
+                        <div className="flex items-center text-[10px] text-black- font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
                           <span>CUMULATIVE</span>
                         </div>
                       </Card>
@@ -558,14 +672,14 @@ function FacultyDashboardContent() {
                              <div className="flex justify-between items-end mb-0">
                                <div>
                                   <span className="text-base font-bold text-gray-800 group-hover:text-blue-600 transition-colors">YEAR {yearStat.year}</span>
-                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{yearStat.count} Total Classes Allocated</p>
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{yearStat.count} Total Classes</p>
                                </div>
                                <span className="text-sm font-bold text-gray-900">{Math.round(yearStat.percentage)}%</span>
                              </div>
                              <div className="relative w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
                                 <div 
                                   className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-1000 ease-out group-hover:from-blue-400 group-hover:to-blue-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                                  style={{ width: `${yearStat.percentage}%` }}
+                                  style={{ width: `${Math.min(100, yearStat.percentage)}%` }}
                                 ></div>
                              </div>
                           </div>
@@ -579,7 +693,7 @@ function FacultyDashboardContent() {
                     <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 overflow-hidden">
                        <div className="flex flex-row items-center justify-between pb-4 border-b border-gray-50">
                           <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest">Recent Sessions</h4>
-                          <span className="text-[10px] font-black text-gray-400 px-2.5 py-1 bg-gray-50 rounded-lg uppercase tracking-widest border border-gray-100">Last 3</span>
+                          <span className="text-[10px] font-black text-black-400 px-2.5 py-1 bg-gray-50 rounded-lg uppercase tracking-widest border border-gray-100">Last 3</span>
                        </div>
                       <div className="space-y-4">
                         {stats.recentClasses.length > 0 ? (
@@ -632,7 +746,7 @@ function FacultyDashboardContent() {
                     <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7">
                        <div className="flex flex-row items-center justify-between mb-8">
                           <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest">Additional Classes</h4>
-                          <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full uppercase">By Year</span>
+                          <span className="text-[10px] font-bold text-black-400 bg-gray-50 px-2 py-0.5 rounded-full uppercase">By Year</span>
                        </div>
                        <div className="flex flex-row items-end justify-between gap-4 h-[120px]">
                           {stats.additionalClassesByYear.map((item, index) => {
@@ -677,15 +791,15 @@ function FacultyDashboardContent() {
                             <PieChart>
                               <Pie 
                                 data={[{ value: 100 }]} 
-                                cx="50%" cy="100%" startAngle={180} endAngle={0} 
-                                innerRadius="65%" outerRadius="90%" paddingAngle={0} 
+                                cx="50%" cy="80%" startAngle={180} endAngle={0} 
+                                innerRadius="50%" outerRadius="90%" paddingAngle={0} 
                                 dataKey="value" stroke="none" isAnimationActive={false}
                               >
-                                 <Cell fill="#F1F5F9" />
+                                 <Cell fill="#e5e5e5" />
                               </Pie>
                               <Pie 
                                 data={[{ value: stats.attendanceRate }, { value: 100 - stats.attendanceRate }]} 
-                                cx="50%" cy="100%" startAngle={180} endAngle={0} 
+                                cx="50%" cy="80%" startAngle={180} endAngle={0} 
                                 innerRadius="65%" outerRadius="90%" paddingAngle={0} 
                                 dataKey="value" stroke="none" cornerRadius={10}
                                 className="drop-shadow-xl"
@@ -702,11 +816,11 @@ function FacultyDashboardContent() {
                         </div>
                         <div className="w-full mt-4 flex justify-center items-center gap-8">
                            <div className="flex flex-col items-center">
-                               <div className="flex items-center gap-1.5 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></span><span className="text-xs font-bold text-gray-800">Done</span></div>
+                               <div className="flex items-center gap-1.5 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></span><span className="text-xs font-bold text-gray-800">DONE</span></div>
                                <span className="text-[10px] text-gray-400 font-bold uppercase">{stats.completedClasses} Classes</span>
                            </div>
                            <div className="flex flex-col items-center">
-                               <div className="flex items-center gap-1.5 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-200"></span><span className="text-xs font-bold text-gray-400">Todo</span></div>
+                               <div className="flex items-center gap-1.5 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-200"></span><span className="text-xs font-bold text-gray-400">TODO</span></div>
                                <span className="text-[10px] text-gray-400 font-bold uppercase">{stats.totalClasses - stats.completedClasses} Classes</span>
                            </div>
                         </div>
@@ -722,7 +836,7 @@ function FacultyDashboardContent() {
                              onClick={() => handleNav('/faculty/peer-tutor?tab=renumeration', 'renumeration')}
                           >
                              <div className="text-left w-full">
-                                <p className="text-sm font-black text-gray-900 mb-1 leading-tight group-hover:text-emerald-600 transition-colors">Renumeration</p>
+                                <p className="text-sm font-black text-gray-900 mb-1 leading-tight  uppercase transition-colors">Renumeration</p>
                                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Payments</p>
                              </div>
                              <div className="flex items-center justify-between w-full">
@@ -744,7 +858,7 @@ function FacultyDashboardContent() {
                              onClick={() => handleNav('/faculty/peer-tutor?tab=feedback', 'feedback')}
                           >
                              <div className="text-left w-full">
-                                <p className="text-sm font-black text-gray-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors">Feedback</p>
+                                <p className="text-sm font-black text-gray-900 mb-1 leading-tight  uppercase transition-colors">Feedback</p>
                                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Insights</p>
                              </div>
                              <div className="flex items-center justify-between w-full">
@@ -762,19 +876,15 @@ function FacultyDashboardContent() {
                           </button>
 
                           <button 
-                             className="bg-[#1C2434] hover:bg-black p-5 rounded-2xl flex flex-col items-start justify-between group transition-all duration-300 shadow-xl shadow-gray-900/10 h-[110px] col-span-2 relative overflow-hidden" 
+                             className="bg-[#1C2434] hover:bg-black px-4 py-0.5 rounded-2xl flex flex-col items-center justify-center group transition-all duration-300 shadow-xl shadow-gray-900/10 h-[36px] col-span-2 relative overflow-hidden text-center" 
                              onClick={() => router.push('/faculty/analytics')}
                           >
-                             <div className="relative z-10 w-full">
-                                <p className="text-sm font-black text-white mb-1 leading-none">Analytics & Reports</p>
-                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Performance Monitoring</p>
-                             </div>
-                             <div className="relative z-10 flex items-center justify-between w-full">
-                                <div className="flex items-center gap-2">
-                                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-                                   <span className="text-[10px] font-bold text-gray-300">Live Dashboard</span>
+                             <div className="relative z-10 w-full flex flex-col items-center justify-center leading-none">
+                                <p className="text-[10px] font-black text-white uppercase leading-none">Analytics & Reports</p>
+                                <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                                   <p className="text-[7px] text-gray-400 font-bold uppercase tracking-widest leading-none">Performance Monitoring</p>
+                                   <ArrowUpRight size={8} className="text-gray-400 group-hover:text-white transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
                                 </div>
-                                <ArrowUpRight size={16} className="text-gray-400 group-hover:text-white transform group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
                              </div>
                              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-all duration-700"></div>
                           </button>
@@ -792,19 +902,23 @@ function FacultyDashboardContent() {
                        
                        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3">
                           {stats.todaysClasses.total > 0 ? (
-                            stats.todaysClasses.classes.map((cls: ScheduledClassWithDetails, i: number) => (
+                            stats.todaysClasses.classes.map((cls: { year: string; subject_name: string; totalClasses: number; completedClasses: number; percentage: number; completion_status: string }, i: number) => (
                               <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-white transition-all duration-300 group">
-                                 <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-bold text-gray-700 group-hover:scale-110 transition-transform">
+                                 <div className={`w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-bold relative ${cls.completion_status === 'completed' ? 'text-emerald-600' : 'text-gray-700'} group-hover:scale-110 transition-transform`}>
                                     {cls.year}
+                                    <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${cls.completion_status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
                                  </div>
                                  <div className="flex-1">
-                                    <h6 className="text-[12px] font-black text-gray-900 uppercase leading-tight mb-0.5">{cls.class?.subject_name}</h6>
+                                    <h6 className="text-[12px] font-black text-gray-900 uppercase leading-tight mb-0.5">Year {cls.year}</h6>
                                     <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1"><Clock className="w-3 h-3 text-gray-400"/><span className="text-[10px] text-gray-500 font-bold">Allocated</span></div>
-                                        <div className={`w-1.5 h-1.5 rounded-full ${cls.completion_status === 'completed' ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                                        <span className="text-[10px] text-gray-500 font-bold">{cls.completedClasses}/{cls.totalClasses} Classes</span>
+                                        <div className={`w-1.5 h-1.5 rounded-full ${cls.completion_status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
                                     </div>
                                  </div>
-                                 <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
+                                 <div className="text-right">
+                                    <p className="text-xs font-black text-gray-900 mb-0.5">{cls.percentage}%</p>
+                                    <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">{cls.completion_status === 'completed' ? 'Complete' : 'Pending'}</p>
+                                 </div>
                               </div>
                             ))
                           ) : (

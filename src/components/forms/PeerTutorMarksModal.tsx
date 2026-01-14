@@ -4,17 +4,17 @@ import { useState, useEffect, useCallback } from 'react'
 import { ExamService, ExamAssignment, ExamMark } from '@/lib/services/examService'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Button } from '@/components/ui'
 
-interface PeerTutorMarksModalProps {
+interface peertutorsMarksModalProps {
   isOpen: boolean
   onClose: () => void
   examAssignment: ExamAssignment
 }
 
-export default function PeerTutorMarksModal({
+export default function peertutorsMarksModal({
   isOpen,
   onClose,
   examAssignment
-}: PeerTutorMarksModalProps) {
+}: peertutorsMarksModalProps) {
   const [marks, setMarks] = useState<ExamMark[]>([])
   const [loading, setLoading] = useState(true)
 

@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { RenumerationService, PeerTutorRenumeration, RenumerationField } from '@/lib/services/renumerationService'
+import { RenumerationService, peertutorsRenumeration, RenumerationField } from '@/lib/services/renumerationService'
 
 interface PeerRenumerationModalProps {
-  renumeration: PeerTutorRenumeration
+  renumeration: peertutorsRenumeration
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
@@ -20,6 +20,7 @@ export default function PeerRenumerationModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fields, setFields] = useState<RenumerationField[]>([])
+
 
   useEffect(() => {
     if (renumeration && renumeration.template) {
@@ -71,28 +72,7 @@ export default function PeerRenumerationModal({
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this renumeration response? This action cannot be undone.')) {
-      return
-    }
 
-    setLoading(true)
-    try {
-      const success = await RenumerationService.deleteRenumerationResponse(renumeration.id)
-      
-      if (success) {
-        onSuccess()
-        onClose()
-      } else {
-        setError('Failed to delete renumeration response')
-      }
-    } catch (error) {
-      console.error('Error deleting renumeration:', error)
-      setError('Failed to delete renumeration response')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const renderField = (field: RenumerationField) => {
     const rawValue = formData[field.field_name]
@@ -118,9 +98,15 @@ export default function PeerRenumerationModal({
       case 'number':
         return (
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             value={value}
-            onChange={(e) => handleFieldChange(field.field_name, e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value
+              if (/^\d*$/.test(val)) {
+                handleFieldChange(field.field_name, val)
+              }
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder={`Enter ${field.field_name.toLowerCase()}`}
             disabled={isReadOnly}
@@ -189,8 +175,8 @@ export default function PeerRenumerationModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 sm:p-6 animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300">
         <div className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -230,7 +216,7 @@ export default function PeerRenumerationModal({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <span className="text-sm font-medium text-gray-700">Status:</span>
-                <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded uppercase text-xs font-medium ${
                   renumeration.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                   renumeration.status === 'submitted' ? 'bg-blue-100 text-blue-800' :
                   renumeration.status === 'approved' ? 'bg-green-100 text-green-800' :
@@ -283,38 +269,27 @@ export default function PeerRenumerationModal({
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between mt-8 pt-6 border-t border-gray-200 gap-4">
-            <div className="w-full sm:w-auto">
-              {renumeration.status === 'submitted' && renumeration.template?.is_active && (
-                <button
-                  onClick={handleDelete}
-                  disabled={loading}
-                  className="w-full sm:w-auto px-4 py-2 text-red-600 hover:text-red-800 transition-colors disabled:opacity-50 text-sm font-medium"
-                >
-                  Delete Response
-                </button>
-              )}
-            </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
+            <button
+              onClick={onClose}
+              className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
+              disabled={loading}
+            >
+              {renumeration.template?.is_active ? 'Cancel' : 'Close'}
+            </button>
+            {(renumeration.status === 'pending' || renumeration.status === 'submitted') && renumeration.template?.is_active && (
               <button
-                onClick={onClose}
-                className="w-full sm:w-auto px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm font-medium"
+                onClick={handleSubmit}
                 disabled={loading}
+                className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
               >
-                {renumeration.template?.is_active ? 'Cancel' : 'Close'}
+                {loading ? 'Saving...' : renumeration.status === 'submitted' ? 'Update Response' : 'Submit Response'}
               </button>
-              {(renumeration.status === 'pending' || renumeration.status === 'submitted') && renumeration.template?.is_active && (
-                <button
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                >
-                  {loading ? 'Saving...' : renumeration.status === 'submitted' ? 'Update Response' : 'Submit Response'}
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
+
+
       </div>
     </div>
   )

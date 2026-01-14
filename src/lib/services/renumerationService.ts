@@ -21,7 +21,7 @@ export interface RenumerationTemplate {
   updated_at: string
 }
 
-export interface PeerTutorRenumeration {
+export interface peertutorsRenumeration {
   id: string
   peer_tutor_id: string
   template_id: string
@@ -52,7 +52,7 @@ export class RenumerationService {
     description: string,
     facultyId: string,
     fields: Omit<RenumerationField, 'id' | 'created_at' | 'updated_at'>[]
-  ): Promise<RenumerationTemplate | null> {
+  ): Promise<{ template: RenumerationTemplate | null; error?: string }> {
     try {
       const supabase = createClient()
       
@@ -76,13 +76,16 @@ export class RenumerationService {
           code: templateError.code,
           fullError: templateError
         })
-        return null
+        return { template: null, error: templateError.message }
       }
 
       // Then create the fields
       const fieldsWithTemplateId = fields.map(field => ({
-        ...field,
-        template_id: template.id
+        template_id: template.id,
+        field_name: field.field_name,
+        field_type: field.field_type,
+        is_mandatory: field.is_mandatory,
+        options: field.field_type === 'dropdown' ? (field.options || []) : []
       }))
 
       console.log('Creating fields for template:', {
@@ -106,7 +109,7 @@ export class RenumerationService {
         })
         // Clean up the template if fields creation failed
         await supabase.from('renumeration_templates').delete().eq('id', template.id)
-        return null
+        return { template: null, error: fieldsError.message }
       }
 
       console.log('Fields created successfully:', {
@@ -116,8 +119,10 @@ export class RenumerationService {
       })
 
       return {
-        ...template,
-        fields: createdFields || []
+        template: {
+          ...template,
+          fields: createdFields || []
+        }
       }
     } catch (error) {
       console.error('Error in createRenumerationTemplate:', {
@@ -125,7 +130,7 @@ export class RenumerationService {
         stack: error instanceof Error ? error.stack : undefined,
         fullError: error
       })
-      return null
+      return { template: null, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
 
@@ -156,27 +161,28 @@ export class RenumerationService {
   /**
    * Send renumeration to all peer tutors
    */
-  static async sendRenumerationToAllPeerTutors(templateId: string): Promise<boolean> {
+  static async sendRenumerationToAllpeerTutor(templateId: string, facultyId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const supabase = createClient()
       
-      // Get all peer tutors
-      const { data: peerTutors, error: tutorsError } = await supabase
+      // Get all peer tutors for this faculty
+      const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('id')
+        .eq('faculty_id', facultyId)
 
       if (tutorsError) {
         console.error('Error getting peer tutors:', tutorsError)
-        return false
+        return { success: false, error: tutorsError.message }
       }
 
-      if (!peerTutors || peerTutors.length === 0) {
-        console.log('No peer tutors found')
-        return true
+      if (!peerTutor || peerTutor.length === 0) {
+        console.log('No peer tutors found for this faculty')
+        return { success: true }
       }
 
       // Create renumeration records for all peer tutors
-      const renumerationRecords = peerTutors.map(tutor => ({
+      const renumerationRecords = peerTutor.map(tutor => ({
         peer_tutor_id: tutor.id,
         template_id: templateId,
         status: 'pending',
@@ -189,13 +195,13 @@ export class RenumerationService {
 
       if (insertError) {
         console.error('Error creating renumeration records:', insertError)
-        return false
+        return { success: false, error: insertError.message }
       }
 
-      return true
+      return { success: true }
     } catch (error) {
-      console.error('Error in sendRenumerationToAllPeerTutors:', error)
-      return false
+      console.error('Error in sendRenumerationToAllpeerTutor:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
 
@@ -230,14 +236,17 @@ export class RenumerationService {
   /**
    * Get renumeration submissions for a faculty
    */
-  static async getRenumerationSubmissions(facultyId: string): Promise<PeerTutorRenumeration[]> {
+  static async getRenumerationSubmissions(facultyId: string): Promise<peertutorsRenumeration[]> {
     try {
       const supabase = createClient()
       
-      // First get all renumeration templates for this faculty
+      // First get all renumeration templates for this faculty with fields
       const { data: templates, error: templatesError } = await supabase
         .from('renumeration_templates')
-        .select('id')
+        .select(`
+          *,
+          fields:renumeration_fields(*)
+        `)
         .eq('faculty_id', facultyId)
 
       if (templatesError) {
@@ -256,6 +265,9 @@ export class RenumerationService {
       }
 
       const templateIds = templates.map(t => t.id)
+      
+      // Create a map of templates by ID for efficient lookup
+      const templateMap = new Map(templates.map(t => [t.id, t]))
 
       // Then get submissions for these templates
       const { data: submissions, error: submissionsError } = await supabase
@@ -275,45 +287,21 @@ export class RenumerationService {
         return []
       }
 
-      // Get template and peer tutor details separately
+      // Enrich submissions with template and peer tutor details
       const enrichedSubmissions = await Promise.all(
         (submissions || []).map(async (submission) => {
-          // Get template details with fields
-          const { data: template, error: templateError } = await supabase
-            .from('renumeration_templates')
-            .select(`
-              *,
-              fields:renumeration_fields(*)
-            `)
-            .eq('id', submission.template_id)
-            .single()
-
-          if (templateError) {
-            console.error('Error getting template details:', {
-              message: templateError.message,
-              details: templateError.details,
-              hint: templateError.hint,
-              code: templateError.code,
-              fullError: templateError
-            })
-          }
-
-          console.log('Template details for submission:', {
-            submissionId: submission.id,
-            templateId: submission.template_id,
-            template,
-            fieldsCount: template?.fields?.length || 0
-          })
+          // Get template from our map (no additional query needed)
+          const template = templateMap.get(submission.template_id)
 
           // Get peer tutor details (note: this might fail due to schema mismatch)
-          let peerTutor = null
+          let peertutors = null
           try {
             const { data: tutor } = await supabase
               .from('peer_tutors')
               .select('id, name, email, dept, year, section')
               .eq('id', submission.peer_tutor_id)
               .single()
-            peerTutor = tutor
+            peertutors = tutor
           } catch (error) {
             console.warn('Could not fetch peer tutor details:', error)
           }
@@ -321,7 +309,7 @@ export class RenumerationService {
           return {
             ...submission,
             template,
-            peer_tutor: peerTutor
+            peer_tutor: peertutors
           }
         })
       )
@@ -340,14 +328,14 @@ export class RenumerationService {
   /**
    * Get renumeration for a specific peer tutor
    */
-  static async getPeerTutorRenumeration(peerTutorId: string): Promise<PeerTutorRenumeration[]> {
+  static async getpeertutorsRenumeration(peertutorsId: string): Promise<peertutorsRenumeration[]> {
     try {
       const supabase = createClient()
       
       const { data: renumeration, error: renumerationError } = await supabase
         .from('peer_tutor_renumerations')
         .select('*')
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .order('created_at', { ascending: false })
 
       if (renumerationError) {
@@ -383,7 +371,7 @@ export class RenumerationService {
 
       return enrichedRenumerations
     } catch (error) {
-      console.error('Error in getPeerTutorRenumeration:', {
+      console.error('Error in getpeertutorsRenumeration:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         fullError: error
@@ -529,7 +517,7 @@ export class RenumerationService {
   /**
    * Get renumeration submissions for a specific template
    */
-  static async getRenumerationSubmissionsByTemplate(templateId: string): Promise<PeerTutorRenumeration[]> {
+  static async getRenumerationSubmissionsByTemplate(templateId: string): Promise<peertutorsRenumeration[]> {
     try {
       const supabase = createClient()
       
@@ -574,14 +562,14 @@ export class RenumerationService {
       // Get peer tutor details for each submission
       const enrichedSubmissions = await Promise.all(
         (submissions || []).map(async (submission) => {
-          let peerTutor = null
+          let peertutors = null
           try {
             const { data: tutor } = await supabase
               .from('peer_tutors')
               .select('id, name, email, dept, year, section')
               .eq('id', submission.peer_tutor_id)
               .single()
-            peerTutor = tutor
+            peertutors = tutor
           } catch (error) {
             console.warn('Could not fetch peer tutor details:', error)
           }
@@ -589,7 +577,7 @@ export class RenumerationService {
           return {
             ...submission,
             template,
-            peer_tutor: peerTutor
+            peer_tutor: peertutors
           }
         })
       )
@@ -625,17 +613,29 @@ export class RenumerationService {
         .eq('faculty_id', facultyId)
 
       // Get submission counts
-      const { data: submissions } = await supabase
-        .from('peer_tutor_renumerations')
-        .select('status')
-        .eq('template.faculty_id', facultyId)
+      // We need to join with renumeration_templates to filter by faculty_id
+      const { data: submissionTemplates, error: submissionsError } = await supabase
+        .from('renumeration_templates')
+        .select(`
+          id,
+          submissions:peer_tutor_renumerations (
+            status
+          )
+        `)
+        .eq('faculty_id', facultyId)
+
+      if (submissionsError) {
+        console.error('Error getting submissions for stats:', submissionsError)
+      }
+
+      const allSubmissions = submissionTemplates?.flatMap(t => t.submissions as unknown as { status: string }[]) || []
 
       const stats = {
         totalTemplates: totalTemplates || 0,
-        totalSubmissions: submissions?.length || 0,
-        pendingSubmissions: submissions?.filter(s => s.status === 'pending').length || 0,
-        approvedSubmissions: submissions?.filter(s => s.status === 'approved').length || 0,
-        rejectedSubmissions: submissions?.filter(s => s.status === 'rejected').length || 0
+        totalSubmissions: allSubmissions.length,
+        pendingSubmissions: allSubmissions.filter(s => s.status === 'pending').length,
+        approvedSubmissions: allSubmissions.filter(s => s.status === 'approved').length,
+        rejectedSubmissions: allSubmissions.filter(s => s.status === 'rejected').length
       }
 
       return stats

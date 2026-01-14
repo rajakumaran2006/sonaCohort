@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { toast } from 'sonner'
 
 import Image from 'next/image'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
@@ -8,8 +9,9 @@ import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { NotificationCenter, Notification } from '@/components/common/NotificationCenter'
+
 import PeerRenumerationModal from '@/components/forms/PeerRenumerationModal'
+import PeerLeaderboard from '@/components/dashboard/PeerLeaderboard'
 import { Card, LoadingSpinner } from '@/components/ui'
 import { 
   ArrowUpRight, 
@@ -19,15 +21,18 @@ import {
 import * as XLSX from 'xlsx'
 import { useQueryClient } from '@tanstack/react-query'
 import { 
-  usePeerTutorInfo, 
+  usepeertutorsInfo, 
   useAssignedStudents, 
   useRenumerations, 
   useClassStats, 
   useStudentAttendanceStats,
   useActiveFeedbackForms,
-  usePendingClassAlert
+  usePendingClassAlert,
+  usePeerLeaderboard
 } from '@/lib/hooks/usePeerDashboardData'
-import { PeerTutorRenumeration } from '@/lib/services/renumerationService'
+import { peertutorsRenumeration } from '@/lib/services/renumerationService'
+
+
 
 export default function PeerDashboardPage() {
   return (
@@ -42,31 +47,32 @@ function PeerDashboardContent() {
   const queryClient = useQueryClient()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [showRenumerationModal, setShowRenumerationModal] = useState(false)
-  const [selectedRenumeration, setSelectedRenumeration] = useState<PeerTutorRenumeration | null>(null)
+  const [selectedRenumeration, setSelectedRenumeration] = useState<peertutorsRenumeration | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Use custom hook for sidebar collapsed state
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
   // --- DATA FETCHING WITH HOOKS ---
-  const { data: peerTutorInfo, isLoading: isTutorLoading } = usePeerTutorInfo(user?.email)
+  const { data: peertutorsInfo, isLoading: isTutorLoading } = usepeertutorsInfo(user?.email)
   
-  const { data: assignedStudents = [], isLoading: isStudentsLoading } = useAssignedStudents(peerTutorInfo?.id)
+  const { data: assignedStudents = [], isLoading: isStudentsLoading } = useAssignedStudents(peertutorsInfo?.id)
   
-  const { data: renumerations = [], isLoading: isRenumerationsLoading } = useRenumerations(peerTutorInfo?.id)
+  const { data: renumerations = [], isLoading: isRenumerationsLoading } = useRenumerations(peertutorsInfo?.id)
   
   // Only fetch class stats if we have students (to match original logic, though strictly not necessary)
-  const { data: classStats, isLoading: isClassStatsLoading } = useClassStats(peerTutorInfo?.id)
+  const { data: classStats, isLoading: isClassStatsLoading } = useClassStats(peertutorsInfo?.id)
   const classesTaken = classStats?.completedClasses ?? 0
   const totalClassesAllocated = classStats?.totalClasses ?? 0
   
-  const { data: studentsWithAttendance = [], isLoading: isAttendanceLoading } = useStudentAttendanceStats(assignedStudents, peerTutorInfo?.id)
+  const { data: studentsWithAttendance = [], isLoading: isAttendanceLoading } = useStudentAttendanceStats(assignedStudents, peertutorsInfo?.id)
 
-  const { data: alertData } = usePendingClassAlert(peerTutorInfo)
+  const { data: alertData } = usePendingClassAlert(peertutorsInfo)
   const showPendingAlert = alertData?.showPendingAlert ?? false
   const consecutivePendingCount = alertData?.consecutivePendingCount ?? 0
 
-  const { data: activeFeedbackForms = [] } = useActiveFeedbackForms(peerTutorInfo?.id)
+  const { data: activeFeedbackForms = [] } = useActiveFeedbackForms(peertutorsInfo?.id)
+  const { data: leaderboardData, isLoading: isLeaderboardLoading } = usePeerLeaderboard(peertutorsInfo)
 
   // Combined Loading State
   // We can be a bit selective about what blocks the UI or show skeletons. 
@@ -78,7 +84,7 @@ function PeerDashboardContent() {
 
   const handleExportToExcel = () => {
     if (studentsWithAttendance.length === 0) {
-      alert('No data to export')
+      toast.error('No data to export')
       return
     }
 
@@ -104,7 +110,7 @@ function PeerDashboardContent() {
     setIsRefreshing(true)
     try {
         await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ['peerTutor'] }),
+            queryClient.invalidateQueries({ queryKey: ['peertutors'] }),
             queryClient.invalidateQueries({ queryKey: ['assignedStudents'] }),
             queryClient.invalidateQueries({ queryKey: ['renumerations'] }),
             queryClient.invalidateQueries({ queryKey: ['classStats'] }),
@@ -121,66 +127,13 @@ function PeerDashboardContent() {
     ? Math.round((classesTaken / totalClassesAllocated) * 100) 
     : 0
 
-  const notifications: Notification[] = useMemo(() => {
-    const items: Notification[] = []
 
-    // 1. Pending Renumerations
-    renumerations.forEach(r => {
-      if (r.status === 'pending') {
-        items.push({
-          id: `renum-${r.id}`,
-          title: 'Renumeration Pending',
-          message: `${r.template?.name || 'Form'} is waiting for your submission.`,
-          type: 'action_required',
-          timestamp: new Date(r.created_at),
-          read: false,
-          actionLabel: 'Fill Form',
-          onClick: () => {
-            setSelectedRenumeration(r)
-            setShowRenumerationModal(true)
-          }
-        })
-      }
-    })
-
-    // 2. Active Feedback Forms
-    activeFeedbackForms.forEach(f => {
-      items.push({
-        id: `feedback-${f.id}`,
-        title: 'Feedback Requested',
-        message: `Please submit feedback for ${f.name}.`,
-        type: 'action_required',
-        timestamp: new Date(f.created_at),
-        read: false, 
-        actionLabel: 'View Details',
-        onClick: () => {
-
-        }
-      })
-    })
-
-    // 3. Pending Classes Alert
-    if (showPendingAlert) {
-      items.push({
-        id: 'pending-alert',
-        title: 'Class Completion Pending',
-        message: `You have ${consecutivePendingCount} classes pending. Action required.`,
-        type: 'warning',
-        timestamp: new Date(),
-        read: false,
-      })
-    }
-
-
-
-    return items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-  }, [renumerations, activeFeedbackForms, showPendingAlert, consecutivePendingCount])
 
   return (
     <div className="min-h-screen bg-[#F8F9FA]">
       <PeerSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col`}>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
         <PageHeader
           title="DASHBOARD"
           tagline="Role & Performance Overview"
@@ -188,9 +141,7 @@ function PeerDashboardContent() {
           isRefreshing={isRefreshing}
           onToggleSidebar={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
-        >
-          <NotificationCenter notifications={notifications} />
-        </PageHeader>
+        />
 
         <main className="flex-1 p-6 overflow-y-auto bg-gray-50/50">
           <div className="max-w-[1600px] mx-auto w-full">
@@ -216,7 +167,7 @@ function PeerDashboardContent() {
             )}
 
             {loading ? (
-              <div className="flex items-center justify-center py-32">
+              <div className="flex items-center justify-center min-h-[70vh]">
                 <LoadingSpinner size="lg" className="mr-3" />
                 <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Loading...</span>
               </div>
@@ -230,26 +181,25 @@ function PeerDashboardContent() {
                   <div className="bg-gradient-to-br from-[#1C2434] to-[#2D3748] text-white rounded-[2rem] p-8 relative overflow-hidden shadow-2xl border border-white/10 group">
                     <div className="relative z-10">
                       <div className="flex items-center gap-2 mb-6">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]"></span>
                         <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">Assignment Profile</span>
                       </div>
                       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                         <div>
                           <p className="text-sm text-gray-400 font-bold mb-1 uppercase tracking-wider">
-                            {peerTutorInfo?.dept || 'Department'}
+                            {peertutorsInfo?.dept || 'Department'}
                           </p>
                           <h3 className="text-3xl font-black tracking-tight mb-4 leading-none text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
-                            {peerTutorInfo?.name || 'Peer Tutor'}
+                            {peertutorsInfo?.name || 'Peer Tutor'}
                           </h3>
                           <div className="flex flex-wrap gap-2 mt-2">
-                             {peerTutorInfo?.year && (
+                             {peertutorsInfo?.year && (
                                <span className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-lg text-[10px] font-bold border border-white/5 text-gray-300 uppercase tracking-wider">
-                                 Year {peerTutorInfo.year}
+                                 Year {peertutorsInfo.year}
                                </span>
                              )}
-                             {peerTutorInfo?.section && (
+                             {peertutorsInfo?.section && (
                                <span className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-lg text-[10px] font-bold border border-white/5 text-gray-300 uppercase tracking-wider">
-                                 Section {peerTutorInfo.section}
+                                 Section {peertutorsInfo.section}
                                </span>
                              )}
                           </div>
@@ -290,7 +240,7 @@ function PeerDashboardContent() {
                           className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-[10px] font-black text-gray-600 uppercase tracking-widest transition-all border border-transparent hover:border-gray-200"
                         >
                           <ArrowUpRight size={12} />
-                          Export List
+                          Export
                         </button>
                       )}
                     </div>
@@ -303,26 +253,26 @@ function PeerDashboardContent() {
                     ) : studentsWithAttendance.length > 0 ? (
                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 max-h-[500px]">
                           {studentsWithAttendance.map((student: { id: string; name: string; email: string; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number }) => (
-                             <div key={student.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-white transition-all duration-300 group cursor-default">
-                                <div className="flex items-center gap-4">
-                                   <div className="w-12 h-12 rounded-xl bg-[#1C2434] text-white flex items-center justify-center text-xs font-bold shadow-md shadow-gray-200 group-hover:scale-105 transition-transform duration-300">
+                             <div key={student.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-white transition-all duration-300 group cursor-default gap-3 sm:gap-0">
+                                <div className="flex items-center gap-4 w-full sm:w-auto">
+                                   <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#1C2434] text-white flex items-center justify-center text-[10px] sm:text-xs font-bold shadow-md shadow-gray-200 group-hover:scale-105 transition-transform duration-300 flex-shrink-0">
                                       {student.name.substring(0, 2).toUpperCase()}
                                    </div>
-                                   <div>
-                                      <h5 className="text-[13px] font-bold text-gray-900 leading-tight mb-1 group-hover:text-blue-600 transition-colors">{student.name}</h5>
-                                      <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                                   <div className="min-w-0 flex-1">
+                                      <h5 className="text-xs sm:text-[13px] font-bold text-gray-900 leading-tight mb-1 group-hover:text-blue-600 transition-colors truncate">{student.name}</h5>
+                                      <div className="flex flex-wrap items-center gap-2 text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wide">
                                          <span>{student.dept}</span>
                                          <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                                         <span>Year {student.year}</span>
+                                         <span>Yr {student.year}</span>
                                          <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                                         <span>{student.email}</span>
+                                         <span className="truncate max-w-[120px] sm:max-w-none">{student.email}</span>
                                       </div>
                                    </div>
                                 </div>
-                                <div className="flex flex-col items-end gap-1">
-                                   <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-                                      student.attendancePercentage >= 75 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                                      student.attendancePercentage >= 60 ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-red-50 text-red-600 border-red-100'
+                                <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 sm:gap-1 pl-[56px] sm:pl-0">
+                                   <div className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider border ${
+                                      student.attendancePercentage >= 75 ? 'bg-gray-100 text-black border-black' : 
+                                      student.attendancePercentage >= 60 ? 'bg-gray-100 text-black border-black' : 'bg-gray-100 text-black border-black'
                                    }`}>
                                       {student.attendancePercentage}% Attendance
                                    </div>
@@ -353,11 +303,11 @@ function PeerDashboardContent() {
                   {/* Class Progress Card */}
 
                   <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 relative overflow-hidden group hover:shadow-md transition-shadow duration-300">
-                     <div className="flex flex-row items-center justify-between mb-6">
+                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3 sm:gap-0">
                        <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Class Progress</h4>
                        <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                          completionPercentage >= 75 ? 'bg-emerald-50 text-emerald-600' :
-                          completionPercentage >= 40 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'
+                          completionPercentage >= 75 ? 'bg-gray-100 text-black-600' :
+                          completionPercentage >= 40 ? 'bg-gray-100 text-black' : 'bg-gray-100 text-black'
                        }`}>
                           {completionPercentage >= 75 ? 'Excellent' :
                            completionPercentage >= 40 ? 'In Progress' : 'Behind'}
@@ -407,78 +357,79 @@ function PeerDashboardContent() {
                      </div>
                   </Card>
 
+                  {/* Leaderboard Section */}
+                   <div className="h-[300px]">
+                      <PeerLeaderboard 
+                        data={leaderboardData} 
+                        loading={isLeaderboardLoading} 
+                        currentUserId={peertutorsInfo?.id} 
+                      />
+                   </div>
 
-                  {/* Renumeration Section */}
-                  <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 flex-1 overflow-hidden">
-                     <div className="flex flex-row items-center justify-between mb-8 border-b border-gray-50 pb-4">
-                        <div className="flex items-center gap-2">
-                           <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Renumeration Reports</h4>
-                           {renumerations.filter(r => r.status === 'pending').length > 0 && (
-                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                           )}
-                        </div>
-                        <MoreHorizontal className="w-5 h-5 text-gray-300" />
-                     </div>
-                     
-                     <div className="space-y-3">
-                        {renumerations.length > 0 ? (
-                           renumerations.map((renumeration) => (
-                              <div key={renumeration.id} className="p-4 rounded-2xl bg-gray-50 border border-transparent hover:border-purple-100 hover:bg-white transition-all duration-300 group">
-                                 <div className="flex justify-between items-start mb-2">
-                                    <h5 className="text-[11px] font-black text-gray-900 uppercase tracking-tight line-clamp-1 group-hover:text-purple-600 transition-colors">
-                                       {renumeration.template?.name}
-                                    </h5>
-                                    <StatusBadge status={renumeration.status} />
-                                 </div>
-                                 <p className="text-[10px] text-gray-400 font-medium mb-3 line-clamp-2 leading-relaxed">
-                                    {renumeration.template?.description || 'No description available'}
-                                 </p>
-                                 
-                                 <div className="flex items-center justify-between pt-2 border-t border-gray-100/50">
-                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                                       {renumeration.submitted_at 
-                                          ? new Date(renumeration.submitted_at).toLocaleDateString()
-                                          : 'Pending Submission'
-                                       }
-                                    </span>
-                                    
-                                    {!renumeration.template?.is_active ? (
-                                       <span className="text-[9px] font-black text-gray-400 italic uppercase">Closed</span>
-                                    ) : renumeration.status === 'pending' ? (
-                                       <button
-                                          onClick={() => {
-                                             setSelectedRenumeration(renumeration)
-                                             setShowRenumerationModal(true)
-                                          }}
-                                          className="text-[9px] font-black text-white bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded-lg uppercase tracking-widest transition-all shadow-sm hover:shadow-purple-500/20"
-                                       >
-                                          Fill Form
-                                       </button>
-                                    ) : (
-                                       <button
-                                          onClick={() => {
-                                             setSelectedRenumeration(renumeration)
-                                             setShowRenumerationModal(true)
-                                          }}
-                                          className="text-[9px] font-black text-purple-600 hover:text-purple-700 uppercase tracking-widest flex items-center gap-1 group/btn"
-                                       >
-                                          View <ChevronRight size={10} className="group-hover/btn:translate-x-0.5 transition-transform" />
-                                       </button>
-                                    )}
-                                 </div>
-                              </div>
-                           ))
-                        ) : (
-                           <div className="py-12 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
-                   <Image src="/icons/search.png" alt="search" width={64} height={64} />
-               </div>
-                              <p className="text-xs font-black text-gray-900 uppercase tracking-widest mb-1">No Active Forms</p>
-                              <p className="text-[10px] text-gray-400 max-w-[200px] font-medium leading-relaxed">Renumeration forms will appear here.</p>
-                           </div>
-                        )}
-                     </div>
-                  </Card>
+
+                  {/* Renumeration Section - Only show if there are forms */}
+                  {renumerations.length > 0 && (
+                    <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 flex-1 overflow-hidden">
+                       <div className="flex flex-row items-center justify-between mb-8 border-b border-gray-50 pb-4">
+                          <div className="flex items-center gap-2">
+                             <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Renumeration Reports</h4>
+                             {renumerations.filter(r => r.status === 'pending').length > 0 && (
+                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                             )}
+                          </div>
+                          <MoreHorizontal className="w-5 h-5 text-gray-300" />
+                       </div>
+                       
+                       <div className="space-y-3">
+                          {renumerations.map((renumeration) => (
+                             <div key={renumeration.id} className="p-4 rounded-2xl bg-gray-50 border border-transparent hover:border-purple-100 hover:bg-white transition-all duration-300 group">
+                                <div className="flex justify-between items-start mb-2">
+                                   <h5 className="text-[11px] font-black text-gray-900 uppercase tracking-tight line-clamp-1 group-hover:text-purple-600 transition-colors">
+                                      {renumeration.template?.name}
+                                   </h5>
+                                   <StatusBadge status={renumeration.status} />
+                                </div>
+                                <p className="text-[10px] text-gray-400 font-medium mb-3 line-clamp-2 leading-relaxed">
+                                   {renumeration.template?.description || 'No description available'}
+                                </p>
+                                
+                                <div className="flex items-center justify-between pt-2 border-t border-gray-100/50">
+                                   <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                      {renumeration.submitted_at 
+                                         ? new Date(renumeration.submitted_at).toLocaleDateString()
+                                         : 'Pending Submission'
+                                      }
+                                   </span>
+                                   
+                                   {!renumeration.template?.is_active ? (
+                                      <span className="text-[9px] font-black text-gray-400 italic uppercase">Closed</span>
+                                   ) : renumeration.status === 'pending' ? (
+                                      <button
+                                         onClick={() => {
+                                            setSelectedRenumeration(renumeration)
+                                            setShowRenumerationModal(true)
+                                         }}
+                                         className="text-[9px] font-black text-white bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded-lg uppercase tracking-widest transition-all shadow-sm hover:shadow-purple-500/20"
+                                      >
+                                         Fill Form
+                                      </button>
+                                   ) : (
+                                      <button
+                                         onClick={() => {
+                                            setSelectedRenumeration(renumeration)
+                                            setShowRenumerationModal(true)
+                                         }}
+                                         className="text-[9px] font-black text-purple-600 hover:text-purple-700 uppercase tracking-widest flex items-center gap-1 group/btn"
+                                      >
+                                         View <ChevronRight size={10} className="group-hover/btn:translate-x-0.5 transition-transform" />
+                                      </button>
+                                   )}
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+                    </Card>
+                  )}
                 </div>
               </div>
             )}

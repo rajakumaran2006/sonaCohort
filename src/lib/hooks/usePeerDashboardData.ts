@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { RenumerationService } from '@/lib/services/renumerationService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
@@ -7,14 +7,18 @@ import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/ser
 import { AttendanceService } from '@/lib/services/attendanceService'
 import { FeedbackService } from '@/lib/services/feedbackService'
 import { Student } from '@/lib/services/studentService'
+import { peertutorservice } from '@/lib/services/peerTutorService'
+import { ExamService } from '@/lib/services/examService'
+import { ExamMarksService } from '@/lib/services/examMarksService'
+import { calculatepeertutorsAscendScore } from '@/lib/utils/ascendScore'
 
 // 1. Peer Tutor Info Hook
-export function usePeerTutorInfo(email: string | null | undefined) {
+export function usepeertutorsInfo(email: string | null | undefined) {
   return useQuery({
-    queryKey: ['peerTutor', email],
+    queryKey: ['peertutors', email],
     queryFn: async () => {
       if (!email) return null
-      return await PeerTutorAuthService.getPeerTutorByEmail(email)
+      return await peertutorsAuthService.getpeertutorsByEmail(email)
     },
     enabled: !!email,
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -22,56 +26,56 @@ export function usePeerTutorInfo(email: string | null | undefined) {
 }
 
 // 2. Assigned Students Hook
-export function useAssignedStudents(peerTutorId: string | undefined) {
+export function useAssignedStudents(peertutorsId: string | undefined) {
   return useQuery({
-    queryKey: ['assignedStudents', peerTutorId],
+    queryKey: ['assignedStudents', peertutorsId],
     queryFn: async () => {
-      if (!peerTutorId) return []
-      return await AssignmentService.getStudentsByPeerTutor(peerTutorId)
+      if (!peertutorsId) return []
+      return await AssignmentService.getStudentsBypeertutors(peertutorsId)
     },
-    enabled: !!peerTutorId,
+    enabled: !!peertutorsId,
     staleTime: 5 * 60 * 1000,
   })
 }
 
 // 3. Renumerations Hook
-export function useRenumerations(peerTutorId: string | undefined) {
+export function useRenumerations(peertutorsId: string | undefined) {
   return useQuery({
-    queryKey: ['renumerations', peerTutorId],
+    queryKey: ['renumerations', peertutorsId],
     queryFn: async () => {
-      if (!peerTutorId) return []
-      return await RenumerationService.getPeerTutorRenumeration(peerTutorId)
+      if (!peertutorsId) return []
+      return await RenumerationService.getpeertutorsRenumeration(peertutorsId)
     },
-    enabled: !!peerTutorId,
+    enabled: !!peertutorsId,
     staleTime: 5 * 60 * 1000,
   })
 }
 
 // 4. Class Stats Hook
-export function useClassStats(peerTutorId: string | undefined) {
+export function useClassStats(peertutorsId: string | undefined) {
   return useQuery({
-    queryKey: ['classStats', peerTutorId],
+    queryKey: ['classStats', peertutorsId],
     queryFn: async () => {
-      if (!peerTutorId) return { completedClasses: 0, totalClasses: 0 }
-      return await ScheduledClassService.getPeerTutorClassStats(peerTutorId)
+      if (!peertutorsId) return { completedClasses: 0, totalClasses: 0 }
+      return await ScheduledClassService.getpeertutorsClassStats(peertutorsId)
     },
-    enabled: !!peerTutorId,
+    enabled: !!peertutorsId,
     initialData: { completedClasses: 0, totalClasses: 0 },
     staleTime: 5 * 60 * 1000,
   })
 }
 
 // 5. Student Attendance Stats Hook (Complex)
-export function useStudentAttendanceStats(students: Student[] | undefined, peerTutorId: string | undefined) {
+export function useStudentAttendanceStats(students: Student[] | undefined, peertutorsId: string | undefined) {
   return useQuery({
-    queryKey: ['studentAttendance', peerTutorId, students?.length],
+    queryKey: ['studentAttendance', peertutorsId, students?.length],
     queryFn: async () => {
-      if (!students || !peerTutorId) return []
+      if (!students || !peertutorsId) return []
       
       const studentsWithStats = await Promise.all(
         students.map(async (student) => {
           try {
-            const attendanceRecords = await AttendanceService.getStudentAttendanceHistory(student.id, peerTutorId)
+            const attendanceRecords = await AttendanceService.getStudentAttendanceHistory(student.id, peertutorsId)
             
             const presentCount = attendanceRecords.filter(record => record.status === 'present').length
             const absentCount = attendanceRecords.filter(record => record.status === 'absent').length
@@ -109,47 +113,48 @@ export function useStudentAttendanceStats(students: Student[] | undefined, peerT
       )
       return studentsWithStats
     },
-    enabled: !!peerTutorId && !!students && students.length > 0,
+    enabled: !!peertutorsId && !!students && students.length > 0,
     staleTime: 5 * 60 * 1000,
   })
 }
 
 // 6. Feedback Forms Hook
-export function useActiveFeedbackForms(peerTutorId: string | undefined) {
+export function useActiveFeedbackForms(peertutorsId: string | undefined) {
     return useQuery({
-        queryKey: ['activeFeedbackForms', peerTutorId],
+        queryKey: ['activeFeedbackForms', peertutorsId],
         queryFn: async () => {
-            if (!peerTutorId) return []
+            if (!peertutorsId) return []
             const feedbackForms = await FeedbackService.getActiveFeedbackForms()
             const formsWithStatus = await Promise.all(feedbackForms.map(async (form) => {
-                const hasSubmitted = await FeedbackService.hasStudentSubmittedFeedback(form.id, peerTutorId)
+                const hasSubmitted = await FeedbackService.hasStudentSubmittedFeedback(form.id, peertutorsId)
                 return { ...form, hasSubmitted }
             }))
             return formsWithStatus.filter(f => !f.hasSubmitted)
         },
-        enabled: !!peerTutorId,
+        enabled: !!peertutorsId,
         staleTime: 5 * 60 * 1000
     })
 }
 
 // 7. Pending Class Alert Hook (Logic Extracted)
-export function usePendingClassAlert(peerTutorInfo: { id?: string, dept?: string, year?: string, section?: string } | null | undefined) {
+export function usePendingClassAlert(peertutorsInfo: { id?: string, dept?: string, year?: string, section?: string } | null | undefined) {
     return useQuery({
-        queryKey: ['pendingClassAlert', peerTutorInfo?.id, peerTutorInfo?.dept, peerTutorInfo?.year, peerTutorInfo?.section],
+        queryKey: ['pendingClassAlert', peertutorsInfo?.id, peertutorsInfo?.dept, peertutorsInfo?.year, peertutorsInfo?.section],
         queryFn: async () => {
-             if (!peerTutorInfo?.id || !peerTutorInfo?.dept || !peerTutorInfo?.year || !peerTutorInfo?.section) {
+             if (!peertutorsInfo?.id || !peertutorsInfo?.dept || !peertutorsInfo?.year || !peertutorsInfo?.section) {
                  return { showPendingAlert: false, consecutivePendingCount: 0 }
              }
 
              // Fetch scheduled classes
              const scheduledPromise = ScheduledClassService.getScheduledClassesByDate(
-                peerTutorInfo.dept,
-                peerTutorInfo.year,
-                peerTutorInfo.section
+                peertutorsInfo.dept,
+                peertutorsInfo.year,
+                peertutorsInfo.section,
+                peertutorsInfo.id
              )
              
              // Fetch additional classes (these count as completed classes)
-             const additionalPromise = AdditionalClassService.getAdditionalClassesByPeerTutor(peerTutorInfo.id)
+             const additionalPromise = AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsInfo.id)
 
              const [scheduledClasses, additionalClasses] = await Promise.all([scheduledPromise, additionalPromise])
 
@@ -222,7 +227,99 @@ export function usePendingClassAlert(peerTutorInfo: { id?: string, dept?: string
                  consecutivePendingCount: streak
              }
         },
-        enabled: !!peerTutorInfo?.id && !!peerTutorInfo?.dept,
+        enabled: !!peertutorsInfo?.id && !!peertutorsInfo?.dept,
         staleTime: 5 * 60 * 1000,
     })
+}
+
+// 8. Leaderboard Hook
+export function usePeerLeaderboard(peertutorsInfo: { id?: string, dept?: string, year?: string } | null | undefined) {
+  return useQuery({
+    queryKey: ['peerLeaderboard', peertutorsInfo?.dept, peertutorsInfo?.year],
+    queryFn: async () => {
+      if (!peertutorsInfo?.dept || !peertutorsInfo?.year || !peertutorsInfo?.id) return null
+
+      // 1. Get all peer tutors in the same department
+      const allTutors = await peertutorservice.getpeerTutorByDepartment(peertutorsInfo.dept)
+      
+      // 2. Filter by same year
+      const sameYearTutors = allTutors.filter(t => t.year === peertutorsInfo.year)
+
+      // 3. Get latest exam (needed for Ascend Score)
+      const allExams = await ExamService.getAllExams()
+      // Filter exams relevant to this year group and sort by latest
+      const examsForYear = allExams
+        .filter(e => e.years.includes(peertutorsInfo.year!) || e.years.includes(peertutorsInfo.year! + 'nd Year') || e.years.includes(peertutorsInfo.year! + 'rd Year') || e.years.includes(peertutorsInfo.year! + 'th Year')) // Flexible matching
+        .sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      
+      const latestExam = examsForYear.length > 0 ? examsForYear[0] : null
+
+      // 4. fetch stats/score for each
+      const tutorsWithStats = await Promise.all(
+        sameYearTutors.map(async (tutor) => {
+          try {
+            let score = 0
+            if (latestExam) {
+                 // Fetch marks for Ascend Score
+                 const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(tutor.id, latestExam.id)
+                 const students = await AssignmentService.getStudentsBypeertutors(tutor.id)
+                 
+                 // Construct structure for calculation
+                 // allStudentsMarks: Record<string, Record<string, Record<string, number | string>>>
+                 // { studentId: { subjectId: { marks: value } } }
+                  const allStudentsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
+
+                  students.forEach(student => {
+                    allStudentsMarks[student.id] = {}
+                    marks.forEach(mark => {
+                      if (mark.student_id === student.id && mark.exam_subject_id) {
+                         if (!allStudentsMarks[student.id][mark.exam_subject_id]) {
+                           allStudentsMarks[student.id][mark.exam_subject_id] = {}
+                         }
+                         if (mark.marks) {
+                           Object.assign(allStudentsMarks[student.id][mark.exam_subject_id], mark.marks)
+                         }
+                      }
+                    })
+                  })
+
+                 score = calculatepeertutorsAscendScore(allStudentsMarks, latestExam.max_marks || 100)
+            } else {
+                 // If no exam, default to 0
+                 score = 0
+            }
+
+            // Also fetch classes stats for total count if needed (optional)
+            const stats = await ScheduledClassService.getpeertutorsClassStats(tutor.id)
+
+            return {
+              id: tutor.id,
+              name: tutor.name,
+              score: score, // Ascend Score
+              total: stats.totalClasses
+            }
+          } catch (e) {
+            return { id: tutor.id, name: tutor.name, score: 0, total: 0 }
+          }
+        })
+      )
+
+      // 5. Sort by score (descending)
+      tutorsWithStats.sort((a, b) => b.score - a.score)
+
+      // 6. Find current user rank
+      const myRankIndex = tutorsWithStats.findIndex(t => t.id === peertutorsInfo.id)
+      const myRank = myRankIndex !== -1 ? myRankIndex + 1 : 0
+      
+      // 7. Return top 3 and my rank info
+      return {
+        topThree: tutorsWithStats.slice(0, 3),
+        myRank,
+        myStats: myRankIndex !== -1 ? tutorsWithStats[myRankIndex] : null,
+        totalPeers: tutorsWithStats.length
+      }
+    },
+    enabled: !!peertutorsInfo?.dept && !!peertutorsInfo?.year && !!peertutorsInfo?.id,
+    staleTime: 10 * 60 * 1000 // 10 minutes
+  })
 }

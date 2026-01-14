@@ -4,6 +4,7 @@ import { useState } from 'react'
 import * as XLSX from 'xlsx'
 import { Class } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
+import { toast } from 'sonner'
 
 interface ClassesExportModalProps {
   filteredClasses: Class[]
@@ -40,7 +41,7 @@ export default function ClassesExportModal({
       setIsExporting(true)
 
       if (filteredClasses.length === 0) {
-        alert('No classes to export.')
+        toast.warning('No classes to export.')
         setIsExporting(false)
         return
       }
@@ -79,7 +80,7 @@ export default function ClassesExportModal({
       onClose()
     } catch (error) {
       console.error('Error exporting classes:', error)
-      alert('Error exporting data. Please try again.')
+      toast.error('Error exporting data. Please try again.')
     } finally {
       setIsExporting(false)
     }
@@ -181,7 +182,7 @@ export default function ClassesExportModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">

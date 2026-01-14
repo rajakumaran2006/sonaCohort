@@ -129,7 +129,7 @@ export class ExamSubjectService {
    */
   static async initializeSubjectsFromClasses(
     examId: string,
-    peerTutorId: string,
+    peertutorsId: string,
     dept: string,
     year: string,
     section: string

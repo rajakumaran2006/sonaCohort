@@ -2,19 +2,20 @@
 import React, { useState } from 'react'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as XLSX from 'xlsx'
-import { PeerTutorReportData } from '@/lib/services/reportService'
+import { peertutorsReportData } from '@/lib/services/reportService'
 import { ReportService } from '@/lib/services/reportService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import ExcelPreviewModal from './ExcelPreviewModal'
+import { toast } from 'sonner'
 
 interface ExcelExportModalProps {
   isOpen: boolean
   onClose: () => void
-  peerTutorInfo: { id: string; name: string } | null
-  reportData: PeerTutorReportData | null
+  peertutorsInfo: { id: string; name: string } | null
+  reportData: peertutorsReportData | null
 }
 
-export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, reportData }: ExcelExportModalProps) {
+export default function ExcelExportModal({ isOpen, onClose, peertutorsInfo, reportData }: ExcelExportModalProps) {
   const [numHeaders, setNumHeaders] = useState<number>(1)
   const [extraHeaders, setExtraHeaders] = useState<string[]>([''])
   const [exporting, setExporting] = useState(false)
@@ -38,7 +39,7 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
   }
 
   const handleExport = async () => {
-    if (!reportData || !peerTutorInfo) return
+    if (!reportData || !peertutorsInfo) return
 
     setExporting(true)
     try {
@@ -78,16 +79,16 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
       data.push(new Array(5).fill(''))
 
       // Add peer tutor information row
-      const peerTutorRow = new Array(5).fill('')
-      peerTutorRow[0] = `Peer Tutor Name: ${peerTutorInfo.name}`
-      peerTutorRow[3] = `Dept/Year: ${reportData.dept}/${reportData.year}`
-      data.push(peerTutorRow)
+      const peertutorsRow = new Array(5).fill('')
+      peertutorsRow[0] = `Peer Tutor Name: ${peertutorsInfo.name}`
+      peertutorsRow[3] = `Dept/Year: ${reportData.dept}/${reportData.year}`
+      data.push(peertutorsRow)
 
       // Add another empty row for spacing
       data.push(new Array(5).fill(''))
 
       // Get all additional classes first
-      const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(peerTutorInfo.id)
+      const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsInfo.id)
       
       // Group additional classes by subject
       const additionalClassesBySubject = additionalClasses.reduce((acc, additionalClass) => {
@@ -107,7 +108,7 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
       // Process each subject
       for (const subject of reportData.subjects) {
         // Get scheduled classes for this subject
-        const scheduledClasses = await ReportService.getSubjectScheduledClasses(peerTutorInfo.id, subject.subject_name)
+        const scheduledClasses = await ReportService.getSubjectScheduledClasses(peertutorsInfo.id, subject.subject_name)
         
         // Get additional classes for this subject
         const subjectAdditionalClasses = additionalClassesBySubject[subject.subject_name] || []
@@ -271,15 +272,15 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
       }
 
       // Format peer tutor info row (left align for name, right align for dept/year)
-      const peerTutorRowIndex = numHeaders + extraHeaders.filter(h => h.trim()).length + 2
-      if (worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 0 })]) {
-        ;(worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 0 })] as any).s = {
+      const peertutorsRowIndex = numHeaders + extraHeaders.filter(h => h.trim()).length + 2
+      if (worksheet[XLSX.utils.encode_cell({ r: peertutorsRowIndex, c: 0 })]) {
+        ;(worksheet[XLSX.utils.encode_cell({ r: peertutorsRowIndex, c: 0 })] as any).s = {
           font: { name: 'Times New Roman', sz: 11, bold: true },
           alignment: { horizontal: 'left', vertical: 'center' }
         }
       }
-      if (worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 3 })]) {
-        ;(worksheet[XLSX.utils.encode_cell({ r: peerTutorRowIndex, c: 3 })] as any).s = {
+      if (worksheet[XLSX.utils.encode_cell({ r: peertutorsRowIndex, c: 3 })]) {
+        ;(worksheet[XLSX.utils.encode_cell({ r: peertutorsRowIndex, c: 3 })] as any).s = {
           font: { name: 'Times New Roman', sz: 11, bold: true },
           alignment: { horizontal: 'right', vertical: 'center' }
         }
@@ -316,7 +317,7 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Peer Tutor Report')
 
       // Generate filename
-      const fileName = `Peer_Tutor_Report_${peerTutorInfo.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
+      const fileName = `Peer_Tutor_Report_${peertutorsInfo.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
 
       // Save file
       XLSX.writeFile(workbook, fileName)
@@ -325,14 +326,14 @@ export default function ExcelExportModal({ isOpen, onClose, peerTutorInfo, repor
       onClose()
     } catch (error) {
       console.error('Error exporting Excel:', error)
-      alert('Error exporting Excel file. Please try again.')
+      toast.error('Error exporting Excel file. Please try again.')
     } finally {
       setExporting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
         <div className="px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-medium text-gray-900">Export Excel Report</h3>

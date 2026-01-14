@@ -285,7 +285,7 @@ export default function AddStudentModal({
             {(getDisplayedStudents().length > 0) ? (
               <div className="flex flex-col h-full animate-in fade-in duration-300">
                 {/* Table Header */}
-                <div className="bg-gray-50/80 border-b border-gray-200 px-6 py-3 grid grid-cols-[auto_1fr_1.5fr] gap-4 items-center shrink-0">
+                <div className="bg-gray-50/80 border-b border-gray-200 px-6 py-3 grid grid-cols-[auto_1.5fr_2fr_0.8fr_0.8fr] gap-4 items-center shrink-0">
                   <div className="w-5 flex items-center justify-center">
                     {viewMode === 'all' && searchQuery ? (
                       <input
@@ -300,6 +300,8 @@ export default function AddStudentModal({
                   </div>
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Student Name</div>
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Email Address</div>
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Year</div>
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Section</div>
                 </div>
 
                 {/* Table Body (Scrollable) */}
@@ -312,7 +314,7 @@ export default function AddStudentModal({
                         key={email || index}
                         onClick={() => handleToggleStudent(student)}
                         className={cn(
-                          "px-6 py-4 grid grid-cols-[auto_1fr_1.5fr] gap-4 items-center border-b border-gray-100 last:border-0 cursor-pointer transition-all duration-200 group",
+                          "px-6 py-4 grid grid-cols-[auto_1.5fr_2fr_0.8fr_0.8fr] gap-4 items-center border-b border-gray-100 last:border-0 cursor-pointer transition-all duration-200 group",
                           isSelected ? "bg-gray-100 hover:bg-gray-200" : "hover:bg-gray-50"
                         )}
                       >
@@ -341,6 +343,12 @@ export default function AddStudentModal({
                           <span className={isSelected ? "text-gray-700" : "text-gray-500"}>
                             {email || 'No email provided'}
                           </span>
+                        </div>
+                        <div className={cn("text-sm text-center font-medium", isSelected ? "text-gray-900" : "text-gray-500")}>
+                          {year}
+                        </div>
+                        <div className={cn("text-sm text-center font-medium", isSelected ? "text-gray-900" : "text-gray-500")}>
+                          {section}
                         </div>
                       </div>
                     )

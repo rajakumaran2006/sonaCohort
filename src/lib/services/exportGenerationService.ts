@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx'
 import { ScheduledClassService } from './scheduledClassService'
 import { AttendanceService } from './attendanceService'
-import { PeerTutorService } from './peerTutorService'
+import { peertutorservice } from './peerTutorService'
 import { StudentService } from './studentService'
 import { ExamService } from './examService'
 import { ExamMarksService } from './examMarksService'
@@ -52,7 +52,7 @@ export class ExportGenerationService {
         return this.generateAttendanceReport(department)
       
       case 'peer-tutors-list':
-        return this.generatePeerTutorsList(department)
+        return this.generatepeerTutorList(department)
       
       case 'classes-export':
         return this.generateClassesSchedule(department)
@@ -62,10 +62,10 @@ export class ExportGenerationService {
         return this.generateAllExamsData(department)
 
       case 'peer-tutor-marks':
-        return this.generatePeerTutorMarks(department)
+        return this.generatepeertutorsMarks(department)
         
       case 'peer-tutor-reports':
-        return this.generatePeerTutorReports(department)
+        return this.generatepeertutorsReports(department)
         
       default:
         console.warn(`Unknown export ID: ${exportId}`)
@@ -114,11 +114,11 @@ export class ExportGenerationService {
   /**
    * Generate peer tutor marks
    */
-  private static async generatePeerTutorMarks(department: string): Promise<ExportFile> {
+  private static async generatepeertutorsMarks(department: string): Promise<ExportFile> {
     const workbook = XLSX.utils.book_new()
     
     // Get all peer tutors in department
-    const peerTutors = await PeerTutorService.getPeerTutorsByDepartment(department)
+    const peerTutor = await peertutorservice.getpeerTutorByDepartment(department)
     const exams = await ExamService.getAllExams()
     
     // Prepare data
@@ -133,7 +133,7 @@ export class ExportGenerationService {
     // but we don't have a direct service method for "all marks by department".
     // For now, iterate through peer tutors and exams (could be slow for large datasets, but acceptable for MVP)
     
-    for (const tutor of peerTutors) {
+    for (const tutor of peerTutor) {
         // Optimization: In a real app, fetch all marks for department in one query.
         // For now, we'll just list the tutors. 
         // A proper implementation requires dedicated service methods to fetch marks by department.
@@ -142,7 +142,7 @@ export class ExportGenerationService {
         
         // Let's try to fetch marks for each exam for this tutor
         for (const exam of exams) {
-            const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(tutor.id, exam.id)
+            const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(tutor.id, exam.id)
             if (marks && marks.length > 0) {
                 for (const mark of marks) {
                     data.push([
@@ -172,11 +172,11 @@ export class ExportGenerationService {
   /**
    * Generate peer tutor reports
    */
-  private static async generatePeerTutorReports(department: string): Promise<ExportFile> {
+  private static async generatepeertutorsReports(department: string): Promise<ExportFile> {
     const workbook = XLSX.utils.book_new()
     
     // Get peer tutors
-    const peerTutors = await PeerTutorService.getPeerTutorsByDepartment(department)
+    const peerTutor = await peertutorservice.getpeerTutorByDepartment(department)
     
     // Prepare data
     const data: (string | number | boolean | Date | null | undefined)[][] = []
@@ -185,8 +185,8 @@ export class ExportGenerationService {
     data.push([])
     data.push(['Name', 'Email', 'Year', 'Section', 'Assigned Students'])
 
-    for (const tutor of peerTutors) {
-        const students = await StudentService.getStudentsByPeerTutor(tutor.id)
+    for (const tutor of peerTutor) {
+        const students = await StudentService.getStudentsBypeertutors(tutor.id)
         data.push([
             tutor.name,
             tutor.email,
@@ -258,11 +258,11 @@ export class ExportGenerationService {
   /**
    * Generate peer tutors list
    */
-  private static async generatePeerTutorsList(department: string): Promise<ExportFile> {
+  private static async generatepeerTutorList(department: string): Promise<ExportFile> {
     const workbook = XLSX.utils.book_new()
     
     // Get all peer tutors
-    const peerTutors = await PeerTutorService.getPeerTutorsByDepartment(department)
+    const peerTutor = await peertutorservice.getpeerTutorByDepartment(department)
 
     // Prepare data
     const data: (string | number | boolean | Date | null | undefined)[][] = []
@@ -272,8 +272,8 @@ export class ExportGenerationService {
     data.push([])
     data.push(['Name', 'Email', 'Year', 'Section', 'Total Students', 'Status'])
 
-    for (const tutor of peerTutors) {
-      const students = await StudentService.getStudentsByPeerTutor(tutor.id)
+    for (const tutor of peerTutor) {
+      const students = await StudentService.getStudentsBypeertutors(tutor.id)
       
       data.push([
         tutor.name,

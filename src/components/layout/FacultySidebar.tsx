@@ -49,12 +49,22 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
   }
 
   const navigation = [
-    { name: 'DASHBOARD', href: '/faculty/dashboard', Icon: LayoutGrid },
+    { 
+      name: 'DASHBOARD', 
+      href: '/faculty/dashboard', 
+      Icon: LayoutGrid,
+      relatedPaths: ['/faculty/department', '/faculty/renumeration']
+    },
     { name: 'STUDENTS', href: '/faculty/peer-tutor', Icon: Users },
     { name: 'CLASSES', href: '/faculty/classes', Icon: GraduationCap },
     { name: 'ATTENDANCE', href: '/faculty/attendance', Icon: ClipboardList },
     { name: 'EXAMS', href: '/faculty/exams', Icon: FileText },
-    { name: 'ANALYTICS', href: '/faculty/analytics', Icon: BarChart3 },
+    { 
+      name: 'ANALYTICS', 
+      href: '/faculty/analytics', 
+      Icon: BarChart3,
+      relatedPaths: ['/faculty/feedback-analytics']
+    },
   ]
 
 
@@ -83,6 +93,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
 
       {/* Sidebar */}
       <div
+        suppressHydrationWarning
         className={`
           fixed inset-y-0 left-0 z-50 bg-[#1C2434] shadow-lg transform transition-all duration-300 ease-in-out lg:flex lg:flex-col
           ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'}
@@ -91,17 +102,21 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
         data-sidebar-collapsed={isCollapsed}
       >
         {/* Logo Header */}
-        <div className={`flex items-center h-20 flex-shrink-0 ${isCollapsed ? 'px-4' : 'pl-4 pr-10'} pt-6 mb-6 transition-all duration-300`}>
-          <div className={`flex items-center ${isCollapsed ? 'justify-center w-full' : 'w-full'}`}>
-            <div className={`relative ${isCollapsed ? 'w-12 h-12' : 'w-full h-12'}`}>
-              <Image 
-                src="/peers.png" 
-                alt="Peers Logo" 
-                fill
-                className={`object-contain transition-all duration-300`}
-                priority
-              />
-            </div>
+        <div className={`flex items-center h-20 flex-shrink-0 ${isCollapsed ? 'px-4 justify-center' : 'px-6'} pt-6 mb-6 transition-all duration-300`}>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+            <Image 
+              src="/peers.png" 
+              alt="Peers Logo" 
+              width={48}
+              height={48}
+              className="object-contain flex-shrink-0"
+              priority
+            />
+            {!isCollapsed && (
+              <span className="text-2xl font-bold text-white tracking-wide whitespace-nowrap">
+                SONA COHORT
+              </span>
+            )}
           </div>
         </div>
 
@@ -114,8 +129,10 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
           )}
           <div className="space-y-2">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
-              // Trigger rebuild
+              const isActive = pathname === item.href || 
+                              pathname?.startsWith(`${item.href}/`) || 
+                              (item.relatedPaths && item.relatedPaths.some(path => pathname?.startsWith(path)))
+              
               const Icon = item.Icon
               return (
                 <Link

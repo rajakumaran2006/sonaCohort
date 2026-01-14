@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { ExamService } from '@/lib/services/examService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
@@ -35,7 +35,7 @@ function PeerExamsContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [peerTutorYear, setPeerTutorYear] = useState<string | null>(null)
+  const [peertutorsYear, setpeertutorsYear] = useState<string | null>(null)
   
   // Stats state
   const [stats, setStats] = useState({
@@ -51,41 +51,41 @@ function PeerExamsContent() {
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
   // Fetch peer tutor info
-  const { data: peerTutorInfo, isLoading: isTutorLoading } = useQuery({
+  const { data: peertutorsInfo, isLoading: isTutorLoading } = useQuery({
     queryKey: ['peer-tutor-info', user?.email],
     queryFn: async () => {
       if (!user?.email) return null
-      return await PeerTutorAuthService.getPeerTutorByEmail(user.email)
+      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
     },
     enabled: !!user?.email,
     staleTime: 5 * 60 * 1000,
   })
 
   useEffect(() => {
-    if (peerTutorInfo?.year) {
-      setPeerTutorYear(peerTutorInfo.year)
+    if (peertutorsInfo?.year) {
+      setpeertutorsYear(peertutorsInfo.year)
     }
-  }, [peerTutorInfo])
+  }, [peertutorsInfo])
 
   // Fetch exams for peer tutor's year
   const { data: exams, isLoading: isExamsLoading } = useQuery({
-    queryKey: ['peer-exams', peerTutorYear],
+    queryKey: ['peer-exams', peertutorsYear],
     queryFn: async () => {
-      if (!peerTutorYear) return []
-      return await ExamService.getExamsByYear(peerTutorYear)
+      if (!peertutorsYear) return []
+      return await ExamService.getExamsByYear(peertutorsYear)
     },
-    enabled: !!peerTutorYear,
+    enabled: !!peertutorsYear,
     staleTime: 5 * 60 * 1000,
   })
 
   // Calculate detailed stats
   useEffect(() => {
     const calculateStats = async () => {
-      if (!peerTutorInfo?.id || !exams) return
+      if (!peertutorsInfo?.id || !exams) return
 
       try {
         // 1. Get assigned students count
-        const students = await AssignmentService.getStudentsByPeerTutor(peerTutorInfo.id)
+        const students = await AssignmentService.getStudentsBypeertutors(peertutorsInfo.id)
         const totalStudents = students.length
 
         // 2. Calculate progress for each exam
@@ -95,14 +95,14 @@ function PeerExamsContent() {
 
         for (const exam of exams) {
           const subjects = await ExamSubjectService.getExamSubjects(exam.id)
-          const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutorInfo.id, exam.id)
+          const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutorsInfo.id, exam.id)
           
           const totalPossibleMarks = students.length * subjects.length
           
 
 
           // We need a more accurate count based on unique student-subject pairs
-          // But for now, let's look at the fetch logic. getExamMarksByPeerTutorAndExam returns one record per student-exam-subject?
+          // But for now, let's look at the fetch logic. getExamMarksBypeertutorsAndExam returns one record per student-exam-subject?
           // Looking at the service: it returns ExamMark[] which has student_id and exam_subject_id.
           // So length is the count of entries.
           
@@ -137,7 +137,7 @@ function PeerExamsContent() {
     }
 
     calculateStats()
-  }, [peerTutorInfo, exams])
+  }, [peertutorsInfo, exams])
 
 
   const loading = isTutorLoading || isExamsLoading
@@ -147,7 +147,7 @@ function PeerExamsContent() {
     try {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['peer-tutor-info', user?.email] }),
-        queryClient.invalidateQueries({ queryKey: ['peer-exams', peerTutorYear] }),
+        queryClient.invalidateQueries({ queryKey: ['peer-exams', peertutorsYear] }),
       ])
       setLastRefresh(new Date())
     } finally {
@@ -162,7 +162,7 @@ function PeerExamsContent() {
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col`}>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
         <PageHeader
           title="EXAMS"
           tagline="Marks Entry & Performance Tracking"
@@ -193,9 +193,8 @@ function PeerExamsContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
-                           Assigned for Year {peerTutorYear}
+                           Assigned for Year {peertutorsYear}
                         </p>
                     </div>
                   </div>
@@ -211,7 +210,6 @@ function PeerExamsContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                         <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
                            Finished
                         </p>
@@ -229,7 +227,6 @@ function PeerExamsContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
                         <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
                            Remaining
                         </p>
@@ -260,81 +257,139 @@ function PeerExamsContent() {
                         <p className="text-gray-500">There are currently no exams assigned to your year.</p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-white">
-                            <tr>
-                              <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Exam Name
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Date
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Year
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Progress
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Status
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
+                      <>
+                        {/* Mobile Card View */}
+                        <div className="block md:hidden">
+                          <div className="divide-y divide-gray-100">
                             {exams.map((exam) => {
-                               const progress = examProgress[exam.id] || 0
-                               const isCompleted = progress === 100
+                              const progress = examProgress[exam.id] || 0
+                              const isCompleted = progress === 100
 
                               return (
-                                <tr 
-                                  key={exam.id} 
-                                  className="hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
+                                <div
+                                  key={exam.id}
+                                  className="p-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer active:bg-gray-100"
                                   onClick={() => router.push(`/peer/exams/${exam.id}`)}
                                 >
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className="text-sm font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors">
-                                      {exam.name}
+                                  <div className="flex items-start justify-between mb-3">
+                                    <div className="flex-1 min-w-0">
+                                      <h4 className="text-sm font-bold text-gray-900 truncate">
+                                        {exam.name}
+                                      </h4>
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        Year {peertutorsYear}
+                                      </p>
+                                    </div>
+                                    <span className={`text-[9px] font-bold px-2 py-1 rounded-md uppercase tracking-widest border flex-shrink-0 ml-3 ${
+                                      isCompleted 
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                        : 'bg-blue-50 text-blue-600 border-blue-100'
+                                    }`}>
+                                      {isCompleted ? 'Completed' : 'In Progress'}
                                     </span>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-bold text-gray-700">
+                                  </div>
+
+                                  <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-3 h-3" />
                                       {new Date(exam.created_at).toLocaleDateString()}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                                      <div 
+                                        className={`h-1.5 rounded-full transition-all duration-300 ${isCompleted ? 'bg-emerald-500' : 'bg-gray-800'}`}
+                                        style={{ width: `${progress}%` }}
+                                      ></div>
                                     </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-bold text-gray-700">
-                                      Year {peerTutorYear}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="flex items-center justify-center">
-                                      <div className="w-24 bg-gray-100 rounded-full h-1.5 mr-2">
-                                        <div 
-                                          className={`h-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'}`}
-                                          style={{ width: `${progress}%` }}
-                                        ></div>
-                                      </div>
-                                      <span className={`text-xs font-bold ${isCompleted ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                        {progress}%
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                     <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-widest border ${
-                                        isCompleted 
-                                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                          : 'bg-blue-50 text-blue-600 border-blue-100'
-                                     }`}>
-                                        {isCompleted ? 'Completed' : 'In Progress'}
-                                     </span>
-                                  </td>
-                                </tr>
+                                    <span className={`text-xs font-bold min-w-[32px] text-right ${isCompleted ? 'text-emerald-600' : 'text-gray-700'}`}>
+                                      {progress}%
+                                    </span>
+                                  </div>
+                                </div>
                               )
                             })}
-                          </tbody>
-                        </table>
-                      </div>
+                          </div>
+                        </div>
+
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-white">
+                              <tr>
+                                <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  Exam Name
+                                </th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  Date
+                                </th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  Year
+                                </th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  Progress
+                                </th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  Status
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {exams.map((exam) => {
+                                const progress = examProgress[exam.id] || 0
+                                const isCompleted = progress === 100
+
+                                return (
+                                  <tr 
+                                    key={exam.id} 
+                                    className="hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
+                                    onClick={() => router.push(`/peer/exams/${exam.id}`)}
+                                  >
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                      <span className="text-sm font-bold text-black-600 hover:text-black-800 hover:underline transition-colors">
+                                        {exam.name}
+                                      </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                      <div className="text-sm font-bold text-gray-700">
+                                        {new Date(exam.created_at).toLocaleDateString()}
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                      <div className="text-sm font-bold text-gray-700">
+                                        Year {peertutorsYear}
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                      <div className="flex items-center justify-center">
+                                        <div className="w-24 bg-gray-100 rounded-full h-1.5 mr-2">
+                                          <div 
+                                            className={`h-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-black-500'}`}
+                                            style={{ width: `${progress}%` }}
+                                          ></div>
+                                        </div>
+                                        <span className={`text-xs font-bold ${isCompleted ? 'text-emerald-600' : 'text-black-600'}`}>
+                                          {progress}%
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-widest border ${
+                                          isCompleted 
+                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                            : 'bg-blue-50 text-blue-600 border-blue-100'
+                                      }`}>
+                                          {isCompleted ? 'Completed' : 'In Progress'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>

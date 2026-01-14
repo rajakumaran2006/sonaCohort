@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import StudentProtectedRoute from '@/components/auth/StudentProtectedRoute'
-import StudentSidebar from '@/components/layout/PeerSidebar'
+import StudentSidebar from '@/components/layout/StudentSidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { AssignmentService } from '@/lib/services/assignmentService'
@@ -24,19 +24,39 @@ function StudentStudentsContent() {
   const [assignedStudents, setAssignedStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Sidebar collapsed state
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('student-sidebar-collapsed')
+      return saved ? JSON.parse(saved) : false
+    }
+    return false
+  })
+
+  useEffect(() => {
+    const handleSidebarToggle = () => {
+      if (typeof window !== 'undefined') {
+         const saved = localStorage.getItem('student-sidebar-collapsed')
+         if (saved) setIsSidebarCollapsed(JSON.parse(saved))
+      }
+    }
+    window.addEventListener('sidebar-toggle', handleSidebarToggle)
+    return () => window.removeEventListener('sidebar-toggle', handleSidebarToggle)
+  }, [])
+
   useEffect(() => {
     const loadData = async () => {
       if (user?.email) {
         try {
           // Get all students and find the current student
-          const allStudents = await StudentService.getAllStudentsWithPeerTutors()
+          const allStudents = await StudentService.getAllStudentsWithpeerTutor()
           const currentStudent = allStudents.find(s => s.email === user.email)
           
           if (currentStudent) {
             setStudentInfo(currentStudent)
             // For students viewing other students - this might not be the intended behavior
             // but keeping it as is for now
-            const students = await AssignmentService.getStudentsByPeerTutor(user.id || '')
+            const students = await AssignmentService.getStudentsBypeertutors(user.id || '')
             setAssignedStudents(students)
           }
         } catch (error) {
@@ -73,7 +93,7 @@ function StudentStudentsContent() {
       <StudentSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-0">
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden flex-1 w-full lg:w-auto`}>
         {/* Top Header */}
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">

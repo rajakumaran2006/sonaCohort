@@ -107,8 +107,8 @@ export class ExamMarksService {
   /**
    * Get exam marks for a peer tutor and exam
    */
-  static async getExamMarksByPeerTutorAndExam(
-    peerTutorId: string,
+  static async getExamMarksBypeertutorsAndExam(
+    peertutorsId: string,
     examId: string
   ): Promise<ExamMark[]> {
     try {
@@ -117,7 +117,7 @@ export class ExamMarksService {
       const { data, error } = await supabase
         .from('exam_marks')
         .select('*')
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .eq('exam_id', examId)
         .order('created_at', { ascending: false })
 
@@ -128,7 +128,7 @@ export class ExamMarksService {
 
       return (data || []) as ExamMark[]
     } catch (error) {
-      console.error('Error in getExamMarksByPeerTutorAndExam:', error)
+      console.error('Error in getExamMarksBypeertutorsAndExam:', error)
       return []
     }
   }
@@ -138,7 +138,7 @@ export class ExamMarksService {
    */
   static async getExamMark(
     examId: string,
-    peerTutorId: string,
+    peertutorsId: string,
     studentId: string,
     examSubjectId: string
   ): Promise<ExamMark | null> {
@@ -149,7 +149,7 @@ export class ExamMarksService {
         .from('exam_marks')
         .select('*')
         .eq('exam_id', examId)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .eq('student_id', studentId)
         .eq('exam_subject_id', examSubjectId)
         .single()

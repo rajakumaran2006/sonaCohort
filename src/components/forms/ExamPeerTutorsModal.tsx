@@ -4,26 +4,26 @@ import { useState, useEffect, useMemo } from 'react'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui'
 import { Exam } from '@/lib/services/examService'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { useQuery } from '@tanstack/react-query'
 import { Filter, Eye } from 'lucide-react'
 
-interface ExamPeerTutorsModalProps {
+interface ExampeerTutorModalProps {
   isOpen: boolean
   onClose: () => void
   exam: Exam | null
 }
 
-export default function ExamPeerTutorsModal({ isOpen, onClose, exam }: ExamPeerTutorsModalProps) {
+export default function ExampeerTutorModal({ isOpen, onClose, exam }: ExampeerTutorModalProps) {
   const [selectedYear, setSelectedYear] = useState<string>('all')
   const [selectedSection, setSelectedSection] = useState<string>('all')
 
   // Fetch peer tutors for the exam's years
-  const { data: peerTutors, isLoading } = useQuery({
+  const { data: peerTutor, isLoading } = useQuery({
     queryKey: ['exam-peer-tutors', exam?.id, exam?.years],
     queryFn: async () => {
       if (!exam?.years || exam.years.length === 0) return []
-      return await PeerTutorService.getPeerTutorsByYears(exam.years)
+      return await peertutorservice.getpeerTutorByYears(exam.years)
     },
     enabled: !!exam && !!exam.years && exam.years.length > 0,
     staleTime: 5 * 60 * 1000,
@@ -31,24 +31,24 @@ export default function ExamPeerTutorsModal({ isOpen, onClose, exam }: ExamPeerT
 
   // Get unique years and sections from peer tutors
   const uniqueYears = useMemo(() => {
-    if (!peerTutors) return []
-    return Array.from(new Set(peerTutors.map(pt => pt.year))).sort()
-  }, [peerTutors])
+    if (!peerTutor) return []
+    return Array.from(new Set(peerTutor.map(pt => pt.year))).sort()
+  }, [peerTutor])
 
   const uniqueSections = useMemo(() => {
-    if (!peerTutors) return []
-    let filtered = peerTutors
+    if (!peerTutor) return []
+    let filtered = peerTutor
     if (selectedYear !== 'all') {
       filtered = filtered.filter(pt => pt.year === selectedYear)
     }
     return Array.from(new Set(filtered.map(pt => pt.section))).sort()
-  }, [peerTutors, selectedYear])
+  }, [peerTutor, selectedYear])
 
   // Filter peer tutors based on selected filters
-  const filteredPeerTutors = useMemo(() => {
-    if (!peerTutors) return []
+  const filteredpeerTutor = useMemo(() => {
+    if (!peerTutor) return []
     
-    let filtered = [...peerTutors]
+    let filtered = [...peerTutor]
     
     if (selectedYear !== 'all') {
       filtered = filtered.filter(pt => pt.year === selectedYear)
@@ -64,7 +64,7 @@ export default function ExamPeerTutorsModal({ isOpen, onClose, exam }: ExamPeerT
       if (a.section !== b.section) return a.section.localeCompare(b.section)
       return a.name.localeCompare(b.name)
     })
-  }, [peerTutors, selectedYear, selectedSection])
+  }, [peerTutor, selectedYear, selectedSection])
 
   // Reset section filter when year changes
   useEffect(() => {
@@ -73,13 +73,13 @@ export default function ExamPeerTutorsModal({ isOpen, onClose, exam }: ExamPeerT
     } else {
       // If current section is not available in filtered sections, reset it
       const availableSections = Array.from(new Set(
-        peerTutors?.filter(pt => pt.year === selectedYear).map(pt => pt.section) || []
+        peerTutor?.filter(pt => pt.year === selectedYear).map(pt => pt.section) || []
       )).sort()
       if (!availableSections.includes(selectedSection)) {
         setSelectedSection('all')
       }
     }
-  }, [selectedYear, peerTutors, selectedSection])
+  }, [selectedYear, peerTutor, selectedSection])
 
   const formatYear = (year: string): string => {
     const yearMap: { [key: string]: string } = {
@@ -90,9 +90,9 @@ export default function ExamPeerTutorsModal({ isOpen, onClose, exam }: ExamPeerT
     return yearMap[year] || year
   }
 
-  const handleView = (peerTutor: PeerTutor) => {
+  const handleView = (peertutors: peertutors) => {
     // TODO: Implement view functionality in the future
-    console.log('View peer tutor:', peerTutor)
+    console.log('View peer tutor:', peertutors)
   }
 
   const hasActiveFilters = selectedYear !== 'all' || selectedSection !== 'all'
@@ -192,7 +192,7 @@ export default function ExamPeerTutorsModal({ isOpen, onClose, exam }: ExamPeerT
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : filteredPeerTutors.length === 0 ? (
+              ) : filteredpeerTutor.length === 0 ? (
                 <EmptyTable
                   title="No peer tutors found"
                   description={
@@ -202,22 +202,22 @@ export default function ExamPeerTutorsModal({ isOpen, onClose, exam }: ExamPeerT
                   }
                 />
               ) : (
-                filteredPeerTutors.map((peerTutor) => (
-                  <TableRow key={peerTutor.id}>
+                filteredpeerTutor.map((peertutors) => (
+                  <TableRow key={peertutors.id}>
                     <TableCell className="font-medium text-gray-900">
-                      {peerTutor.name}
+                      {peertutors.name}
                     </TableCell>
                     <TableCell className="text-gray-600">
-                      {formatYear(peerTutor.year)}
+                      {formatYear(peertutors.year)}
                     </TableCell>
                     <TableCell className="text-gray-600">
-                      {peerTutor.section}
+                      {peertutors.section}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleView(peerTutor)}
+                        onClick={() => handleView(peertutors)}
                         className="inline-flex items-center"
                       >
                         <Eye className="h-4 w-4 mr-1.5" />
@@ -232,9 +232,9 @@ export default function ExamPeerTutorsModal({ isOpen, onClose, exam }: ExamPeerT
         </div>
 
         {/* Summary */}
-        {!isLoading && filteredPeerTutors.length > 0 && (
+        {!isLoading && filteredpeerTutor.length > 0 && (
           <div className="mt-4 text-sm text-gray-500">
-            Showing {filteredPeerTutors.length} of {peerTutors?.length || 0} peer tutor{peerTutors?.length !== 1 ? 's' : ''}
+            Showing {filteredpeerTutor.length} of {peerTutor?.length || 0} peer tutor{peerTutor?.length !== 1 ? 's' : ''}
           </div>
         )}
       </ModalBody>

@@ -7,10 +7,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { ReportService } from '@/lib/services/reportService'
-import { PeerTutorAuthService } from '@/lib/auth/peerTutorAuthService'
+import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import ExcelExportModal from '@/components/forms/ExcelExportModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { useCachedData } from '@/lib/hooks/useCachedData'
+import PeerTopicSheet from '@/components/reports/PeerTopicSheet'
+import PeerAttendanceSheet from '@/components/reports/PeerAttendanceSheet'
 
 export default function PeerReportsPage() {
   return (
@@ -25,6 +27,7 @@ function PeerReportsContent() {
   const router = useRouter()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<'overview' | 'topic-sheet' | 'attendance-sheet'>('overview')
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   // Use custom hook for sidebar collapsed state
@@ -35,7 +38,7 @@ function PeerReportsContent() {
     queryKey: ['peer-tutor-info', user?.email],
     queryFn: async () => {
       if (!user?.email) return null
-      return await PeerTutorAuthService.getPeerTutorByEmail(user.email)
+      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
     },
     enabled: !!user?.email,
     initialData: null,
@@ -47,7 +50,7 @@ function PeerReportsContent() {
     queryKey: ['peer-tutor-report', tutorInfoData?.id],
     queryFn: async () => {
       if (!tutorInfoData?.id) return null
-      return await ReportService.getPeerTutorReportData(tutorInfoData.id)
+      return await ReportService.getpeertutorsReportData(tutorInfoData.id)
     },
     enabled: !!tutorInfoData?.id,
     initialData: null,
@@ -55,7 +58,7 @@ function PeerReportsContent() {
   })
 
   const loading = tutorLoading || reportLoading
-  const peerTutorInfo = tutorInfoData
+  const peertutorsInfo = tutorInfoData
 
   const handleRefresh = async () => {
     await Promise.all([refreshTutor(), refreshReport()])
@@ -63,9 +66,9 @@ function PeerReportsContent() {
   }
 
   const handleSubjectClick = (subjectName: string, classId: string) => {
-    if (peerTutorInfo) {
+    if (peertutorsInfo) {
       // Use query parameters instead of nested routes
-      const route = `/peer/reports/subject?tutorId=${peerTutorInfo.id}&subjectId=${classId}&subjectName=${encodeURIComponent(subjectName)}`
+      const route = `/peer/reports/subject?tutorId=${peertutorsInfo.id}&subjectId=${classId}&subjectName=${encodeURIComponent(subjectName)}`
       router.push(route)
     }
   }
@@ -80,7 +83,7 @@ function PeerReportsContent() {
       <PeerSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className="transition-all duration-300 lg:ml-64 min-h-screen flex flex-col overflow-hidden">
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
         {/* Top Header */}
         <PageHeader
           title="REPORTS"
@@ -92,6 +95,44 @@ function PeerReportsContent() {
           isSidebarCollapsed={isSidebarCollapsed}
         />
 
+      {/* Tab Navigation */}
+        <div className="px-4 sm:px-6 lg:px-8 mt-6">
+          <div className="bg-white border-b border-gray-100">
+            <nav className="flex space-x-2 py-3 overflow-x-auto no-scrollbar" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap ${
+                  activeTab === 'overview'
+                    ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105' 
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                OVERVIEW
+              </button>
+              <button
+                onClick={() => setActiveTab('topic-sheet')}
+                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap ${
+                  activeTab === 'topic-sheet'
+                    ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105' 
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                TOPIC SHEET
+              </button>
+              <button
+                onClick={() => setActiveTab('attendance-sheet')}
+                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap ${
+                  activeTab === 'attendance-sheet'
+                    ? 'bg-black text-white shadow-lg shadow-gray-200 scale-105' 
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                ATTENDANCE SHEET
+              </button>
+            </nav>
+          </div>
+        </div>
+
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           <div className="w-full py-8 px-4 sm:px-6 lg:px-8">
@@ -102,211 +143,302 @@ function PeerReportsContent() {
                   <p className="text-gray-600">Loading your reports...</p>
                 </div>
               </div>
-            ) : reportData ? (
-              <div className="space-y-6">
-                
-                {/* Stats Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Subjects</p>
-                        <p className="text-3xl font-bold text-gray-900 tracking-tight">{reportData.subjects.length}</p>
-                      </div>
-                      <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
-                           Assigned
-                        </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Completed Classes</p>
-                        <p className="text-3xl font-bold text-gray-900 tracking-tight">
-                          {reportData.subjects.reduce((sum, subject) => sum + subject.completed_classes, 0)}
-                        </p>
-                      </div>
-                      <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                        <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-                        <p className="text-[9px] font-bold text-green-600 uppercase tracking-widest flex items-center gap-1.5">
-                           Finished
-                        </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Pending Classes</p>
-                        <p className="text-3xl font-bold text-gray-900 tracking-tight">
-                          {reportData.subjects.reduce((sum, subject) => sum + subject.pending_classes, 0)}
-                        </p>
-                      </div>
-                      <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                        <div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
-                        <p className="text-[9px] font-bold text-yellow-600 uppercase tracking-widest flex items-center gap-1.5">
-                           Remaining
-                        </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Subjects Table */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  <div className="px-6 py-5 border-b border-gray-100">
-                    <div className="flex items-center justify-between mb-0">
-                      <div>
-                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">My Subjects</h3>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {loading ? 'Loading...' : `${reportData.subjects.length} subject(s) assigned`}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleExportExcel}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 uppercase tracking-wider hover:bg-gray-50 transition-all shadow-sm"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span>Export</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    {reportData.subjects.length === 0 ? (
-                      <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                          </svg>
+            ) : (
+              <>
+                {activeTab === 'overview' && reportData ? (
+                  <div className="space-y-6">
+                    
+                    {/* Stats Overview */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Subjects</p>
+                            <p className="text-3xl font-bold text-gray-900 tracking-tight">{reportData.subjects.length}</p>
+                          </div>
+                          <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
+                          </div>
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No subjects assigned</h3>
-                        <p className="text-gray-500">You haven&apos;t been assigned to any subjects yet.</p>
+                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                               Assigned
+                            </p>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-white">
-                            <tr>
-                              <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Subject Name
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Scheduled
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Completed
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Additional
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Pending
-                              </th>
-                              <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Completion Rate
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {reportData.subjects.map((subject) => {
-                              // Calculate completion rate: (completed + additional) / scheduled
-                              const totalTaken = subject.completed_classes + subject.additional_classes
-                              const completionRate = subject.total_classes > 0 
-                                ? Math.round((totalTaken / subject.total_classes) * 100)
-                                : 0
-                              
-                              return (
-                                <tr key={subject.class_id} className="hover:bg-gray-50 transition-colors duration-200">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <button
-                                      onClick={() => handleSubjectClick(subject.subject_name, subject.class_id)}
-                                      className="text-sm font-bold text-gray-900 hover:text-blue-600 hover:underline transition-colors"
-                                    >
-                                      {subject.subject_name}
-                                    </button>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-bold text-gray-900">
-                                      {subject.total_classes}
+
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Completed Classes</p>
+                            <p className="text-3xl font-bold text-gray-900 tracking-tight">
+                              {reportData.subjects.reduce((sum, subject) => sum + subject.completed_classes, 0)}
+                            </p>
+                          </div>
+                          <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                            <p className="text-[9px] font-bold text-green-600 uppercase tracking-widest flex items-center gap-1.5">
+                                Finished
+                            </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Additional Classes</p>
+                            <p className="text-3xl font-bold text-gray-900 tracking-tight">
+                              {reportData.subjects.reduce((sum, subject) => sum + subject.additional_classes, 0)}
+                            </p>
+                          </div>
+                          <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                            <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+                            <p className="text-[9px] font-bold text-purple-600 uppercase tracking-widest flex items-center gap-1.5">
+                               Extra
+                            </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Pending Classes</p>
+                            <p className="text-3xl font-bold text-gray-900 tracking-tight">
+                              {reportData.subjects.reduce((sum, subject) => sum + subject.pending_classes, 0)}
+                            </p>
+                          </div>
+                          <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
+                            <div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
+                            <p className="text-[9px] font-bold text-yellow-600 uppercase tracking-widest flex items-center gap-1.5">
+                               Remaining
+                            </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Subjects Table */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                      <div className="px-6 py-5 border-b border-gray-100">
+                        <div className="flex items-center justify-between mb-0">
+                          <div>
+                            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">My Subjects</h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {loading ? 'Loading...' : `${reportData.subjects.length} subject(s) assigned`}
+                            </p>
+                          </div>
+                          <button
+                            onClick={handleExportExcel}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 uppercase tracking-wider hover:bg-gray-50 transition-all shadow-sm"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>Export</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        {reportData.subjects.length === 0 ? (
+                          <div className="text-center py-12">
+                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                              </svg>
+                            </div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">No subjects assigned</h3>
+                            <p className="text-gray-500">You haven&apos;t been assigned to any subjects yet.</p>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Mobile Card View */}
+                            <div className="md:hidden divide-y divide-gray-100">
+                              {reportData.subjects.map((subject) => {
+                                const totalTaken = subject.completed_classes + subject.additional_classes
+                                const completionRate = subject.total_classes > 0 
+                                  ? Math.round((totalTaken / subject.total_classes) * 100)
+                                  : 0
+                                
+                                return (
+                                  <div 
+                                    key={subject.class_id} 
+                                    className="p-4 hover:bg-gray-50 transition-colors"
+                                    onClick={() => handleSubjectClick(subject.subject_name, subject.class_id)}
+                                  >
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h4 className="text-sm font-bold text-gray-900 uppercase">
+                                        {subject.subject_name}
+                                      </h4>
+                                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                      </svg>
                                     </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-bold text-gray-900">
-                                      {subject.completed_classes}
+                                    
+                                    <div className="grid grid-cols-4 gap-2 mb-3">
+                                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Scheduled</p>
+                                        <p className="text-sm font-bold text-gray-900">{subject.total_classes}</p>
+                                      </div>
+                                      <div className="text-center p-2 bg-green-50 rounded-lg">
+                                        <p className="text-[9px] font-bold text-green-600 uppercase">Done</p>
+                                        <p className="text-sm font-bold text-green-700">{subject.completed_classes}</p>
+                                      </div>
+                                      <div className="text-center p-2 bg-purple-50 rounded-lg">
+                                        <p className="text-[9px] font-bold text-purple-600 uppercase">Extra</p>
+                                        <p className="text-sm font-bold text-purple-700">{subject.additional_classes}</p>
+                                      </div>
+                                      <div className="text-center p-2 bg-yellow-50 rounded-lg">
+                                        <p className="text-[9px] font-bold text-yellow-600 uppercase">Pending</p>
+                                        <p className="text-sm font-bold text-yellow-700">{subject.pending_classes}</p>
+                                      </div>
                                     </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-bold text-gray-900">
-                                      {subject.additional_classes}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-bold text-gray-900">
-                                      {subject.pending_classes}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="flex items-center justify-center">
-                                      <div className="w-16 bg-gray-100 rounded-full h-1.5 mr-2">
+                                    
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex-1 bg-gray-100 rounded-full h-2">
                                         <div 
-                                          className="bg-blue-600 h-1.5 rounded-full" 
+                                          className="bg-blue-600 h-2 rounded-full transition-all" 
                                           style={{ width: `${completionRate}%` }}
                                         ></div>
                                       </div>
-                                      <span className="text-xs font-bold text-gray-700">
+                                      <span className="text-xs font-bold text-gray-700 min-w-[40px] text-right">
                                         {completionRate}%
                                       </span>
                                     </div>
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
+                                  </div>
+                                )
+                              })}
+                            </div>
+
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-white">
+                                  <tr>
+                                    <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                      Subject Name
+                                    </th>
+                                    <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                      Scheduled
+                                    </th>
+                                    <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                      Completed
+                                    </th>
+                                    <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                      Additional
+                                    </th>
+                                    <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                      Pending
+                                    </th>
+                                    <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                      Completion Rate
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {reportData.subjects.map((subject) => {
+                                    // Calculate completion rate: (completed + additional) / scheduled
+                                    const totalTaken = subject.completed_classes + subject.additional_classes
+                                    const completionRate = subject.total_classes > 0 
+                                      ? Math.round((totalTaken / subject.total_classes) * 100)
+                                      : 0
+                                    
+                                    return (
+                                      <tr key={subject.class_id} className="hover:bg-gray-50 transition-colors duration-200">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                          <button
+                                            onClick={() => handleSubjectClick(subject.subject_name, subject.class_id)}
+                                            className="text-sm font-bold  uppercase text-gray-900 hover:text-blue-600 hover:underline transition-colors"
+                                          >
+                                            {subject.subject_name}
+                                          </button>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                          <div className="text-sm font-bold text-gray-900">
+                                            {subject.total_classes}
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                          <div className="text-sm font-bold text-gray-900">
+                                            {subject.completed_classes}
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                          <div className="text-sm font-bold text-purple-900">
+                                            {subject.additional_classes}
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                          <div className="text-sm font-bold text-gray-900">
+                                            {subject.pending_classes}
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                          <div className="flex items-center justify-center">
+                                            <div className="w-16 bg-gray-100 rounded-full h-1.5 mr-2">
+                                              <div 
+                                                className="bg-blue-600 h-1.5 rounded-full" 
+                                                style={{ width: `${completionRate}%` }}
+                                              ></div>
+                                            </div>
+                                            <span className="text-xs font-bold text-gray-700">
+                                              {completionRate}%
+                                            </span>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to load reports</h3>
-                <p className="text-gray-500 mb-6">There was an error loading your report data. Please try again.</p>
-                <button
-                  onClick={handleRefresh}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  Retry
-                </button>
-              </div>
+                ) : activeTab === 'topic-sheet' ? (
+                  peertutorsInfo && <PeerTopicSheet peertutorId={peertutorsInfo.id} />
+                ) : activeTab === 'attendance-sheet' ? (
+                  peertutorsInfo && <PeerAttendanceSheet peertutorId={peertutorsInfo.id} />
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to load reports</h3>
+                    <p className="text-gray-500 mb-6">There was an error loading your report data. Please try again.</p>
+                    <button
+                      onClick={handleRefresh}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </main>
@@ -317,7 +449,7 @@ function PeerReportsContent() {
         <ExcelExportModal
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
-          peerTutorInfo={peerTutorInfo ?? null}
+          peertutorsInfo={peertutorsInfo ?? null}
           reportData={reportData ?? null}
         />
       )}

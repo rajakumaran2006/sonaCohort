@@ -32,18 +32,18 @@ export class AdditionalClassService {
   /**
    * Get available subjects for a peer tutor
    */
-  static async getAvailableSubjectsForPeerTutor(peerTutorId: string): Promise<string[]> {
+  static async getAvailableSubjectsForpeertutors(peertutorsId: string): Promise<string[]> {
     try {
       const supabase = createClient()
       
       // Get peer tutor info
-      const { data: peerTutor, error: tutorError } = await supabase
+      const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('dept, year, section')
-        .eq('id', peerTutorId)
+        .eq('id', peertutorsId)
         .single()
 
-      if (tutorError || !peerTutor) {
+      if (tutorError || !peertutors) {
         console.error('Error getting peer tutor info:', tutorError)
         return []
       }
@@ -52,9 +52,9 @@ export class AdditionalClassService {
       const { data: classes, error: classesError } = await supabase
         .from('classes')
         .select('subject_name')
-        .eq('dept', peerTutor.dept)
-        .eq('year', peerTutor.year)
-        .eq('section', peerTutor.section)
+        .eq('dept', peertutors.dept)
+        .eq('year', peertutors.year)
+        .eq('section', peertutors.section)
 
       if (classesError) {
         console.error('Error getting classes:', classesError)
@@ -65,7 +65,7 @@ export class AdditionalClassService {
       const subjects = [...new Set(classes.map(cls => cls.subject_name))]
       return subjects
     } catch (error) {
-      console.error('Error in getAvailableSubjectsForPeerTutor:', error)
+      console.error('Error in getAvailableSubjectsForpeertutors:', error)
       return []
     }
   }
@@ -74,7 +74,7 @@ export class AdditionalClassService {
    * Create a new additional class
    */
   static async createAdditionalClass(
-    peerTutorId: string,
+    peertutorsId: string,
     subjectName: string,
     topic: string,
     classDate: string,
@@ -87,7 +87,7 @@ export class AdditionalClassService {
       const { data: additionalClass, error: classError } = await supabase
         .from('additional_classes')
         .insert([{
-          peer_tutor_id: peerTutorId,
+          peer_tutor_id: peertutorsId,
           subject_name: subjectName,
           topic: topic,
           class_date: classDate
@@ -101,21 +101,17 @@ export class AdditionalClassService {
       }
 
       // Then, create attendance records in the separate additional_class_attendance table
-      console.log('Creating attendance records for additional class:', {
-        additionalClassId: additionalClass.id,
-        attendanceRecordsCount: attendanceRecords.length,
-        attendanceRecords: attendanceRecords
-      })
+      
 
       if (attendanceRecords.length > 0) {
         const attendanceData = attendanceRecords.map(record => ({
           additional_class_id: additionalClass.id,
           student_id: record.student_id,
-          peer_tutor_id: peerTutorId,
+          peer_tutor_id: peertutorsId,
           status: record.status
         }))
 
-        console.log('Attendance data to insert:', attendanceData)
+        // console.log('Attendance data to insert:', attendanceData)
 
         const { error: attendanceError } = await supabase
           .from('additional_class_attendance')
@@ -126,10 +122,10 @@ export class AdditionalClassService {
           // Note: We don't rollback the additional class creation here
           // In a production app, you might want to implement proper transaction handling
         } else {
-          console.log('Successfully created attendance records for additional class:', additionalClass.id)
+          // console.log('Successfully created attendance records for additional class:', additionalClass.id)
         }
       } else {
-        console.log('No attendance records to create for additional class:', additionalClass.id)
+        // console.log('No attendance records to create for additional class:', additionalClass.id)
       }
 
       return additionalClass
@@ -142,7 +138,7 @@ export class AdditionalClassService {
   /**
    * Get all additional classes for a peer tutor
    */
-  static async getAdditionalClassesByPeerTutor(peerTutorId: string): Promise<AdditionalClassWithAttendance[]> {
+  static async getAdditionalClassesBypeertutors(peertutorsId: string): Promise<AdditionalClassWithAttendance[]> {
     try {
       const supabase = createClient()
       
@@ -150,7 +146,7 @@ export class AdditionalClassService {
       const { data: additionalClasses, error: classesError } = await supabase
         .from('additional_classes')
         .select('*')
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .order('class_date', { ascending: false })
 
       if (classesError) {
@@ -171,7 +167,7 @@ export class AdditionalClassService {
 
       return classesWithAttendance
     } catch (error) {
-      console.error('Error in getAdditionalClassesByPeerTutor:', error)
+      console.error('Error in getAdditionalClassesBypeertutors:', error)
       return []
     }
   }
@@ -183,13 +179,13 @@ export class AdditionalClassService {
     try {
       const supabase = createClient()
       
-      console.log('Fetching attendance for additional class:', additionalClassId)
+      // console.log('Fetching attendance for additional class:', additionalClassId)
       
       const { data: attendanceRecords, error } = await supabase
         .from('additional_class_attendance')
         .select(`
           *,
-          student:peer_students!inner(
+          student:peer_students!fk_additional_class_attendance_student(
             id,
             name,
             email
@@ -202,21 +198,23 @@ export class AdditionalClassService {
         return []
       }
 
-      console.log('Raw attendance records from DB:', attendanceRecords)
+      // console.log('Raw attendance records from DB:', attendanceRecords)
 
-      const mappedRecords = (attendanceRecords || []).map(record => ({
-        id: record.id,
-        additional_class_id: record.additional_class_id,
-        student_id: record.student_id,
-        peer_tutor_id: record.peer_tutor_id,
-        status: record.status,
-        student_name: record.student.name,
-        student_email: record.student.email,
-        created_at: record.created_at,
-        updated_at: record.updated_at
-      }))
+      const mappedRecords = (attendanceRecords || [])
+        .filter(record => record.student) // Filter out records where student join failed
+        .map(record => ({
+          id: record.id,
+          additional_class_id: record.additional_class_id,
+          student_id: record.student_id,
+          peer_tutor_id: record.peer_tutor_id,
+          status: record.status,
+          student_name: record.student?.name || 'Unknown',
+          student_email: record.student?.email || '',
+          created_at: record.created_at,
+          updated_at: record.updated_at
+        }))
 
-      console.log('Mapped attendance records:', mappedRecords)
+      // console.log('Mapped attendance records:', mappedRecords)
       return mappedRecords
     } catch (error) {
       console.error('Error in getAttendanceForAdditionalClass:', error)
@@ -229,7 +227,7 @@ export class AdditionalClassService {
    */
   static async updateAttendanceForAdditionalClass(
     additionalClassId: string,
-    peerTutorId: string,
+    peertutorsId: string,
     attendanceRecords: AttendanceRecord[]
   ): Promise<boolean> {
     try {
@@ -251,7 +249,7 @@ export class AdditionalClassService {
         const attendanceData = attendanceRecords.map(record => ({
           additional_class_id: additionalClassId,
           student_id: record.student_id,
-          peer_tutor_id: peerTutorId,
+          peer_tutor_id: peertutorsId,
           status: record.status
         }))
 
@@ -320,7 +318,7 @@ export class AdditionalClassService {
         .from('additional_classes')
         .select(`
           *,
-          peer_tutors!inner(dept, year)
+          peer_tutors!inner(dept, year, section)
         `)
         .eq('peer_tutors.dept', dept)
         .order('class_date', { ascending: false })

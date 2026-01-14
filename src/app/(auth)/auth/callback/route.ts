@@ -1,121 +1,71 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { FacultyService } from '@/lib/services/facultyService'
-import { AdminService } from '@/lib/services/adminService'
-import { StudentAuthService } from '@/lib/auth/studentAuthService'
+import{ RoleDetectionService } from '@/lib/services/roleDetectionService'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/admin/dashboard'
-
-  console.log('Callback route called with:', { code: !!code, next })
+  const next = searchParams.get('next') ?? '/'
 
   if (code) {
     const supabase = await createClient()
+    const { error, data } = await supabase.auth.exchangeCodeForSession(code)
     
-    // Exchange the code for a session
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-    
-    if (!error && data.session) {
-      console.log('Session created successfully:', data.session)
-      console.log('User data:', data.session.user)
-      console.log('User metadata:', data.session.user?.user_metadata)
+    if (!error && data.user) {
+      const userEmail = data.user.email
       
-      const userEmail = data.session.user.email
       if (!userEmail) {
-        console.error('No email found in user session')
-        return NextResponse.redirect(`${origin}/login?error=authentication_failed`)
+        console.error('No email found for user')
+        return NextResponse.redirect(`${origin}/login?error=no_email`)
       }
 
-      // Determine the correct dashboard path based on user type
-      let finalRedirectPath = next
-      
-      // If next is the default dashboard, determine the correct path
-      if (next === '/admin/dashboard') {
-        try {
-          finalRedirectPath = await AdminService.getDashboardPath(userEmail, supabase)
-          console.log('Determined correct dashboard path:', finalRedirectPath)
-        } catch (error) {
-          console.error('Error determining dashboard path:', error)
-          finalRedirectPath = '/admin/dashboard'
-        }
-      }
-      
-      // If redirecting to faculty dashboard, verify faculty access
-      if (finalRedirectPath.startsWith('/faculty')) {
-        try {
-          const department = await FacultyService.verifyFacultyAccess(userEmail, supabase)
-          if (!department) {
-            console.log('Faculty access denied for:', userEmail)
-            return NextResponse.redirect(`${origin}/login?error=faculty_access_denied`)
-          }
-          
-          console.log('Faculty access verified for department:', department.name)
-        } catch (error) {
-          console.error('Error verifying faculty access:', error)
-          return NextResponse.redirect(`${origin}/login?error=faculty_verification_failed`)
-        }
-      }
-      
-      // If redirecting to admin dashboard, verify admin access
-      if (finalRedirectPath.startsWith('/admin')) {
-        try {
-          const isAdmin = await AdminService.isAdmin(userEmail, supabase)
-          if (!isAdmin) {
-            console.log('Admin access denied for:', userEmail)
-            return NextResponse.redirect(`${origin}/login?error=admin_access_denied`)
-          }
-          
-          console.log('Admin access verified for:', userEmail)
-        } catch (error) {
-          console.error('Error verifying admin access:', error)
-          return NextResponse.redirect(`${origin}/login?error=admin_verification_failed`)
-        }
-      }
+      try {
+        // Detect all available roles for the user
+        const { roles, dashboardPaths } = await RoleDetectionService.detectUserRoles(userEmail, supabase)
+        
+        // console.log(`Detected roles for ${userEmail}:`, roles)
 
-      // If redirecting to peer dashboard, verify peer tutor access
-      if (finalRedirectPath.startsWith('/peer')) {
-        try {
-          const { PeerTutorAuthService } = await import('@/lib/auth/peerTutorAuthService')
-          const isPeerTutor = await PeerTutorAuthService.isPeerTutor(userEmail, supabase)
-          if (!isPeerTutor) {
-            console.log('Peer tutor access denied for:', userEmail)
-            return NextResponse.redirect(`${origin}/login?error=peer_access_denied`)
-          }
-          
-          console.log('Peer tutor access verified for:', userEmail)
-        } catch (error) {
-          console.error('Error verifying peer tutor access:', error)
-          return NextResponse.redirect(`${origin}/login?error=peer_verification_failed`)
+        // If user has no roles, they don't have access
+        if (roles.length === 0) {
+          // console.log(`User ${userEmail} has no access`)
+          // Sign out the user
+          await supabase.auth.signOut()
+          return NextResponse.redirect(`${origin}/login?error=no_access`)
         }
-      }
 
-      // If redirecting to student dashboard, verify student access
-      if (finalRedirectPath.startsWith('/student')) {
-        try {
-          const student = await StudentAuthService.verifyStudent(userEmail, supabase)
-          if (!student) {
-            console.log('Student access denied for:', userEmail)
-            return NextResponse.redirect(`${origin}/login?error=student_access_denied`)
-          }
+        // If user has exactly one role, redirect directly to that dashboard
+        if (roles.length === 1) {
+          const role = roles[0]
+          const dashboardPath = dashboardPaths[role]
+          // console.log(`User has single role: ${role}, redirecting to ${dashboardPath}`)
           
-          console.log('Student access verified for:', userEmail)
-        } catch (error) {
-          console.error('Error verifying student access:', error)
-          return NextResponse.redirect(`${origin}/login?error=student_verification_failed`)
+          // Store the selected role
+          const response = NextResponse.redirect(`${origin}${dashboardPath}`)
+          response.cookies.set('user_role', role, { 
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
+          })
+          return response
         }
+
+        // If user has multiple roles, redirect to role selection page
+        // console.log(`User has multiple roles: ${roles.join(', ')}, redirecting to role selection`)
+        const response = NextResponse.redirect(`${origin}/auth/select-role?roles=${roles.join(',')}&next=${encodeURIComponent(next)}`)
+        return response
+
+      } catch (roleError) {
+        console.error('Error detecting user roles:', roleError)
+        await supabase.auth.signOut()
+        return NextResponse.redirect(`${origin}/login?error=role_detection_failed`)
       }
-      
-      console.log('Redirecting to:', `${origin}${finalRedirectPath}`)
-      return NextResponse.redirect(`${origin}${finalRedirectPath}`)
-    } else {
+    } else if (error) {
       console.error('Error exchanging code for session:', error)
-      return NextResponse.redirect(`${origin}/auth/auth-code-error?error=${encodeURIComponent(error?.message || 'Unknown error')}`)
+      return NextResponse.redirect(`${origin}/login?error=auth_failed`)
     }
   }
 
-  // No code provided, redirect to error page
-  console.log('No code provided, redirecting to error page')
-  return NextResponse.redirect(`${origin}/auth/auth-code-error?error=no_code`)
+  // return the user to an error page with instructions
+  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
 }

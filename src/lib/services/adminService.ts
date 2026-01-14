@@ -106,6 +106,30 @@ export class AdminService {
         // Continue with admin check even if faculty verification fails
       }
 
+      // Then check if user is a peer tutor
+      try {
+        const { peertutorsAuthService } = await import('../auth/peertutorsAuthService')
+        const ispeertutors = await peertutorsAuthService.ispeertutors(email, supabaseClient)
+        if (ispeertutors) {
+          console.log('User is peer tutor, redirecting to peer dashboard')
+          return '/peer/dashboard'
+        }
+      } catch (peerError) {
+        console.log('Peer tutor verification failed:', peerError)
+      }
+
+      // Then check if user is a student
+      try {
+        const { StudentAuthService } = await import('../auth/studentAuthService')
+        const student = await StudentAuthService.verifyStudent(email, supabaseClient)
+        if (student) {
+          console.log('User is student, redirecting to student dashboard')
+          return '/student/dashboard'
+        }
+      } catch (studentError) {
+        console.log('Student verification failed:', studentError)
+      }
+
       // Then check if user is admin
       const isAdminUser = await this.isAdmin(email, supabaseClient)
       if (isAdminUser) {
@@ -113,7 +137,7 @@ export class AdminService {
         return '/admin/dashboard'
       }
 
-      // Default to admin dashboard for now (you can change this logic)
+      // Default to admin dashboard only as a last resort
       console.log('User role unknown, defaulting to admin dashboard')
       return '/admin/dashboard'
     } catch (error) {

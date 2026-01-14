@@ -4,7 +4,7 @@ import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService } from '@/lib/services/facultyService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
+import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 import { useState, useEffect, useCallback } from 'react'
 import { Building2, ArrowLeft, Mail } from 'lucide-react'
@@ -30,11 +30,11 @@ function SettingsContent() {
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [stats, setStats] = useState<{
     department: string
-    totalPeerTutors: number
+    totalpeerTutor: number
     totalStudents: number
   }>({
     department: '',
-    totalPeerTutors: 0,
+    totalpeerTutor: 0,
     totalStudents: 0
   })
 
@@ -75,18 +75,18 @@ function SettingsContent() {
       const deptName = facultyDept?.name || 'Not Assigned'
 
       // Get all peer tutors for this department
-      const peerTutors = await PeerTutorService.getPeerTutorsByDepartment(deptName)
+      const peerTutor = await peertutorservice.getpeerTutorByDepartment(deptName)
       
       // Get all students assigned to these peer tutors
       let totalStudents = 0
-      for (const tutor of peerTutors) {
-        const students = await StudentService.getStudentsByPeerTutor(tutor.id)
+      for (const tutor of peerTutor) {
+        const students = await StudentService.getStudentsBypeertutors(tutor.id)
         totalStudents += students.length
       }
 
       setStats({
         department: deptName,
-        totalPeerTutors: peerTutors.length,
+        totalpeerTutor: peerTutor.length,
         totalStudents
       })
     } catch (error) {
@@ -115,7 +115,7 @@ function SettingsContent() {
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
         <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex items-center justify-center`}>
+        <div className={`${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex items-center justify-center w-full lg:w-auto`}>
           <div className="text-center">
             <div className="relative w-20 h-20 mx-auto mb-6">
               <div className="absolute inset-0 rounded-full border-4 border-blue-50/50"></div>
@@ -132,7 +132,7 @@ function SettingsContent() {
     <div className="min-h-screen bg-[#F8FAFC]">
       <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col transition-all duration-300`}>
+      <div className={`${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col transition-all duration-300 w-full lg:w-auto`}>
         {/* Header */}
         <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 h-20 flex items-center px-8">
           <div className="flex justify-between items-center w-full">
@@ -212,7 +212,7 @@ function SettingsContent() {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Peer Tutors</p>
-                  <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalPeerTutors}</p>
+                  <p className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalpeerTutor}</p>
                 </div>
                 <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
                   <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -11,6 +11,7 @@ export { default as Table, TableHeader, TableBody, TableRow, TableHead, TableCel
 export { default as Chart } from './Chart'
 export { default as Heatmap } from './Heatmap'
 export { default as StudentPerformanceChart } from './StudentPerformanceChart'
+export { ConfirmationModal } from './ConfirmationModal'
 
 // Re-export types
 export type { ButtonProps } from './Button'

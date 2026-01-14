@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ReportService, ClassAttendanceReport } from '@/lib/services/reportService'
 import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
+import SubjectReportSkeleton from '@/components/skeletons/SubjectReportSkeleton'
 
 export default function SubjectReportsPage() {
   return (
@@ -23,7 +24,7 @@ function SubjectReportsContent() {
   const [loading, setLoading] = useState(true)
   const [selectedClass, setSelectedClass] = useState<ClassAttendanceReport | null>(null)
   const [showClassModal, setShowClassModal] = useState(false)
-  const [peerTutorInfo, setPeerTutorInfo] = useState<{ id: string; name: string } | null>(null)
+  const [peertutorsInfo, setpeertutorsInfo] = useState<{ id: string; name: string } | null>(null)
   const [subjectName, setSubjectName] = useState<string>('')
   
   // Check if sidebar is collapsed - read from localStorage first (source of truth)
@@ -94,18 +95,18 @@ function SubjectReportsContent() {
       const { createClient } = await import('@/utils/supabase/client')
       const supabase = createClient()
       
-      const { data: peerTutor, error: tutorError } = await supabase
+      const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('*')
         .eq('id', tutorId)
         .single()
 
-      if (tutorError || !peerTutor) {
+      if (tutorError || !peertutors) {
         console.error('Error getting peer tutor info:', tutorError)
         return
       }
 
-      setPeerTutorInfo(peerTutor)
+      setpeertutorsInfo(peertutors)
 
       // Get subject name from class_id
       const { data: classData, error: classError } = await supabase
@@ -178,7 +179,7 @@ function SubjectReportsContent() {
                   <span className="text-gray-700">{subjectName}</span>
                 </div>
                 <h1 className="text-2xl font-semibold text-gray-900">
-                  {subjectName} - {peerTutorInfo?.name}
+                  {subjectName} - {peertutorsInfo?.name}
                 </h1>
               </div>
             </div>
@@ -189,9 +190,7 @@ function SubjectReportsContent() {
         <main className="py-6">
           <div className={`max-w-7xl mx-auto ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-0' : 'px-4 sm:px-6 lg:px-8'}`}>
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-              </div>
+              <SubjectReportSkeleton />
             ) : (
               <div className="space-y-6">
                 {/* Stats Overview */}
@@ -438,8 +437,8 @@ function SubjectReportsContent() {
                             <td className="px-6 py-4 whitespace-nowrap text-center">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 record.status === 'present' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
+                                  ? 'bg-green-600 text-white' 
+                                  : 'bg-red-600 text-white'
                               }`}>
                                 {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                               </span>

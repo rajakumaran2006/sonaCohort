@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/client'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
-import { PeerTutorService } from './peerTutorService'
+import { peertutorservice } from './peerTutorService'
 
 import { MicrosoftUser } from '@/lib/types'
 
@@ -17,7 +17,7 @@ export interface Student {
   created_at: string
 }
 
-export interface StudentWithPeerTutor extends Student {
+export interface StudentWithpeertutors extends Student {
   assigned_peer_tutor?: {
     id: string
     name: string
@@ -205,6 +205,34 @@ export class StudentService {
   }
 
   /**
+   * Get student details by email
+   */
+  static async getStudentByEmail(email: string): Promise<Student | null> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('peer_students')
+        .select('*')
+        .eq('email', email)
+        .eq('peer_tutor', false)
+        .single()
+
+      if (error) {
+        if (error.code !== 'PGRST116') {
+          console.error('Error getting student by email:', error)
+        }
+        return null
+      }
+
+      return data as Student
+    } catch (error) {
+      console.error('Error in getStudentByEmail:', error)
+      return null
+    }
+  }
+
+  /**
    * Add a new student
    */
   static async addStudent(student: StudentAssignment): Promise<boolean> {
@@ -230,10 +258,42 @@ export class StudentService {
   /**
    * Remove a student
    */
+  /**
+   * Remove a student and all associated data
+   */
   static async removeStudent(id: string): Promise<boolean> {
     try {
       const supabase = createClient()
       
+      console.log(`Starting student removal for: ${id}`)
+      
+      // 1. Delete authentication/attendance records linked to this student
+      // Note: We need to check if there are any other tables linking to students
+      // For now, primarily attendance records
+      
+      // Attempt to delete from attendance table if it exists and has student_id
+      // We'll wrap this in a try-catch or check error codes in case columns differ
+      const { error: attendanceError } = await supabase
+        .from('attendance')
+        .delete()
+        .eq('student_id', id)
+
+      if (attendanceError) {
+        console.warn('Error deleting student attendance (or records not found):', attendanceError)
+        // Proceeding anyway as it might be a schema mismatch or no records
+      }
+
+      // 1.5 Delete additional class attendance records
+      const { error: additionalAttendanceError } = await supabase
+        .from('additional_class_attendance')
+        .delete()
+        .eq('student_id', id)
+
+      if (additionalAttendanceError) {
+         console.warn('Error deleting additional class attendance:', additionalAttendanceError)
+      }
+
+      // 2. Delete the student record
       const { error } = await supabase
         .from('peer_students')
         .delete()
@@ -261,11 +321,11 @@ export class StudentService {
       const existingStudentEmails = existingStudents.map(s => s.email.toLowerCase())
 
       // Get all existing peer tutor emails to exclude them
-      const existingPeerTutors = await PeerTutorService.getAllPeerTutors()
-      const existingPeerTutorEmails = existingPeerTutors.map(pt => pt.email.toLowerCase())
+      const existingpeerTutor = await peertutorservice.getAllpeerTutor()
+      const existingpeertutorsEmails = existingpeerTutor.map(pt => pt.email.toLowerCase())
 
       // Combine all emails to exclude
-      const allExcludedEmails = [...existingStudentEmails, ...existingPeerTutorEmails]
+      const allExcludedEmails = [...existingStudentEmails, ...existingpeertutorsEmails]
 
       // Search Microsoft Graph for students
       const searchResults = await MicrosoftGraphService.searchUsers(query)
@@ -285,11 +345,11 @@ export class StudentService {
   /**
    * Get all students with their assigned peer tutor information
    */
-  static async getAllStudentsWithPeerTutors(): Promise<StudentWithPeerTutor[]> {
+  static async getAllStudentsWithpeerTutor(facultyId?: string): Promise<StudentWithpeertutors[]> {
     try {
       const supabase = createClient()
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('peer_students')
         .select(`
           *,
@@ -302,6 +362,12 @@ export class StudentService {
         .eq('peer_tutor', false)
         .order('name')
 
+      if (facultyId) {
+        query = query.eq('faculty_id', facultyId)
+      }
+
+      const { data, error } = await query
+
       if (error) {
         console.error('Error getting students with peer tutors:', error)
         return []
@@ -309,7 +375,7 @@ export class StudentService {
 
       return data || []
     } catch (error) {
-      console.error('Error in getAllStudentsWithPeerTutors:', error)
+      console.error('Error in getAllStudentsWithpeerTutor:', error)
       return []
     }
   }
@@ -317,14 +383,14 @@ export class StudentService {
   /**
    * Get students assigned to a specific peer tutor
    */
-  static async getStudentsByPeerTutor(peerTutorId: string): Promise<Student[]> {
+  static async getStudentsBypeertutors(peertutorsId: string): Promise<Student[]> {
     try {
       const supabase = createClient()
       
       const { data, error } = await supabase
         .from('peer_students')
         .select('*')
-        .eq('assigned_peer_tutor_id', peerTutorId)
+        .eq('assigned_peer_tutor_id', peertutorsId)
         .eq('peer_tutor', false)
         .order('name')
 
@@ -335,7 +401,7 @@ export class StudentService {
 
       return data as Student[] || []
     } catch (error) {
-      console.error('Error in getStudentsByPeerTutor:', error)
+      console.error('Error in getStudentsBypeertutors:', error)
       return []
     }
   }
@@ -362,4 +428,37 @@ export class StudentService {
     }
   }
 
+
+  /**
+   * Get all students for a specific department with their assigned peer tutor information
+   */
+  static async getStudentsWithpeerTutorByDepartment(dept: string): Promise<StudentWithpeertutors[]> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('peer_students')
+        .select(`
+          *,
+          assigned_peer_tutor:assigned_peer_tutor_id (
+            id,
+            name,
+            email
+          )
+        `)
+        .eq('dept', dept)
+        .eq('peer_tutor', false)
+        .order('name')
+
+      if (error) {
+        console.error('Error getting students with peer tutors by department:', error)
+        return []
+      }
+
+      return data || []
+    } catch (error) {
+      console.error('Error in getStudentsWithpeerTutorByDepartment:', error)
+      return []
+    }
+  }
 }

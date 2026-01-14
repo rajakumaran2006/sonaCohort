@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react'
 import Modal, { ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { ClassService } from '@/lib/services/classService'
 import { StudentService } from '@/lib/services/studentService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
 import { AlertCircle, CheckCircle, XCircle, Loader2, Users } from 'lucide-react'
 
 interface ItemToTransfer {
@@ -66,16 +65,16 @@ export default function TransferModal({
     setLoading(true)
     setError(null)
     try {
-      console.log('Loading sections for:', { dept, year, currentSection })
+      // console.log('Loading sections for:', { dept, year, currentSection })
       const sections = await ClassService.getSectionsForYear(dept, year)
-      console.log('All sections found:', sections)
+      // console.log('All sections found:', sections)
       
       // Filter out current section (case-insensitive comparison)
       const otherSections = sections.filter(s => 
         s.toUpperCase() !== currentSection.toUpperCase()
       )
       
-      console.log('Available sections after filtering:', otherSections)
+      // console.log('Available sections after filtering:', otherSections)
       
       if (otherSections.length === 0) {
         setError('No other sections available for this year. Please create additional sections first.')

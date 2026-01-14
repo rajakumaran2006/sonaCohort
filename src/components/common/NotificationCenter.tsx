@@ -27,6 +27,7 @@ export function NotificationCenter({
   onClearAll 
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   
   // Calculate unread count
@@ -88,7 +89,7 @@ export function NotificationCenter({
       >
         <Bell className={`w-5 h-5 ${unreadCount > 0 ? 'text-gray-900' : 'text-gray-400'} group-hover:text-gray-900 transition-colors`} />
         
-        {unreadCount > 0 && (
+        {unreadCount > 0 && !isOpen && (
           <span className="absolute -top-1 -right-1 flex h-4 w-4">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[9px] font-bold text-white items-center justify-center border-2 border-white">
@@ -155,15 +156,30 @@ export function NotificationCenter({
                             </span>
                           </div>
                           
-                          <p className={`text-xs leading-relaxed mb-2 ${!notification.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                          <p className={`text-xs leading-relaxed mb-2 ${!notification.read ? 'text-gray-700 font-medium' : 'text-gray-500'} line-clamp-2`}>
                             {notification.message}
                           </p>
                           
-                          {notification.actionLabel && (
-                            <span className="inline-flex items-center text-[10px] font-black text-blue-600 uppercase tracking-wider group-hover:underline">
-                              {notification.actionLabel} &rarr;
-                            </span>
-                          )}
+                          <div className="flex items-center gap-3">
+                            {notification.actionLabel && (
+                              <span className="inline-flex items-center text-[10px] font-black text-blue-600 uppercase tracking-wider group-hover:underline">
+                                {notification.actionLabel} &rarr;
+                              </span>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedNotification(notification)
+                                setIsOpen(false)
+                                if (onMarkAsRead && !notification.read) {
+                                  onMarkAsRead(notification.id)
+                                }
+                              }}
+                              className="text-[10px] font-bold text-gray-500 hover:text-gray-800 uppercase tracking-wider transition-colors z-10"
+                            >
+                              View Details
+                            </button>
+                          </div>
                         </div>
 
                         {/* Unread indicator dot */}
@@ -185,6 +201,68 @@ export function NotificationCenter({
               )}
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Detail Popup Modal */}
+      <AnimatePresence>
+        {selectedNotification && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedNotification(null)}
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50"
+            />
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-md bg-white rounded-2xl shadow-2xl z-50 overflow-hidden border border-gray-100"
+            >
+              <div className={`px-6 py-4 border-b border-gray-50 flex items-center justify-between ${getBgColor(selectedNotification.type).split(' ')[0]} bg-opacity-10`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${getBgColor(selectedNotification.type)}`}>
+                    {getIcon(selectedNotification.type)}
+                  </div>
+                  <h3 className="text-base font-bold text-gray-900">{selectedNotification.title}</h3>
+                </div>
+                <button
+                  onClick={() => setSelectedNotification(null)}
+                  className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <div className="mb-4 flex items-center text-xs text-gray-400">
+                  <span className="font-medium">Received:</span>
+                  <span className="ml-2">{new Date(selectedNotification.timestamp).toLocaleString()}</span>
+                </div>
+                
+                <div className="prose prose-sm max-w-none max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    {selectedNotification.message}
+                  </p>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                   <button
+                    onClick={() => setSelectedNotification(null)}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-bold transition-all"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

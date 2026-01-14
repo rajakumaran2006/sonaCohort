@@ -6,24 +6,24 @@ import { Button } from '@/components/ui'
 import { ExamService, ExamMarkWithDetails } from '@/lib/services/examService'
 import { LoadingOverlay, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 
-interface PeerTutorMarksViewModalProps {
+interface peertutorsMarksViewModalProps {
   isOpen: boolean
   onClose: () => void
   examAssignmentId: string
 }
 
-export default function PeerTutorMarksViewModal({
+export default function peertutorsMarksViewModal({
   isOpen,
   onClose,
   examAssignmentId
-}: PeerTutorMarksViewModalProps) {
+}: peertutorsMarksViewModalProps) {
   const [marks, setMarks] = useState<ExamMarkWithDetails[]>([])
   const [loading, setLoading] = useState(false)
 
   const loadMarks = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await ExamService.getPeerTutorMarks(examAssignmentId)
+      const data = await ExamService.getpeertutorsMarks(examAssignmentId)
       setMarks(data)
     } catch (error) {
       console.error('Error loading marks:', error)

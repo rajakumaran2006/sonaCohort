@@ -3,7 +3,7 @@ import { AttendanceService } from './attendanceService'
 import { ScheduledClassWithDetails } from './scheduledClassService'
 import { AdditionalClassService } from './additionalClassService'
 
-export interface PeerTutorSubject {
+export interface peerTutorubject {
   subject_name: string
   class_id: string
   total_classes: number
@@ -12,14 +12,14 @@ export interface PeerTutorSubject {
   additional_classes: number
 }
 
-export interface PeerTutorReportData {
+export interface peertutorsReportData {
   peer_tutor_id: string
   peer_tutor_name: string
   peer_tutor_email: string
   dept: string
   year: string
   section: string
-  subjects: PeerTutorSubject[]
+  subjects: peerTutorubject[]
 }
 
 export interface ClassAttendanceReport {
@@ -39,6 +39,41 @@ export interface ClassAttendanceReport {
   total_students: number
 }
 
+export interface FullClassReport {
+  subject_name: string
+  columns: {
+    id: string
+    date: string
+    time: string
+    is_additional: boolean
+    topics: string
+  }[]
+  rows: {
+    student_id: string
+    student_name: string
+    student_email: string
+    attendance: {
+      [class_id: string]: 'present' | 'absent' | 'on_duty' | 'late'
+    }
+    stats: {
+      present: number
+      total: number
+      percentage: number
+    }
+  }[]
+}
+
+export interface TopicSheetData {
+  subject_name: string
+  classes: {
+    id: string
+    date: string
+    hour: string
+    topic: string
+    is_additional: boolean
+  }[]
+}
+
 export interface ExcelExportData {
   subject_name: string
   student_name: string
@@ -52,24 +87,24 @@ export class ReportService {
   /**
    * Get all subjects assigned to a peer tutor
    */
-  static async getPeerTutorSubjects(peerTutorId: string): Promise<PeerTutorSubject[]> {
+  static async getpeerTutorubjects(peertutorsId: string): Promise<peerTutorubject[]> {
     try {
       const supabase = createClient()
       
       // Get peer tutor info first (including created_at)
-      const { data: peerTutor, error: tutorError } = await supabase
+      const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('dept, year, section, created_at')
-        .eq('id', peerTutorId)
+        .eq('id', peertutorsId)
         .single()
 
-      if (tutorError || !peerTutor) {
+      if (tutorError || !peertutors) {
         console.error('Error getting peer tutor info:', tutorError)
         return []
       }
 
       // Calculate the minimum date for classes (day after peer tutor was created)
-      const createdDate = new Date(peerTutor.created_at)
+      const createdDate = new Date(peertutors.created_at)
       createdDate.setHours(0, 0, 0, 0)
       const minimumClassDate = new Date(createdDate)
       minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
@@ -89,7 +124,7 @@ export class ReportService {
             subject_name
           )
         `)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
 
       if (allScheduledError) {
         console.error('Error getting scheduled classes:', allScheduledError)
@@ -104,9 +139,9 @@ export class ReportService {
         const { data: classes, error: classesError } = await supabase
           .from('classes')
           .select('id, subject_name')
-          .eq('dept', peerTutor.dept)
-          .eq('year', peerTutor.year)
-          .eq('section', peerTutor.section)
+          .eq('dept', peertutors.dept)
+          .eq('year', peertutors.year)
+          .eq('section', peertutors.section)
 
         if (classesError) {
           console.error('Error getting classes:', classesError)
@@ -125,7 +160,7 @@ export class ReportService {
       }
 
       // Get additional classes for this peer tutor
-      const additionalClasses = await AdditionalClassService.getAdditionalClassesByPeerTutor(peerTutorId)
+      const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsId)
 
       // Group scheduled classes by class_id to get unique subjects
       // Use all scheduled classes to determine which subjects are assigned
@@ -188,7 +223,7 @@ export class ReportService {
 
       // Process subjects with class statistics
       // Use scheduledClassesForStats for counting (only classes after creation date)
-      const subjects: PeerTutorSubject[] = Array.from(classMap.values()).map(classData => {
+      const subjects: peerTutorubject[] = Array.from(classMap.values()).map(classData => {
         const classScheduledClasses = classData.scheduledClassesForStats
         const totalClasses = classScheduledClasses.length
         const completedClasses = classScheduledClasses.filter(sc => 
@@ -212,7 +247,7 @@ export class ReportService {
 
       return subjects
     } catch (error) {
-      console.error('Error in getPeerTutorSubjects:', error)
+      console.error('Error in getpeerTutorubjects:', error)
       return []
     }
   }
@@ -220,24 +255,24 @@ export class ReportService {
   /**
    * Get scheduled classes for a specific subject and peer tutor
    */
-  static async getSubjectScheduledClasses(peerTutorId: string, subjectName: string): Promise<ScheduledClassWithDetails[]> {
+  static async getSubjectScheduledClasses(peertutorsId: string, subjectName: string): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
       
       // Get peer tutor info (including created_at)
-      const { data: peerTutor, error: tutorError } = await supabase
+      const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('dept, year, section, created_at')
-        .eq('id', peerTutorId)
+        .eq('id', peertutorsId)
         .single()
 
-      if (tutorError || !peerTutor) {
+      if (tutorError || !peertutors) {
         console.error('Error getting peer tutor info:', tutorError)
         return []
       }
 
       // Calculate the minimum date for classes (day after peer tutor was created)
-      const createdDate = new Date(peerTutor.created_at)
+      const createdDate = new Date(peertutors.created_at)
       createdDate.setHours(0, 0, 0, 0)
       const minimumClassDate = new Date(createdDate)
       minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
@@ -261,7 +296,7 @@ export class ReportService {
             email
           )
         `)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .eq('class.subject_name', subjectName)
         .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0])
         .order('scheduled_date', { ascending: true })
@@ -334,36 +369,222 @@ export class ReportService {
   /**
    * Get comprehensive report data for a peer tutor
    */
-  static async getPeerTutorReportData(peerTutorId: string): Promise<PeerTutorReportData | null> {
+  static async getpeertutorsReportData(peertutorsId: string): Promise<peertutorsReportData | null> {
     try {
       const supabase = createClient()
       
       // Get peer tutor info
-      const { data: peerTutor, error: tutorError } = await supabase
+      const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('*')
-        .eq('id', peerTutorId)
+        .eq('id', peertutorsId)
         .single()
 
-      if (tutorError || !peerTutor) {
+      if (tutorError || !peertutors) {
         console.error('Error getting peer tutor info:', tutorError)
         return null
       }
 
       // Get subjects
-      const subjects = await this.getPeerTutorSubjects(peerTutorId)
+      const subjects = await this.getpeerTutorubjects(peertutorsId)
 
       return {
-        peer_tutor_id: peerTutor.id,
-        peer_tutor_name: peerTutor.name,
-        peer_tutor_email: peerTutor.email,
-        dept: peerTutor.dept,
-        year: peerTutor.year,
-        section: peerTutor.section,
+        peer_tutor_id: peertutors.id,
+        peer_tutor_name: peertutors.name,
+        peer_tutor_email: peertutors.email,
+        dept: peertutors.dept,
+        year: peertutors.year,
+        section: peertutors.section,
         subjects
       }
     } catch (error) {
-      console.error('Error in getPeerTutorReportData:', error)
+      console.error('Error in getpeertutorsReportData:', error)
+      return null
+    }
+  }
+
+  /**
+   * Get comprehensive attendance report matrix for a specific subject
+   */
+  static async getSubjectFullClassReport(peertutorsId: string, subjectName: string): Promise<FullClassReport | null> {
+    try {
+      const supabase = createClient()
+      
+      // 1. Get peer tutor info
+      const { data: peertutors, error: tutorError } = await supabase
+        .from('peer_tutors')
+        .select('*')
+        .eq('id', peertutorsId)
+        .single()
+
+      if (tutorError || !peertutors) {
+        console.error('Error getting peer tutor info:', tutorError)
+        return null
+      }
+
+      // Calculate start date
+      const createdDate = new Date(peertutors.created_at)
+      createdDate.setHours(0, 0, 0, 0)
+      const minimumClassDate = new Date(createdDate)
+      minimumClassDate.setDate(minimumClassDate.getDate() + 1)
+
+      // 2. Get Scheduled Classes (Completed only)
+      const { data: scheduledClasses, error: scheduledError } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          id,
+          class_id,
+          scheduled_date,
+          topics,
+          class:classes!inner(subject_name)
+        `)
+        .eq('peer_tutor_id', peertutorsId)
+        .eq('class.subject_name', subjectName)
+        .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0])
+        .or('completion_status.eq.completed,and(attendance_completed.eq.true,topics_completed.eq.true)')
+        .order('scheduled_date', { ascending: true })
+
+      if (scheduledError) {
+        console.error('Error getting scheduled classes:', scheduledError)
+        return null
+      }
+
+      // 3. Get Additional Classes
+      const { data: additionalClasses, error: additionalError } = await supabase
+        .from('additional_classes')
+        .select('*')
+        .eq('peer_tutor_id', peertutorsId)
+        .eq('subject_name', subjectName)
+        .order('class_date', { ascending: true })
+
+      if (additionalError) {
+        console.error('Error getting additional classes:', additionalError)
+        return null
+      }
+
+      // 4. Merge and Sort Classes (Columns)
+      const columns = [
+        ...(scheduledClasses || []).map(c => ({
+          id: c.id,
+          date: c.scheduled_date,
+          time: new Date(c.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          is_additional: false,
+          topics: c.topics || ''
+        })),
+        ...(additionalClasses || []).map(c => ({
+          id: c.id,
+          date: c.class_date, // Assumes ISO string or date string
+          time: 'Additional', // Additional classes might not have specific time stored? 
+          is_additional: true,
+          topics: c.topic || ''
+        }))
+      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      if (columns.length === 0) {
+        return { subject_name: subjectName, columns: [], rows: [] }
+      }
+
+      // 5. Get Students
+      const { data: students, error: studentsError } = await supabase
+        .from('peer_students')
+        .select('id, name, email')
+        .eq('assigned_peer_tutor_id', peertutorsId)
+        .eq('peer_tutor', false)
+        .order('name')
+
+      if (studentsError) {
+        console.error('Error getting students:', studentsError)
+        return null
+      }
+
+      // 6. Get Attendance Records
+      // Scheduled
+      const scheduledIds = scheduledClasses?.map(c => c.id) || []
+      let scheduledAttendance: any[] = []
+      if (scheduledIds.length > 0) {
+        const { data: sa, error: saError } = await supabase
+          .from('attendance')
+          .select('student_id, scheduled_class_id, status')
+          .in('scheduled_class_id', scheduledIds)
+        
+        if (saError) console.error('Error fetching scheduled attendance', saError)
+        else scheduledAttendance = sa || []
+      }
+
+      // Additional
+      const additionalIds = additionalClasses?.map(c => c.id) || []
+      let additionalAttendance: any[] = []
+      if (additionalIds.length > 0) {
+        const { data: aa, error: aaError } = await supabase
+          .from('additional_class_attendance')
+          .select('student_id, additional_class_id, status')
+          .in('additional_class_id', additionalIds)
+
+        if (aaError) console.error('Error fetching additional attendance', aaError)
+        else additionalAttendance = aa || []
+      }
+
+      // 7. Build Rows
+      const rows = students.map(student => {
+        const attendanceMap: Record<string, 'present' | 'absent' | 'on_duty' | 'late'> = {}
+        let presentCount = 0
+        let totalCount = 0
+
+        // Process columns to populate map and stats
+        columns.forEach(col => {
+          let status: any = null
+          
+          if (!col.is_additional) {
+            const record = scheduledAttendance.find(r => r.student_id === student.id && r.scheduled_class_id === col.id)
+            status = record?.status
+          } else {
+            const record = additionalAttendance.find(r => r.student_id === student.id && r.additional_class_id === col.id)
+            status = record?.status
+          }
+
+          if (status) {
+            attendanceMap[col.id] = status
+            totalCount++
+            if (status === 'present') presentCount++
+          } else {
+            // Absent by default if class exists but no record? Or just null?
+            // Usually if class is completed, attendance should exist.
+            // If missing, count as absent? Or ignore?
+            // Let's assume ignore if truly missing, but for report usually absent.
+            // But let's stick to what we have.
+            attendanceMap[col.id] = 'absent' // Defaulting to absent if not found but student is in class list? 
+            // Better to verify if student was enrolled then.
+            // For now, assume if no record found, it might mean they weren't in the class list OR absent.
+            // Safest to leave as null or 'absent' if we assume full enrolment.
+            // Let's count only if record exists for now to be safe, or check business logic.
+            // User requirement: "in the column only the completed allocated class"
+            // If we have a column, the student should have a status.
+             totalCount++ // Assume everyone should have attended
+             attendanceMap[col.id] = 'absent'
+          }
+        })
+
+        return {
+          student_id: student.id,
+          student_name: student.name,
+          student_email: student.email,
+          attendance: attendanceMap,
+          stats: {
+            present: presentCount,
+            total: totalCount,
+            percentage: totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0
+          }
+        }
+      })
+
+      return {
+        subject_name: subjectName,
+        columns,
+        rows
+      }
+
+    } catch (error) {
+      console.error('Error in getSubjectFullClassReport:', error)
       return null
     }
   }
@@ -371,24 +592,24 @@ export class ReportService {
   /**
    * Get Excel export data for a peer tutor
    */
-  static async getExcelExportData(peerTutorId: string): Promise<ExcelExportData[]> {
+  static async getExcelExportData(peertutorsId: string): Promise<ExcelExportData[]> {
     try {
       const supabase = createClient()
       
       // Get peer tutor info (including created_at)
-      const { data: peerTutor, error: tutorError } = await supabase
+      const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('dept, year, section, created_at')
-        .eq('id', peerTutorId)
+        .eq('id', peertutorsId)
         .single()
 
-      if (tutorError || !peerTutor) {
+      if (tutorError || !peertutors) {
         console.error('Error getting peer tutor info:', tutorError)
         return []
       }
 
       // Calculate the minimum date for classes (day after peer tutor was created)
-      const createdDate = new Date(peerTutor.created_at)
+      const createdDate = new Date(peertutors.created_at)
       createdDate.setHours(0, 0, 0, 0)
       const minimumClassDate = new Date(createdDate)
       minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
@@ -403,7 +624,7 @@ export class ReportService {
             subject_name
           )
         `)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0])
         .order('scheduled_date', { ascending: true })
 
@@ -416,7 +637,7 @@ export class ReportService {
       const { data: students, error: studentsError } = await supabase
         .from('peer_students')
         .select('id, name, email')
-        .eq('assigned_peer_tutor_id', peerTutorId)
+        .eq('assigned_peer_tutor_id', peertutorsId)
         .eq('peer_tutor', false)
 
       if (studentsError) {
@@ -428,7 +649,7 @@ export class ReportService {
       const { data: attendanceRecords, error: attendanceError } = await supabase
         .from('attendance')
         .select('*')
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
 
       if (attendanceError) {
         console.error('Error getting attendance records:', attendanceError)
@@ -505,15 +726,21 @@ export class ReportService {
   /**
    * Get all peer tutors with their report data
    */
-  static async getAllPeerTutorReports(): Promise<PeerTutorReportData[]> {
+  static async getAllpeertutorsReports(facultyId?: string): Promise<peertutorsReportData[]> {
     try {
       const supabase = createClient()
       
       // Get all peer tutors
-      const { data: peerTutors, error: tutorsError } = await supabase
+      let query = supabase
         .from('peer_tutors')
         .select('*')
         .order('name')
+
+      if (facultyId) {
+        query = query.eq('faculty_id', facultyId)
+      }
+
+      const { data: peerTutor, error: tutorsError } = await query
 
       if (tutorsError) {
         console.error('Error getting peer tutors:', tutorsError)
@@ -522,8 +749,8 @@ export class ReportService {
 
       // Get report data for each peer tutor
       const reports = await Promise.all(
-        peerTutors.map(async (tutor) => {
-          const subjects = await this.getPeerTutorSubjects(tutor.id)
+        peerTutor.map(async (tutor) => {
+          const subjects = await this.getpeerTutorubjects(tutor.id)
           return {
             peer_tutor_id: tutor.id,
             peer_tutor_name: tutor.name,
@@ -538,7 +765,153 @@ export class ReportService {
 
       return reports
     } catch (error) {
-      console.error('Error in getAllPeerTutorReports:', error)
+      console.error('Error in getAllpeertutorsReports:', error)
+      return []
+    }
+  }
+  /**
+   * Get topic sheet data (only class details, no attendance) for all subjects
+   */
+  static async getTopicSheetData(peertutorsId: string): Promise<TopicSheetData[]> {
+    try {
+      const supabase = createClient()
+      
+      // 1. Get all assigned subjects first
+      const assignedSubjects = await this.getpeerTutorubjects(peertutorsId)
+      
+      // Initialize map with all subjects
+      const subjectMap = new Map<string, TopicSheetData>()
+      assignedSubjects.forEach(sub => {
+        subjectMap.set(sub.subject_name, { 
+          subject_name: sub.subject_name, 
+          classes: [] 
+        })
+      })
+
+      // 2. Get peer tutor info for creation date filter
+      const { data: peertutors, error: tutorError } = await supabase
+        .from('peer_tutors')
+        .select('created_at')
+        .eq('id', peertutorsId)
+        .single()
+
+      if (tutorError || !peertutors) {
+        console.error('Error getting peer tutor info:', tutorError)
+        return []
+      }
+
+      // Calculate the minimum date for classes (day after peer tutor was created)
+      const createdDate = new Date(peertutors.created_at)
+      createdDate.setHours(0, 0, 0, 0)
+      const minimumClassDate = new Date(createdDate)
+      minimumClassDate.setDate(minimumClassDate.getDate() + 1)
+
+      // 3. Get All Scheduled Classes (Completed only)
+      const { data: scheduledClasses, error: scheduledError } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          id,
+          class_id,
+          scheduled_date,
+          topics,
+          class:classes!inner(subject_name)
+        `)
+        .eq('peer_tutor_id', peertutorsId)
+        .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0])
+        .or('completion_status.eq.completed,and(attendance_completed.eq.true,topics_completed.eq.true)')
+        .order('scheduled_date', { ascending: true })
+
+      if (scheduledError) {
+        console.error('Error getting scheduled classes:', scheduledError)
+        return []
+      }
+
+      // 4. Get All Additional Classes
+      const { data: additionalClasses, error: additionalError } = await supabase
+        .from('additional_classes')
+        .select('*')
+        .eq('peer_tutor_id', peertutorsId)
+        .order('class_date', { ascending: true })
+
+      if (additionalError) {
+        console.error('Error getting additional classes:', additionalError)
+        return []
+      }
+
+      // 5. Populate classes
+      // Process Scheduled Classes
+      scheduledClasses?.forEach(sc => {
+        // @ts-ignore
+        const subjectName = sc.class?.subject_name
+        if (!subjectName) return
+
+        if (!subjectMap.has(subjectName)) {
+          // This ensures even if a subject wasn't in the initial list (unlikely if logic is correct), it's added
+          subjectMap.set(subjectName, { subject_name: subjectName, classes: [] })
+        }
+
+        subjectMap.get(subjectName)!.classes.push({
+          id: sc.id,
+          date: sc.scheduled_date,
+          hour: new Date(sc.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          topic: sc.topics || '',
+          is_additional: false
+        })
+      })
+
+      // Process Additional Classes
+      additionalClasses?.forEach(ac => {
+        const subjectName = ac.subject_name
+        if (!subjectName) return
+
+        if (!subjectMap.has(subjectName)) {
+           // Should ideally be there, but safe to add
+          subjectMap.set(subjectName, { subject_name: subjectName, classes: [] })
+        }
+
+        subjectMap.get(subjectName)!.classes.push({
+          id: ac.id,
+          date: ac.class_date,
+          hour: '(A)', // Additional class marked as (A)
+          topic: ac.topic || '',
+          is_additional: true
+        })
+      })
+
+      // Sort classes by date for each subject and return values
+      const result = Array.from(subjectMap.values()).map(data => ({
+        ...data,
+        classes: data.classes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      }))
+
+      return result
+    } catch (error) {
+      console.error('Error in getTopicSheetData:', error)
+      return []
+    }
+  }
+
+  /**
+   * Get attendance sheet data for all subjects
+   */
+  static async getAttendanceSheetData(peertutorsId: string): Promise<FullClassReport[]> {
+    try {
+      // 1. Get all subjects for the peer tutor
+      const subjects = await this.getpeerTutorubjects(peertutorsId)
+      
+      if (!subjects || subjects.length === 0) return []
+
+      // 2. Fetch full class report for each subject
+      const reports = await Promise.all(
+        subjects.map(async (subject) => {
+          return await this.getSubjectFullClassReport(peertutorsId, subject.subject_name)
+        })
+      )
+
+      // Filter out nulls
+      return reports.filter((r): r is FullClassReport => r !== null)
+    } catch (error) {
+      console.error('Error in getAttendanceSheetData:', error)
       return []
     }
   }

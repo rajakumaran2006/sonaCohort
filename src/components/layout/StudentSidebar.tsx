@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { LayoutGrid, Users, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface StudentSidebarProps {
@@ -48,9 +49,7 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
   const navigation = [
     { name: 'Dashboard', href: '/student/dashboard', Icon: LayoutGrid },
     { name: 'Students', href: '/student/students', Icon: Users },
-  ] as const
-
-
+  ]
 
   const handleSignOut = async () => {
     setIsLoggingOut(true)
@@ -69,41 +68,60 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
       {/* Mobile backdrop */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={onClose}
         />
       )}
 
       {/* Sidebar */}
       <div
+        suppressHydrationWarning
         className={`
-          fixed inset-y-0 left-0 z-50 bg-[#0f291e] shadow-lg transform transition-all duration-300 ease-in-out lg:flex lg:flex-col
+          fixed inset-y-0 left-0 z-50 bg-[#0f291e] shadow-2xl transform transition-all duration-300 ease-in-out lg:flex lg:flex-col
           ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'}
           ${isCollapsed ? 'lg:w-20' : 'w-64'}
+          max-w-[85vw] border-r border-[#1a3d2e]
         `}
         data-sidebar-collapsed={isCollapsed}
       >
         {/* Logo Header */}
-        <div className="flex items-center h-20 flex-shrink-0 px-6 pt-4 mb-6">
-          <div className="flex items-center gap-3">
-             {!isCollapsed && (
-               <h1 className="font-bold text-white text-xl tracking-wide">
-                 STUDENT PORTAL
-               </h1>
-             )}
+        <div className={`flex items-center h-20 flex-shrink-0 ${isCollapsed ? 'px-4' : 'pl-6 pr-6'} pt-6 mb-8 transition-all duration-300`}>
+          <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center w-full' : 'w-full'}`}>
+            <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-1 ${isCollapsed ? 'w-10 h-10' : 'w-10 h-10'}`}>
+              <Image 
+                src="/peers.png" 
+                alt="Peers Logo" 
+                width={48}
+                height={48}
+                className={`object-contain transition-all duration-300`}
+                priority
+              />
+            </div>
+            {!isCollapsed && (
+              <div className="flex flex-col">
+                <span className="text-sm font-black text-white tracking-[0.2em] leading-none mb-1">
+                  SONA
+                </span>
+                <span className="text-[10px] font-bold text-[#bef264] tracking-[0.3em] leading-none uppercase">
+                  Cohort
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 overflow-y-auto">
+        <nav className="flex-1 px-4 overflow-y-auto custom-scrollbar">
           {!isCollapsed && (
-            <div className="px-4 mb-4 text-xs font-bold text-gray-500 tracking-wider uppercase">
+            <div className="px-2 mb-4 text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase pl-4">
               Menu
             </div>
           )}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = pathname === item.href || 
+                              pathname?.startsWith(`${item.href}/`)
+              
               const Icon = item.Icon
               return (
                 <Link
@@ -111,20 +129,24 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
                   href={item.href}
                   onClick={onClose}
                   className={`
-                    w-full flex items-center rounded-lg transition-all duration-200 group relative
-                    ${isCollapsed ? 'justify-center py-4' : 'px-4 py-3 text-left'}
+                    w-full flex items-center rounded-xl transition-all duration-200 group relative
+                    ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3 text-left'}
                     ${isActive
-                      ? 'text-white'
-                      : 'text-gray-400 hover:text-white'
+                      ? 'bg-white/10 text-white shadow-lg shadow-black/10'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }
                   `}
                   title={isCollapsed ? item.name : undefined}
                 >
-                  {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#bef264] rounded-r-full" />
+                  {isActive && !isCollapsed && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#bef264] rounded-r-full shadow-[0_0_10px_rgba(190,242,100,0.5)]" />
                   )}
-                  <Icon className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'} ${isActive ? 'text-[#bef264]' : 'text-gray-400 group-hover:text-white'}`} />
-                  {!isCollapsed && <span className="font-medium">{item.name}</span>}
+                  <Icon className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'} ${isActive ? 'text-[#bef264]' : 'text-gray-400 group-hover:text-white transition-colors'}`} />
+                  {!isCollapsed && (
+                    <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-white' : ''}`}>
+                      {item.name}
+                    </span>
+                  )}
                 </Link>
               )
 
@@ -132,47 +154,57 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
           </div>
 
         {/* Toggle Button - Bottom Right */}
-        <div className={`mt-8 flex ${isCollapsed ? 'justify-center' : 'justify-end px-4'}`}>
+        <div className={`mt-8 flex ${isCollapsed ? 'justify-center' : 'justify-end px-2'}`}>
           <button
             onClick={handleToggleCollapse}
-            className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors duration-200 lg:flex hidden"
+            className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors duration-200 lg:flex hidden border border-transparent hover:border-white/10"
           >
-            {isCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
         </div>
         </nav>
 
         {/* Profile Section */}
-        <div className="border-t border-gray-800 p-4">
+        <div className="border-t border-[#1a3d2e] bg-[#0c2219]/50 flex-shrink-0 p-4 relative backdrop-blur-sm">
           <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between'}`}>
-            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 min-w-0'}`}>
-              <div className="relative flex-shrink-0">
-                <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden ring-2 ring-[#bef264] ring-offset-2 ring-offset-[#0f291e]">
-                  <User className="h-6 w-6 text-gray-300" />
+            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 min-w-0 transition-colors'}`}>
+              <div className="relative flex-shrink-0 group cursor-pointer">
+                <div className="h-9 w-9 rounded-lg bg-[#1a3d2e] flex items-center justify-center overflow-hidden ring-1 ring-white/10 group-hover:ring-[#bef264]/50 transition-all">
+                  <User className="h-5 w-5 text-gray-300" />
                 </div>
-                <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
+                <div className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
               </div>
               
               {!isCollapsed && (
                 <div className="flex flex-col min-w-0 mr-2">
-                  <p className="text-sm font-medium text-white truncate">
+                  <p className="text-xs font-bold text-white truncate uppercase tracking-wide">
                     {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Student'}
                   </p>
                 </div>
               )}
             </div>
 
-            <button
-              onClick={handleSignOut}
-              disabled={isLoggingOut}
-              className={`
-                text-gray-400 hover:text-white transition-colors flex-shrink-0
-                ${isCollapsed ? '' : 'p-2 rounded-lg hover:bg-white/10'}
-              `}
-              title="Sign Out"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+            {!isCollapsed ? (
+              <button
+                onClick={handleSignOut}
+                disabled={isLoggingOut}
+                className={`
+                  flex-shrink-0 p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all duration-200 group
+                `}
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
+              </button>
+            ) : (
+               <button
+                onClick={handleSignOut}
+                disabled={isLoggingOut}
+                className="flex-shrink-0 p-2 rounded-lg text-gray-400 hover:text-red-400 transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>

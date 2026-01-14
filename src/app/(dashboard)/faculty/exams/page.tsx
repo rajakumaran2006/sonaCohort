@@ -9,19 +9,21 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ExamService, Exam } from '@/lib/services/examService'
-import { PeerTutorService } from '@/lib/services/peerTutorService'
+import { peertutorservice } from '@/lib/services/peerTutorService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { LoadingOverlay } from '@/components/ui'
+import ExamPageSkeleton from '@/components/skeletons/ExamPageSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import CreateExamModal from '@/components/forms/CreateExamModal'
-import { FileText, Plus, Trash2 } from 'lucide-react'
+import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import { FileText, Plus, Trash2, Eye } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
-import { calculatePeerTutorAscendScore } from '@/lib/utils/ascendScore'
+import { calculatepeertutorsAscendScore } from '@/lib/utils/ascendScore'
 
 export default function FacultyExamsPage() {
   return (
@@ -47,6 +49,11 @@ function FacultyExamsContent() {
   }>>({})
   const [, setIsLoadingStats] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isDeleteMode, setIsDeleteMode] = useState(false)
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set())
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [examsToDelete, setExamsToDelete] = useState<{name: string, id: string}[]>([])
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
@@ -69,13 +76,18 @@ function FacultyExamsContent() {
   })
 
   // Fetch all peer tutors (across all years)
-  const { data: allPeerTutors, isLoading: isPeerTutorsLoading } = useQuery({
-    queryKey: ['all-peer-tutors'],
-    queryFn: async () => await PeerTutorService.getAllPeerTutors(),
+  // Fetch all peer tutors (filtered by department)
+  const { data: allpeerTutor, isLoading: ispeerTutorLoading } = useQuery({
+    queryKey: ['all-peer-tutors', department?.name],
+    queryFn: async () => {
+      if (!department?.name) return []
+      return await peertutorservice.getpeerTutorByDepartment(department.name)
+    },
+    enabled: !!department?.name,
     staleTime: 5 * 60 * 1000,
   })
 
-  const loading = isDepartmentLoading || isExamsLoading || isPeerTutorsLoading
+  const loading = isDepartmentLoading || isExamsLoading || ispeerTutorLoading
 
   // Calculate exam statistics
   useEffect(() => {
@@ -93,7 +105,7 @@ function FacultyExamsContent() {
       for (const exam of exams) {
         try {
           // Get peer tutors for this exam's years
-          const peerTutors = await PeerTutorService.getPeerTutorsByYears(exam.years)
+          const peerTutor = await peertutorservice.getpeerTutorByYears(exam.years)
           const examSubjects = await ExamSubjectService.getExamSubjects(exam.id)
           const totalSubjects = examSubjects.length
 
@@ -101,10 +113,10 @@ function FacultyExamsContent() {
           let pending = 0
           let ongoing = 0
 
-          for (const tutor of peerTutors) {
+          for (const tutor of peerTutor) {
             try {
-              const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(tutor.id, exam.id)
-              const students = await AssignmentService.getStudentsByPeerTutor(tutor.id)
+              const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(tutor.id, exam.id)
+              const students = await AssignmentService.getStudentsBypeertutors(tutor.id)
 
               // Organize marks by student and subject
               const allStudentsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
@@ -156,7 +168,7 @@ function FacultyExamsContent() {
           }
 
           stats[exam.id] = {
-            total: peerTutors.length,
+            total: peerTutor.length,
             completed,
             pending,
             ongoing,
@@ -197,21 +209,60 @@ function FacultyExamsContent() {
     refetchExams()
   }
 
-  const handleDeleteExam = async (examId: string, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent triggering the exam click
-    if (!confirm('Are you sure you want to delete this exam?')) return
+  const handleDeleteModeToggle = () => {
+    setIsDeleteMode(!isDeleteMode)
+    setSelectedExamIds(new Set())
+  }
 
+  const handleSelectExam = (examId: string) => {
+    const newSelected = new Set(selectedExamIds)
+    if (newSelected.has(examId)) {
+      newSelected.delete(examId)
+    } else {
+      newSelected.add(examId)
+    }
+    setSelectedExamIds(newSelected)
+  }
+
+  const handleSelectAllExams = () => {
+    if (!exams) return
+    if (selectedExamIds.size === exams.length) {
+      setSelectedExamIds(new Set())
+    } else {
+      setSelectedExamIds(new Set(exams.map(e => e.id)))
+    }
+  }
+
+  const handleBulkDeleteExams = () => {
+    if (!exams || selectedExamIds.size === 0) return
+    
+    const examsToDelete = exams
+      .filter(e => selectedExamIds.has(e.id))
+      .map(e => ({ name: e.name, id: e.id }))
+    
+    setExamsToDelete(examsToDelete)
+    setDeleteModalOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    setIsDeleting(true)
     try {
-      const success = await ExamService.deleteExam(examId)
-      if (success) {
-        queryClient.invalidateQueries({ queryKey: ['faculty-exams'] })
-        refetchExams()
-      } else {
-        alert('Failed to delete exam')
-      }
+      const deletePromises = Array.from(selectedExamIds).map(id => 
+        ExamService.deleteExam(id)
+      )
+      
+      await Promise.all(deletePromises)
+      
+      queryClient.invalidateQueries({ queryKey: ['faculty-exams'] })
+      refetchExams()
+      setSelectedExamIds(new Set())
+      setIsDeleteMode(false)
+      setDeleteModalOpen(false)
     } catch (error) {
-      console.error('Error deleting exam:', error)
-      alert('An error occurred while deleting the exam')
+      console.error('Error deleting exams:', error)
+      alert('An error occurred while deleting exams')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -260,11 +311,11 @@ function FacultyExamsContent() {
           const examSubjects = await ExamSubjectService.getExamSubjects(exam.id)
           
           // Get peer tutors for this exam's years
-          const peerTutors = await PeerTutorService.getPeerTutorsByYears(exam.years)
+          const peerTutor = await peertutorservice.getpeerTutorByYears(exam.years)
           
           // Get all unique years and sections from peer tutors
-          const uniqueYears = Array.from(new Set(peerTutors.map(pt => pt.year)))
-          const uniqueSections = Array.from(new Set(peerTutors.map(pt => pt.section)))
+          const uniqueYears = Array.from(new Set(peerTutor.map(pt => pt.year)))
+          const uniqueSections = Array.from(new Set(peerTutor.map(pt => pt.section)))
           
           // Format years and sections
           const yearsText = uniqueYears.map(y => formatYear(y)).join(', ')
@@ -291,10 +342,10 @@ function FacultyExamsContent() {
           const completionPercentages: Record<string, number> = {}
           const ascendScores: Record<string, number> = {}
           
-          for (const peerTutor of peerTutors) {
+          for (const peertutors of peerTutor) {
             try {
-              const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutor.id, exam.id)
-              const students = await AssignmentService.getStudentsByPeerTutor(peerTutor.id)
+              const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutors.id, exam.id)
+              const students = await AssignmentService.getStudentsBypeertutors(peertutors.id)
               
               // Organize marks by student and subject
               const allStudentsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
@@ -313,7 +364,7 @@ function FacultyExamsContent() {
                 })
               })
               
-              ascendScores[peerTutor.id] = calculatePeerTutorAscendScore(allStudentsMarks, exam.max_marks || 100)
+              ascendScores[peertutors.id] = calculatepeertutorsAscendScore(allStudentsMarks, exam.max_marks || 100)
               
               // Calculate completion percentage
               let enteredMarks = 0
@@ -329,46 +380,46 @@ function FacultyExamsContent() {
                   })
                 })
                 
-                completionPercentages[peerTutor.id] = Math.round((enteredMarks / totalPossible) * 100)
+                completionPercentages[peertutors.id] = Math.round((enteredMarks / totalPossible) * 100)
               } else {
-                completionPercentages[peerTutor.id] = 0
+                completionPercentages[peertutors.id] = 0
               }
             } catch (error) {
-              console.error(`Error calculating scores for tutor ${peerTutor.id}:`, error)
-              ascendScores[peerTutor.id] = 0
-              completionPercentages[peerTutor.id] = 0
+              console.error(`Error calculating scores for tutor ${peertutors.id}:`, error)
+              ascendScores[peertutors.id] = 0
+              completionPercentages[peertutors.id] = 0
             }
           }
           
           // Sort peer tutors by year, then section, then name
-          const sortedPeerTutors = [...peerTutors].sort((a, b) => {
+          const sortedpeerTutor = [...peerTutor].sort((a, b) => {
             if (a.year !== b.year) return a.year.localeCompare(b.year)
             if (a.section !== b.section) return a.section.localeCompare(b.section)
             return a.name.localeCompare(b.name)
           })
           
           // For each peer tutor
-          for (const peerTutor of sortedPeerTutors) {
-            const completion = completionPercentages[peerTutor.id] || 0
+          for (const peertutors of sortedpeerTutor) {
+            const completion = completionPercentages[peertutors.id] || 0
             
             // If 0% completion, only show peer tutor name, ascend score, and completion percentage
             if (completion === 0) {
-              exportData.push(['Peer Tutor Name:', peerTutor.name])
-              exportData.push(['Ascend Score:', `${ascendScores[peerTutor.id]?.toFixed(1) || '0.0'}/10`])
+              exportData.push(['Peer Tutor Name:', peertutors.name])
+              exportData.push(['Ascend Score:', `${ascendScores[peertutors.id]?.toFixed(1) || '0.0'}/10`])
               exportData.push(['Completion Status:', `${completion}%`])
               exportData.push([]) // Empty row
               continue
             }
             
             // Otherwise, show full details
-            exportData.push(['Peer Tutor Name:', peerTutor.name])
-            exportData.push(['Ascend Score:', `${ascendScores[peerTutor.id]?.toFixed(1) || '0.0'}/10`])
+            exportData.push(['Peer Tutor Name:', peertutors.name])
+            exportData.push(['Ascend Score:', `${ascendScores[peertutors.id]?.toFixed(1) || '0.0'}/10`])
             exportData.push(['Completion Status:', `${completion}%`])
             exportData.push([]) // Empty row
             
             // Get students and marks for this peer tutor
-            const students = await AssignmentService.getStudentsByPeerTutor(peerTutor.id)
-            const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutor.id, exam.id)
+            const students = await AssignmentService.getStudentsBypeertutors(peertutors.id)
+            const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutors.id, exam.id)
             
             // Organize marks by student and subject
             const marksByStudentSubject: Record<string, Record<string, string>> = {}
@@ -383,7 +434,7 @@ function FacultyExamsContent() {
             
             // For each student assigned to this peer tutor
             for (const student of students) {
-              exportData.push(['Peer Tutor Allocated:', peerTutor.name])
+              exportData.push(['Peer Tutor Allocated:', peertutors.name])
               
               // For each subject - show subject name and marks
               for (const subject of examSubjects) {
@@ -431,7 +482,8 @@ function FacultyExamsContent() {
       />
 
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+      {/* Main Content */}
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
         {/* Top Header */}
         <PageHeader
           title="EXAM MANAGEMENT"
@@ -444,14 +496,12 @@ function FacultyExamsContent() {
         />
 
         {/* Main Content */}
-        {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
+          <div className={`max-w-full mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
           {loading ? (
-            <LoadingOverlay className="h-96" size="xl">
-              Loading exams...
-            </LoadingOverlay>
+            <ExamPageSkeleton />
           ) : (
-            <div className={`max-w-full mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
+            <>
               
               {/* Stats Cards - Clean White Design */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -467,7 +517,6 @@ function FacultyExamsContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                     <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
                       Current Academic Year
                     </p>
@@ -480,7 +529,7 @@ function FacultyExamsContent() {
                     <div>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Peer Tutors</p>
                       <p className="text-3xl font-bold text-gray-900 tracking-tight">
-                        {allPeerTutors?.length || 0}
+                        {allpeerTutor?.length || 0}
                       </p>
                     </div>
                     <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
@@ -490,7 +539,6 @@ function FacultyExamsContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
                     <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
                       Across All Years
                     </p>
@@ -507,15 +555,14 @@ function FacultyExamsContent() {
                       </p>
                     </div>
                     <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
-                      <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-4 h-4 text-black-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
                     <p className="text-[9px] font-bold text-green-600 uppercase tracking-widest flex items-center gap-1.5">
-                      100% Marks Entered
+                      Marks Entered
                     </p>
                   </div>
                 </div>
@@ -530,13 +577,12 @@ function FacultyExamsContent() {
                       </p>
                     </div>
                     <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
-                      <svg className="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
                     <p className="text-[9px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
                       Action Required
                     </p>
@@ -558,21 +604,53 @@ function FacultyExamsContent() {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                      <Button
-                        onClick={() => setIsCreateModalOpen(true)}
-                        className="bg-black hover:bg-gray-900 text-white border-2 border-transparent px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Exam
-                      </Button>
-                      
-                      {exams && exams.length > 0 && (
-                        <ExportButton 
-                          onClick={handleExportAllExams}
-                          disabled={isExporting}
-                          isLoading={isExporting}
-                          text="EXPORT"
-                        />
+                      {!isDeleteMode ? (
+                        <>
+                          <Button
+                            onClick={() => setIsCreateModalOpen(true)}
+                            className="bg-black hover:bg-gray-900 text-white border-2 border-transparent px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Exam
+                          </Button>
+
+                          {exams && exams.length > 0 && (
+                            <button
+                              onClick={handleDeleteModeToggle}
+                              className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                              title="Delete"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                            </button>
+                          )}
+                          
+                          {exams && exams.length > 0 && (
+                            <ExportButton 
+                              onClick={handleExportAllExams}
+                              disabled={isExporting}
+                              isLoading={isExporting}
+                              text="EXPORT"
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={handleBulkDeleteExams}
+                            disabled={selectedExamIds.size === 0}
+                            className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors duration-200"
+                          >
+                            Delete Selected ({selectedExamIds.size})
+                          </button>
+                          <button
+                            onClick={handleDeleteModeToggle}
+                            className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
+                          >
+                            Cancel
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -580,98 +658,112 @@ function FacultyExamsContent() {
                 {exams && exams.length > 0 ? (
                   <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader>
-                      <TableRow className="bg-white border-b border-gray-100">
-                        <TableHead className="pl-6 py-4">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Exam Name</span>
+                    <TableHeader className="bg-gray-50">
+                      <TableRow className="border-b border-gray-200">
+                        {isDeleteMode && (
+                          <TableHead className="w-[50px] pl-6 py-3">
+                            <input
+                              type="checkbox"
+                              checked={exams && selectedExamIds.size === exams.length && exams.length > 0}
+                              onChange={handleSelectAllExams}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                            />
+                          </TableHead>
+                        )}
+                        <TableHead className="pl-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[25%]">
+                          Exam Details
                         </TableHead>
-                        <TableHead className="text-center py-4">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Years</span>
+                        <TableHead className="text-center py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Year
                         </TableHead>
-                        <TableHead className="text-center py-4">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date Created</span>
+                        <TableHead className="text-center py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Tutors
                         </TableHead>
-                        <TableHead className="text-center py-4">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tutors</span>
+                        <TableHead className="text-center py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Status
                         </TableHead>
-                        <TableHead className="text-center py-4">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Done</span>
+                        <TableHead className="text-center py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Completion
                         </TableHead>
-                        <TableHead className="text-center py-4">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pending</span>
-                        </TableHead>
-                        <TableHead className="text-center pr-6 py-4">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</span>
-                        </TableHead>
+                        {!isDeleteMode && (
+                          <TableHead className="text-right pr-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </TableHead>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {exams.map((exam) => {
                         const stats = examStats[exam.id] || { total: 0, completed: 0, pending: 0, ongoing: 0 }
+                        const total = stats.total
+                        const progress = total > 0 ? Math.round((stats.completed / total) * 100) : 0
+                        const status = total === 0 ? 'Pending' : (progress === 100 ? 'Completed' : (progress > 0 ? 'Ongoing' : 'Pending'))
+                        const statusColor = status === 'Completed' ? 'bg-green-100 text-green-700' : (status === 'Ongoing' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700')
+                        
                         return (
                           <TableRow 
                             key={exam.id} 
-                            onClick={() => handleExamClick(exam)}
-                            className="hover:bg-gray-50/50 transition-colors group border-b border-gray-50 cursor-pointer"
+                            onClick={() => !isDeleteMode && handleExamClick(exam)}
+                            className={`transition-colors group border-b border-gray-100 last:border-0 ${!isDeleteMode ? 'cursor-pointer hover:bg-gray-50' : ''}`}
                           >
-                            <TableCell className="pl-6 py-5">
-                              <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
-                                  <FileText className="w-5 h-5 text-gray-400" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold text-gray-900 mb-0.5">{exam.name}</p>
-                                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-                                    {exam.id.substring(0, 8)}...
-                                  </p>
-                                </div>
-                              </div>
+                            {isDeleteMode && (
+                              <TableCell className="pl-6 py-4">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedExamIds.has(exam.id)}
+                                  onChange={() => handleSelectExam(exam.id)}
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                />
+                              </TableCell>
+                            )}
+                            <TableCell className="pl-6 py-4">
+                              <p className="text-sm font-semibold text-gray-900">{exam.name}</p>
                             </TableCell>
-                            <TableCell className="text-center py-5">
-                              <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                            <TableCell className="text-center py-4">
+                              <span className="inline-flex items-center px-2 py-0.5 uppercase rounded text-xs font-medium bg-gray-100 text-black">
                                 {formatYears(exam.years)}
                               </span>
                             </TableCell>
-                            <TableCell className="text-center py-5">
-                              <span className="text-xs font-medium text-gray-500">
-                                {new Date(exam.created_at).toLocaleDateString()}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-center py-5">
-                              <span className="text-sm font-bold text-gray-900">
+                            <TableCell className="text-center py-4">
+                              <span className="text-sm font-semibold text-gray-900">
                                 {stats.total}
                               </span>
                             </TableCell>
-                            <TableCell className="text-center py-5">
-                              <span className="text-sm font-bold text-gray-900">
-                                {stats.completed}
+                            <TableCell className="text-center py-4">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded bg-gray-100 uppercase text-xs font-medium ${statusColor}`}>
+                                {status}
                               </span>
                             </TableCell>
-                            <TableCell className="text-center py-5">
-                              <span className="text-sm font-bold text-gray-900">
-                                {stats.pending + stats.ongoing}
-                              </span>
+                            <TableCell className="text-center py-4">
+                              <div className="w-full max-w-[100px] mx-auto">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="font-medium text-gray-700">{progress}%</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                                  <div 
+                                    className={`h-1.5 rounded-full ${
+                                      progress === 100 ? 'bg-green-500' : 
+                                      progress > 50 ? 'bg-blue-500' : 
+                                      progress > 0 ? 'bg-orange-500' : 'bg-gray-300'
+                                    }`}
+                                    style={{ width: `${progress}%` }}
+                                  ></div>
+                                </div>
+                              </div>
                             </TableCell>
-                            <TableCell className="text-center pr-6 py-5">
-                              <div className="flex items-center justify-center gap-2">
+                            {!isDeleteMode && (
+                              <TableCell className="text-right pr-6 py-4">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleExamClick(exam);
                                   }}
                                   className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
-                                >
-                                  VIEW
+                                      >
+                                  view
                                 </button>
-                                <button
-                                  onClick={(e) => handleDeleteExam(exam.id, e)}
-                                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                  title="Delete Exam"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </TableCell>
+                              </TableCell>
+                            )}
                           </TableRow>
                         )
                       })}
@@ -682,9 +774,9 @@ function FacultyExamsContent() {
                     <div className="flex items-center justify-center min-h-[400px] py-12">
                       <div className="text-center">
                         <div className="mx-auto mb-4">
-                          <FileText className="h-12 w-12 text-gray-400 mx-auto" />
+                          <FileText className="h-12 w-12 text-black mx-auto" />
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        <h3 className="text-lg font-medium uppercase text-gray-900 mb-2">
                           No exams created yet
                         </h3>
                         <p className="text-sm text-gray-500">
@@ -694,8 +786,9 @@ function FacultyExamsContent() {
                     </div>
                   )}
                 </div>
-              </div>
-          )}
+              </>
+            )}
+          </div>
         </main>
       </div>
 
@@ -705,6 +798,17 @@ function FacultyExamsContent() {
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={handleCreateSuccess}
         facultyId={department?.id || null}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        title="Confirm Delete"
+        itemsToDelete={examsToDelete.map(e => ({ name: e.name, email: e.id }))}
+        isLoading={isDeleting}
+        type="exams"
       />
     </div>
   )

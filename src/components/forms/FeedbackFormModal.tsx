@@ -15,7 +15,8 @@ import {
   Star,
   Info,
   Settings,
-  AlertTriangle
+  AlertTriangle,
+  Zap
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -49,8 +50,9 @@ export default function FeedbackFormModal({
   const [editStrategy, setEditStrategy] = useState<FormEditStrategy | null>(null)
   const [showStrategyModal, setShowStrategyModal] = useState(false)
   const [strategyConfirmed, setStrategyConfirmed] = useState(false)
-  const [allStarRatingMode, setAllStarRatingMode] = useState(false)
-  const isManualToggleRef = useRef(false)
+  
+  // Quick Add State
+  const [quickAddText, setQuickAddText] = useState('')
 
   // Initialize form data when editing
   useEffect(() => {
@@ -59,91 +61,62 @@ export default function FeedbackFormModal({
       setFormDescription(editingForm.description || '')
       const mappedQuestions = editingForm.questions.map(q => ({
         question_text: q.question_text,
-        question_type: q.question_type,
-        is_required: q.is_required,
-        options: q.options || []
+        question_type: 'star_rating' as const, // Force star rating on edit too
+        is_required: true, // Force required on edit too
+        options: []
       }))
       setQuestions(mappedQuestions)
-      const allStarRating = mappedQuestions.length > 0 && mappedQuestions.every(q => q.question_type === 'star_rating')
-      setAllStarRatingMode(allStarRating)
     } else {
       setFormName('')
       setFormDescription('')
       setQuestions([])
-      setAllStarRatingMode(false)
     }
     setErrors({})
     setEditStrategy(null)
     setShowStrategyModal(false)
     setStrategyConfirmed(false)
+    setQuickAddText('')
   }, [editingForm, isOpen])
-
-  // Auto-enable toggle when all questions are star_rating
-  useEffect(() => {
-    if (isManualToggleRef.current) {
-      isManualToggleRef.current = false
-      return
-    }
-    
-    if (questions.length > 0) {
-      const allStarRating = questions.every(q => q.question_type === 'star_rating')
-      if (allStarRating !== allStarRatingMode) {
-        setAllStarRatingMode(allStarRating)
-      }
-    } else if (allStarRatingMode) {
-      setAllStarRatingMode(false)
-    }
-  }, [questions, allStarRatingMode])
-
-  // When toggle is ON, force all questions to be star_rating
-  useEffect(() => {
-    if (allStarRatingMode && questions.length > 0) {
-      const hasNonStarRating = questions.some(q => q.question_type !== 'star_rating')
-      if (hasNonStarRating) {
-        setQuestions(questions.map(q => ({
-          ...q,
-          question_type: 'star_rating' as const,
-          options: []
-        })))
-      }
-    }
-  }, [allStarRatingMode, questions])
 
   const addQuestion = () => {
     setQuestions([...questions, {
       question_text: '',
-      question_type: allStarRatingMode ? 'star_rating' : 'text',
-      is_required: false,
+      question_type: 'star_rating',
+      is_required: true,
       options: []
     }])
+  }
+
+  const handleQuickAdd = () => {
+    if (!quickAddText.trim()) return
+
+    const lines = quickAddText.split('\n').filter(line => line.trim())
+    const newQuestions: QuestionForm[] = lines.map(line => {
+      // Clean up the line (remove numbering like "1)", "1.", "- ")
+      const cleanText = line.trim().replace(/^(\d+[\.\)]|\-)\s*/, '')
+      return {
+        question_text: cleanText,
+        question_type: 'star_rating',
+        is_required: true,
+        options: []
+      }
+    })
+
+    setQuestions([...questions, ...newQuestions])
+    setQuickAddText('')
   }
 
   const removeQuestion = (index: number) => {
     setQuestions(questions.filter((_, i) => i !== index))
   }
 
-  const updateQuestion = (index: number, field: keyof QuestionForm, value: string | boolean | "multiple_choice" | "text" | "star_rating") => {
+  const updateQuestion = (index: number, field: keyof QuestionForm, value: string | boolean) => {
     const updatedQuestions = [...questions]
-    updatedQuestions[index] = { ...updatedQuestions[index], [field]: value }
-    setQuestions(updatedQuestions)
-  }
-
-  const addOption = (questionIndex: number) => {
-    const updatedQuestions = [...questions]
-    updatedQuestions[questionIndex].options.push('')
-    setQuestions(updatedQuestions)
-  }
-
-  const removeOption = (questionIndex: number, optionIndex: number) => {
-    const updatedQuestions = [...questions]
-    updatedQuestions[questionIndex].options.splice(optionIndex, 1)
-    setQuestions(updatedQuestions)
-  }
-
-  const updateOption = (questionIndex: number, optionIndex: number, value: string) => {
-    const updatedQuestions = [...questions]
-    updatedQuestions[questionIndex].options[optionIndex] = value
-    setQuestions(updatedQuestions)
+    // We only really update 'question_text' now, but keep generic for safety
+    if (field === 'question_text') {
+        updatedQuestions[index] = { ...updatedQuestions[index], question_text: value as string }
+        setQuestions(updatedQuestions)
+    }
   }
 
   const validateForm = () => {
@@ -154,12 +127,6 @@ export default function FeedbackFormModal({
     questions.forEach((question, index) => {
       if (!question.question_text.trim()) {
         newErrors[`question_${index}`] = 'Question text is required'
-      }
-      if (question.question_type === 'multiple_choice') {
-        const validOptions = question.options.filter(opt => opt.trim())
-        if (validOptions.length < 2) {
-          newErrors[`question_options_${index}`] = 'Need at least 2 options'
-        }
       }
     })
 
@@ -181,10 +148,10 @@ export default function FeedbackFormModal({
     try {
       const questionsToSubmit = questions.map((q, index) => ({
         question_text: q.question_text,
-        question_type: q.question_type,
-        is_required: q.is_required,
+        question_type: 'star_rating' as const,
+        is_required: true,
         order_index: index + 1,
-        options: q.question_type === 'multiple_choice' ? q.options.filter(opt => opt.trim()) : undefined
+        options: undefined
       }))
 
       if (editingForm) {
@@ -217,10 +184,10 @@ export default function FeedbackFormModal({
     if (!editingForm) return
     const questionsToSubmit = questions.map((q, index) => ({
       question_text: q.question_text,
-      question_type: q.question_type,
-      is_required: q.is_required,
+      question_type: 'star_rating' as const,
+      is_required: true,
       order_index: index + 1,
-      options: q.question_type === 'multiple_choice' ? q.options.filter(opt => opt.trim()) : undefined
+      options: undefined
     }))
 
     const strategy = await FeedbackService.getFormEditStrategy(editingForm.id, {
@@ -297,7 +264,7 @@ export default function FeedbackFormModal({
                         "w-full px-4 py-3 bg-white border rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm",
                         errors.formName ? 'border-red-300' : 'border-gray-200'
                       )}
-                      placeholder="e.g., Monthly Peer Tutor Feedback"
+                      placeholder="e.g., Peer Tutor Review"
                     />
                     {errors.formName && (
                       <p className="mt-1.5 text-xs font-medium text-red-500 ml-1 flex items-center gap-1">
@@ -318,45 +285,35 @@ export default function FeedbackFormModal({
                       placeholder="Describe the purpose of this feedback form..."
                     />
                   </div>
-
-                  {/* All Star Rating Toggle */}
-                  <div className="flex items-center justify-between p-4 bg-blue-50/50 border border-blue-100 rounded-xl mt-4">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-blue-100 rounded-lg shrink-0 mt-0.5">
-                        <Star className="w-4 h-4 text-blue-600 fill-blue-600" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-blue-900 uppercase tracking-tight">
-                          All Star Rating Questions
-                        </label>
-                        <p className="text-[11px] text-blue-700 font-medium leading-relaxed max-w-lg">
-                          Simplifies responses by forcing all questions to a 5-star scale. 
-                          Enables satisfaction score analytics for the dashboard.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        isManualToggleRef.current = true
-                        setAllStarRatingMode(!allStarRatingMode)
-                      }}
-                      className={cn(
-                        "relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300",
-                        allStarRatingMode ? 'bg-blue-600' : 'bg-gray-300'
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "inline-block h-4 w-4 transform rounded-full bg-white transition-all duration-300 shadow-sm",
-                          allStarRatingMode ? 'translate-x-6' : 'translate-x-1'
-                        )}
-                      />
-                    </button>
-                  </div>
                 </div>
              </div>
           </div>
+
+          {/* Quick Add Section */}
+          <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-2xl shadow-sm">
+             <div className="flex items-center gap-2 mb-3">
+                <h4 className="text-xs font-bold text-blue-600 uppercase tracking-widest">Quick Add Questions</h4>
+             </div>
+             <div className="relative">
+                <textarea
+                  value={quickAddText}
+                  onChange={(e) => setQuickAddText(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm min-h-[100px]"
+                  placeholder={`1) How was the tutor's knowledge?\n2) Was the session helpful?`}
+                />
+                <div className="absolute bottom-3 right-3">
+                  <button
+                    type="button"
+                    onClick={handleQuickAdd}
+                    disabled={!quickAddText.trim()}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white text-xs font-bold uppercase rounded-lg shadow-sm transition-all"
+                  >
+                    Generate
+                  </button>
+                </div>
+             </div>
+          </div>
+
 
           {/* Questions Section */}
           <div className="space-y-4">
@@ -392,6 +349,12 @@ export default function FeedbackFormModal({
                           Q{questionIndex + 1}
                        </span>
                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">QUESTION DETAILS</span>
+                       <span className="ml-2 px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-bold uppercase rounded-md border border-blue-100">
+                          5-Star Rating
+                       </span>
+                       <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[9px] font-bold uppercase rounded-md border border-gray-200">
+                          Mandatory
+                       </span>
                     </div>
                     <button
                       type="button"
@@ -403,9 +366,9 @@ export default function FeedbackFormModal({
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                  <div className="grid grid-cols-1 gap-6">
                     {/* Question Text */}
-                    <div className="md:col-span-8">
+                    <div>
                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
                           The Question <span className="text-red-500">*</span>
                        </label>
@@ -425,105 +388,19 @@ export default function FeedbackFormModal({
                          </p>
                        )}
                     </div>
-
-                    {/* Question Type */}
-                    <div className="md:col-span-4">
-                       <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
-                          Input Type
-                       </label>
-                       <div className="relative">
-                          <select
-                            value={question.question_type}
-                            onChange={(e) => updateQuestion(questionIndex, 'question_type', e.target.value)}
-                            disabled={allStarRatingMode}
-                            className={cn(
-                              "w-full px-4 py-2.5 bg-gray-50/50 border border-gray-100 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none transition-all",
-                              allStarRatingMode ? 'opacity-60 cursor-not-allowed' : ''
-                            )}
-                          >
-                            <option value="text">Textual Answer</option>
-                            <option value="multiple_choice">Multiple Choice</option>
-                            <option value="star_rating">5-Star Scale</option>
-                          </select>
-                          {!allStarRatingMode && (
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                               <Info className="w-3.5 h-3.5 text-gray-400" />
-                            </div>
-                          )}
-                       </div>
-                    </div>
                   </div>
 
-                  {/* Dynamic Fields based on Type */}
-                  <div className="mt-6 space-y-4">
-                    {question.question_type === 'star_rating' && (
-                      <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
-                         <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Rating Scale Preview</p>
-                         <StarRating
-                            value={3}
+                  {/* Preview of Rating */}
+                  <div className="mt-6">
+                    <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Rating Scale Preview</p>
+                        <StarRating
+                            value={0}
                             onChange={() => {}}
-                            disabled={true}
-                         />
-                      </div>
-                    )}
-
-                    {question.question_type === 'multiple_choice' && (
-                      <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
-                           Choice Options ({question.options.length})
-                        </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {question.options.map((option, optionIndex) => (
-                            <div key={optionIndex} className="flex items-center gap-2 group/option">
-                              <div className="flex-1 relative">
-                                <input
-                                  type="text"
-                                  value={option}
-                                  onChange={(e) => updateOption(questionIndex, optionIndex, e.target.value)}
-                                  className="w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                  placeholder={`Option ${optionIndex + 1}`}
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => removeOption(questionIndex, optionIndex)}
-                                className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => addOption(questionIndex)}
-                            className="flex items-center justify-center gap-1.5 p-2 bg-white border border-dashed border-gray-200 rounded-xl text-xs font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all"
-                          >
-                            <Plus className="w-3.5 h-3.5" /> ADD CHOICE
-                          </button>
-                        </div>
-                        {errors[`question_options_${questionIndex}`] && (
-                           <p className="text-[10px] font-bold text-red-500 flex items-center gap-1 mt-1 ml-1">
-                              <AlertTriangle className="w-3 h-3" /> {errors[`question_options_${questionIndex}`]}
-                           </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Required Settings */}
-                  <div className="mt-6 pt-6 border-t border-gray-100 flex items-center gap-4">
-                     <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id={`required_${questionIndex}`}
-                          checked={question.is_required}
-                          onChange={(e) => updateQuestion(questionIndex, 'is_required', e.target.checked)}
-                          className="w-4 h-4 rounded-md border-gray-300 text-gray-900 focus:ring-gray-900 cursor-pointer"
+                            disabled={false} 
+                            readonly={true} 
                         />
-                        <label htmlFor={`required_${questionIndex}`} className="text-[11px] font-bold text-gray-600 uppercase tracking-tight cursor-pointer">
-                          Mandatory Response
-                        </label>
-                     </div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -534,7 +411,9 @@ export default function FeedbackFormModal({
                       <MessageSquare className="w-8 h-8 text-gray-300" />
                    </div>
                    <p className="text-gray-900 font-bold uppercase tracking-tight">No Questions Added</p>
-                   <p className="text-xs text-gray-400 mt-1">Start by adding your first feedback question</p>
+                   <p className="text-xs text-gray-400 mt-1">
+                     Use Quick Add above or click below to start
+                   </p>
                    <button
                       type="button"
                       onClick={addQuestion}
@@ -557,10 +436,6 @@ export default function FeedbackFormModal({
                    <span className="text-lg font-black text-gray-900">{questions.length}</span>
                 </div>
                 <div className="w-[1px] h-8 bg-gray-100 mx-2"></div>
-                <div className="flex items-center gap-1 font-bold text-xs text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                   <Settings className="w-3.5 h-3.5" /> 
-                   <span>DRAFT</span>
-                </div>
             </div>
             <div className="flex gap-3">
               <button

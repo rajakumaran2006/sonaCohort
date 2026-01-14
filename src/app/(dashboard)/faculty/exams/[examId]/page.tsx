@@ -9,11 +9,11 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ExamService } from '@/lib/services/examService'
-import { PeerTutorService, PeerTutor } from '@/lib/services/peerTutorService'
+import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
-import { calculatePeerTutorAscendScore } from '@/lib/utils/ascendScore'
+import { calculatepeertutorsAscendScore } from '@/lib/utils/ascendScore'
 import { Card, CardContent, LoadingOverlay, Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
@@ -69,11 +69,11 @@ function ExamDetailsContent() {
   })
 
   // Fetch peer tutors for the exam's years
-  const { data: peerTutors, isLoading: isPeerTutorsLoading } = useQuery({
+  const { data: peerTutor, isLoading: ispeerTutorLoading } = useQuery({
     queryKey: ['exam-peer-tutors', examId, exam?.years],
     queryFn: async () => {
       if (!exam?.years || exam.years.length === 0) return []
-      return await PeerTutorService.getPeerTutorsByYears(exam.years)
+      return await peertutorservice.getpeerTutorByYears(exam.years)
     },
     enabled: !!exam && !!exam.years && exam.years.length > 0,
     staleTime: 5 * 60 * 1000,
@@ -83,7 +83,7 @@ function ExamDetailsContent() {
   const [ascendScores, setAscendScores] = useState<Record<string, number>>({})
   
   useEffect(() => {
-    if (!peerTutors || !exam || !examId) return
+    if (!peerTutor || !exam || !examId) return
     
     const fetchScoresAndCompletion = async () => {
       const scores: Record<string, number> = {}
@@ -93,10 +93,10 @@ function ExamDetailsContent() {
       const examSubjects = await ExamSubjectService.getExamSubjects(examId)
       const totalSubjects = examSubjects.length
       
-      for (const tutor of peerTutors) {
+      for (const tutor of peerTutor) {
         try {
-          const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(tutor.id, examId)
-          const students = await AssignmentService.getStudentsByPeerTutor(tutor.id)
+          const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(tutor.id, examId)
+          const students = await AssignmentService.getStudentsBypeertutors(tutor.id)
           
           // Organize marks by student and subject
           const allStudentsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
@@ -115,7 +115,7 @@ function ExamDetailsContent() {
             })
           })
           
-          scores[tutor.id] = calculatePeerTutorAscendScore(allStudentsMarks, exam.max_marks || 100)
+          scores[tutor.id] = calculatepeertutorsAscendScore(allStudentsMarks, exam.max_marks || 100)
           
           // Calculate completion percentage
           // Count how many marks have been entered (marks field is not empty)
@@ -148,9 +148,9 @@ function ExamDetailsContent() {
     }
     
     fetchScoresAndCompletion()
-  }, [peerTutors, exam, examId])
+  }, [peerTutor, exam, examId])
 
-  const loading = isDepartmentLoading || isExamLoading || isPeerTutorsLoading
+  const loading = isDepartmentLoading || isExamLoading || ispeerTutorLoading
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -168,24 +168,24 @@ function ExamDetailsContent() {
 
   // Get unique years and sections from peer tutors
   const uniqueYears = useMemo(() => {
-    if (!peerTutors) return []
-    return Array.from(new Set(peerTutors.map(pt => pt.year))).sort()
-  }, [peerTutors])
+    if (!peerTutor) return []
+    return Array.from(new Set(peerTutor.map(pt => pt.year))).sort()
+  }, [peerTutor])
 
   const uniqueSections = useMemo(() => {
-    if (!peerTutors) return []
-    let filtered = peerTutors
+    if (!peerTutor) return []
+    let filtered = peerTutor
     if (selectedYear !== 'all') {
       filtered = filtered.filter(pt => pt.year === selectedYear)
     }
     return Array.from(new Set(filtered.map(pt => pt.section))).sort()
-  }, [peerTutors, selectedYear])
+  }, [peerTutor, selectedYear])
 
   // Filter peer tutors based on selected filters
-  const filteredPeerTutors = useMemo(() => {
-    if (!peerTutors) return []
+  const filteredpeerTutor = useMemo(() => {
+    if (!peerTutor) return []
     
-    let filtered = [...peerTutors]
+    let filtered = [...peerTutor]
     
     if (selectedYear !== 'all') {
       filtered = filtered.filter(pt => pt.year === selectedYear)
@@ -212,7 +212,7 @@ function ExamDetailsContent() {
       if (a.section !== b.section) return a.section.localeCompare(b.section)
       return a.name.localeCompare(b.name)
     })
-  }, [peerTutors, selectedYear, selectedSection, selectedStatus, completionPercentages])
+  }, [peerTutor, selectedYear, selectedSection, selectedStatus, completionPercentages])
 
   // Reset section filter when year changes
   useEffect(() => {
@@ -221,13 +221,13 @@ function ExamDetailsContent() {
     } else {
       // If current section is not available in filtered sections, reset it
       const availableSections = Array.from(new Set(
-        peerTutors?.filter(pt => pt.year === selectedYear).map(pt => pt.section) || []
+        peerTutor?.filter(pt => pt.year === selectedYear).map(pt => pt.section) || []
       )).sort()
       if (!availableSections.includes(selectedSection)) {
         setSelectedSection('all')
       }
     }
-  }, [selectedYear, peerTutors, selectedSection])
+  }, [selectedYear, peerTutor, selectedSection])
 
   const formatYear = (year: string): string => {
     const yearMap: { [key: string]: string } = {
@@ -238,15 +238,15 @@ function ExamDetailsContent() {
     return yearMap[year] || year
   }
 
-  const handleView = (peerTutor: PeerTutor) => {
-    router.push(`/faculty/exams/${examId}/peer-tutor/${peerTutor.id}`)
+  const handleView = (peertutors: peertutors) => {
+    router.push(`/faculty/exams/${examId}/peer-tutor/${peertutors.id}`)
   }
 
   const hasActiveFilters = selectedYear !== 'all' || selectedSection !== 'all' || selectedStatus !== 'all'
 
   // Excel export function - handles pending, ongoing, and completed statuses
   const handleExportToExcel = async (exportType?: 'student-details' | 'marks-details') => {
-    if (!exam || !filteredPeerTutors || filteredPeerTutors.length === 0) return
+    if (!exam || !filteredpeerTutor || filteredpeerTutor.length === 0) return
 
     // If ongoing status and no export type selected, show modal
     if (selectedStatus === 'ongoing' && !exportType) {
@@ -265,11 +265,11 @@ function ExamDetailsContent() {
         // Add header rows following xlsx-rule.mdc format
         exportData.push(['Subjects Export Report'])
         exportData.push(['Department:', (department as { dept?: string; name?: string })?.dept || (department as { dept?: string; name?: string })?.name || ''])
-        const yearsText = Array.from(new Set(filteredPeerTutors.map(pt => formatYear(pt.year)))).join(', ')
+        const yearsText = Array.from(new Set(filteredpeerTutor.map(pt => formatYear(pt.year)))).join(', ')
         exportData.push(['Year:', yearsText])
-        const sectionsText = Array.from(new Set(filteredPeerTutors.map(pt => pt.section))).length > 1 
+        const sectionsText = Array.from(new Set(filteredpeerTutor.map(pt => pt.section))).length > 1 
           ? 'ALL' 
-          : filteredPeerTutors[0]?.section || 'ALL'
+          : filteredpeerTutor[0]?.section || 'ALL'
         exportData.push(['Section:', sectionsText])
         exportData.push(['Generated on:', new Date().toLocaleDateString('en-US', {
           year: 'numeric',
@@ -282,8 +282,8 @@ function ExamDetailsContent() {
         exportData.push(['Peer Tutor', 'Status'])
         
         // Add data rows
-        filteredPeerTutors.forEach(peerTutor => {
-          exportData.push([peerTutor.name, 'Pending'])
+        filteredpeerTutor.forEach(peertutors => {
+          exportData.push([peertutors.name, 'Pending'])
         })
         
         // Create workbook and worksheet
@@ -304,11 +304,11 @@ function ExamDetailsContent() {
         // Add header rows following xlsx-rule.mdc format
         exportData.push(['Subjects Export Report'])
         exportData.push(['Department:', (department as { dept?: string; name?: string })?.dept || (department as { dept?: string; name?: string })?.name || ''])
-        const yearsText = Array.from(new Set(filteredPeerTutors.map(pt => formatYear(pt.year)))).join(', ')
+        const yearsText = Array.from(new Set(filteredpeerTutor.map(pt => formatYear(pt.year)))).join(', ')
         exportData.push(['Year:', yearsText])
-        const sectionsText = Array.from(new Set(filteredPeerTutors.map(pt => pt.section))).length > 1 
+        const sectionsText = Array.from(new Set(filteredpeerTutor.map(pt => pt.section))).length > 1 
           ? 'ALL' 
-          : filteredPeerTutors[0]?.section || 'ALL'
+          : filteredpeerTutor[0]?.section || 'ALL'
         exportData.push(['Section:', sectionsText])
         exportData.push(['Generated on:', new Date().toLocaleDateString('en-US', {
           year: 'numeric',
@@ -321,8 +321,8 @@ function ExamDetailsContent() {
         exportData.push(['Peer Tutor', 'Status'])
         
         // Add data rows
-        filteredPeerTutors.forEach(peerTutor => {
-          exportData.push([peerTutor.name, 'Ongoing'])
+        filteredpeerTutor.forEach(peertutors => {
+          exportData.push([peertutors.name, 'Ongoing'])
         })
         
         // Create workbook and worksheet
@@ -342,8 +342,8 @@ function ExamDetailsContent() {
       const examSubjects = await ExamSubjectService.getExamSubjects(examId)
       
       // Group peer tutors by year
-      const tutorsByYear: Record<string, typeof filteredPeerTutors> = {}
-      filteredPeerTutors.forEach(tutor => {
+      const tutorsByYear: Record<string, typeof filteredpeerTutor> = {}
+      filteredpeerTutor.forEach(tutor => {
         if (!tutorsByYear[tutor.year]) {
           tutorsByYear[tutor.year] = []
         }
@@ -397,12 +397,12 @@ function ExamDetailsContent() {
           }
           
           // Process each peer tutor in this section
-          for (const peerTutor of sectionTutors) {
-            const completion = completionPercentages[peerTutor.id] || 0
-            const ascendScore = ascendScores[peerTutor.id] || 0
+          for (const peertutors of sectionTutors) {
+            const completion = completionPercentages[peertutors.id] || 0
+            const ascendScore = ascendScores[peertutors.id] || 0
             
             // Add peer tutor info before marks
-            exportData.push(['Peer Tutor Name:', peerTutor.name])
+            exportData.push(['Peer Tutor Name:', peertutors.name])
             exportData.push(['Ascend Score:', `${ascendScore.toFixed(1)}/10`])
             exportData.push(['Completion Rate:', `${completion}%`])
             exportData.push([]) // Empty row
@@ -412,8 +412,8 @@ function ExamDetailsContent() {
             exportData.push(headerRow)
             
             // Get students and marks for this peer tutor
-            const students = await AssignmentService.getStudentsByPeerTutor(peerTutor.id)
-            const marks = await ExamMarksService.getExamMarksByPeerTutorAndExam(peerTutor.id, examId)
+            const students = await AssignmentService.getStudentsBypeertutors(peertutors.id)
+            const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutors.id, examId)
             
             // Organize marks by student and subject
             const marksByStudentSubject: Record<string, Record<string, string>> = {}
@@ -478,7 +478,7 @@ function ExamDetailsContent() {
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />
-        <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+        <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
           <PageHeader
             title="EXAM DETAILS"
             lastRefresh={lastRefresh}
@@ -504,7 +504,7 @@ function ExamDetailsContent() {
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />
-        <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+        <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
           <PageHeader
             title="EXAM DETAILS"
             lastRefresh={lastRefresh}
@@ -546,7 +546,7 @@ function ExamDetailsContent() {
       />
 
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden`}>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col overflow-hidden w-full lg:w-auto`}>
         {/* Top Header */}
         <header className="bg-white shadow-sm border-b border-gray-200 w-full">
           <div className={`flex items-center justify-between py-4 w-full ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
@@ -605,28 +605,17 @@ function ExamDetailsContent() {
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em]">Exam Information</p>
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900 tracking-tight mb-4">{exam.name}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
                       <div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Created On</p>
                         <p className="text-sm font-bold text-gray-700">{new Date(exam.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                      </div>
                       <div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Academic Years</p>
                         <p className="text-sm font-bold text-gray-700">{exam.years.map(y => formatYear(y)).join(', ')}</p>
@@ -635,9 +624,9 @@ function ExamDetailsContent() {
                   </div>
                 </div>
                 <div className="hidden sm:block">
-                  <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex flex-col items-center justify-center min-w-[120px]">
-                    <p className="text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-1">Max Marks</p>
-                    <p className="text-2xl font-black text-blue-600">{exam.max_marks || 100}</p>
+                  <div className="p-4 bg-blue-50/50 rounded-2xl border border-gray-100 flex flex-col items-center justify-center min-w-[120px]">
+                    <p className="text-[9px] font-bold text-black-400 uppercase tracking-widest mb-1">Max Marks</p>
+                    <p className="text-2xl font-black text-black">{exam.max_marks || 100}</p>
                   </div>
                 </div>
               </div>
@@ -649,7 +638,7 @@ function ExamDetailsContent() {
               <div className="px-6 py-5 border-b border-gray-100">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Peer Tutors ({filteredPeerTutors.length})
+                    Peer Tutors ({filteredpeerTutor.length})
                   </h3>
                   
                   <div className="flex items-center gap-3 flex-wrap">
@@ -693,7 +682,7 @@ function ExamDetailsContent() {
 
                     <ExportButton 
                       onClick={() => handleExportToExcel()}
-                      disabled={!filteredPeerTutors || filteredPeerTutors.length === 0}
+                      disabled={!filteredpeerTutor || filteredpeerTutor.length === 0}
                     />
                   </div>
                 </div>
@@ -721,7 +710,7 @@ function ExamDetailsContent() {
                     </TableRow>
                   </TableHeader>
                     <TableBody>
-                      {filteredPeerTutors.length === 0 ? (
+                      {filteredpeerTutor.length === 0 ? (
                         <EmptyTable
                           title="No peer tutors found"
                           description={
@@ -731,27 +720,27 @@ function ExamDetailsContent() {
                           }
                         />
                       ) : (
-                        filteredPeerTutors.map((peerTutor) => {
-                          const completion = completionPercentages[peerTutor.id] || 0
-                          const score = ascendScores[peerTutor.id] || 0
+                        filteredpeerTutor.map((peertutors) => {
+                          const completion = completionPercentages[peertutors.id] || 0
+                          const score = ascendScores[peertutors.id] || 0
                           return (
-                            <TableRow key={peerTutor.id} className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100">
+                            <TableRow key={peertutors.id} className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100">
                               <TableCell className="pl-6 py-4">
                                 <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
-                                    <span className="text-xs font-bold text-blue-600 uppercase">
-                                      {peerTutor.name.substring(0, 2)}
+                                  <div className="w-10 h-10 rounded-full bg-black border border-gray-100 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+                                    <span className="text-xs font-bold text-white uppercase">
+                                      {peertutors.name.substring(0, 2)}
                                     </span>
                                   </div>
                                   <div>
-                                    <p className="text-sm font-bold text-gray-900 mb-0.5">{peerTutor.name}</p>
-                                    <p className="text-[10px] text-gray-400 font-medium">{peerTutor.email}</p>
+                                    <p className="text-sm font-bold text-gray-900 mb-0.5">{peertutors.name}</p>
+                                    <p className="text-[10px] text-gray-400 font-medium">{peertutors.email}</p>
                                   </div>
                                 </div>
                               </TableCell>
                               <TableCell className="text-center py-4">
                                 <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-                                  {formatYear(peerTutor.year)} - {peerTutor.section}
+                                  {formatYear(peertutors.year)} - {peertutors.section}
                                 </span>
                               </TableCell>
                               <TableCell className="text-center py-4">
@@ -780,7 +769,7 @@ function ExamDetailsContent() {
                               </TableCell>
                               <TableCell className="text-right pr-6 py-4">
                                 <button
-                                  onClick={() => handleView(peerTutor)}
+                                  onClick={() => handleView(peertutors)}
                                   className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                                 >
                                   VIEW

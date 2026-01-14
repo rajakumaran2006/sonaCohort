@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/client'
 import { Student } from './studentService'
-import { PeerTutor } from './peerTutorService'
+import { peertutors } from './peertutorservice'
 
 export interface Assignment {
   id: string
@@ -18,7 +18,7 @@ export interface Assignment {
 
 export interface AssignmentStats {
   totalStudents: number
-  totalPeerTutors: number
+  totalpeerTutor: number
   assignedStudents: number
   unassignedStudents: number
   averageStudentsPerTutor: number
@@ -44,7 +44,7 @@ export class AssignmentService {
         console.error('Error getting students by year:', studentsError)
         return {
           totalStudents: 0,
-          totalPeerTutors: 0,
+          totalpeerTutor: 0,
           assignedStudents: 0,
           unassignedStudents: 0,
           averageStudentsPerTutor: 0
@@ -52,7 +52,7 @@ export class AssignmentService {
       }
 
       // Get all peer tutors in the year (all sections)
-      const { data: peerTutors, error: tutorsError } = await supabase
+      const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('id')
         .eq('dept', dept)
@@ -62,7 +62,7 @@ export class AssignmentService {
         console.error('Error getting peer tutors by year:', tutorsError)
         return {
           totalStudents: 0,
-          totalPeerTutors: 0,
+          totalpeerTutor: 0,
           assignedStudents: 0,
           unassignedStudents: 0,
           averageStudentsPerTutor: 0
@@ -70,14 +70,14 @@ export class AssignmentService {
       }
 
       const totalStudents = students?.length || 0
-      const totalPeerTutors = peerTutors?.length || 0
+      const totalpeerTutor = peerTutor?.length || 0
       const assignedStudents = students?.filter(s => s.assigned_peer_tutor_id).length || 0
       const unassignedStudents = totalStudents - assignedStudents
-      const averageStudentsPerTutor = totalPeerTutors > 0 ? Math.round(totalStudents / totalPeerTutors) : 0
+      const averageStudentsPerTutor = totalpeerTutor > 0 ? Math.round(totalStudents / totalpeerTutor) : 0
 
       return {
         totalStudents,
-        totalPeerTutors,
+        totalpeerTutor,
         assignedStudents,
         unassignedStudents,
         averageStudentsPerTutor
@@ -86,7 +86,7 @@ export class AssignmentService {
       console.error('Error getting assignment stats by year:', error)
       return {
         totalStudents: 0,
-        totalPeerTutors: 0,
+        totalpeerTutor: 0,
         assignedStudents: 0,
         unassignedStudents: 0,
         averageStudentsPerTutor: 0
@@ -114,7 +114,7 @@ export class AssignmentService {
         console.error('Error getting students:', studentsError)
         return {
           totalStudents: 0,
-          totalPeerTutors: 0,
+          totalpeerTutor: 0,
           assignedStudents: 0,
           unassignedStudents: 0,
           averageStudentsPerTutor: 0
@@ -122,7 +122,7 @@ export class AssignmentService {
       }
 
       // Get all peer tutors in the section
-      const { data: peerTutors, error: tutorsError } = await supabase
+      const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('id')
         .eq('dept', dept)
@@ -133,7 +133,7 @@ export class AssignmentService {
         console.error('Error getting peer tutors:', tutorsError)
         return {
           totalStudents: 0,
-          totalPeerTutors: 0,
+          totalpeerTutor: 0,
           assignedStudents: 0,
           unassignedStudents: 0,
           averageStudentsPerTutor: 0
@@ -141,14 +141,14 @@ export class AssignmentService {
       }
 
       const totalStudents = students?.length || 0
-      const totalPeerTutors = peerTutors?.length || 0
+      const totalpeerTutor = peerTutor?.length || 0
       const assignedStudents = students?.filter(s => s.assigned_peer_tutor_id).length || 0
       const unassignedStudents = totalStudents - assignedStudents
-      const averageStudentsPerTutor = totalPeerTutors > 0 ? Math.round(totalStudents / totalPeerTutors) : 0
+      const averageStudentsPerTutor = totalpeerTutor > 0 ? Math.round(totalStudents / totalpeerTutor) : 0
 
       return {
         totalStudents,
-        totalPeerTutors,
+        totalpeerTutor,
         assignedStudents,
         unassignedStudents,
         averageStudentsPerTutor
@@ -157,7 +157,7 @@ export class AssignmentService {
       console.error('Error getting assignment stats:', error)
       return {
         totalStudents: 0,
-        totalPeerTutors: 0,
+        totalpeerTutor: 0,
         assignedStudents: 0,
         unassignedStudents: 0,
         averageStudentsPerTutor: 0
@@ -175,7 +175,7 @@ export class AssignmentService {
   /**
    * Get assignment by student and tutor
    */
-  static async getAssignmentByStudentAndTutor(studentId: string, peerTutorId: string): Promise<Assignment | null> {
+  static async getAssignmentByStudentAndTutor(studentId: string, peertutorsId: string): Promise<Assignment | null> {
     try {
       const supabase = createClient()
       
@@ -196,7 +196,7 @@ export class AssignmentService {
           )
         `)
         .eq('id', studentId)
-        .eq('assigned_peer_tutor_id', peerTutorId)
+        .eq('assigned_peer_tutor_id', peertutorsId)
         .eq('peer_tutor', false)
         .single()
 
@@ -307,13 +307,13 @@ export class AssignmentService {
   /**
    * Assign a student to a peer tutor
    */
-  static async assignStudent(studentId: string, peerTutorId: string): Promise<boolean> {
+  static async assignStudent(studentId: string, peertutorsId: string): Promise<boolean> {
     try {
       const supabase = createClient()
       
       const { error } = await supabase
         .from('peer_students')
-        .update({ assigned_peer_tutor_id: peerTutorId })
+        .update({ assigned_peer_tutor_id: peertutorsId })
         .eq('id', studentId)
 
       if (error) {
@@ -376,7 +376,7 @@ export class AssignmentService {
       }
 
       // Get all peer tutors
-      const { data: peerTutors, error: tutorsError } = await supabase
+      const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('id, name')
         .eq('dept', dept)
@@ -388,13 +388,13 @@ export class AssignmentService {
         return false
       }
 
-      if (!unassignedStudents || !peerTutors || peerTutors.length === 0) {
+      if (!unassignedStudents || !peerTutor || peerTutor.length === 0) {
         return true // No students to assign or no peer tutors
       }
 
       // Calculate current assignment counts for each peer tutor
       const tutorAssignmentCounts = await Promise.all(
-        peerTutors.map(async (tutor) => {
+        peerTutor.map(async (tutor) => {
           const { count } = await supabase
             .from('peer_students')
             .select('*', { count: 'exact', head: true })
@@ -417,8 +417,8 @@ export class AssignmentService {
 
       // Calculate target assignments per tutor
       const totalStudents = unassignedStudents.length + tutorAssignmentCounts.reduce((sum, tutor) => sum + tutor.currentCount, 0)
-      const targetPerTutor = Math.floor(totalStudents / peerTutors.length)
-      const remainder = totalStudents % peerTutors.length
+      const targetPerTutor = Math.floor(totalStudents / peerTutor.length)
+      const remainder = totalStudents % peerTutor.length
 
       console.log('Total students:', totalStudents)
       console.log('Target per tutor:', targetPerTutor)
@@ -468,14 +468,14 @@ export class AssignmentService {
   /**
    * Get students assigned to a specific peer tutor
    */
-  static async getStudentsByPeerTutor(peerTutorId: string): Promise<Student[]> {
+  static async getStudentsBypeertutors(peertutorsId: string): Promise<Student[]> {
     try {
       const supabase = createClient()
       
       const { data, error } = await supabase
         .from('peer_students')
         .select('*')
-        .eq('assigned_peer_tutor_id', peerTutorId)
+        .eq('assigned_peer_tutor_id', peertutorsId)
         .eq('peer_tutor', false)
 
       if (error) {
@@ -485,7 +485,7 @@ export class AssignmentService {
 
       return data as Student[] || []
     } catch (error) {
-      console.error('Error in getStudentsByPeerTutor:', error)
+      console.error('Error in getStudentsBypeertutors:', error)
       return []
     }
   }
@@ -580,15 +580,15 @@ export class AssignmentService {
   /**
    * Get peer tutors with their assigned students for a section
    */
-  static async getPeerTutorsWithStudents(dept: string, year: string, section: string): Promise<Array<{
-    peerTutor: PeerTutor
+  static async getpeerTutorWithStudents(dept: string, year: string, section: string): Promise<Array<{
+    peertutors: peertutors
     students: Student[]
   }>> {
     try {
       const supabase = createClient()
       
       // Get all peer tutors for this section
-      const { data: peerTutors, error: tutorsError } = await supabase
+      const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('*')
         .eq('dept', dept)
@@ -600,13 +600,13 @@ export class AssignmentService {
         return []
       }
 
-      if (!peerTutors || peerTutors.length === 0) {
+      if (!peerTutor || peerTutor.length === 0) {
         return []
       }
 
       // Get students for each peer tutor
       const tutorsWithStudents = await Promise.all(
-        peerTutors.map(async (tutor) => {
+        peerTutor.map(async (tutor) => {
           const { data: students, error: studentsError } = await supabase
             .from('peer_students')
             .select('id, name, email, dept, year, section')
@@ -615,11 +615,11 @@ export class AssignmentService {
 
           if (studentsError) {
             console.error(`Error getting students for tutor ${tutor.id}:`, studentsError)
-            return { peerTutor: tutor as PeerTutor, students: [] as Student[] }
+            return { peertutors: tutor as peertutors, students: [] as Student[] }
           }
 
           return { 
-            peerTutor: tutor as PeerTutor, 
+            peertutors: tutor as peertutors, 
             students: (students || []) as Student[] 
           }
         })
@@ -627,7 +627,7 @@ export class AssignmentService {
 
       return tutorsWithStudents
     } catch (error) {
-      console.error('Error in getPeerTutorsWithStudents:', error)
+      console.error('Error in getpeerTutorWithStudents:', error)
       return []
     }
   }
@@ -700,7 +700,7 @@ static async importAssignmentsFromCSV(
         continue
       }
       
-      const [studentName, studentEmail, peerTutorName, peerTutorEmail] = row
+      const [studentName, studentEmail, peertutorsName, peertutorsEmail] = row
       
       try {
         // Check if student exists in this section
@@ -726,28 +726,28 @@ static async importAssignmentsFromCSV(
         }
         
         // Check if peer tutor exists in this section
-        const { data: peerTutor, error: tutorError } = await supabase
+        const { data: peertutors, error: tutorError } = await supabase
           .from('peer_tutors')
           .select('id')
-          .eq('email', peerTutorEmail)
+          .eq('email', peertutorsEmail)
           .eq('dept', dept)
           .eq('year', year)
           .eq('section', section)
           .single()
         
-        if (tutorError || !peerTutor) {
-          skipped.push(`${studentName} (${studentEmail}) - Peer tutor ${peerTutorName} not found in this section`)
+        if (tutorError || !peertutors) {
+          skipped.push(`${studentName} (${studentEmail}) - Peer tutor ${peertutorsName} not found in this section`)
           continue
         }
         
         // Assign student to peer tutor
         const { error: assignError } = await supabase
           .from('peer_students')
-          .update({ assigned_peer_tutor_id: peerTutor.id })
+          .update({ assigned_peer_tutor_id: peertutors.id })
           .eq('id', student.id)
         
         if (assignError) {
-          errors.push(`Row ${i + 1}: Failed to assign ${studentName} to ${peerTutorName}`)
+          errors.push(`Row ${i + 1}: Failed to assign ${studentName} to ${peertutorsName}`)
           continue
         }
         

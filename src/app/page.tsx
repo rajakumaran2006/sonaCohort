@@ -16,9 +16,12 @@ export default function Home() {
     console.log('Home page - Loading:', loading)
     console.log('Home page - Session:', session)
     
-    if (user && !loading) {
-      console.log('Redirecting to login page to determine role...')
-      router.push('/login')
+    // Only redirect logged-in users to role detection
+    // Do NOT redirect to /login - that causes a loop
+    if (user && !loading && user.email) {
+      console.log('User authenticated, redirecting to role detection...')
+      // Redirect to a page that will detect roles and redirect appropriately
+      router.push('/auth/detect-role')
     }
   }, [user, loading, session, router])
 
@@ -82,7 +85,7 @@ export default function Home() {
           <div className="flex justify-between items-center h-16">
             {/* Logo - Bold and Uppercase */}
             <div className="flex items-center">
-              <span className="text-2xl font-black text-gray-900 uppercase tracking-tight">PEERTUTORS</span>
+              <span className="text-2xl font-black text-gray-900 uppercase tracking-tight">sonaCohort</span>
             </div>
 
             {/* Desktop Menu */}
@@ -404,11 +407,11 @@ export default function Home() {
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             {/* Logo - Bold and Uppercase */}
             <div className="flex items-center">
-              <span className="text-2xl font-black text-gray-900 uppercase tracking-tight">PEERTUTORS</span>
+              <span className="text-2xl font-black text-gray-900 uppercase tracking-tight">sonaCohort</span>
             </div>
             
             <p className="text-sm text-gray-600">
-              © 2024 PEERTUTORS. All rights reserved.
+              © 2026 SONACOHORT. All rights reserved.
             </p>
             
             <div className="flex items-center space-x-6">

@@ -268,6 +268,17 @@ export class ClassService {
         return false
       }
 
+      // 2.5) Delete class completion records linked to this class
+      const { error: completionError } = await supabase
+        .from('class_completion')
+        .delete()
+        .eq('class_id', classId)
+
+      if (completionError) {
+        console.error('Error deleting class completion records:', completionError)
+        return false
+      }
+
       // 3) Delete attendance tied to scheduled classes for this class
       if (scheduledIds.length > 0) {
         const { error: attendanceByScheduledError } = await supabase
@@ -435,61 +446,87 @@ export class ClassService {
       
       console.log('getSectionsForYear called with:', { dept, year, normalizedDept, normalizedYear })
       
-      // First, try case-insensitive matching for department
-      const { data, error } = await supabase
+      // Collect sections from multiple sources to ensure we get all available sections
+      const allSections = new Set<string>()
+      
+      // 1. Query sections from peer_students (both students and peer tutors)
+      const { data: peerStudentsData, error: peerStudentsError } = await supabase
         .from('peer_students')
         .select('section')
-        .ilike('dept', normalizedDept) // Case-insensitive match
+        .ilike('dept', normalizedDept)
         .eq('year', normalizedYear)
-        .eq('peer_tutor', false)
 
-      if (error) {
-        console.error('Error getting sections for year (case-insensitive):', error, { dept: normalizedDept, year: normalizedYear })
-      }
-
-      // Get unique sections
-      let uniqueSections: string[] = []
-      if (data) {
-        uniqueSections = [...new Set((data || []).map(item => item.section))]
-          .filter(Boolean)
-          .sort()
+      if (peerStudentsError) {
+        console.error('Error getting sections from peer_students:', peerStudentsError)
+      } else if (peerStudentsData) {
+        peerStudentsData.forEach(item => {
+          if (item.section) allSections.add(item.section)
+        })
       }
       
-      console.log('Found sections (case-insensitive):', uniqueSections, 'for dept:', normalizedDept, 'year:', normalizedYear)
+      // 2. Also query sections from the classes table
+      const { data: classesData, error: classesError } = await supabase
+        .from('classes')
+        .select('section')
+        .ilike('dept', normalizedDept)
+        .eq('year', normalizedYear)
+
+      if (classesError) {
+        console.error('Error getting sections from classes:', classesError)
+      } else if (classesData) {
+        classesData.forEach(item => {
+          if (item.section) allSections.add(item.section)
+        })
+      }
       
-      // If no sections found, try with exact department match (case-sensitive)
+      let uniqueSections = [...allSections].filter(Boolean).sort()
+      
+      console.log('Found sections from all sources:', uniqueSections, 'for dept:', normalizedDept, 'year:', normalizedYear)
+      
+      // If no sections found with case-insensitive, try exact match
       if (uniqueSections.length === 0) {
         const { data: dataExact, error: errorExact } = await supabase
           .from('peer_students')
           .select('section')
           .eq('dept', normalizedDept)
           .eq('year', normalizedYear)
-          .eq('peer_tutor', false)
 
         if (!errorExact && dataExact) {
-          uniqueSections = [...new Set((dataExact || []).map(item => item.section))]
-            .filter(Boolean)
-            .sort()
-          console.log('Found sections with exact match:', uniqueSections)
+          dataExact.forEach(item => {
+            if (item.section) allSections.add(item.section)
+          })
         }
+        
+        const { data: classesExact, error: classesExactError } = await supabase
+          .from('classes')
+          .select('section')
+          .eq('dept', normalizedDept)
+          .eq('year', normalizedYear)
+
+        if (!classesExactError && classesExact) {
+          classesExact.forEach(item => {
+            if (item.section) allSections.add(item.section)
+          })
+        }
+        
+        uniqueSections = [...allSections].filter(Boolean).sort()
+        console.log('Found sections with exact match:', uniqueSections)
       }
       
-      // If still no sections found, try to get sections for this year across ALL departments
-      // This helps when department name doesn't match exactly
+      // If still no sections found, try year-only query
       if (uniqueSections.length === 0) {
         console.log('No sections found with department filter, trying year-only query...')
         const { data: dataYearOnly, error: errorYearOnly } = await supabase
           .from('peer_students')
           .select('section')
           .eq('year', normalizedYear)
-          .eq('peer_tutor', false)
 
         if (!errorYearOnly && dataYearOnly) {
-          const yearOnlySections = [...new Set((dataYearOnly || []).map(item => item.section))]
-            .filter(Boolean)
-            .sort()
-          console.log('Found sections for year (all departments):', yearOnlySections)
-          return yearOnlySections
+          dataYearOnly.forEach(item => {
+            if (item.section) allSections.add(item.section)
+          })
+          uniqueSections = [...allSections].filter(Boolean).sort()
+          console.log('Found sections for year (all departments):', uniqueSections)
         }
       }
 
@@ -556,7 +593,7 @@ export class ClassService {
   /**
    * Get or create class completion record for a peer tutor
    */
-  static async getClassCompletion(classId: string, peerTutorId: string): Promise<ClassCompletion | null> {
+  static async getClassCompletion(classId: string, peertutorsId: string): Promise<ClassCompletion | null> {
     try {
       const supabase = createClient()
       
@@ -565,7 +602,7 @@ export class ClassService {
         .from('class_completion')
         .select('*')
         .eq('class_id', classId)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .single()
       
       let { data } = result
@@ -577,7 +614,7 @@ export class ClassService {
           .from('class_completion')
           .insert([{
             class_id: classId,
-            peer_tutor_id: peerTutorId,
+            peer_tutor_id: peertutorsId,
             attendance_completed: false,
             topics_completed: false,
             completion_status: 'pending'
@@ -597,7 +634,7 @@ export class ClassService {
           return {
             id: '',
             class_id: classId,
-            peer_tutor_id: peerTutorId,
+            peer_tutor_id: peertutorsId,
             attendance_completed: false,
             topics_completed: false,
             completion_status: 'pending',
@@ -618,7 +655,7 @@ export class ClassService {
         return {
           id: '',
           class_id: classId,
-          peer_tutor_id: peerTutorId,
+          peer_tutor_id: peertutorsId,
           attendance_completed: false,
           topics_completed: false,
           completion_status: 'pending',
@@ -634,7 +671,7 @@ export class ClassService {
       return {
         id: '',
         class_id: classId,
-        peer_tutor_id: peerTutorId,
+        peer_tutor_id: peertutorsId,
         attendance_completed: false,
         topics_completed: false,
         completion_status: 'pending',
@@ -649,14 +686,14 @@ export class ClassService {
    */
   static async updateClassCompletion(
     classId: string, 
-    peerTutorId: string, 
+    peertutorsId: string, 
     attendanceCompleted: boolean, 
     topicsCompleted: boolean
   ): Promise<boolean> {
     try {
       const supabase = createClient()
       
-      console.log('Updating class completion for class:', classId, 'peer tutor:', peerTutorId)
+      console.log('Updating class completion for class:', classId, 'peer tutor:', peertutorsId)
       console.log('Attendance completed:', attendanceCompleted, 'Topics completed:', topicsCompleted)
       
       const completionStatus = attendanceCompleted && topicsCompleted ? 'completed' : 'pending'
@@ -668,7 +705,7 @@ export class ClassService {
         .from('class_completion')
         .upsert([{
           class_id: classId,
-          peer_tutor_id: peerTutorId,
+          peer_tutor_id: peertutorsId,
           attendance_completed: attendanceCompleted,
           topics_completed: topicsCompleted,
           completion_status: completionStatus,
@@ -701,7 +738,7 @@ export class ClassService {
   /**
    * Get classes with completion status for a peer tutor
    */
-  static async getClassesWithCompletion(peerTutorId: string, dept: string, year: string, section: string): Promise<(Class & { isEditable: boolean; completion: ClassCompletion })[]> {
+  static async getClassesWithCompletion(peertutorsId: string, dept: string, year: string, section: string): Promise<(Class & { isEditable: boolean; completion: ClassCompletion })[]> {
     try {
       const supabase = createClient()
       
@@ -808,7 +845,7 @@ export class ClassService {
   /**
    * Add a topic to a class
    */
-  static async addClassTopic(classId: string, peerTutorId: string, topicName: string, description?: string, scheduledClassId?: string): Promise<boolean> {
+  static async addClassTopic(classId: string, peertutorsId: string, topicName: string, description?: string, scheduledClassId?: string): Promise<boolean> {
     try {
       const supabase = createClient()
       
@@ -834,7 +871,7 @@ export class ClassService {
         .from('class_topics')
         .insert([{
           class_id: actualClassId,
-          peer_tutor_id: peerTutorId,
+          peer_tutor_id: peertutorsId,
           topic_name: topicName,
           description: description
         }])
@@ -869,12 +906,17 @@ export class ClassService {
   ): Promise<{ success: boolean; message: string }> {
     try {
       // 1. Get all unique sections for this dept and year
-      const sections = await this.getSectionsForYear(dept, year)
+      const dbSections = await this.getSectionsForYear(dept, year)
+      
+      // Ensure standard sections are always included
+      const standardSections = ['A', 'B', 'C']
+      const sections = Array.from(new Set([...standardSections, ...dbSections])).sort()
       
       if (sections.length === 0) {
+        // This should technically not happen now with standardSections, but good safety check
         return { 
           success: false, 
-          message: `No sections found for ${dept} - Year ${year}. Please ensure students are added first.` 
+          message: `No sections found for ${dept} - Year ${year}.` 
         }
       }
 
@@ -929,6 +971,106 @@ export class ClassService {
         success: false, 
         message: 'An unexpected error occurred while creating classes for all sections.' 
       }
+    }
+  }
+  /**
+   * Check if all sections in a year are synced (same subjects and scheduled classes)
+   * Now checks for EXACT matching of subjects and scheduled dates, not just counts
+   */
+  static async getYearSyncStatus(dept: string, year: string): Promise<{
+    isSynced: boolean
+    details: {
+      section: string
+      subjectCount: number
+      scheduledCount: number
+    }[]
+  }> {
+    try {
+      const supabase = createClient()
+      const sections = await this.getSectionsForYear(dept, year)
+      
+      if (sections.length <= 1) {
+        // If 0 or 1 section, it's synced by definition
+        const details = sections.map(section => ({
+          section,
+          subjectCount: 0,
+          scheduledCount: 0
+        }))
+        return { isSynced: true, details }
+      }
+
+      const normalizedYear = this.normalizeYear(year)
+      const normalizedDept = this.normalizeDepartment(dept)
+
+      // Fetch actual subjects and scheduled classes for each section
+      const sectionData = await Promise.all(sections.map(async (section) => {
+        // Get all subjects for this section
+        const { data: classesData, error: classesError } = await supabase
+          .from('classes')
+          .select('subject_name')
+          .ilike('dept', normalizedDept)
+          .eq('year', normalizedYear)
+          .eq('section', section)
+        
+        const subjects = new Set(classesData?.map(c => c.subject_name.toLowerCase().trim()) || [])
+        
+        // Get all scheduled dates (unique by subject name and date)
+        const { data: scheduledData, error: scheduledError } = await supabase
+          .from('scheduled_classes')
+          .select(`
+            scheduled_date,
+            classes!inner(subject_name)
+          `)
+          .ilike('dept', normalizedDept)
+          .eq('year', normalizedYear)
+          .eq('section', section)
+
+        // Create set of "subject_name|date" pairs for exact matching
+        const scheduledPairs = new Set(
+          scheduledData?.map(s => 
+            `${((s.classes as { subject_name?: string } | null)?.subject_name?.toLowerCase().trim() || '')}|${s.scheduled_date}`
+          ) || []
+        )
+
+        return {
+          section,
+          subjects,
+          scheduledPairs,
+          subjectCount: subjects.size,
+          scheduledCount: scheduledPairs.size
+        }
+      }))
+
+      // Compare first section with all other sections
+      const firstSection = sectionData[0]
+      
+      // Check if all sections have identical subjects and scheduled classes
+      const isSynced = sectionData.every(sectionInfo => {
+        // Check if subject sets are identical
+        const subjectsMatch = 
+          sectionInfo.subjects.size === firstSection.subjects.size &&
+          Array.from(sectionInfo.subjects).every(sub => firstSection.subjects.has(sub))
+        
+        // Check if scheduled class pairs are identical
+        const schedulesMatch = 
+          sectionInfo.scheduledPairs.size === firstSection.scheduledPairs.size &&
+          Array.from(sectionInfo.scheduledPairs).every(pair => firstSection.scheduledPairs.has(pair))
+        
+        return subjectsMatch && schedulesMatch
+      })
+
+      // Return details with counts for display
+      const details = sectionData.map(({ section, subjectCount, scheduledCount }) => ({
+        section,
+        subjectCount,
+        scheduledCount
+      }))
+
+      return { isSynced, details }
+
+    } catch (error) {
+      console.error('Error checking sync status:', error)
+      return { isSynced: false, details: [] }
     }
   }
 }

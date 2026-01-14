@@ -1,15 +1,15 @@
 import { createClient } from '@/utils/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { PeerTutor } from '../services/peerTutorService'
+import { peertutors } from '../services/peertutorservice'
 
-export class PeerTutorAuthService {
+export class peertutorsAuthService {
   /**
    * Check if a user is a peer tutor
    * @param email User's email from Microsoft authentication
    * @param supabaseClient Optional Supabase client instance (for server-side usage)
    * @returns True if user is a peer tutor, false otherwise
    */
-  static async isPeerTutor(email: string, supabaseClient?: SupabaseClient): Promise<boolean> {
+  static async ispeertutors(email: string, supabaseClient?: SupabaseClient): Promise<boolean> {
     try {
       const supabase = supabaseClient || createClient()
       
@@ -26,7 +26,7 @@ export class PeerTutorAuthService {
 
       return !!data
     } catch (error) {
-      console.error('Error in isPeerTutor:', error)
+      console.error('Error in ispeertutors:', error)
       return false
     }
   }
@@ -37,7 +37,7 @@ export class PeerTutorAuthService {
    * @param supabaseClient Optional Supabase client instance (for server-side usage)
    * @returns Peer tutor data or null
    */
-  static async getPeerTutorByEmail(email: string, supabaseClient?: SupabaseClient): Promise<PeerTutor | null> {
+  static async getpeertutorsByEmail(email: string, supabaseClient?: SupabaseClient): Promise<peertutors | null> {
     try {
       const supabase = supabaseClient || createClient()
       
@@ -54,7 +54,7 @@ export class PeerTutorAuthService {
 
       return data
     } catch (error) {
-      console.error('Error in getPeerTutorByEmail:', error)
+      console.error('Error in getpeertutorsByEmail:', error)
       return null
     }
   }

@@ -9,12 +9,13 @@ import * as XLSX from 'xlsx'
 import { createClient } from '@/utils/supabase/client'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubject } from '@/lib/services/examSubjectService'
+import { toast } from 'sonner'
 
 interface ImportMarksModalProps {
   isOpen: boolean
   onClose: () => void
   examId: string
-  peerTutorId: string
+  peertutorsId: string
   availableSubjects: ExamSubject[]
   onImportComplete: () => void
 }
@@ -30,7 +31,7 @@ export default function ImportMarksModal({
   isOpen,
   onClose,
   examId,
-  peerTutorId,
+  peertutorsId,
   availableSubjects,
   onImportComplete,
 }: ImportMarksModalProps) {
@@ -45,12 +46,12 @@ export default function ImportMarksModal({
     if (!file) return
 
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      alert('Please select an Excel file (.xlsx or .xls).')
+      toast.warning('Please select an Excel file (.xlsx or .xls).')
       return
     }
 
     if (!selectedSubjectId) {
-      alert('Please select a subject first.')
+      toast.warning('Please select a subject first.')
       return
     }
 
@@ -127,7 +128,7 @@ export default function ImportMarksModal({
       }
 
       if (studentNameColIndex === -1 || consolidatedMarkColIndex === -1) {
-        alert('Could not find "StudentName" and "Consolidated Mark" (or "Consolidted Mark") columns in the Excel file. Please ensure these columns exist.')
+        toast.error('Could not find "StudentName" and "Consolidated Mark" (or "Consolidted Mark") columns in the Excel file. Please ensure these columns exist.')
         return
       }
 
@@ -146,7 +147,7 @@ export default function ImportMarksModal({
 
       if (studentsError) {
         console.error('Error fetching students:', studentsError)
-        alert('Error fetching students from database. Please try again.')
+        toast.error('Error fetching students from database. Please try again.')
         return
       }
 
@@ -195,7 +196,7 @@ export default function ImportMarksModal({
       // Get the selected subject name
       const selectedSubject = availableSubjects.find(s => s.id === selectedSubjectId)
       if (!selectedSubject) {
-        alert('Selected subject not found.')
+        toast.error('Selected subject not found.')
         return
       }
 
@@ -282,13 +283,13 @@ export default function ImportMarksModal({
           }
 
           // Get the peer tutor's info to find their year
-          const { data: peerTutor, error: peerTutorError } = await supabase
+          const { data: peertutors, error: peertutorsError } = await supabase
             .from('peer_tutors')
             .select('year')
             .eq('id', student.assigned_peer_tutor_id)
             .single()
 
-          if (peerTutorError || !peerTutor) {
+          if (peertutorsError || !peertutors) {
             result.skipped++
             result.errors.push(`Could not find peer tutor for "${studentName}"`)
             continue
@@ -300,13 +301,13 @@ export default function ImportMarksModal({
             .select('id, years')
           
           // Filter exams that include this peer tutor's year
-          const peerTutorExams = (allExams || []).filter((exam: any) => 
-            exam.years && Array.isArray(exam.years) && exam.years.includes(peerTutor.year)
+          const peertutorsExams = (allExams || []).filter((exam: any) => 
+            exam.years && Array.isArray(exam.years) && exam.years.includes(peertutors.year)
           )
 
-          if (peerTutorExams.length === 0) {
+          if (peertutorsExams.length === 0) {
             result.skipped++
-            result.errors.push(`No exams found for peer tutor's year (${peerTutor.year}) for "${studentName}"`)
+            result.errors.push(`No exams found for peer tutor's year (${peertutors.year}) for "${studentName}"`)
             continue
           }
 
@@ -316,7 +317,7 @@ export default function ImportMarksModal({
           let foundExamId: string | null = null
 
           // First, check current exam if student belongs to current peer tutor
-          if (student.assigned_peer_tutor_id === peerTutorId) {
+          if (student.assigned_peer_tutor_id === peertutorsId) {
             const currentExamSubjects = examSubjectMap.get(examId)
             if (currentExamSubjects && currentExamSubjects.has(selectedSubject.subject_name)) {
               foundExamSubjectId = currentExamSubjects.get(selectedSubject.subject_name)!
@@ -326,7 +327,7 @@ export default function ImportMarksModal({
 
           // If not found in current exam, check all other exams
           if (!foundExamSubjectId) {
-            for (const exam of peerTutorExams) {
+            for (const exam of peertutorsExams) {
               const examSubjects = examSubjectMap.get(exam.id)
               if (examSubjects && examSubjects.has(selectedSubject.subject_name)) {
                 foundExamSubjectId = examSubjects.get(selectedSubject.subject_name)!
@@ -399,7 +400,7 @@ export default function ImportMarksModal({
 
     } catch (error) {
       console.error('Error importing marks:', error)
-      alert('Error importing marks. Please check the file format and try again.')
+      toast.error('Error importing marks. Please check the file format and try again.')
     } finally {
       setIsImporting(false)
       // Reset file input

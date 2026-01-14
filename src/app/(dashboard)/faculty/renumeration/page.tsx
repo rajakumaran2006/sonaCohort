@@ -173,7 +173,7 @@ function FacultyRenumerationContent() {
       <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} overflow-y-auto`}>
+      <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} overflow-y-auto w-full lg:w-auto`}>
         <PageHeader
           title="RENUMERATION MANAGEMENT"
           tagline="Templates & Submission Processing"

@@ -29,7 +29,7 @@ export default function Navbar() {
             <Link href="/" className="flex items-center">
               <Image 
                 src="/logo.png" 
-                alt="PeerTutors" 
+                alt="peerTutor" 
                 width={128}
                 height={128}
                 className="h-32 w-32 mr-2 object-contain"

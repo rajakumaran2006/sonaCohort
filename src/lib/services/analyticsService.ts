@@ -60,7 +60,7 @@ export class AnalyticsService {
       const supabase = createClient()
 
       // Get all peer tutors in the department
-      const { data: peerTutors, error: tutorError } = await supabase
+      const { data: peerTutor, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('id, name, email, year, section, dept')
         .eq('dept', dept)
@@ -75,7 +75,7 @@ export class AnalyticsService {
         }
       }
 
-      if (!peerTutors || peerTutors.length === 0) {
+      if (!peerTutor || peerTutor.length === 0) {
         return {
           students: [],
           total_students: 0,
@@ -87,8 +87,8 @@ export class AnalyticsService {
       // Get pending class data for each peer tutor
       const studentsWithPendingClasses: PendingClassStudent[] = []
 
-      for (const tutor of peerTutors) {
-        const pendingData = await this.calculatePendingClassesForPeerTutor(
+      for (const tutor of peerTutor) {
+        const pendingData = await this.calculatePendingClassesForpeertutors(
           tutor.id,
           tutor.name,
           tutor.year,
@@ -150,9 +150,9 @@ export class AnalyticsService {
   /**
    * Calculate pending classes for a specific peer tutor
    */
-  private static async calculatePendingClassesForPeerTutor(
-    peerTutorId: string,
-    peerTutorName: string,
+  private static async calculatePendingClassesForpeertutors(
+    peertutorsId: string,
+    peertutorsName: string,
     year: string,
     section: string,
     dept: string,
@@ -174,7 +174,7 @@ export class AnalyticsService {
             subject_name
           )
         `)
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('peer_tutor_id', peertutorsId)
         .order('scheduled_date', { ascending: true })
 
       if (scheduledError) {
@@ -206,7 +206,7 @@ export class AnalyticsService {
         const { data: addClasses, error: addError } = await supabase
           .from('additional_classes')
           .select('id, class_date, subject_name')
-          .eq('peer_tutor_id', peerTutorId)
+          .eq('peer_tutor_id', peertutorsId)
           .order('class_date', { ascending: true })
 
         if (!addError && addClasses) {
@@ -230,14 +230,14 @@ export class AnalyticsService {
       }
 
       return {
-        id: peerTutorId,
-        name: peerTutorName,
+        id: peertutorsId,
+        name: peertutorsName,
         email: '', // Will be filled from peer_tutors table if needed
         year,
         section,
         dept,
-        peer_tutor_id: peerTutorId,
-        peer_tutor_name: peerTutorName,
+        peer_tutor_id: peertutorsId,
+        peer_tutor_name: peertutorsName,
         pending_count: pendingClasses.length,
         continuous_pending_count: continuousPendingCount,
         scheduled_classes: pendingClasses.map(cls => {
