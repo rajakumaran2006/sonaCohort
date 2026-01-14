@@ -11,7 +11,9 @@ import { Building2, ArrowLeft, Mail } from 'lucide-react'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import EmailExportModal from '@/components/forms/EmailExportModal'
+import EmailExportModal from '@/components/forms/import-export/EmailExportModal'
+
+import { logger } from '@/lib/logger'
 
 export default function SettingsPage() {
   return (
@@ -90,7 +92,7 @@ function SettingsContent() {
         totalStudents
       })
     } catch (error) {
-      console.error('Error loading settings data:', error)
+      logger.error('Error loading settings data:', error)
     } finally {
       setLoading(false)
     }

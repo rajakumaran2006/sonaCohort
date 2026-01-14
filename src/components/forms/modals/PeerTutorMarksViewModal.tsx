@@ -12,7 +12,7 @@ interface peertutorsMarksViewModalProps {
   examAssignmentId: string
 }
 
-export default function peertutorsMarksViewModal({
+export default function PeerTutorMarksViewModal({
   isOpen,
   onClose,
   examAssignmentId

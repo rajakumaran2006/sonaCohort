@@ -23,6 +23,7 @@ import ExportButton from '@/components/ui/ExportButton'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import { useMemo, useEffect } from 'react'
 import * as XLSX from 'xlsx'
+import { logger } from '@/lib/logger'
 
 export default function ExamDetailsPage() {
   return (
@@ -137,7 +138,7 @@ function ExamDetailsContent() {
             completions[tutor.id] = 0
           }
         } catch (error) {
-          console.error(`Error calculating scores for tutor ${tutor.id}:`, error)
+          logger.error(`Error calculating scores for tutor ${tutor.id}:`, error)
           scores[tutor.id] = 0
           completions[tutor.id] = 0
         }
@@ -466,7 +467,7 @@ function ExamDetailsContent() {
       // Write file
       XLSX.writeFile(workbook, filename)
     } catch (error) {
-      console.error('Error exporting to Excel:', error)
+      logger.error('Error exporting to Excel:', error)
       alert('Error exporting to Excel. Please try again.')
     }
   }

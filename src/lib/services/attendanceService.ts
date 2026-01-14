@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { ScheduledClassService } from './scheduledClassService'
 
 export interface Attendance {
@@ -71,13 +72,13 @@ export class AttendanceService {
         .eq('peer_tutor', false)
 
       if (error) {
-        console.error('Error getting students for attendance:', error)
+        logger.error('Error getting students for attendance:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error in getStudentsForAttendance:', error)
+      logger.error('Error in getStudentsForAttendance:', error)
       return []
     }
   }
@@ -89,7 +90,7 @@ export class AttendanceService {
     try {
       const supabase = createClient()
       
-      // console.log('Getting attendance for scheduled class:', scheduledClassId)
+      // logger.info('Getting attendance for scheduled class:', scheduledClassId)
       
       // First, get the scheduled class details to find the peer tutor and class_id
       const { data: scheduledClass, error: classError } = await supabase
@@ -99,11 +100,11 @@ export class AttendanceService {
         .single()
 
       if (classError || !scheduledClass) {
-        console.error('Error getting scheduled class:', classError)
+        logger.error('Error getting scheduled class:', classError)
         return []
       }
 
-      // console.log('Scheduled class details:', {
+      // logger.info('Scheduled class details:', {
       //   peertutorsId: scheduledClass.peer_tutor_id,
       //   classId: scheduledClass.class_id
       // })
@@ -116,11 +117,11 @@ export class AttendanceService {
         .eq('peer_tutor', false)
 
       if (studentsError) {
-        console.error('Error getting assigned students:', studentsError)
+        logger.error('Error getting assigned students:', studentsError)
         return []
       }
 
-      // console.log('Assigned students:', assignedStudents)
+      // logger.info('Assigned students:', assignedStudents)
 
       // Get attendance records for this scheduled class
       const { data: attendanceData, error: attendanceError } = await supabase
@@ -133,18 +134,18 @@ export class AttendanceService {
         .eq('scheduled_class_id', scheduledClassId)
 
       if (attendanceError) {
-        console.error('Error getting attendance by scheduled_class_id:', attendanceError)
+        logger.error('Error getting attendance by scheduled_class_id:', attendanceError)
         return []
       }
 
-      // console.log('Attendance records found:', attendanceData || [])
-      // console.log('Query used:', `scheduled_class_id.eq.${scheduledClassId}`)
+      // logger.info('Attendance records found:', attendanceData || [])
+      // logger.info('Query used:', `scheduled_class_id.eq.${scheduledClassId}`)
 
       // Create a map of attendance records for quick lookup
       const attendanceMap = new Map()
       if (attendanceData) {
         attendanceData.forEach(record => {
-          // console.log('Attendance record:', {
+          // logger.info('Attendance record:', {
           //   studentId: record.student_id,
           //   status: record.status,
           //   scheduledClassId: record.scheduled_class_id
@@ -163,7 +164,7 @@ export class AttendanceService {
 
       // If no assigned students found but we have attendance data, try to get student info directly from attendance records
       if (result.length === 0 && attendanceData.length > 0) {
-        // console.log('No assigned students found, trying direct approach from attendance records...')
+        // logger.info('No assigned students found, trying direct approach from attendance records...')
         
         // Get student info for each attendance record
         const studentIds = attendanceData.map(record => record.student_id)
@@ -173,9 +174,9 @@ export class AttendanceService {
           .in('id', studentIds)
 
         if (studentInfoError) {
-          console.error('Error getting student info:', studentInfoError)
+          logger.error('Error getting student info:', studentInfoError)
         } else {
-          // console.log('Student info from attendance records:', studentInfo)
+          // logger.info('Student info from attendance records:', studentInfo)
           
           result = attendanceData.map(record => {
             const student = studentInfo?.find(s => s.id === record.student_id)
@@ -189,8 +190,8 @@ export class AttendanceService {
         }
       }
 
-      // console.log('Final attendance result:', result)
-      // console.log('Debug summary:', {
+      // logger.info('Final attendance result:', result)
+      // logger.info('Debug summary:', {
       //   assignedStudentsCount: assignedStudents.length,
       //   attendanceRecordsCount: attendanceData.length,
       //   attendanceMapSize: attendanceMap.size,
@@ -202,7 +203,7 @@ export class AttendanceService {
       return result
 
     } catch (error) {
-      console.error('Error in getAttendanceByScheduledClass:', error)
+      logger.error('Error in getAttendanceByScheduledClass:', error)
       return []
     }
   }
@@ -215,7 +216,7 @@ export class AttendanceService {
     try {
       const supabase = createClient()
       
-      // console.log('Getting attendance for class:', classId)
+      // logger.info('Getting attendance for class:', classId)
       
       // First, get all scheduled classes for this class_id
       const { data: scheduledClasses, error: scheduledError } = await supabase
@@ -224,12 +225,12 @@ export class AttendanceService {
         .eq('class_id', classId)
 
       if (scheduledError) {
-        console.error('Error getting scheduled classes:', JSON.stringify(scheduledError, null, 2))
+        logger.error('Error getting scheduled classes:', JSON.stringify(scheduledError, null, 2))
         return []
       }
 
       if (!scheduledClasses || scheduledClasses.length === 0) {
-        // console.log('No scheduled classes found for class:', classId)
+        // logger.info('No scheduled classes found for class:', classId)
         return []
       }
 
@@ -250,8 +251,8 @@ export class AttendanceService {
         .in('scheduled_class_id', scheduledClassIds)
 
       if (error) {
-        console.error('Error getting attendance by class:', error)
-        console.error('Error details:', {
+        logger.error('Error getting attendance by class:', error)
+        logger.error('Error details:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -260,11 +261,11 @@ export class AttendanceService {
         return []
       }
 
-      // console.log('Attendance data retrieved:', data)
+      // logger.info('Attendance data retrieved:', data)
 
       // If no attendance records exist, return empty array
       if (!data || data.length === 0) {
-        // console.log('No attendance records found for class:', classId)
+        // logger.info('No attendance records found for class:', classId)
         return []
       }
 
@@ -275,7 +276,7 @@ export class AttendanceService {
         status: item.status
       }))
     } catch (error) {
-      console.error('Error in getAttendanceByClass:', error)
+      logger.error('Error in getAttendanceByClass:', error)
       return []
     }
   }
@@ -287,18 +288,18 @@ export class AttendanceService {
     try {
       const supabase = createClient()
       
-      // console.log('=== markAttendanceForScheduledClass called ===')
-      // console.log('Marking attendance for scheduled class:', scheduledClassId, 'peer tutor:', peertutorsId)
-      // console.log('Attendance records:', attendanceRecords)
+      // logger.info('=== markAttendanceForScheduledClass called ===')
+      // logger.info('Marking attendance for scheduled class:', scheduledClassId, 'peer tutor:', peertutorsId)
+      // logger.info('Attendance records:', attendanceRecords)
       
       // Validate input data
       if (!scheduledClassId || !peertutorsId) {
-        console.error('Missing required parameters: scheduledClassId or peertutorsId')
+        logger.error('Missing required parameters: scheduledClassId or peertutorsId')
         return false
       }
       
       if (!attendanceRecords || attendanceRecords.length === 0) {
-        console.error('No attendance records provided')
+        logger.error('No attendance records provided')
         return false
       }
       
@@ -310,20 +311,20 @@ export class AttendanceService {
       )
       
       if (validRecords.length === 0) {
-        console.error('No valid attendance records found')
+        logger.error('No valid attendance records found')
         return false
       }
       
-      // console.log('Valid attendance records:', validRecords)
+      // logger.info('Valid attendance records:', validRecords)
       
       // Get the class_id from the scheduled class
       const scheduledClass = await ScheduledClassService.getScheduledClassById(scheduledClassId)
       if (!scheduledClass) {
-        console.error('Scheduled class not found:', scheduledClassId)
+        logger.error('Scheduled class not found:', scheduledClassId)
         return false
       }
       
-      // console.log('Scheduled class found:', scheduledClass)
+      // logger.info('Scheduled class found:', scheduledClass)
       
       // Prepare attendance data for insert with both scheduled_class_id and class_id
       const attendanceData = validRecords.map(record => ({
@@ -334,10 +335,10 @@ export class AttendanceService {
         status: record.status
       }))
 
-      // console.log('Prepared attendance data for insert:', attendanceData)
+      // logger.info('Prepared attendance data for insert:', attendanceData)
 
       // First, delete existing attendance records for this scheduled class and peer tutor
-      // console.log('Deleting existing attendance records...')
+      // logger.info('Deleting existing attendance records...')
       const { error: deleteError } = await supabase
         .from('attendance')
         .delete()
@@ -345,28 +346,28 @@ export class AttendanceService {
         .eq('peer_tutor_id', peertutorsId)
 
       if (deleteError) {
-        console.error('Error deleting existing attendance records:', deleteError)
+        logger.error('Error deleting existing attendance records:', deleteError)
         throw deleteError
       } else {
-        // console.log('Successfully deleted existing attendance records')
+        // logger.info('Successfully deleted existing attendance records')
       }
 
       // Then insert new attendance records
-      // console.log('Inserting new attendance records...')
-      const { data, error: insertError } = await supabase
+      // logger.info('Inserting new attendance records...')
+      const { error: insertError } = await supabase
         .from('attendance')
         .insert(attendanceData)
         .select()
 
       if (insertError) {
-        console.error('Error inserting attendance records:', insertError)
+        logger.error('Error inserting attendance records:', insertError)
         throw insertError
       }
 
-      // console.log('Successfully inserted attendance records:', data)
+      // logger.info('Successfully inserted attendance records:', data)
       return true
     } catch (error) {
-      console.error('Error in markAttendanceForScheduledClass:', error)
+      logger.error('Error in markAttendanceForScheduledClass:', error)
       throw error
     }
   }
@@ -378,17 +379,17 @@ export class AttendanceService {
     try {
       const supabase = createClient()
       
-      // console.log('Marking attendance for class:', classId, 'peer tutor:', peertutorsId)
-      // console.log('Attendance records:', attendanceRecords)
+      // logger.info('Marking attendance for class:', classId, 'peer tutor:', peertutorsId)
+      // logger.info('Attendance records:', attendanceRecords)
       
       // Validate input data
       if (!classId || !peertutorsId) {
-        console.error('Missing required parameters: classId or peertutorsId')
+        logger.error('Missing required parameters: classId or peertutorsId')
         return false
       }
       
       if (!attendanceRecords || attendanceRecords.length === 0) {
-        console.error('No attendance records provided')
+        logger.error('No attendance records provided')
         return false
       }
       
@@ -400,11 +401,11 @@ export class AttendanceService {
       )
       
       if (validRecords.length === 0) {
-        console.error('No valid attendance records found')
+        logger.error('No valid attendance records found')
         return false
       }
       
-      // console.log('Valid attendance records:', validRecords)
+      // logger.info('Valid attendance records:', validRecords)
       
       // Resolve scheduled_class_id and class_id correctly
       let resolvedScheduledClassId = scheduledClassId
@@ -428,10 +429,10 @@ export class AttendanceService {
         status: record.status
       }))
 
-      // console.log('Prepared attendance data for insert:', attendanceData)
+      // logger.info('Prepared attendance data for insert:', attendanceData)
 
       // First, delete existing attendance records for this scheduled class and peer tutor
-      // console.log('Deleting existing attendance records...')
+      // logger.info('Deleting existing attendance records...')
       const { error: deleteError } = await supabase
         .from('attendance')
         .delete()
@@ -439,22 +440,22 @@ export class AttendanceService {
         .eq('peer_tutor_id', peertutorsId)
 
       if (deleteError) {
-        console.error('Error deleting existing attendance records:', deleteError)
+        logger.error('Error deleting existing attendance records:', deleteError)
         // Don't return false here, continue with insert as delete might fail if no records exist
       } else {
-        // console.log('Successfully deleted existing attendance records')
+        // logger.info('Successfully deleted existing attendance records')
       }
 
       // Then insert new attendance records
-      // console.log('Inserting new attendance records...')
-      const { data, error: insertError } = await supabase
+      // logger.info('Inserting new attendance records...')
+      const { error: insertError } = await supabase
         .from('attendance')
         .insert(attendanceData)
         .select()
 
       if (insertError) {
-        console.error('Error inserting attendance records:', insertError)
-        console.error('Insert error details:', {
+        logger.error('Error inserting attendance records:', insertError)
+        logger.error('Insert error details:', {
           message: insertError.message,
           details: insertError.details,
           hint: insertError.hint,
@@ -463,10 +464,10 @@ export class AttendanceService {
         return false
       }
 
-      // console.log('Successfully inserted attendance records:', data)
+      // logger.info('Successfully inserted attendance records:', data)
       return true
     } catch (error) {
-      console.error('Error in markAttendance:', error)
+      logger.error('Error in markAttendance:', error)
       return false
     }
   }
@@ -485,13 +486,13 @@ export class AttendanceService {
         .order('created_at', { ascending: true })
 
       if (error) {
-        console.error('Error getting class topics:', error)
+        logger.error('Error getting class topics:', error)
         return []
       }
 
       return data as ClassTopic[] || []
     } catch (error) {
-      console.error('Error in getClassTopics:', error)
+      logger.error('Error in getClassTopics:', error)
       return []
     }
   }
@@ -513,13 +514,13 @@ export class AttendanceService {
         }])
 
       if (error) {
-        console.error('Error adding class topic:', error)
+        logger.error('Error adding class topic:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in addClassTopic:', error)
+      logger.error('Error in addClassTopic:', error)
       return false
     }
   }
@@ -537,13 +538,13 @@ export class AttendanceService {
         .eq('id', topicId)
 
       if (error) {
-        console.error('Error deleting class topic:', error)
+        logger.error('Error deleting class topic:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteClassTopic:', error)
+      logger.error('Error in deleteClassTopic:', error)
       return false
     }
   }
@@ -610,8 +611,8 @@ export class AttendanceService {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error getting attendance history:', error)
-        console.error('Error details:', {
+        logger.error('Error getting attendance history:', error)
+        logger.error('Error details:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -624,18 +625,18 @@ export class AttendanceService {
       const validData = Array.isArray(data) ? data : []
       
       if (validData.length === 0) {
-        // console.log('No attendance records found for peer tutor:', peertutorsId)
+        // logger.info('No attendance records found for peer tutor:', peertutorsId)
         return []
       }
       
-      // console.log(`Processing ${validData.length} attendance records for peer tutor:`, peertutorsId)
+      // logger.info(`Processing ${validData.length} attendance records for peer tutor:`, peertutorsId)
       
       // Add scheduled class information if available
       const enrichedData = await Promise.all(
         validData.map(async (record) => {
           // Check if record exists and has required properties
           if (!record || !record.id) {
-            console.warn('Invalid record found:', record)
+            logger.warn('Invalid record found:', record)
             return null
           }
 
@@ -645,7 +646,7 @@ export class AttendanceService {
 
           // Check if classes data exists
           if (!record.classes || !classRecord) {
-            console.warn('No class record found for attendance record:', record.id)
+            logger.warn('No class record found for attendance record:', record.id)
             return {
               ...record,
               classes: null,
@@ -677,7 +678,7 @@ export class AttendanceService {
               } : null
             } as AttendanceHistoryRecord
           } catch (error) {
-            console.error('Error fetching scheduled classes for record:', record.id, error)
+            logger.error('Error fetching scheduled classes for record:', record.id, error)
             return {
               ...record,
               classes: classRecord,
@@ -691,7 +692,7 @@ export class AttendanceService {
       // Filter out any null records that couldn't be processed
       return enrichedData.filter((record): record is AttendanceHistoryRecord => record !== null)
     } catch (error) {
-      console.error('Error in getAttendanceHistory:', error)
+      logger.error('Error in getAttendanceHistory:', error)
       return []
     }
   }
@@ -709,7 +710,7 @@ export class AttendanceService {
     try {
       const supabase = createClient()
       
-      // console.log('Getting attendance summary for peer tutor ID:', peertutorsId)
+      // logger.info('Getting attendance summary for peer tutor ID:', peertutorsId)
       
       // First get peer tutor info to get dept, year, section
       const { data: tutorData, error: tutorError } = await supabase
@@ -719,8 +720,8 @@ export class AttendanceService {
         .single()
 
       if (tutorError) {
-        console.error('Error getting peer tutor info:', tutorError)
-        console.error('Tutor error details:', {
+        logger.error('Error getting peer tutor info:', tutorError)
+        logger.error('Tutor error details:', {
           message: tutorError.message,
           details: tutorError.details,
           hint: tutorError.hint,
@@ -736,7 +737,7 @@ export class AttendanceService {
       }
 
       if (!tutorData) {
-        console.error('No peer tutor data found for ID:', peertutorsId)
+        logger.error('No peer tutor data found for ID:', peertutorsId)
         return {
           totalClasses: 0,
           totalStudents: 0,
@@ -746,7 +747,7 @@ export class AttendanceService {
         }
       }
 
-      // console.log('Peer tutor data:', tutorData)
+      // logger.info('Peer tutor data:', tutorData)
 
       // Get total scheduled classes for this peer tutor's dept, year, section
       const { data: scheduledClassesData, error: scheduledClassesError } = await supabase
@@ -758,8 +759,8 @@ export class AttendanceService {
         .eq('peer_tutor_id', peertutorsId)
 
       if (scheduledClassesError) {
-        console.error('Error getting scheduled classes count:', scheduledClassesError)
-        console.error('Scheduled classes error details:', {
+        logger.error('Error getting scheduled classes count:', scheduledClassesError)
+        logger.error('Scheduled classes error details:', {
           message: scheduledClassesError.message,
           details: scheduledClassesError.details,
           hint: scheduledClassesError.hint,
@@ -782,8 +783,8 @@ export class AttendanceService {
         .eq('peer_tutor', false)
 
       if (studentsError) {
-        console.error('Error getting students count:', studentsError)
-        console.error('Students error details:', {
+        logger.error('Error getting students count:', studentsError)
+        logger.error('Students error details:', {
           message: studentsError.message,
           details: studentsError.details,
           hint: studentsError.hint,
@@ -805,8 +806,8 @@ export class AttendanceService {
         .eq('peer_tutor_id', peertutorsId)
 
       if (attendanceError) {
-        console.error('Error getting attendance records:', attendanceError)
-        console.error('Attendance error details:', {
+        logger.error('Error getting attendance records:', attendanceError)
+        logger.error('Attendance error details:', {
           message: attendanceError.message,
           details: attendanceError.details,
           hint: attendanceError.hint,
@@ -826,7 +827,7 @@ export class AttendanceService {
       const totalRecords = presentCount + absentCount
       const attendanceRate = totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0
 
-      console.log('Attendance summary calculated:', {
+      logger.info('Attendance summary calculated:', {
         totalClasses: scheduledClassesData?.length || 0,
         totalStudents: studentsData?.length || 0,
         presentCount,
@@ -842,7 +843,7 @@ export class AttendanceService {
         attendanceRate: Math.round(attendanceRate * 100) / 100
       }
     } catch (error) {
-      console.error('Error in getAttendanceSummary:', error)
+      logger.error('Error in getAttendanceSummary:', error)
       return {
         totalClasses: 0,
         totalStudents: 0,
@@ -872,13 +873,13 @@ export class AttendanceService {
         .eq('id', attendanceId)
 
       if (error) {
-        console.error('Error updating attendance record:', error)
+        logger.error('Error updating attendance record:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateAttendanceRecord:', error)
+      logger.error('Error in updateAttendanceRecord:', error)
       return false
     }
   }
@@ -920,7 +921,7 @@ export class AttendanceService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting student attendance history:', error)
+        logger.error('Error getting student attendance history:', error)
         return []
       }
 
@@ -930,7 +931,7 @@ export class AttendanceService {
         scheduled_classes: Array.isArray(record.scheduled_classes) ? record.scheduled_classes[0] : record.scheduled_classes
       }))
     } catch (error) {
-      console.error('Error in getStudentAttendanceHistory:', error)
+      logger.error('Error in getStudentAttendanceHistory:', error)
       return []
     }
   }

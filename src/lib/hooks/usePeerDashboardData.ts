@@ -11,9 +11,10 @@ import { peertutorservice } from '@/lib/services/peerTutorService'
 import { ExamService } from '@/lib/services/examService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { calculatepeertutorsAscendScore } from '@/lib/utils/ascendScore'
+import { logger } from '@/lib/logger'
 
 // 1. Peer Tutor Info Hook
-export function usepeertutorsInfo(email: string | null | undefined) {
+export function usePeerTutorInfo(email: string | null | undefined) {
   return useQuery({
     queryKey: ['peertutors', email],
     queryFn: async () => {
@@ -96,7 +97,7 @@ export function useStudentAttendanceStats(students: Student[] | undefined, peert
               attendancePercentage
             }
           } catch (error) {
-            console.error(`Error loading attendance for student ${student.id}:`, error)
+            logger.error(`Error loading attendance for student ${student.id}:`, error)
             return {
               id: student.id,
               name: student.name,

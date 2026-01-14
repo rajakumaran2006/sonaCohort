@@ -4,10 +4,10 @@ import Image from 'next/image'
 
 import { AttendanceRecord } from '@/lib/services/attendanceService'
 import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
-import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 import DatePicker from '@/components/ui/DatePicker'
 import * as XLSX from 'xlsx'
-import { Plus, Trash2, FileDown, ChevronDown, CheckCircle, XCircle, Calendar, User, FileText } from 'lucide-react'
+import { Plus, Trash2, FileDown, ChevronDown, CheckCircle, XCircle, User, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 
 // Helper to parse "YYYY-MM-DD" as a local date (prevents timezone shifts)

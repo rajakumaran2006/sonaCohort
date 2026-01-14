@@ -1,6 +1,7 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { Student } from './studentService'
-import { peertutors } from './peertutorservice'
+import { peertutors } from './peerTutorService'
 
 export interface Assignment {
   id: string
@@ -41,7 +42,7 @@ export class AssignmentService {
         .eq('peer_tutor', false) // Only regular students, not peer tutors
 
       if (studentsError) {
-        console.error('Error getting students by year:', studentsError)
+        logger.error('Error getting students by year:', studentsError)
         return {
           totalStudents: 0,
           totalpeerTutor: 0,
@@ -59,7 +60,7 @@ export class AssignmentService {
         .eq('year', year)
 
       if (tutorsError) {
-        console.error('Error getting peer tutors by year:', tutorsError)
+        logger.error('Error getting peer tutors by year:', tutorsError)
         return {
           totalStudents: 0,
           totalpeerTutor: 0,
@@ -83,7 +84,7 @@ export class AssignmentService {
         averageStudentsPerTutor
       }
     } catch (error) {
-      console.error('Error getting assignment stats by year:', error)
+      logger.error('Error getting assignment stats by year:', error)
       return {
         totalStudents: 0,
         totalpeerTutor: 0,
@@ -111,7 +112,7 @@ export class AssignmentService {
         .eq('peer_tutor', false) // Only regular students, not peer tutors
 
       if (studentsError) {
-        console.error('Error getting students:', studentsError)
+        logger.error('Error getting students:', studentsError)
         return {
           totalStudents: 0,
           totalpeerTutor: 0,
@@ -130,7 +131,7 @@ export class AssignmentService {
         .eq('section', section)
 
       if (tutorsError) {
-        console.error('Error getting peer tutors:', tutorsError)
+        logger.error('Error getting peer tutors:', tutorsError)
         return {
           totalStudents: 0,
           totalpeerTutor: 0,
@@ -154,7 +155,7 @@ export class AssignmentService {
         averageStudentsPerTutor
       }
     } catch (error) {
-      console.error('Error getting assignment stats:', error)
+      logger.error('Error getting assignment stats:', error)
       return {
         totalStudents: 0,
         totalpeerTutor: 0,
@@ -218,7 +219,7 @@ export class AssignmentService {
         created_at: new Date().toISOString()
       }
     } catch (error) {
-      console.error('Error getting assignment by student and tutor:', error)
+      logger.error('Error getting assignment by student and tutor:', error)
       return null
     }
   }
@@ -243,13 +244,13 @@ export class AssignmentService {
         .eq('id', assignmentData.student_id)
 
       if (error) {
-        console.error('Error creating assignment:', error)
+        logger.error('Error creating assignment:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in createAssignment:', error)
+      logger.error('Error in createAssignment:', error)
       return false
     }
   }
@@ -281,7 +282,7 @@ export class AssignmentService {
         .not('assigned_peer_tutor_id', 'is', null)
 
       if (error) {
-        console.error('Error getting assignments:', error)
+        logger.error('Error getting assignments:', error)
         return []
       }
 
@@ -299,7 +300,7 @@ export class AssignmentService {
         created_at: new Date().toISOString()
       }))
     } catch (error) {
-      console.error('Error in getAssignments:', error)
+      logger.error('Error in getAssignments:', error)
       return []
     }
   }
@@ -317,13 +318,13 @@ export class AssignmentService {
         .eq('id', studentId)
 
       if (error) {
-        console.error('Error assigning student:', error)
+        logger.error('Error assigning student:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in assignStudent:', error)
+      logger.error('Error in assignStudent:', error)
       return false
     }
   }
@@ -341,13 +342,13 @@ export class AssignmentService {
         .eq('id', studentId)
 
       if (error) {
-        console.error('Error unassigning student:', error)
+        logger.error('Error unassigning student:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in unassignStudent:', error)
+      logger.error('Error in unassignStudent:', error)
       return false
     }
   }
@@ -371,7 +372,7 @@ export class AssignmentService {
         .is('assigned_peer_tutor_id', null)
 
       if (studentsError) {
-        console.error('Error getting unassigned students:', studentsError)
+        logger.error('Error getting unassigned students:', studentsError)
         return false
       }
 
@@ -384,7 +385,7 @@ export class AssignmentService {
         .eq('section', section)
 
       if (tutorsError) {
-        console.error('Error getting peer tutors:', tutorsError)
+        logger.error('Error getting peer tutors:', tutorsError)
         return false
       }
 
@@ -409,8 +410,8 @@ export class AssignmentService {
         })
       )
 
-      console.log('Tutor assignment counts before auto-assign:', tutorAssignmentCounts)
-      console.log('Unassigned students count:', unassignedStudents.length)
+      logger.info('Tutor assignment counts before auto-assign:', tutorAssignmentCounts)
+      logger.info('Unassigned students count:', unassignedStudents.length)
 
       // Sort tutors by current assignment count (ascending) to prioritize those with fewer students
       tutorAssignmentCounts.sort((a, b) => a.currentCount - b.currentCount)
@@ -420,9 +421,9 @@ export class AssignmentService {
       const targetPerTutor = Math.floor(totalStudents / peerTutor.length)
       const remainder = totalStudents % peerTutor.length
 
-      console.log('Total students:', totalStudents)
-      console.log('Target per tutor:', targetPerTutor)
-      console.log('Remainder:', remainder)
+      logger.info('Total students:', totalStudents)
+      logger.info('Target per tutor:', targetPerTutor)
+      logger.info('Remainder:', remainder)
 
       // Assign students to balance the load
       let studentIndex = 0
@@ -433,7 +434,7 @@ export class AssignmentService {
         const additionalStudentsNeeded = targetPerTutor - tutor.currentCount + (i < remainder ? 1 : 0)
         const studentsToAssign = Math.min(additionalStudentsNeeded, unassignedStudents.length - studentIndex)
         
-        console.log(`Tutor ${tutor.name}: current=${tutor.currentCount}, needs=${additionalStudentsNeeded}, will assign=${studentsToAssign}`)
+        logger.info(`Tutor ${tutor.name}: current=${tutor.currentCount}, needs=${additionalStudentsNeeded}, will assign=${studentsToAssign}`)
         
         // Only assign if this tutor needs more students
         if (studentsToAssign > 0) {
@@ -447,20 +448,20 @@ export class AssignmentService {
               .eq('id', student.id)
 
             if (error) {
-              console.error('Error auto-assigning student:', error)
+              logger.error('Error auto-assigning student:', error)
               return false
             }
             
-            console.log(`Assigned student ${student.id} to tutor ${tutor.name}`)
+            logger.info(`Assigned student ${student.id} to tutor ${tutor.name}`)
             studentIndex++
           }
         }
       }
 
-      console.log('Auto-assignment completed')
+      logger.info('Auto-assignment completed')
       return true
     } catch (error) {
-      console.error('Error in autoAssignStudents:', error)
+      logger.error('Error in autoAssignStudents:', error)
       return false
     }
   }
@@ -479,13 +480,13 @@ export class AssignmentService {
         .eq('peer_tutor', false)
 
       if (error) {
-        console.error('Error getting students by peer tutor:', error)
+        logger.error('Error getting students by peer tutor:', error)
         return []
       }
 
       return data as Student[] || []
     } catch (error) {
-      console.error('Error in getStudentsBypeertutors:', error)
+      logger.error('Error in getStudentsBypeertutors:', error)
       return []
     }
   }
@@ -517,7 +518,7 @@ export class AssignmentService {
         .not('assigned_peer_tutor_id', 'is', null)
 
       if (error) {
-        console.error('Error getting assignments by faculty:', error)
+        logger.error('Error getting assignments by faculty:', error)
         return []
       }
 
@@ -544,7 +545,7 @@ export class AssignmentService {
         created_at: new Date().toISOString()
       }))
     } catch (error) {
-      console.error('Error in getAllAssignmentsByFaculty:', error)
+      logger.error('Error in getAllAssignmentsByFaculty:', error)
       return []
     }
   }
@@ -566,13 +567,13 @@ export class AssignmentService {
         .is('assigned_peer_tutor_id', null)
 
       if (error) {
-        console.error('Error getting unassigned students:', error)
+        logger.error('Error getting unassigned students:', error)
         return []
       }
 
       return data as Student[] || []
     } catch (error) {
-      console.error('Error in getUnassignedStudents:', error)
+      logger.error('Error in getUnassignedStudents:', error)
       return []
     }
   }
@@ -596,7 +597,7 @@ export class AssignmentService {
         .eq('section', section)
 
       if (tutorsError) {
-        console.error('Error getting peer tutors:', tutorsError)
+        logger.error('Error getting peer tutors:', tutorsError)
         return []
       }
 
@@ -614,7 +615,7 @@ export class AssignmentService {
             .eq('peer_tutor', false)
 
           if (studentsError) {
-            console.error(`Error getting students for tutor ${tutor.id}:`, studentsError)
+            logger.error(`Error getting students for tutor ${tutor.id}:`, studentsError)
             return { peertutors: tutor as peertutors, students: [] as Student[] }
           }
 
@@ -627,7 +628,7 @@ export class AssignmentService {
 
       return tutorsWithStudents
     } catch (error) {
-      console.error('Error in getpeerTutorWithStudents:', error)
+      logger.error('Error in getpeerTutorWithStudents:', error)
       return []
     }
   }
@@ -657,7 +658,7 @@ static async exportAssignmentsToCSV(dept: string, year: string, section: string)
     
     return csvContent
   } catch (error) {
-    console.error('Error exporting assignments to CSV:', error)
+    logger.error('Error exporting assignments to CSV:', error)
     throw error
   }
 }
@@ -764,7 +765,7 @@ static async importAssignmentsFromCSV(
       errors
     }
   } catch (error) {
-    console.error('Error importing assignments from CSV:', error)
+    logger.error('Error importing assignments from CSV:', error)
     return {
       success: false,
       added: 0,
@@ -788,13 +789,13 @@ static async importAssignmentsFromCSV(
         .eq('section', section)
         
       if (error) {
-        console.error('Error unassigning all students:', error)
+        logger.error('Error unassigning all students:', error)
         return false
       }
       
       return true
     } catch (error) {
-      console.error('Error in unassignAllStudents:', error)
+      logger.error('Error in unassignAllStudents:', error)
       return false
     }
   }

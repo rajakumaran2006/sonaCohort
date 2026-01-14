@@ -391,7 +391,7 @@ export default function ClassImportModal({
               }
 
               // Ensure class exists
-              let classExists = await ClassService.classExists(dept, year, currentSection, row.subject)
+              const classExists = await ClassService.classExists(dept, year, currentSection, row.subject)
               
               if (!classExists) {
                 const created = await ClassService.createClass({

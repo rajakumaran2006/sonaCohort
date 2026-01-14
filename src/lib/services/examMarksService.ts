@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export interface ExamMark {
   id: string
@@ -51,7 +52,7 @@ export class ExamMarksService {
           .single()
 
         if (error) {
-          console.error('Error updating exam marks:', error)
+          logger.error('Error updating exam marks:', error)
           return null
         }
 
@@ -72,14 +73,14 @@ export class ExamMarksService {
           .single()
 
         if (error) {
-          console.error('Error inserting exam marks:', error)
+          logger.error('Error inserting exam marks:', error)
           return null
         }
 
         return inserted as ExamMark
       }
     } catch (error) {
-      console.error('Error in saveExamMarks:', error)
+      logger.error('Error in saveExamMarks:', error)
       return null
     }
   }
@@ -99,7 +100,7 @@ export class ExamMarksService {
       const results = await Promise.all(operations)
       return results.every(result => result !== null)
     } catch (error) {
-      console.error('Error in saveExamMarksBatch:', error)
+      logger.error('Error in saveExamMarksBatch:', error)
       return false
     }
   }
@@ -122,13 +123,13 @@ export class ExamMarksService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting exam marks:', error)
+        logger.error('Error getting exam marks:', error)
         return []
       }
 
       return (data || []) as ExamMark[]
     } catch (error) {
-      console.error('Error in getExamMarksBypeertutorsAndExam:', error)
+      logger.error('Error in getExamMarksBypeertutorsAndExam:', error)
       return []
     }
   }
@@ -155,13 +156,13 @@ export class ExamMarksService {
         .single()
 
       if (error && error.code !== 'PGRST116') {
-        console.error('Error getting exam mark:', error)
+        logger.error('Error getting exam mark:', error)
         return null
       }
 
       return data as ExamMark | null
     } catch (error) {
-      console.error('Error in getExamMark:', error)
+      logger.error('Error in getExamMark:', error)
       return null
     }
   }

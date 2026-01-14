@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import Modal, { ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { ClassService } from '@/lib/services/classService'
 import { StudentService } from '@/lib/services/studentService'
+import { peertutorservice as PeerTutorService } from '@/lib/services/peerTutorService'
 import { AlertCircle, CheckCircle, XCircle, Loader2, Users } from 'lucide-react'
 
 interface ItemToTransfer {
@@ -125,8 +126,8 @@ export default function TransferModal({
         
         validation.canTransfer = validation.conflictingItems.length === 0
       } else {
-        const existingPeerTutors = await PeerTutorService.getPeerTutorsBySection(dept, year, section)
-        const existingEmails = existingPeerTutors.map(pt => pt.email.toLowerCase())
+        const existingPeerTutors = await PeerTutorService.getpeerTutorBySection(dept, year, section)
+        const existingEmails = existingPeerTutors.map((pt: { email: string }) => pt.email.toLowerCase())
         validation.existingEmails = existingEmails
         
         // Find conflicting items

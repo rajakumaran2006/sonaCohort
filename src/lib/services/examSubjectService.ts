@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export interface ExamSubject {
   id: string
@@ -34,13 +35,13 @@ export class ExamSubjectService {
         .order('created_at', { ascending: true })
 
       if (error) {
-        console.error('Error getting exam subjects:', error)
+        logger.error('Error getting exam subjects:', error)
         return []
       }
 
       return (data || []) as ExamSubject[]
     } catch (error) {
-      console.error('Error in getExamSubjects:', error)
+      logger.error('Error in getExamSubjects:', error)
       return []
     }
   }
@@ -65,13 +66,13 @@ export class ExamSubjectService {
         .single()
 
       if (error) {
-        console.error('Error adding exam subject:', error)
+        logger.error('Error adding exam subject:', error)
         return null
       }
 
       return subject as ExamSubject
     } catch (error) {
-      console.error('Error in addExamSubject:', error)
+      logger.error('Error in addExamSubject:', error)
       return null
     }
   }
@@ -89,13 +90,13 @@ export class ExamSubjectService {
         .eq('id', subjectId)
 
       if (error) {
-        console.error('Error updating subject name:', error)
+        logger.error('Error updating subject name:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateSubjectName:', error)
+      logger.error('Error in updateSubjectName:', error)
       return false
     }
   }
@@ -113,13 +114,13 @@ export class ExamSubjectService {
         .eq('id', subjectId)
 
       if (error) {
-        console.error('Error deleting exam subject:', error)
+        logger.error('Error deleting exam subject:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteExamSubject:', error)
+      logger.error('Error in deleteExamSubject:', error)
       return false
     }
   }
@@ -146,7 +147,7 @@ export class ExamSubjectService {
         .eq('section', section)
 
       if (classesError) {
-        console.error('Error getting classes:', classesError)
+        logger.error('Error getting classes:', classesError)
         return false
       }
 
@@ -179,14 +180,14 @@ export class ExamSubjectService {
           .insert(subjectsToAdd)
 
         if (insertError) {
-          console.error('Error inserting exam subjects:', insertError)
+          logger.error('Error inserting exam subjects:', insertError)
           return false
         }
       }
 
       return true
     } catch (error) {
-      console.error('Error in initializeSubjectsFromClasses:', error)
+      logger.error('Error in initializeSubjectsFromClasses:', error)
       return false
     }
   }

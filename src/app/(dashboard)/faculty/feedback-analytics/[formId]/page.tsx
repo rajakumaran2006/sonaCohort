@@ -6,8 +6,9 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
-import FeedbackAnalyticsPage from '@/components/forms/FeedbackAnalyticsPage'
+import FeedbackAnalyticsPage from '@/components/forms/feedback/FeedbackAnalyticsPage'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { logger } from '@/lib/logger'
 
 
 export default function FeedbackFormAnalytics() {
@@ -92,8 +93,8 @@ function FeedbackFormAnalyticsContent() {
       setLoading(true)
       setError(null)
       
-      console.log('loadForm called with formId:', formId)
-      console.log('User ID:', user?.id)
+      logger.info('loadForm called with formId:', formId)
+      logger.info('User ID:', user?.id)
       
       if (!user?.id) {
         setError('User not authenticated')
@@ -106,20 +107,19 @@ function FeedbackFormAnalyticsContent() {
       }
       
       // Get the specific form by ID
-      console.log('Calling getFeedbackFormById with form ID:', formId)
+      logger.info('Calling getFeedbackFormById with form ID:', formId)
       const foundForm = await FeedbackService.getFeedbackFormById(formId)
       
       if (foundForm) {
-        console.log('Found form:', foundForm)
+        logger.info('Found form:', foundForm)
         setForm(foundForm)
       } else {
-        console.log('Form not found with ID:', formId)
+        logger.info('Form not found with ID:', formId)
         setError('Form not found')
       }
     } catch (err) {
-      console.error('Error loading form:', err)
-      console.error('Error type:', typeof err)
-      console.error('Error message:', err instanceof Error ? err.message : 'Unknown error')
+      logger.error('Error loading form:', err)
+      logger.error('Error message:', err instanceof Error ? err.message : 'Unknown error')
       setError('Failed to load form data')
     } finally {
       setLoading(false)

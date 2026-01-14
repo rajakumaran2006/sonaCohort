@@ -6,7 +6,6 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { LayoutGrid, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
-import Image from 'next/image'
 
 interface SidebarProps {
   isOpen: boolean

@@ -7,7 +7,7 @@ import { DepartmentService } from '@/lib/services/departmentService'
 import { peertutorservice, peertutors as Basepeertutors } from '@/lib/services/peerTutorService'
 import { Student as BaseStudent } from '@/lib/services/studentService'
 import { Department } from '@/lib/types'
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { AdminAnalyticsSkeleton } from '@/components/skeletons/AdminAnalyticsSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { 
@@ -19,8 +19,10 @@ import {
   Download, 
   Filter,
   ChevronDown,
+  ChevronDown,
   X 
 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface peertutorsWithDetails extends Basepeertutors {
   faculty_name: string
@@ -116,7 +118,7 @@ function AnalyticsContent() {
       setTotalStudents(totalStudentCount)
 
     } catch (error) {
-      console.error('Error loading analytics data:', error)
+      logger.error('Error loading analytics data:', error)
     } finally {
       setIsLoading(false)
     }
@@ -177,7 +179,7 @@ function AnalyticsContent() {
 
       setAssignedStudents(studentsWithRollNumbers)
     } catch (error) {
-      console.error('Error in handlepeertutorsClick:', error)
+      logger.error('Error in handlepeertutorsClick:', error)
       setAssignedStudents([])
     }
   }
@@ -222,7 +224,7 @@ function AnalyticsContent() {
         link.setAttribute('href', url)
         link.setAttribute('download', `peer-tutors-and-students-${new Date().toISOString().split('T')[0]}.csv`)
         document.body.appendChild(link); link.click(); document.body.removeChild(link)
-      } catch (error) { console.error(error); alert('Failed to export') }
+      } catch (error) { logger.error(error); alert('Failed to export') }
   }
 
   const exportpeerTutorOnly = () => {
@@ -263,7 +265,7 @@ function AnalyticsContent() {
         link.setAttribute('href', url)
         link.setAttribute('download', `students-${new Date().toISOString().split('T')[0]}.csv`)
         document.body.appendChild(link); link.click(); document.body.removeChild(link)
-     } catch(e) { console.error(e); alert('Error')}
+     } catch(e) { logger.error(e); alert('Error')}
   }
 
   return (
@@ -519,7 +521,7 @@ function AnalyticsContent() {
 
 // Helper Components
 
-function StatCard({ title, value, icon: Icon, color }: { title: string, value: number, icon: any, color: 'purple' | 'blue' | 'orange' | 'emerald' }) {
+function StatCard({ title, value, icon: Icon, color }: { title: string, value: number, icon: React.ComponentType<{ className?: string }>, color: 'purple' | 'blue' | 'orange' | 'emerald' }) {
    const colorStyles = {
       purple: 'bg-purple-50 text-purple-600',
       blue: 'bg-blue-50 text-blue-600',

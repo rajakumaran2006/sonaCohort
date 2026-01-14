@@ -110,7 +110,7 @@ export default function DatePicker({
   const renderDays = () => {
     const dateFormat = "EEEEE" // M, T, W, T, F, S, S
     const days = []
-    let startDate = startOfWeek(currentMonth)
+    const startDate = startOfWeek(currentMonth)
 
     for (let i = 0; i < 7; i++) {
         days.push(

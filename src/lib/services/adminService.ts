@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export interface AdminUser {
@@ -18,7 +19,7 @@ export class AdminService {
    */
   static async isAdmin(email: string, supabaseClient?: SupabaseClient): Promise<boolean> {
     try {
-      console.log('AdminService: Checking admin status for:', email)
+      logger.info('AdminService: Checking admin status for:', email)
       
       // First, check if it's a known admin email (fastest check)
       const knownAdminEmails = [
@@ -27,7 +28,7 @@ export class AdminService {
       ]
       
       if (knownAdminEmails.includes(email.toLowerCase())) {
-        console.log('AdminService: User is in known admin list:', email)
+        logger.info('AdminService: User is in known admin list:', email)
         return true
       }
       
@@ -42,23 +43,23 @@ export class AdminService {
           .maybeSingle()
 
         if (error) {
-          console.log('AdminService: Database error, using known admin list:', error.message)
+          logger.info('AdminService: Database error, using known admin list:', error.message)
           return false // Don't fall back to known list here since we already checked
         }
 
         if (data) {
-          console.log('AdminService: Admin found in database for:', email)
+          logger.info('AdminService: Admin found in database for:', email)
           return true
         }
 
-        console.log('AdminService: No admin record found in database for:', email)
+        logger.info('AdminService: No admin record found in database for:', email)
         return false
       } catch (dbError) {
-        console.log('AdminService: Database check failed:', dbError)
+        logger.info('AdminService: Database check failed:', dbError)
         return false
       }
     } catch (error) {
-      console.error('AdminService: Error checking admin status:', error)
+      logger.error('AdminService: Error checking admin status:', error)
       return false
     }
   }
@@ -88,7 +89,7 @@ export class AdminService {
   static async getDashboardPath(email: string, supabaseClient?: SupabaseClient): Promise<string> {
     try {
       if (!email || email.trim() === '') {
-        console.log('No email provided, defaulting to admin dashboard')
+        logger.info('No email provided, defaulting to admin dashboard')
         return '/admin/dashboard'
       }
 
@@ -98,24 +99,24 @@ export class AdminService {
         const department = await FacultyService.verifyFacultyAccess(email, supabaseClient)
         
         if (department) {
-          console.log('User is faculty, redirecting to faculty dashboard')
+          logger.info('User is faculty, redirecting to faculty dashboard')
           return '/faculty/dashboard'
         }
       } catch (facultyError) {
-        console.log('Faculty verification failed, continuing with admin check:', facultyError)
+        logger.info('Faculty verification failed, continuing with admin check:', facultyError)
         // Continue with admin check even if faculty verification fails
       }
 
       // Then check if user is a peer tutor
       try {
-        const { peertutorsAuthService } = await import('../auth/peertutorsAuthService')
+        const { peertutorsAuthService } = await import('../auth/peerTutorAuthService')
         const ispeertutors = await peertutorsAuthService.ispeertutors(email, supabaseClient)
         if (ispeertutors) {
-          console.log('User is peer tutor, redirecting to peer dashboard')
+          logger.info('User is peer tutor, redirecting to peer dashboard')
           return '/peer/dashboard'
         }
       } catch (peerError) {
-        console.log('Peer tutor verification failed:', peerError)
+        logger.info('Peer tutor verification failed:', peerError)
       }
 
       // Then check if user is a student
@@ -123,25 +124,25 @@ export class AdminService {
         const { StudentAuthService } = await import('../auth/studentAuthService')
         const student = await StudentAuthService.verifyStudent(email, supabaseClient)
         if (student) {
-          console.log('User is student, redirecting to student dashboard')
+          logger.info('User is student, redirecting to student dashboard')
           return '/student/dashboard'
         }
       } catch (studentError) {
-        console.log('Student verification failed:', studentError)
+        logger.info('Student verification failed:', studentError)
       }
 
       // Then check if user is admin
       const isAdminUser = await this.isAdmin(email, supabaseClient)
       if (isAdminUser) {
-        console.log('User is admin, redirecting to admin dashboard')
+        logger.info('User is admin, redirecting to admin dashboard')
         return '/admin/dashboard'
       }
 
       // Default to admin dashboard only as a last resort
-      console.log('User role unknown, defaulting to admin dashboard')
+      logger.info('User role unknown, defaulting to admin dashboard')
       return '/admin/dashboard'
     } catch (error) {
-      console.error('Error determining dashboard path:', error)
+      logger.error('Error determining dashboard path:', error)
       return '/admin/dashboard'
     }
   }
@@ -162,11 +163,11 @@ export class AdminService {
           .limit(1)
 
         if (error) {
-          console.log('Admin_users table not accessible, returning empty list:', error.message)
+          logger.info('Admin_users table not accessible, returning empty list:', error.message)
           return []
         }
       } catch (tableError) {
-        console.log('Admin_users table check failed, returning empty list:', tableError)
+        logger.info('Admin_users table check failed, returning empty list:', tableError)
         return []
       }
       
@@ -176,13 +177,13 @@ export class AdminService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching admin users:', error)
+        logger.error('Error fetching admin users:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error fetching admin users:', error)
+      logger.error('Error fetching admin users:', error)
       return []
     }
   }
@@ -208,13 +209,13 @@ export class AdminService {
         .single()
 
       if (error) {
-        console.error('Error creating admin user:', error)
+        logger.error('Error creating admin user:', error)
         return null
       }
 
       return data as AdminUser
     } catch (error) {
-      console.error('Error creating admin user:', error)
+      logger.error('Error creating admin user:', error)
       return null
     }
   }

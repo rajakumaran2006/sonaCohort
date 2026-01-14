@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 import { AdditionalClass } from './additionalClassService'
 
@@ -66,7 +67,7 @@ export class AnalyticsService {
         .eq('dept', dept)
 
       if (tutorError) {
-        console.error('Error fetching peer tutors:', tutorError)
+        logger.error('Error fetching peer tutors:', tutorError)
         return {
           students: [],
           total_students: 0,
@@ -137,7 +138,7 @@ export class AnalyticsService {
         average_pending_per_student
       }
     } catch (error) {
-      console.error('Error in getPendingClassAnalytics:', error)
+      logger.error('Error in getPendingClassAnalytics:', error)
       return {
         students: [],
         total_students: 0,
@@ -178,7 +179,7 @@ export class AnalyticsService {
         .order('scheduled_date', { ascending: true })
 
       if (scheduledError) {
-        console.error('Error fetching scheduled classes:', scheduledError)
+        logger.error('Error fetching scheduled classes:', scheduledError)
         return null
       }
 
@@ -256,7 +257,7 @@ export class AnalyticsService {
         }))
       }
     } catch (error) {
-      console.error('Error calculating pending classes for peer tutor:', error)
+      logger.error('Error calculating pending classes for peer tutor:', error)
       return null
     }
   }
@@ -367,7 +368,7 @@ export class AnalyticsService {
 
       return stats
     } catch (error) {
-      console.error('Error in getPendingClassStatsByYear:', error)
+      logger.error('Error in getPendingClassStatsByYear:', error)
       return []
     }
   }

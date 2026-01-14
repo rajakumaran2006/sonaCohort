@@ -56,7 +56,19 @@ export const YearSectionGraph: React.FC<YearSectionGraphProps> = ({
     )
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  interface TooltipPayload {
+    name: string;
+    value: number;
+    color: string;
+  }
+
+  interface CustomTooltipProps {
+    active?: boolean;
+    payload?: TooltipPayload[];
+    label?: string;
+  }
+
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-800 p-4 rounded-xl shadow-xl min-w-[200px]">
@@ -64,7 +76,7 @@ export const YearSectionGraph: React.FC<YearSectionGraphProps> = ({
             Section {label}
           </p>
           <div className="space-y-2.5">
-            {payload.map((entry: any, index: number) => (
+            {payload.map((entry: TooltipPayload, index: number) => (
               <div key={index} className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   <div 

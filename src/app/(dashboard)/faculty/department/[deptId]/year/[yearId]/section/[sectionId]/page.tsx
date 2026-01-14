@@ -13,29 +13,30 @@ import Image from 'next/image'
 import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import AssignpeertutorsModal from '@/components/forms/AssignPeerTutorModal'
-import AddStudentModal from '@/components/forms/AddStudentModal'
-import BulkImportExport from '@/components/forms/BulkImportExport'
-import ClassesImportExport from '@/components/forms/ClassesImportExport'
-import AssignmentImportModal from '@/components/forms/AssignmentImportModal'
-import PeerTutorsImportModal from '@/components/forms/PeerTutorImportModal'
-import StudentImportModal from '@/components/forms/StudentImportModal'
-import DateAssignmentModal from '@/components/forms/DateAssignmentModal'
-import ClassImportModal from '@/components/forms/ClassImportModal'
+import AssignpeertutorsModal from '@/components/forms/modals/AssignPeerTutorModal'
+import AddStudentModal from '@/components/forms/modals/AddStudentModal'
+import BulkImportExport from '@/components/forms/import-export/BulkImportExport'
+import ClassesImportExport from '@/components/forms/import-export/ClassesImportExport'
+import AssignmentImportModal from '@/components/forms/import-export/AssignmentImportModal'
+import PeerTutorsImportModal from '@/components/forms/import-export/PeerTutorImportModal'
+import StudentImportModal from '@/components/forms/import-export/StudentImportModal'
+import DateAssignmentModal from '@/components/forms/modals/DateAssignmentModal'
+import ClassImportModal from '@/components/forms/import-export/ClassImportModal'
 import { ClassService } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { AttendanceService } from '@/lib/services/attendanceService'
 import { FacultyService } from '@/lib/services/facultyService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { ReportService } from '@/lib/services/reportService'
-import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 
 
 
 
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, Search, X, Eye, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
@@ -149,7 +150,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
         toast.success('Peer tutors transferred successfully')
       }
     } catch (error) {
-      console.error('Failed to transfer peer tutors:', error)
+      logger.error('Failed to transfer peer tutors:', error)
     }
   }
 
@@ -193,8 +194,9 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
             // so their additional classes should logically belong to this section
             const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
             
+            
             // Debug logging
-            console.log(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
+            logger.info(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
               dept: tutor.dept,
               year: tutor.year,
               section: tutor.section,
@@ -229,7 +231,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
         })
         setpeerTutortudentCounts(studentCounts)
       } catch (error) {
-        console.error('Error loading peer tutor stats:', error)
+        logger.error('Error loading peer tutor stats:', error)
         // Fallback to original data without stats
         setpeerTutorWithStats(peerTutor.map(tutor => ({
           ...tutor,
@@ -390,7 +392,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
         )
       }
     } catch (error) {
-       console.error("Deletion failed", error)
+       logger.error("Deletion failed", error)
        toast.error("FAILED TO DELETE PEER TUTORS", {
          style: { textTransform: 'uppercase', fontWeight: 'bold' }
        })

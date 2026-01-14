@@ -5,7 +5,8 @@ import { AssignmentService, AssignmentStats, Assignment } from '@/lib/services/a
 import { StudentService, Student } from '@/lib/services/studentService'
 import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { Upload, Download } from 'lucide-react'
-import AssignmentImportModal from '@/components/forms/AssignmentImportModal'
+import AssignmentImportModal from '@/components/forms/import-export/AssignmentImportModal'
+import PeerTutorsMappingExport from '@/components/forms/import-export/PeerTutorMappingExport'
 
 interface AssignTabProps {
   dept: string
@@ -36,14 +37,14 @@ const getAvatarColor = (name: string): string => {
 export default function AssignTab({ dept, year, section }: AssignTabProps) {
   const [stats, setStats] = useState<AssignmentStats>({
     totalStudents: 0,
-    totalPEERSTUTOR: 0,
+    totalpeerTutor: 0,
     assignedStudents: 0,
     unassignedStudents: 0,
     averageStudentsPerTutor: 0
   })
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([])
-  const [PEERSTUTOR, setPEERSTUTOR] = useState<peertutors[]>([])
+  const [peerTutors, setPeerTutors] = useState<peertutors[]>([])
   const [loading, setLoading] = useState(true)
   const [autoAssigning, setAutoAssigning] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -56,13 +57,13 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
         AssignmentService.getAssignmentStats(dept, year, section),
         AssignmentService.getAssignments(dept, year, section),
         StudentService.getStudentsBySection(dept, year, section),
-        PEERSTUTORervice.getPEERSTUTORBySection(dept, year, section)
+        peertutorservice.getpeerTutorBySection(dept, year, section)
       ])
 
       setStats(statsData)
       setAssignments(assignmentsData)
-      setUnassignedStudents(studentsData.filter(s => !s.assigned_peer_tutor_id && !s.peer_tutor))
-      setPEERSTUTOR(tutorsData)
+      setUnassignedStudents(studentsData.filter((s: Student) => !s.assigned_peer_tutor_id && !s.peer_tutor))
+      setPeerTutors(tutorsData)
     } catch (error) {
       console.error('Error loading assignment data:', error)
     } finally {
@@ -120,7 +121,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading assignments...</p>
+         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
         </div>
       </div>
     )
@@ -153,7 +154,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-green-600">Peer Tutors</p>
-              <p className="text-3xl font-bold text-green-900">{stats.totalPEERSTUTOR}</p>
+              <p className="text-3xl font-bold text-green-900">{stats.totalpeerTutor}</p>
             </div>
           </div>
         </div>
@@ -193,7 +194,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
           <div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Automatic Assignment</h3>
             <p className="text-gray-600">
-              Distribute <span className="font-semibold text-blue-600">{stats.unassignedStudents}</span> unassigned students among <span className="font-semibold text-green-600">{stats.totalPEERSTUTOR}</span> peer tutors
+              Distribute <span className="font-semibold text-blue-600">{stats.unassignedStudents}</span> unassigned students among <span className="font-semibold text-green-600">{stats.totalpeerTutor}</span> peer tutors
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -219,7 +220,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
 
             <button
               onClick={handleAutoAssign}
-              disabled={autoAssigning || stats.unassignedStudents === 0 || stats.totalPEERSTUTOR === 0}
+              disabled={autoAssigning || stats.unassignedStudents === 0 || stats.totalpeerTutor === 0}
               className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:shadow-none"
             >
               {autoAssigning ? (
@@ -249,7 +250,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
       )}
 
       {showExportModal && (
-        <peertutorsMappingExport
+        <PeerTutorsMappingExport
           dept={dept}
           year={year}
           section={section}
@@ -261,7 +262,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
       <div className="space-y-6">
         <h3 className="text-xl font-semibold text-gray-900">Peer Tutor Assignments</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {PEERSTUTOR.map((tutor) => {
+          {peerTutors.map((tutor) => {
             const assignedStudents = getStudentsByTutor(tutor.id)
             return (
               <div key={tutor.id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow duration-200">
@@ -355,7 +356,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
                     defaultValue=""
                   >
                     <option value="">Assign to...</option>
-                    {PEERSTUTOR.map((tutor) => (
+                    {peerTutors.map((tutor) => (
                       <option key={tutor.id} value={tutor.id}>
                         {tutor.name}
                       </option>

@@ -13,8 +13,10 @@ import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { 
   ArrowUpRight, 
+  ArrowUpRight, 
   LayoutGrid
 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { BackButton } from '@/components/ui/BackButton'
 import { YearSectionGraph } from '@/components/ui/YearSectionGraph'
@@ -95,7 +97,11 @@ function YearContent() {
         }
       }
 
-      console.log('Year Page - Loading data for:', { deptId, yearId, facultyDeptName })
+      }
+      
+      logger.info('Year Page - Loading data for:', { deptId, yearId, facultyDeptName })
+      
+      setDepartment({
 
       setDepartment({
         id: deptId as string,
@@ -105,13 +111,13 @@ function YearContent() {
 
       // Load overall year stats
       const stats = await AssignmentService.getAssignmentStatsByYear(facultyDeptName, yearId as string)
-      console.log('Year Page - Year stats loaded:', stats)
+      logger.info('Year Page - Year stats loaded:', stats)
       setYearStats(stats)
 
       // Load sections and their stats
       const sections = await ClassService.getSectionsForYear(facultyDeptName, yearId as string)
       const allAdditionalClasses = await AdditionalClassService.getAllAdditionalClassesForDepartment(facultyDeptName)
-      console.log('Year Page - Data found:', { sections, additionalCount: allAdditionalClasses.length })
+      logger.info('Year Page - Data found:', { sections, additionalCount: allAdditionalClasses.length })
       
       // Ensure all standard sections (A, B, C) are included
       const allSections = ['A', 'B', 'C']
@@ -123,7 +129,7 @@ function YearContent() {
           const { completed, pending } = await ScheduledClassService.getpeertutorsClassStatus(facultyDeptName, yearId as string, section)
           
           const sectionAdditional = allAdditionalClasses.filter(c => {
-            const tutor = (c as any).peer_tutors
+          const tutor = (c as { peer_tutors?: { year?: string; section?: string } | { year?: string; section?: string }[] }).peer_tutors
             const tutorData = Array.isArray(tutor) ? tutor[0] : tutor
             const y = c.year || tutorData?.year || ''
             return y.toString() === yearId && tutorData?.section === section
@@ -131,7 +137,9 @@ function YearContent() {
 
           const totalCompleted = completed.length + sectionAdditional.length
           
-          console.log(`Year Page - Section ${section} data:`, {
+          const totalCompleted = completed.length + sectionAdditional.length
+          
+          logger.info(`Year Page - Section ${section} data:`, {
             tutorsCount: tutors.length,
             completedCount: totalCompleted,
             pendingCount: pending.length,
@@ -151,7 +159,9 @@ function YearContent() {
       // Sort sections alphabetically
       sectionData.sort((a, b) => a.section.localeCompare(b.section))
       
-      console.log('Year Page - Final section data:', sectionData)
+      sectionData.sort((a, b) => a.section.localeCompare(b.section))
+      
+      logger.info('Year Page - Final section data:', sectionData)
       setSectionStats(sectionData)
     } catch (error) {
       console.error('Error loading year data:', error)

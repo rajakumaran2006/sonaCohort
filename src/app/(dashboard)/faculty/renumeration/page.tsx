@@ -6,10 +6,11 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { RenumerationService, RenumerationTemplate } from '@/lib/services/renumerationService'
-import RenumerationModal from '@/components/forms/RenumerationModal'
-import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import RenumerationModal from '@/components/forms/modals/RenumerationModal'
+import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { logger } from '@/lib/logger'
 
 export default function FacultyRenumerationPage() {
   return (
@@ -133,7 +134,7 @@ function FacultyRenumerationContent() {
       try {
         await RenumerationService.deleteRenumerationTemplate(id)
       } catch (error) {
-        console.error('Error deleting template:', error)
+        logger.error('Error deleting template:', error)
       }
     }
 
@@ -152,7 +153,7 @@ function FacultyRenumerationContent() {
         handleRefresh()
       }
     } catch (error) {
-      console.error('Error updating submission status:', error)
+      logger.error('Error updating submission status:', error)
     }
   }
 
@@ -161,7 +162,7 @@ function FacultyRenumerationContent() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading renumeration data...</p>
+         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
         </div>
       </div>
     )

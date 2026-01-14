@@ -20,6 +20,7 @@ import {
   Clock,
   User
 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 export default function StudentAttendancePage() {
   return (
@@ -83,7 +84,7 @@ function StudentAttendanceContent() {
   // Keep existing fetch logic
   const getStudentInfo = useCallback(async (studentId: string) => {
     try {
-      const supabase = (await import('@/utils/supabase/client')).createClient()
+      const supabase = (await import('@/lib/supabase/client')).createClient()
       
       const { data, error } = await supabase
         .from('peer_students')
@@ -92,13 +93,13 @@ function StudentAttendanceContent() {
         .single()
 
       if (error) {
-        console.error('Error getting student info:', error)
+        logger.error('Error getting student info:', error)
         return null
       }
 
       return data
     } catch (error) {
-      console.error('Error in getStudentInfo:', error)
+      logger.error('Error in getStudentInfo:', error)
       return null
     }
   }, [])
@@ -136,7 +137,7 @@ function StudentAttendanceContent() {
         }
       }
     } catch (error) {
-      console.error('Error loading student attendance data:', error)
+      logger.error('Error loading student attendance data:', error)
     } finally {
       setLoading(false)
     }
@@ -169,7 +170,7 @@ function StudentAttendanceContent() {
             <XCircle className="w-8 h-8 text-red-500" />
           </div>
           <h3 className="text-lg font-black text-gray-900 mb-2 uppercase tracking-wide">Student Not Found</h3>
-          <p className="text-gray-500 mb-6 text-sm">The requested student could not be found or you don't have permission to view their records.</p>
+          <p className="text-gray-500 mb-6 text-sm">The requested student could not be found or you don&apos;t have permission to view their records.</p>
           <button
             onClick={handleBack}
             className="w-full px-4 py-3 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-gray-800 transition-colors"

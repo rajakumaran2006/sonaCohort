@@ -3,7 +3,8 @@ import nodemailer from 'nodemailer'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ExportGenerationService } from '@/lib/services/exportGenerationService'
 import { AVAILABLE_EXPORTS } from '@/lib/services/emailService'
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -104,7 +105,7 @@ ${department.name}
       attachments: attachments
     })
 
-    console.log('Email sent:', info.messageId)
+    logger.info('Email sent:', info.messageId)
 
     return NextResponse.json({
       success: true,
@@ -114,7 +115,7 @@ ${department.name}
     })
 
   } catch (error) {
-    console.error('Error sending export email:', error)
+    logger.error('Error sending export email:', error)
     return NextResponse.json(
       { 
         success: false, 

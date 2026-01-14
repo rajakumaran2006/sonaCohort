@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { RoleDetectionService } from '@/lib/services/roleDetectionService'
+import { logger } from '@/lib/logger'
 
 export async function POST(request: Request) {
   try {
@@ -28,12 +29,12 @@ export async function POST(request: Request) {
     // Detect all available roles for the user
     const { roles, dashboardPaths } = await RoleDetectionService.detectUserRoles(email, supabase)
 
-    console.log(`Detected roles for ${email}:`, roles)
+    logger.info(`Detected roles for ${email}:`, roles)
 
     return NextResponse.json({ roles, dashboardPaths })
 
   } catch (error) {
-    console.error('Error detecting roles:', error)
+    logger.error('Error detecting roles:', error)
     return NextResponse.json(
       { error: 'Failed to detect roles' },
       { status: 500 }

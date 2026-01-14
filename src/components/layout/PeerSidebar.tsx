@@ -100,6 +100,10 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
     }
   }
 
+  // On mobile (when sidebar is open), always show expanded view
+  // isCollapsed only affects desktop (lg) viewport
+  const showCollapsed = isCollapsed && !isOpen
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -112,15 +116,15 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 bg-[#0f291e] shadow-2xl transform transition-all duration-300 ease-in-out lg:flex lg:flex-col
+        fixed inset-y-0 left-0 z-50 bg-[#0f291e] shadow-2xl transform transition-all duration-300 ease-in-out flex flex-col
         ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'}
-        ${isCollapsed ? 'lg:w-20' : 'w-64'}
+        ${isCollapsed && !isOpen ? 'lg:w-20' : 'lg:w-64'}
         max-w-[85vw] border-r border-[#1a3d2e]
       `}>
         {/* Logo */}
-        <div className={`flex items-center h-28 flex-shrink-0 ${isCollapsed ? 'px-4 justify-center' : 'pl-6 pr-6'} pt-8 mb-10 transition-all`}>
-          <div className={`flex items-center gap-4 ${isCollapsed ? 'justify-center' : 'w-full'}`}>
-            <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-2 ${isCollapsed ? 'w-14 h-14' : 'w-16 h-16'}`}>
+        <div className={`flex items-center h-28 flex-shrink-0 ${showCollapsed ? 'lg:px-4 lg:justify-center pl-6 pr-6' : 'pl-6 pr-6'} pt-8 mb-10 transition-all`}>
+          <div className={`flex items-center gap-4 ${showCollapsed ? 'lg:justify-center w-full' : 'w-full'}`}>
+            <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-2 ${showCollapsed ? 'lg:w-14 lg:h-14 w-16 h-16' : 'w-16 h-16'}`}>
               <Image
                 src="/peers.png"
                 alt="Peers Logo"
@@ -130,26 +134,22 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
                 priority
               />
             </div>
-            {!isCollapsed && (
-              <div className="flex flex-col">
-                <span className="text-xl font-black text-white tracking-[0.2em] leading-none mb-1.5">
-                  SONA
-                </span>
-                <span className="text-sm font-bold text-[#bef264] tracking-[0.3em] leading-none uppercase">
-                  Cohort
-                </span>
-              </div>
-            )}
+            <div className={`flex flex-col ${showCollapsed ? 'lg:hidden' : ''}`}>
+              <span className="text-xl font-black text-white tracking-[0.2em] leading-none mb-1.5">
+                SONA
+              </span>
+              <span className="text-sm font-bold text-[#bef264] tracking-[0.3em] leading-none uppercase">
+                Cohort
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 px-4 overflow-y-auto custom-scrollbar">
-          {!isCollapsed && (
-            <div className="px-2 mb-4 text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase pl-4">
-              Menu
-            </div>
-          )}
+          <div className={`px-2 mb-4 text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase pl-4 ${showCollapsed ? 'lg:hidden' : ''}`}>
+            Menu
+          </div>
           <div className="space-y-1.5">
             {navigation.map((item) => {
               const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`)
@@ -161,74 +161,76 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
                   onClick={onClose}
                   className={`
                     w-full flex items-center rounded-xl transition-all duration-200 group relative
-                    ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3 text-left'}
+                    ${showCollapsed ? 'lg:justify-center lg:py-3 px-4 py-3 text-left' : 'px-4 py-3 text-left'}
                     ${isActive 
                       ? 'bg-white/10 text-white shadow-lg shadow-black/10' 
                       : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }
                   `}
-                  title={isCollapsed ? item.name : undefined}
+                  title={showCollapsed ? item.name : undefined}
                 >
-                  {isActive && !isCollapsed && (
+                  {isActive && !showCollapsed && (
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#bef264] rounded-r-full shadow-[0_0_10px_rgba(190,242,100,0.5)]" />
                   )}
-                  <Icon className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'} ${isActive ? 'text-[#bef264]' : 'text-gray-400 group-hover:text-white transition-colors'}`} />
-                  {!isCollapsed && (
-                    <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-white' : ''}`}>
-                      {item.name}
-                    </span>
+                  {isActive && showCollapsed && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#bef264] rounded-r-full shadow-[0_0_10px_rgba(190,242,100,0.5)] hidden lg:block" />
                   )}
+                  <Icon className={`w-5 h-5 ${showCollapsed ? 'lg:mr-0 mr-3' : 'mr-3'} ${isActive ? 'text-[#bef264]' : 'text-gray-400 group-hover:text-white transition-colors'}`} />
+                  <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-white' : ''} ${showCollapsed ? 'lg:hidden' : ''}`}>
+                    {item.name}
+                  </span>
                 </Link>
               )
             })}
           </div>
           
-          {/* Collapse Toggle Button */}
-          <div className={`mt-8 flex ${isCollapsed ? 'justify-center' : 'justify-end px-2'}`}>
+          {/* Collapse Toggle Button - Desktop Only */}
+          <div className={`mt-8 hidden lg:flex ${isCollapsed ? 'justify-center' : 'justify-end px-2'}`}>
              <button
                 onClick={handleToggleCollapse}
-                className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors duration-200 lg:flex hidden border border-transparent hover:border-white/10"
+                className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors duration-200 border border-transparent hover:border-white/10"
              >
                 {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
              </button>
           </div>
         </nav>
 
-        {/* Profile Section with Sign Out */}
-        <div className="border-t border-[#1a3d2e] bg-[#0c2219]/50 flex-shrink-0 p-4 relative backdrop-blur-sm">
-          <div className={`flex items-center w-full rounded-xl ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between'}`}>
+        {/* Profile Section with Sign Out - Always at bottom */}
+        <div className="border-t border-[#1a3d2e] bg-[#0c2219]/50 flex-shrink-0 p-4 relative backdrop-blur-sm mt-auto">
+          <div className={`flex items-center w-full rounded-xl ${showCollapsed ? 'lg:justify-center lg:flex-col lg:gap-4 justify-between' : 'justify-between'}`}>
             {/* Profile Info */}
-            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 flex-1 min-w-0 transition-colors'}`}>
+            <div className={`flex items-center ${showCollapsed ? 'lg:justify-center gap-3 flex-1 min-w-0' : 'gap-3 flex-1 min-w-0 transition-colors'}`}>
               <div className="flex-shrink-0 relative group cursor-pointer">
                 <div className="h-9 w-9 rounded-lg bg-[#1a3d2e] flex items-center justify-center overflow-hidden ring-1 ring-white/10 group-hover:ring-[#bef264]/50 transition-all">
                   <User className="h-5 w-5 text-gray-300" />
                 </div>
                 <div className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full bg-[#bef264] border-2 border-[#0f291e]"></div>
               </div>
-              {!isCollapsed && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-white truncate uppercase tracking-wide">
-                    {peertutors?.name || user?.user_metadata?.full_name || 'Peer Tutor'}
-                  </p>
-                  <p className="text-[10px] text-[#bef264] font-bold uppercase tracking-wider truncate opacity-80">
-                    Tutor
-                  </p>
-                </div>
-              )}
+              <div className={`flex-1 min-w-0 ${showCollapsed ? 'lg:hidden' : ''}`}>
+                <p className="text-xs font-bold text-white truncate uppercase tracking-wide">
+                  {peertutors?.name || user?.user_metadata?.full_name || 'Peer Tutor'}
+                </p>
+                <p className="text-[10px] text-[#bef264] font-bold uppercase tracking-wider truncate opacity-80">
+                  Tutor
+                </p>
+              </div>
             </div>
             
-            {/* Sign Out Icon */}
-            {!isCollapsed ? (
+            {/* Sign Out Icon - Always visible on mobile */}
+            <button
+              onClick={handleSignOut}
+              disabled={isLoggingOut}
+              className={`flex-shrink-0 p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all duration-200 group ${showCollapsed ? 'lg:hidden' : ''}`}
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </button>
+          </div>
+          
+          {/* Sign Out for Collapsed State - Desktop Only */}
+          {isCollapsed && (
+            <div className="mt-2 hidden lg:flex justify-center">
               <button
-                onClick={handleSignOut}
-                disabled={isLoggingOut}
-                className="flex-shrink-0 p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all duration-200 group"
-                title="Sign Out"
-              >
-                <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
-              </button>
-            ) : (
-               <button
                 onClick={handleSignOut}
                 disabled={isLoggingOut}
                 className="flex-shrink-0 p-2 rounded-lg text-gray-400 hover:text-red-400 transition-colors"
@@ -236,8 +238,8 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
               >
                 <LogOut className="w-4 h-4" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </>

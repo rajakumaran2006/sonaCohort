@@ -5,7 +5,7 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
-import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 import * as XLSX from 'xlsx'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -20,20 +20,19 @@ import { FeedbackAnalyticsService } from '@/lib/services/feedbackAnalyticsServic
 import { ReportService, peertutorsReportData, ClassAttendanceReport } from '@/lib/services/reportService'
 import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
-import RenumerationModal from '@/components/forms/RenumerationModal'
-import RenumerationDetailsModal from '@/components/forms/RenumerationDetailsModal'
-import FeedbackFormModal from '@/components/forms/FeedbackFormModal'
-import FeedbackResponsesModal from '@/components/forms/FeedbackResponsesModal'
-import FeedbackAnalyticsPage from '@/components/forms/FeedbackAnalyticsPage'
-import ExcelExportModal from '@/components/forms/ExcelExportModal'
-import PeerTutorImportModal from '@/components/forms/PeerTutorImportModal'
+import RenumerationModal from '@/components/forms/modals/RenumerationModal'
+import RenumerationDetailsModal from '@/components/forms/modals/RenumerationDetailsModal'
+import FeedbackFormModal from '@/components/forms/feedback/FeedbackFormModal'
+import FeedbackResponsesModal from '@/components/forms/feedback/FeedbackResponsesModal'
+import FeedbackAnalyticsPage from '@/components/forms/feedback/FeedbackAnalyticsPage'
+import ExcelExportModal from '@/components/forms/import-export/ExcelExportModal'
+import PeerTutorImportModal from '@/components/forms/import-export/PeerTutorImportModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Edit, Eye, Search, X, Users, GraduationCap, Clock, Calendar, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react'
-import { Card } from '@/components/ui'
+import { Eye, Search, X } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
-import AddStudentModal from '@/components/forms/AddStudentModal'
-import AddPeerTutorModal from '@/components/forms/AddPeerTutorModal'
-import PeerTutorPageSkeleton from '@/components/skeletons/PeerTutorPageSkeleton'
+import AddStudentModal from '@/components/forms/modals/AddStudentModal'
+import AddPeerTutorModal from '@/components/forms/modals/AddPeerTutorModal'
+import { logger } from '@/lib/logger'
 
 
 
@@ -87,6 +86,7 @@ function FacultypeertutorsContent() {
   const [students, setStudents] = useState<StudentWithpeertutors[]>([])
   const [filteredStudents, setFilteredStudents] = useState<StudentWithpeertutors[]>([])
   const [loading, setLoading] = useState(true)
+  const [isManualRefresh, setIsManualRefresh] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
   const [assignedCount, setAssignedCount] = useState(0)
   const [assignedStudentCount, setAssignedStudentCount] = useState(0)
@@ -122,7 +122,7 @@ function FacultypeertutorsContent() {
   useEffect(() => {
     const tab = searchParams.get('tab')
     if (tab && ['tutors', 'students', 'feedback', 'renumeration', 'reports', 'leaderboard'].includes(tab)) {
-      setActiveTab(tab as any)
+      setActiveTab(tab as 'tutors' | 'students' | 'feedback' | 'renumeration' | 'reports' | 'leaderboard')
     }
   }, [searchParams])
 
@@ -205,7 +205,6 @@ function FacultypeertutorsContent() {
   const [reportFilterYear, setReportFilterYear] = useState<string>('all')
   const [reportFilterSection, setReportFilterSection] = useState<string>('all')
   const [reportFilterSubject, setReportFilterSubject] = useState<string>('all')
-  const [leaderboardFilterYear, setLeaderboardFilterYear] = useState<string>('all')
 
   
   // Inline report view states
@@ -251,7 +250,7 @@ function FacultypeertutorsContent() {
       })
       setpeerTutortudentCounts(studentCounts)
     } catch (error) {
-      console.error('Error loading data:', error)
+      logger.error('Error loading data:', error)
     } finally {
       setLoading(false)
     }
@@ -264,24 +263,10 @@ function FacultypeertutorsContent() {
     }
   }, [loadData, department?.name])
 
-  const loadpeertutorsReports = useCallback(async () => {
-    if (!user?.id) return
-
-    setReportsLoading(true)
-    try {
-      const reports = await ReportService.getAllpeertutorsReports(user.id)
-      setpeertutorsReports(reports)
-      setFilteredpeertutorsReports(reports)
-    } catch (error) {
-      console.error('Error loading peer tutor reports:', error)
-    } finally {
-      setReportsLoading(false)
-    }
-  }, [user?.id])
-
   // Handle refresh
   const handleRefresh = async () => {
     if (!user?.id || !department?.name) return
+    setIsManualRefresh(true)
     setLoading(true)
     try {
       // Reload all data
@@ -315,9 +300,10 @@ function FacultypeertutorsContent() {
       
       setLastRefresh(new Date())
     } catch (error) {
-      console.error('Error refreshing data:', error)
+      logger.error('Error refreshing data:', error)
     } finally {
       setLoading(false)
+      setIsManualRefresh(false)
     }
   }
 
@@ -419,7 +405,7 @@ function FacultypeertutorsContent() {
             const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
             
             // Debug logging
-            console.log(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
+            logger.info(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
               additionalClassesCount: additionalClasses.length,
               additionalClasses: additionalClasses.map(ac => ({
                 id: ac.id,
@@ -437,7 +423,7 @@ function FacultypeertutorsContent() {
         )
         setpeerTutorWithStats(tutorsWithStats)
       } catch (error) {
-        console.error('Error loading peer tutor stats:', error)
+        logger.error('Error loading peer tutor stats:', error)
         // Fallback to original data without stats
         setpeerTutorWithStats(filteredpeerTutor.map(tutor => ({
           ...tutor,
@@ -593,7 +579,7 @@ function FacultypeertutorsContent() {
                failCount++
              }
            } catch (error) {
-             console.error(`Error deleting peer tutor ${tutorId}:`, error)
+             logger.error(`Error deleting peer tutor ${tutorId}:`, error)
              failCount++
            }
         }
@@ -659,7 +645,7 @@ function FacultypeertutorsContent() {
                 if(result) successCount++
                 else failCount++
             } catch(e) {
-                console.error(`Error deleting student ${studentId}`, e)
+                logger.error(`Error deleting student ${studentId}`, e)
                 failCount++
             }
         }
@@ -710,7 +696,7 @@ function FacultypeertutorsContent() {
             if (success) successCount++
             else failCount++
           } catch (error) {
-            console.error(`Error deleting template ${templateId}:`, error)
+            logger.error(`Error deleting template ${templateId}:`, error)
             failCount++
           }
         }
@@ -755,7 +741,7 @@ function FacultypeertutorsContent() {
             if (success) return true
             return false
           } catch (error) {
-            console.error(`Error deleting feedback form ${id}:`, error)
+            logger.error(`Error deleting feedback form ${id}:`, error)
             return false
           }
         })
@@ -795,7 +781,7 @@ function FacultypeertutorsContent() {
         setIsFeedbackDeleteMode(false)
       }
     } catch (error) {
-         console.error("Deletion failed", error)
+         logger.error("Deletion failed", error)
          toast.error("AN ERROR OCCURRED DURING DELETION")
     } finally {
       setIsDeleting(false)
@@ -960,6 +946,7 @@ function FacultypeertutorsContent() {
       setRenumerationTemplates(templates)
     } catch (error) {
       console.error('Error loading renumeration templates:', error)
+      logger.error('Error loading renumeration templates:', error)
     } finally {
       setTemplatesLoading(false)
     }
@@ -974,7 +961,7 @@ function FacultypeertutorsContent() {
       const submissions = await RenumerationService.getRenumerationSubmissions(user.id)
       setRenumerationSubmissions(submissions)
     } catch (error) {
-      console.error('Error loading renumeration submissions:', error)
+      logger.error('Error loading renumeration submissions:', error)
     } finally {
       setRenumerationLoading(false)
     }
@@ -995,7 +982,7 @@ function FacultypeertutorsContent() {
             const classStats = await ScheduledClassService.getpeertutorsClassStats(submission.peer_tutor_id)
             classesCompleted = classStats.completedClasses
           } catch (error) {
-            console.warn('Could not fetch class stats for peer tutor:', submission.peer_tutor_id, error)
+            logger.warn('Could not fetch class stats for peer tutor:', submission.peer_tutor_id, error)
           }
 
           return {
@@ -1006,7 +993,7 @@ function FacultypeertutorsContent() {
       )
       setSubmissionsWithClasses(submissionsWithClassesData)
     } catch (error) {
-      console.error('Error loading template submissions:', error)
+      logger.error('Error loading template submissions:', error)
     } finally {
       setRenumerationLoading(false)
     }
@@ -1135,7 +1122,7 @@ function FacultypeertutorsContent() {
       document.body.appendChild(link)
       document.body.removeChild(link)
     } catch (error) {
-      console.error('Error exporting to Excel:', error)
+      logger.error('Error exporting to Excel:', error)
       alert('Error exporting data. Please try again.')
     }
   }
@@ -1145,7 +1132,7 @@ function FacultypeertutorsContent() {
     // Reload renumeration templates and submissions when a new template is created
     loadRenumerationTemplates()
     loadRenumerationSubmissions()
-    console.log('Renumeration sent successfully')
+    logger.info('Renumeration sent successfully')
   }
 
   // Handle approve/reject renumeration
@@ -1161,7 +1148,7 @@ function FacultypeertutorsContent() {
         loadRenumerationSubmissions() // Reload submissions
       }
     } catch (error) {
-      console.error('Error updating renumeration status:', error)
+      logger.error('Error updating renumeration status:', error)
     }
   }
 
@@ -1186,7 +1173,7 @@ function FacultypeertutorsContent() {
               const analytics = await FeedbackAnalyticsService.getFormAnalytics(form.id)
               deltaScore = analytics?.satisfactionDelta || 0
             } catch (analyticsError) {
-              console.error(`Error loading analytics for form ${form.id}:`, analyticsError)
+              logger.error(`Error loading analytics for form ${form.id}:`, analyticsError)
             }
             return { 
               ...form, 
@@ -1195,7 +1182,7 @@ function FacultypeertutorsContent() {
               deltaScore
             }
           } catch (error) {
-            console.error(`Error loading stats for form ${form.id}:`, error)
+            logger.error(`Error loading stats for form ${form.id}:`, error)
             return { 
               ...form, 
               responseCount: 0,
@@ -1208,9 +1195,9 @@ function FacultypeertutorsContent() {
       
       setFeedbackForms(formsWithCounts)
     } catch (error) {
-      console.error('Error loading feedback forms:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+      logger.error('Error loading feedback forms:', error)
+      logger.error('Error type:', typeof error)
+      logger.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
     } finally {
       setFeedbackLoading(false)
     }
@@ -1277,27 +1264,27 @@ function FacultypeertutorsContent() {
   // Update feedback form status (open/close)
   const handleToggleFormStatus = async (formId: string, newStatus: boolean) => {
     try {
-      console.log('Updating form status:', { formId, newStatus })
+      logger.info('Updating form status:', { formId, newStatus })
       
       const result = await FeedbackService.updateFeedbackForm(formId, {
         is_active: newStatus
       })
       
-      console.log('Update result:', result)
+      logger.info('Update result:', result)
       
       if (result.success) {
         // Refresh the feedback forms list
         loadFeedbackForms()
       } else {
-        console.error('Update failed with result:', result)
-        console.error('Strategy:', result.strategy)
+        logger.error('Update failed with result:', result)
+        logger.error('Strategy:', result.strategy)
         alert('Failed to update form status. Please try again.')
       }
     } catch (error) {
-      console.error('Error toggling form status:', error)
-      console.error('Error details:', {
+      logger.error('Error toggling form status:', error)
+      logger.error('Error details:', {
         message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
+        error
       })
       alert('An error occurred while updating the form status. Please check the console for details.')
     }
@@ -1332,24 +1319,21 @@ function FacultypeertutorsContent() {
     }
   }, [activeTab, loadFeedbackForms])
 
+  // Load peer tutor reports
+  const loadpeertutorsReports = useCallback(async () => {
+    if (!user?.id) return
 
-  if (loading) {
-    return (
-      <div className="flex h-screen overflow-hidden bg-[#F8F9FA]">
-        <FacultySidebar 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)}
-        />
-        <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} w-full`}>
-           <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 pt-20 lg:pt-0">
-              <div className="container mx-auto px-6 py-8">
-                 <PeerTutorPageSkeleton />
-              </div>
-           </main>
-        </div>
-      </div>
-    )
-  }
+    setReportsLoading(true)
+    try {
+      const reports = await ReportService.getAllpeertutorsReports(user.id)
+      setpeertutorsReports(reports)
+      setFilteredpeertutorsReports(reports)
+    } catch (error) {
+      logger.error('Error loading peer tutor reports:', error)
+    } finally {
+      setReportsLoading(false)
+    }
+  }, [user?.id])
 
   // Load reports data when switching to reports tab
   useEffect(() => {
@@ -1607,7 +1591,7 @@ function FacultypeertutorsContent() {
       // Save file
       XLSX.writeFile(workbook, fileName)
     } catch (error) {
-      console.error('Error exporting reports:', error)
+      logger.error('Error exporting reports:', error)
       alert('Error exporting Excel file. Please try again.')
     }
   }
@@ -1620,7 +1604,7 @@ function FacultypeertutorsContent() {
       const classes = await ReportService.getSubjectScheduledClasses(tutorId, subjectName)
       setReportScheduledClasses(classes)
     } catch (error) {
-      console.error('Error loading report data:', error)
+      logger.error('Error loading report data:', error)
     } finally {
       setReportLoading(false)
     }
@@ -1635,7 +1619,7 @@ function FacultypeertutorsContent() {
         setShowClassModal(true)
       }
     } catch (error) {
-      console.error('Error loading class attendance report:', error)
+      logger.error('Error loading class attendance report:', error)
     }
   }
 
@@ -1667,7 +1651,7 @@ function FacultypeertutorsContent() {
           tagline="Peer Tutors, Students & Feedback Oversight"
           lastRefresh={lastRefresh}
           onRefresh={handleRefresh}
-          isRefreshing={loading}
+          isRefreshing={isManualRefresh}
           onToggleSidebar={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
         />
@@ -1685,7 +1669,7 @@ function FacultypeertutorsContent() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as 'tutors' | 'students' | 'feedback' | 'renumeration' | 'reports' | 'leaderboard')}
                 className={`px-6 py-2.5 rounded-2xl text-[10px] font-black tracking-widest transition-all duration-200 whitespace-nowrap uppercase ${
                   activeTab === tab.id
                     ? 'bg-[#1C2434] text-white shadow-lg shadow-gray-200 scale-105' 
@@ -2510,8 +2494,316 @@ function FacultypeertutorsContent() {
                 </div>
               </>
             ) : activeTab === 'feedback' ? (
-              <div className="p-10 text-center text-gray-500">Feedback Module View</div>
+              <>
+                {/* Show Analytics View if a form is selected, otherwise show Forms List */}
+                {selectedFeedbackFormForAnalytics ? (
+                  <>
+                    {/* Breadcrumb Navigation */}
+                    <div className="mb-6">
+                      <nav className="flex items-center space-x-2 text-sm text-gray-500">
+                        <button
+                          onClick={() => setSelectedFeedbackFormForAnalytics(null)}
+                          className="hover:text-gray-700 transition-colors"
+                        >
+                          Feedback
+                        </button>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                        <span className="text-gray-900 font-medium">{selectedFeedbackFormForAnalytics.name}</span>
+                      </nav>
+                    </div>
+                    <FeedbackAnalyticsPage form={selectedFeedbackFormForAnalytics} />
+                  </>
+                ) : (
+                  <>
+                    {/* Feedback Stats Overview - Clean White Design */}
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 lg:grid-cols-3 mb-6">
+                      {/* Total Forms Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                        <div className="p-5">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Total Forms
+                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {feedbackForms.length}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-blue-600">
 
+                            <span className="font-semibold uppercase">Created</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Active Forms Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                        <div className="p-5">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Active Forms
+                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {feedbackForms.filter(form => form.is_active).length}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-yellow-600">
+
+                            <span className="font-semibold uppercase">Pending</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Total Responses Card */}
+                      <div className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                        <div className="p-5">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Total Responses
+                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900">
+                            {feedbackForms.reduce((total, form) => total + (form as FeedbackForm & { responseCount: number }).responseCount || 0, 0)}
+                          </div>
+                          <div className="mt-2 flex items-center text-xs text-green-600">
+
+                            <span className="font-semibold uppercase">Received</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                {/* Feedback Forms Table */}
+                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
+                        Feedback Forms ({feedbackForms.length})
+                      </h3>
+                      <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                              onClick={() => {
+                                setSelectedFeedbackForm(null)
+                                setShowFeedbackModal(true)
+                              }}
+                              className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              CREATE
+                            </button>
+                        {isFeedbackDeleteMode && (
+                          <>
+                            <button
+                              onClick={handleCancelFeedbackDeleteMode}
+                              className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleDeleteSelectedFeedbackForms}
+                              disabled={selectedFeedbackFormIds.size === 0}
+                              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
+                                selectedFeedbackFormIds.size > 0
+                                  ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                                  : 'bg-gray-400 text-white cursor-not-allowed'
+                              }`}
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Delete Selected {selectedFeedbackFormIds.size > 0 && `(${selectedFeedbackFormIds.size})`}
+                            </button>
+                          </>
+                        )}
+                        {!isFeedbackDeleteMode && (
+                          <>
+                            {feedbackForms.length > 0 && (
+                              <button
+                                onClick={handleToggleFeedbackDeleteMode}
+                                className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                                title="Delete"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-white">
+                        <tr>
+                          {isFeedbackDeleteMode && (
+                            <th className="px-6 py-3 text-left">
+                              <input
+                                type="checkbox"
+                                checked={selectedFeedbackFormIds.size === feedbackForms.length && feedbackForms.length > 0}
+                                onChange={(e) => handleSelectAllFeedbackForms(e.target.checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                              />
+                            </th>
+                          )}
+                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            Form Name
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            No of Fields
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Total Response
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Created
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Delta Score
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          {!isFeedbackDeleteMode && (
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {feedbackLoading ? (
+                          <tr>
+                            <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
+                              <div className="flex items-center justify-center">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                                Loading feedback forms...
+                              </div>
+                            </td>
+                          </tr>
+                        ) : feedbackForms.length === 0 ? (
+                          <tr>
+                            <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
+                              <div className="flex flex-col items-center">
+                                <svg className="h-12 w-12 text-black mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <p className="text-lg font-medium text-black mb-2">NO FORM FOUND</p>
+                                <p className="text-sm text-gray-500">Create your first feedback form to get started.</p>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : (
+                          feedbackForms.map((form) => {
+                            const responseCount = (form as FeedbackForm & { responseCount: number }).responseCount || 0
+                            const totalEligibleStudents = (form as FeedbackForm & { totalEligibleStudents: number }).totalEligibleStudents || 0
+                            const deltaScore = (form as FeedbackForm & { deltaScore: number }).deltaScore || 0
+                            const hasResponses = responseCount > 0
+                            const isSelected = selectedFeedbackFormIds.has(form.id)
+
+                            return (
+                              <tr 
+                                key={form.id} 
+                                className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                              >
+                                {isFeedbackDeleteMode && (
+                                  <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        e.stopPropagation()
+                                        handleFeedbackFormCheckboxChange(form.id, e.target.checked)
+                                      }}
+                                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                                    />
+                                  </td>
+                                )}
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">{form.name}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                  <div className="text-sm font-semibold text-gray-900">
+                                    {form.questions.length}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <div className="text-sm font-semibold text-gray-900">
+                                    {responseCount}/{totalEligibleStudents}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                                  {new Date(form.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-semibold">
+                                  {responseCount > 0 ? (
+                                    <span className={deltaScore >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                      {deltaScore > 0 ? '+' : ''}{deltaScore.toFixed(1)}%
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400">N/A</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                                  <select
+                                    className="border border-gray-300 rounded-md px-2 py-1 text-sm mx-auto"
+                                    value={form.is_active ? 'open' : 'closed'}
+                                    onChange={(e) => handleToggleFormStatus(form.id, e.target.value === 'open' ? true : false)}
+                                  >
+                                    <option value="open">Open</option>
+                                    <option value="closed">Closed</option>
+                                  </select>
+                                </td>
+                                {!isFeedbackDeleteMode && (
+                                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                    <div className="flex items-center justify-center space-x-2">
+                                      <button
+                                        onClick={() => handleViewAnalytics(form)}
+                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
+                                      >
+                                        VIEW
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          if (hasResponses) {
+                                            alert('This form cannot be edited as responses are already being received.')
+                                            return
+                                          }
+                                          setSelectedFeedbackForm(form)
+                                          setShowFeedbackModal(true)
+                                        }}className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
+                                      >
+                                        Edit
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                </>
+                )}
+              </>
             ) : activeTab === 'reports' ? (
               <div className="space-y-6">
                 {selectedReport ? (
@@ -2982,59 +3274,27 @@ function FacultypeertutorsContent() {
                       <h2 className="text-2xl font-bold text-gray-900">LEADERBOARD</h2>
                       <p className="text-sm text-gray-500 mt-1">Peer Tutor Rankings</p>
                     </div>
-                    
-                    <div className="flex items-center gap-3">
-                       {/* Year Filter Dropdown */}
-                       <div className="relative">
-                        <select
-                          value={leaderboardFilterYear}
-                          onChange={(e) => setLeaderboardFilterYear(e.target.value)}
-                          className={`h-10 px-4 pr-10 rounded-lg border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                            leaderboardFilterYear !== 'all' 
-                              ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm' 
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                          }`}
-                        >
-                          <option value="all">All Years</option>
-                          {[...new Set(peerTutor.map(t => t.year))].sort().map(year => (
-                            <option key={year} value={year}>{year}</option>
-                          ))}
-                        </select>
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handleRefresh}
-                        disabled={loading}
-                        className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        title="Refresh leaderboard"
-                      >
-                        <svg className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        {loading ? 'Refreshing...' : 'Refresh'}
-                      </button>
-                    </div>
+                    <button
+                      onClick={handleRefresh}
+                      disabled={loading}
+                      className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Refresh leaderboard"
+                    >
+                      <svg className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      {loading ? 'Refreshing...' : 'Refresh'}
+                    </button>
                   </div>
                 </div>
 
                 {/* Prepare ranked peer tutors with apex scores */}
                 {(() => {
-                  // Create array with apex scores (completed classes count)
-                  const rankedpeerTutor = peerTutor
-                    .filter(tutor => leaderboardFilterYear === 'all' || tutor.year === leaderboardFilterYear)
-                    .map(tutor => {
-                      // Find stats for this tutor to get completed classes count
-                      const stats = peerTutorWithStats.find(s => s.id === tutor.id)
-                      return {
-                        ...tutor,
-                        apexScore: stats ? stats.classStats.completedClasses : 0
-                      }
-                    })
+                  // Create array with apex scores (currently all 0, will be updated later)
+                  const rankedpeerTutor = peerTutor.map(tutor => ({
+                    ...tutor,
+                    apexScore: 0 // Will be calculated later
+                  }))
                   
                   // Sort by apex score (descending), then by name for ties
                   rankedpeerTutor.sort((a, b) => {
@@ -3251,7 +3511,7 @@ function FacultypeertutorsContent() {
                           ? filteredAndSortedSubmissions.filter(s => !!s.submitted_at).length
                           : renumerationTemplates.reduce((total, template) => {
                               const submissionCount = renumerationSubmissions.filter(
-                                (submission: any) => 
+                                (submission: peertutorsRenumeration) => 
                                   submission.template_id === template.id &&
                                   peerTutor.some(pt => pt.id === submission.peer_tutor_id) &&
                                   submission.status !== 'pending'
@@ -3375,7 +3635,7 @@ function FacultypeertutorsContent() {
                             <tbody className="bg-white divide-y divide-gray-200">
                               {renumerationTemplates.map((template) => {
                                 const submissionCount = renumerationSubmissions.filter(
-                                  (submission: any) => 
+                                  (submission: peertutorsRenumeration) => 
                                     submission.template_id === template.id &&
                                     peerTutor.some(pt => pt.id === submission.peer_tutor_id) &&
                                     submission.status !== 'pending'
@@ -3666,6 +3926,7 @@ function FacultypeertutorsContent() {
             )}
           </div>
         </main>
+      </div>
 
       {/* Renumeration Modal */}
       {user && (
@@ -3887,5 +4148,5 @@ function FacultypeertutorsContent() {
 
 
     </div>
-  )}
-  
+  )
+}

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { StudentService, StudentWithpeertutors } from '@/lib/services/studentService'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
-import FeedbackSubmissionModal from '@/components/forms/FeedbackSubmissionModal'
+import FeedbackSubmissionModal from '@/components/forms/feedback/FeedbackSubmissionModal'
 import StudentSidebar from '@/components/layout/StudentSidebar'
 import { Card, CardHeader, CardTitle, CardContent, Button, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, StatusBadge } from '@/components/ui'
 

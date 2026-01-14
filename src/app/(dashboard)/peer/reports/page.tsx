@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { ReportService } from '@/lib/services/reportService'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
-import ExcelExportModal from '@/components/forms/ExcelExportModal'
+import ExcelExportModal from '@/components/forms/import-export/ExcelExportModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import PeerTopicSheet from '@/components/reports/PeerTopicSheet'
@@ -140,7 +140,7 @@ function PeerReportsContent() {
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading your reports...</p>
+      <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Loading...</span>
                 </div>
               </div>
             ) : (

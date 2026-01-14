@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
 import { MicrosoftUser } from '@/lib/types'
 
@@ -53,7 +54,7 @@ export class peertutorservice {
         .single()
 
       if (error) {
-        console.error('Error creating peer tutor from Microsoft user:', {
+        logger.error('Error creating peer tutor from Microsoft user:', {
           message: error.message,
           code: error.code,
           details: error.details,
@@ -74,12 +75,12 @@ export class peertutorservice {
       )
 
       if (!assignmentResult) {
-        console.warn('Failed to assign new peer tutor to future classes, but peer tutor was created successfully. The peer tutor will not be automatically assigned to future scheduled classes and will need to be manually assigned.')
+        logger.warn('Failed to assign new peer tutor to future classes, but peer tutor was created successfully. The peer tutor will not be automatically assigned to future scheduled classes and will need to be manually assigned.')
       }
 
       return data as peertutors
     } catch (error) {
-      console.error('Error in createFromMicrosoftUser:', error)
+      logger.error('Error in createFromMicrosoftUser:', error)
       return null
     }
   }
@@ -100,13 +101,13 @@ export class peertutorservice {
         .order('name')
 
       if (error) {
-        console.error('Error getting peer tutors by section:', error)
+        logger.error('Error getting peer tutors by section:', error)
         return []
       }
 
       return data as peertutors[] || []
     } catch (error) {
-      console.error('Error in getpeerTutorBySection:', error)
+      logger.error('Error in getpeerTutorBySection:', error)
       return []
     }
   }
@@ -130,13 +131,13 @@ export class peertutorservice {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error getting all peer tutors:', error)
+        logger.error('Error getting all peer tutors:', error)
         return []
       }
 
       return data as peertutors[] || []
     } catch (error) {
-      console.error('Error in getAllpeerTutor:', error)
+      logger.error('Error in getAllpeerTutor:', error)
       return []
     }
   }
@@ -155,13 +156,13 @@ export class peertutorservice {
         .order('year, section, name')
 
       if (error) {
-        console.error('Error getting peer tutors by department:', error)
+        logger.error('Error getting peer tutors by department:', error)
         return []
       }
 
       return data as peertutors[] || []
     } catch (error) {
-      console.error('Error in getpeerTutorByDepartment:', error)
+      logger.error('Error in getpeerTutorByDepartment:', error)
       return []
     }
   }
@@ -180,13 +181,13 @@ export class peertutorservice {
         .order('year, section, name')
 
       if (error) {
-        console.error('Error getting peer tutors by years:', error)
+        logger.error('Error getting peer tutors by years:', error)
         return []
       }
 
       return data as peertutors[] || []
     } catch (error) {
-      console.error('Error in getpeerTutorByYears:', error)
+      logger.error('Error in getpeerTutorByYears:', error)
       return []
     }
   }
@@ -205,13 +206,13 @@ export class peertutorservice {
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error checking if student is peer tutor:', error)
+        logger.error('Error checking if student is peer tutor:', error)
         return false
       }
 
       return !!data
     } catch (error) {
-      console.error('Error in isAlreadypeertutors:', error)
+      logger.error('Error in isAlreadypeertutors:', error)
       return false
     }
   }
@@ -228,7 +229,7 @@ export class peertutorservice {
         .insert([assignment])
 
       if (error) {
-        console.error('Error assigning peer tutor:', error)
+        logger.error('Error assigning peer tutor:', error)
         return false
       }
 
@@ -245,7 +246,7 @@ export class peertutorservice {
         .single()
 
       if (fetchError || !createdpeertutors) {
-        console.error('Error fetching created peer tutor:', fetchError)
+        logger.error('Error fetching created peer tutor:', fetchError)
         return false
       }
 
@@ -260,12 +261,12 @@ export class peertutorservice {
       )
 
       if (!assignmentResult) {
-        console.warn('Failed to assign new peer tutor to future classes, but peer tutor was created successfully. The peer tutor will not be automatically assigned to future scheduled classes and will need to be manually assigned.')
+        logger.warn('Failed to assign new peer tutor to future classes, but peer tutor was created successfully. The peer tutor will not be automatically assigned to future scheduled classes and will need to be manually assigned.')
       }
 
       return true
     } catch (error) {
-      console.error('Error in assignpeertutors:', error)
+      logger.error('Error in assignpeertutors:', error)
       return false
     }
   }
@@ -277,7 +278,7 @@ export class peertutorservice {
     try {
       const supabase = createClient()
       
-      // console.log(`Starting peer tutor removal for: ${id}`)
+      // logger.info(`Starting peer tutor removal for: ${id}`)
       const deletedRecords: string[] = []
 
       // 1. Check if there are any students assigned to this peer tutor
@@ -287,7 +288,7 @@ export class peertutorservice {
         .eq('assigned_peer_tutor_id', id)
 
       if (checkError) {
-        console.error('Error checking assigned students:', checkError)
+        logger.error('Error checking assigned students:', checkError)
         return { success: false, message: 'Failed to check assigned students' }
       }
 
@@ -299,7 +300,7 @@ export class peertutorservice {
           .eq('assigned_peer_tutor_id', id)
 
         if (unassignError) {
-          console.error('Error unassigning students:', unassignError)
+          logger.error('Error unassigning students:', unassignError)
           return { 
             success: false, 
             message: `Failed to unassign students: ${unassignError.message || 'Unknown error'}` 
@@ -316,7 +317,7 @@ export class peertutorservice {
         .select()
 
       if (scheduledClassesError) {
-        console.error('Error deleting scheduled classes:', scheduledClassesError)
+        logger.error('Error deleting scheduled classes:', scheduledClassesError)
         return { success: false, message: `Failed to delete scheduled classes: ${scheduledClassesError.message}` }
       } else if (scheduledClassesData && scheduledClassesData.length > 0) {
         deletedRecords.push(`${scheduledClassesData.length} scheduled classes`)
@@ -330,7 +331,7 @@ export class peertutorservice {
         .select()
 
       if (additionalClassesError) {
-        console.error('Error deleting additional classes:', additionalClassesError)
+        logger.error('Error deleting additional classes:', additionalClassesError)
         return { success: false, message: `Failed to delete additional classes: ${additionalClassesError.message}` }
       } else if (additionalClassesData && additionalClassesData.length > 0) {
         deletedRecords.push(`${additionalClassesData.length} additional classes`)
@@ -344,7 +345,7 @@ export class peertutorservice {
         .select()
 
       if (renumerationError) {
-        console.error('Error deleting renumeration records:', renumerationError)
+        logger.error('Error deleting renumeration records:', renumerationError)
         return { success: false, message: `Failed to delete renumeration records: ${renumerationError.message}` }
       } else if (renumerationData && renumerationData.length > 0) {
         deletedRecords.push(`${renumerationData.length} renumeration records`)
@@ -360,7 +361,7 @@ export class peertutorservice {
       if (classAssignmentsError) {
         // Only log warning if it's likely just table missing. 
         // We don't want to stop deletion for a legacy/optional table error.
-        console.warn('Error deleting class assignments (table might not exist or other error):', classAssignmentsError)
+        logger.warn('Error deleting class assignments (table might not exist or other error):', classAssignmentsError)
       } else if (classAssignmentsData && Array.isArray(classAssignmentsData) && classAssignmentsData.length > 0) {
         deletedRecords.push(`${classAssignmentsData.length} class assignments`)
       }
@@ -375,7 +376,7 @@ export class peertutorservice {
         .select()
 
       if (attendanceError) {
-        console.error('Error deleting peer tutor attendance records:', attendanceError)
+        logger.error('Error deleting peer tutor attendance records:', attendanceError)
         return { success: false, message: `Failed to delete attendance records: ${attendanceError.message}` }
       } else if (attendanceData && attendanceData.length > 0) {
         deletedRecords.push(`${attendanceData.length} peer tutor attendance records`)
@@ -388,7 +389,7 @@ export class peertutorservice {
         .eq('id', id)
 
       if (deleteError) {
-        console.error('Error removing peer tutor:', deleteError)
+        logger.error('Error removing peer tutor:', deleteError)
         return { 
           success: false, 
           message: `Failed to delete peer tutor: ${deleteError.message || 'Unknown error'}` 
@@ -401,10 +402,10 @@ export class peertutorservice {
         message += `. ${deletedRecords.join(', ')}`
       }
 
-      // console.log(`Peer tutor removal completed for ${id}:`, deletedRecords)
+      // logger.info(`Peer tutor removal completed for ${id}:`, deletedRecords)
       return { success: true, message }
     } catch (error) {
-      console.error('Error in removepeertutors:', error)
+      logger.error('Error in removepeertutors:', error)
       return { 
         success: false, 
         message: `An unexpected error occurred: ${error instanceof Error ? error.message : 'Unknown error'}` 
@@ -428,7 +429,7 @@ export class peertutorservice {
         .select('email')
       
       if (error) {
-        console.error('Error getting existing students:', error)
+        logger.error('Error getting existing students:', error)
       }
       
       const existingStudentEmails = (existingStudents || []).map(s => s.email.toLowerCase())
@@ -446,7 +447,7 @@ export class peertutorservice {
 
       return availableStudents
     } catch (error) {
-      console.error('Error searching available students:', error)
+      logger.error('Error searching available students:', error)
       return []
     }
   }
@@ -478,7 +479,7 @@ export class peertutorservice {
 
       return stats
     } catch (error) {
-      console.error('Error getting peer tutor stats:', error)
+      logger.error('Error getting peer tutor stats:', error)
       return { total: 0, active: 0, byDepartment: {}, byYear: {} }
     }
   }
@@ -497,13 +498,13 @@ export class peertutorservice {
         .single()
 
       if (error) {
-        console.error('Error getting peer tutor by ID:', error)
+        logger.error('Error getting peer tutor by ID:', error)
         return null
       }
 
       return data as peertutors
     } catch (error) {
-      console.error('Error in getpeertutorsById:', error)
+      logger.error('Error in getpeertutorsById:', error)
       return null
     }
   }
@@ -539,7 +540,7 @@ export class peertutorservice {
           .single()
 
         if (tutorError || !fetchedpeertutors) {
-          console.error('Error getting new peer tutor:', tutorError)
+          logger.error('Error getting new peer tutor:', tutorError)
           return false
         }
 
@@ -574,12 +575,12 @@ export class peertutorservice {
         .gte('scheduled_date', allocateFromDateString)
 
       if (classesError) {
-        console.error('Error getting future scheduled classes:', classesError)
+        logger.error('Error getting future scheduled classes:', classesError)
         return false
       }
 
       if (!futureClasses || futureClasses.length === 0) {
-        // console.log('No future scheduled classes found for new peer tutor')
+        // logger.info('No future scheduled classes found for new peer tutor')
         return true // No future classes to assign
       }
 
@@ -623,7 +624,7 @@ export class peertutorservice {
         .gte('scheduled_date', allocateFromDateString)
 
       if (existingError) {
-        console.error('Error checking existing classes for peer tutor:', existingError)
+        logger.error('Error checking existing classes for peer tutor:', existingError)
         return false
       }
 
@@ -639,7 +640,7 @@ export class peertutorservice {
       })
 
       if (classesToInsert.length === 0) {
-        // console.log('New peer tutor already has all future scheduled classes')
+        // logger.info('New peer tutor already has all future scheduled classes')
         return true
       }
 
@@ -666,7 +667,7 @@ export class peertutorservice {
 
       if (insertError) {
         // If batch insert fails, try inserting one by one to identify which ones fail
-        console.warn('Batch insert failed, trying individual inserts:', insertError)
+        logger.warn('Batch insert failed, trying individual inserts:', insertError)
         
         let successCount = 0
         for (const classData of classesToInsert) {
@@ -688,25 +689,25 @@ export class peertutorservice {
               if (individualError.code === '23505') {
                 // Unique constraint violation - this peer tutor already has this class-date
                 // This shouldn't happen due to our check above, but handle it gracefully
-                // console.log(`Class ${classData.class_id} on ${classData.scheduled_date} already exists for this peer tutor`)
+                // logger.info(`Class ${classData.class_id} on ${classData.scheduled_date} already exists for this peer tutor`)
                 successCount++
               } else {
-                console.error(`Failed to insert class ${classData.class_id} on ${classData.scheduled_date}:`, individualError)
+                logger.error(`Failed to insert class ${classData.class_id} on ${classData.scheduled_date}:`, individualError)
               }
             } else {
               successCount++
             }
           } catch (individualException) {
-            console.error(`Exception inserting class ${classData.class_id} on ${classData.scheduled_date}:`, individualException)
+            logger.error(`Exception inserting class ${classData.class_id} on ${classData.scheduled_date}:`, individualException)
           }
         }
 
-        // console.log(`Successfully allocated ${successCount} out of ${classesToInsert.length} classes to new peer tutor starting from ${allocateFromDateString}`)
+        // logger.info(`Successfully allocated ${successCount} out of ${classesToInsert.length} classes to new peer tutor starting from ${allocateFromDateString}`)
         return successCount > 0
       }
 
       const insertedCount = count || recordsToInsert.length
-      // console.log(`Successfully allocated ${insertedCount} classes to new peer tutor starting from ${allocateFromDateString}`)
+      // logger.info(`Successfully allocated ${insertedCount} classes to new peer tutor starting from ${allocateFromDateString}`)
 
       // CLEANUP: Remove "placeholder" scheduled classes (where peer_tutor_id is null)
       // for the class_id/date combinations we just filled.
@@ -726,16 +727,16 @@ export class peertutorservice {
           .in('scheduled_date', scheduledDates)
         
         if (cleanupError) {
-           console.error('Error cleaning up placeholder scheduled classes:', cleanupError)
+           logger.error('Error cleaning up placeholder scheduled classes:', cleanupError)
            // Don't return false, because the assignment itself succeeded.
         } else {
-           // console.log('Successfully cleaned up placeholder scheduled classes')
+           // logger.info('Successfully cleaned up placeholder scheduled classes')
         }
       }
 
       return true
     } catch (error) {
-      console.error('Error in assignNewTutorToFutureClasses:', {
+      logger.error('Error in assignNewTutorToFutureClasses:', {
         error,
         dept,
         year,
@@ -756,13 +757,13 @@ export class peertutorservice {
         .in('id', ids)
 
       if (error) {
-        console.error('Error transferring peer tutors:', error)
+        logger.error('Error transferring peer tutors:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in transferpeerTutor:', error)
+      logger.error('Error in transferpeerTutor:', error)
       return false
     }
   }

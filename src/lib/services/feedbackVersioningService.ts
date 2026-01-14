@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export interface FeedbackFormVersion {
   id: string
@@ -100,7 +101,7 @@ export class FeedbackVersioningService {
         .eq('feedback_form_id', formId)
 
       if (responseError) {
-        console.error('Error checking responses:', responseError)
+        logger.error('Error checking responses:', responseError)
         return {
           type: 'require_confirmation',
           reason: 'Unable to determine form status',
@@ -163,7 +164,7 @@ export class FeedbackVersioningService {
       }
 
     } catch (error) {
-      console.error('Error in getEditStrategy:', error)
+      logger.error('Error in getEditStrategy:', error)
       return {
         type: 'require_confirmation',
         reason: 'Error analyzing changes',
@@ -180,18 +181,18 @@ export class FeedbackVersioningService {
     try {
       const supabase = createClient()
       
-      console.log('getCurrentFormVersion called with formId:', formId)
+      logger.info('getCurrentFormVersion called with formId:', formId)
       
       // Validate form ID parameter
       if (!formId || typeof formId !== 'string' || formId.trim() === '') {
-        console.error('Invalid form ID parameter:', formId)
+        logger.error('Invalid form ID parameter:', formId)
         return null
       }
       
       // Check if versioning is available first
       const versioningAvailable = await this.isVersioningAvailable()
       if (!versioningAvailable) {
-        console.log('Versioning tables not available, returning null')
+        logger.info('Versioning tables not available, returning null')
         return null
       }
       
@@ -211,19 +212,19 @@ export class FeedbackVersioningService {
         .single()
 
       if (!error && data) {
-        console.log('Found versioning data for form:', formId)
+        logger.info('Found versioning data for form:', formId)
         return data as FeedbackFormVersion
       } else if (error) {
-        console.log('No active version found for form:', formId, 'Error:', error)
+        logger.info('No active version found for form:', formId, 'Error:', error)
         return null
       }
 
       return null
     } catch (error) {
-      console.error('Error in getCurrentFormVersion:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
-      console.error('Form ID parameter:', formId)
+      logger.error('Error in getCurrentFormVersion:', error)
+      logger.error('Error type:', typeof error)
+      logger.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+      logger.error('Form ID parameter:', formId)
       return null
     }
   }
@@ -272,7 +273,7 @@ export class FeedbackVersioningService {
         .single()
 
       if (newVersionError) {
-        console.error('Error creating new form version:', newVersionError)
+        logger.error('Error creating new form version:', newVersionError)
         return null
       }
 
@@ -289,7 +290,7 @@ export class FeedbackVersioningService {
         .select()
 
       if (questionsError) {
-        console.error('Error creating question versions:', questionsError)
+        logger.error('Error creating question versions:', questionsError)
         // Clean up the version if questions creation failed
         await supabase.from('feedback_form_versions').delete().eq('id', newVersionData.id)
         return null
@@ -301,7 +302,7 @@ export class FeedbackVersioningService {
       } as FeedbackFormVersion
 
     } catch (error) {
-      console.error('Error in createNewFormVersion:', error)
+      logger.error('Error in createNewFormVersion:', error)
       return null
     }
   }
@@ -326,13 +327,13 @@ export class FeedbackVersioningService {
         .eq('is_active', true)
 
       if (error) {
-        console.error('Error updating form version:', error)
+        logger.error('Error updating form version:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateCurrentFormVersion:', error)
+      logger.error('Error in updateCurrentFormVersion:', error)
       return false
     }
   }
@@ -371,7 +372,7 @@ export class FeedbackVersioningService {
     try {
       const supabase = createClient()
       
-      console.log('getFormVersions called with formId:', formId)
+      logger.info('getFormVersions called with formId:', formId)
       
       // Try versioning approach first
       try {
@@ -387,14 +388,14 @@ export class FeedbackVersioningService {
           .order('version_number', { ascending: false })
 
         if (!error && data) {
-          console.log('Found versioning data for form:', formId)
+          logger.info('Found versioning data for form:', formId)
           return data as FeedbackFormVersion[]
         } else if (error) {
-          console.log('Versioning query failed, versioning tables may not exist. Error:', error)
+          logger.info('Versioning query failed, versioning tables may not exist. Error:', error)
           throw error
         }
       } catch {
-        console.log('Versioning tables not available, creating fallback version data')
+        logger.info('Versioning tables not available, creating fallback version data')
       }
 
       // Fallback: Create a mock version from the legacy form data
@@ -411,12 +412,12 @@ export class FeedbackVersioningService {
           .single()
 
         if (formError) {
-          console.error('Error getting legacy form data:', formError)
+          logger.error('Error getting legacy form data:', formError)
           return []
         }
 
         if (!formData) {
-          console.log('No form found with ID:', formId)
+          logger.info('No form found with ID:', formId)
           return []
         }
 
@@ -444,18 +445,18 @@ export class FeedbackVersioningService {
           }))
         }
 
-        console.log('Created mock version data for form:', formId)
+        logger.info('Created mock version data for form:', formId)
         return [mockVersion]
       } catch (legacyError) {
-        console.error('Error getting legacy form data:', legacyError)
+        logger.error('Error getting legacy form data:', legacyError)
         return []
       }
 
     } catch (error) {
-      console.error('Error in getFormVersions:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
-      console.error('Form ID parameter:', formId)
+      logger.error('Error in getFormVersions:', error)
+      logger.error('Error type:', typeof error)
+      logger.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+      logger.error('Form ID parameter:', formId)
       return []
     }
   }
@@ -472,7 +473,7 @@ export class FeedbackVersioningService {
     try {
       const supabase = createClient()
       
-      console.log('getFormStats called with formId:', formId)
+      logger.info('getFormStats called with formId:', formId)
       
       // Try versioning approach first
       try {
@@ -487,7 +488,7 @@ export class FeedbackVersioningService {
           .eq('feedback_form_id', formId)
 
         if (responseError) {
-          console.error('Error getting response stats:', responseError)
+          logger.error('Error getting response stats:', responseError)
           return {
             totalVersions: versions.length,
             currentVersion,
@@ -512,7 +513,7 @@ export class FeedbackVersioningService {
           responsesByVersion
         }
       } catch {
-        console.log('Versioning not available, using legacy stats calculation')
+        logger.info('Versioning not available, using legacy stats calculation')
       }
 
       // Fallback to legacy approach
@@ -524,7 +525,7 @@ export class FeedbackVersioningService {
           .eq('feedback_form_id', formId)
 
         if (responseError) {
-          console.error('Error getting legacy response count:', responseError)
+          logger.error('Error getting legacy response count:', responseError)
         }
 
         return {
@@ -534,7 +535,7 @@ export class FeedbackVersioningService {
           responsesByVersion: { 1: totalResponses || 0 }
         }
       } catch (legacyError) {
-        console.error('Error in legacy stats calculation:', legacyError)
+        logger.error('Error in legacy stats calculation:', legacyError)
         return {
           totalVersions: 1,
           currentVersion: 1,
@@ -544,10 +545,10 @@ export class FeedbackVersioningService {
       }
 
     } catch (error) {
-      console.error('Error in getFormStats:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
-      console.error('Form ID parameter:', formId)
+      logger.error('Error in getFormStats:', error)
+      logger.error('Error type:', typeof error)
+      logger.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+      logger.error('Form ID parameter:', formId)
       return {
         totalVersions: 1,
         currentVersion: 1,

@@ -10,7 +10,7 @@ interface peertutorsMarksModalProps {
   examAssignment: ExamAssignment
 }
 
-export default function peertutorsMarksModal({
+export default function PeerTutorMarksModal({
   isOpen,
   onClose,
   examAssignment

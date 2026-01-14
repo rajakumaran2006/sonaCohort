@@ -1,0 +1,664 @@
+
+> peerTutor@0.1.0 build
+> next build --turbopack
+
+   ▲ Next.js 15.5.9 (Turbopack)
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Finished writing to disk in 231ms
+ ✓ Compiled successfully in 21.4s
+   Linting and checking validity of types ...
+
+./src/app/(auth)/auth/detect-role/page.tsx
+77:16  Warning: '_' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/(auth)/auth/select-role/page.tsx
+54:14  Warning: '_' is defined but never used.  @typescript-eslint/no-unused-vars
+68:14  Warning: '_' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/(auth)/login/page.tsx
+27:7  Warning: Unexpected console statement.  no-console
+42:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/admin/analytics/page.tsx
+119:7  Warning: Unexpected console statement.  no-console
+180:7  Warning: Unexpected console statement.  no-console
+225:25  Warning: Unexpected console statement.  no-console
+266:19  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/admin/dashboard/page.tsx
+82:7  Warning: Unexpected console statement.  no-console
+110:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/attendance/page.tsx
+142:11  Warning: Unexpected console statement.  no-console
+171:9  Warning: Unexpected console statement.  no-console
+173:11  Warning: Unexpected console statement.  no-console
+176:11  Warning: Unexpected console statement.  no-console
+179:9  Warning: Unexpected console statement.  no-console
+195:7  Warning: Unexpected console statement.  no-console
+205:7  Warning: Unexpected console statement.  no-console
+206:7  Warning: Unexpected console statement.  no-console
+207:7  Warning: Unexpected console statement.  no-console
+210:9  Warning: Unexpected console statement.  no-console
+215:7  Warning: Unexpected console statement.  no-console
+239:9  Warning: Unexpected console statement.  no-console
+244:7  Warning: Unexpected console statement.  no-console
+254:7  Warning: Unexpected console statement.  no-console
+257:9  Warning: Unexpected console statement.  no-console
+264:7  Warning: Unexpected console statement.  no-console
+280:9  Warning: Unexpected console statement.  no-console
+289:9  Warning: Unexpected console statement.  no-console
+297:9  Warning: Unexpected console statement.  no-console
+305:9  Warning: Unexpected console statement.  no-console
+312:9  Warning: Unexpected console statement.  no-console
+313:9  Warning: Unexpected console statement.  no-console
+317:11  Warning: Unexpected console statement.  no-console
+322:7  Warning: Unexpected console statement.  no-console
+352:9  Warning: Unexpected console statement.  no-console
+384:11  Warning: Unexpected console statement.  no-console
+409:11  Warning: Unexpected console statement.  no-console
+438:7  Warning: Unexpected console statement.  no-console
+608:11  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/classes/page.tsx
+41:9  Warning: Unexpected console statement.  no-console
+43:9  Warning: Unexpected console statement.  no-console
+46:9  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/dashboard/page.tsx
+232:13  Warning: 'totalAdditionalClasses' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/(dashboard)/faculty/department/[deptId]/year/[yearId]/page.tsx
+98:7  Warning: Unexpected console statement.  no-console
+108:7  Warning: Unexpected console statement.  no-console
+114:7  Warning: Unexpected console statement.  no-console
+134:11  Warning: Unexpected console statement.  no-console
+154:7  Warning: Unexpected console statement.  no-console
+157:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/department/[deptId]/year/[yearId]/section/[sectionId]/page.tsx
+6:8  Warning: 'PageHeader' is defined but never used.  @typescript-eslint/no-unused-vars
+18:8  Warning: 'BulkImportExport' is defined but never used.  @typescript-eslint/no-unused-vars
+19:8  Warning: 'ClassesImportExport' is defined but never used.  @typescript-eslint/no-unused-vars
+124:11  Warning: 'user' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+152:7  Warning: Unexpected console statement.  no-console
+197:13  Warning: Unexpected console statement.  no-console
+232:9  Warning: Unexpected console statement.  no-console
+393:8  Warning: Unexpected console statement.  no-console
+1043:7  Warning: Unexpected console statement.  no-console
+1090:6  Warning: React Hook useEffect has a missing dependency: 'peerTutor'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+1214:8  Warning: Unexpected console statement.  no-console
+1843:7  Warning: Unexpected console statement.  no-console
+2046:7  Warning: Unexpected console statement.  no-console
+2200:9  Warning: Unexpected console statement.  no-console
+2305:7  Warning: Unexpected console statement.  no-console
+2420:49  Warning: 'facultyId' is defined but never used.  @typescript-eslint/no-unused-vars
+2420:60  Warning: 'onImportComplete' is defined but never used.  @typescript-eslint/no-unused-vars
+2511:7  Warning: Unexpected console statement.  no-console
+2535:7  Warning: Unexpected console statement.  no-console
+2566:7  Warning: Unexpected console statement.  no-console
+2607:7  Warning: Unexpected console statement.  no-console
+2890:17  Warning: 'syncStatus' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+2890:40  Warning: 'loadingSync' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+2909:7  Warning: Unexpected console statement.  no-console
+2915:7  Warning: Unexpected console statement.  no-console
+2930:7  Warning: Unexpected console statement.  no-console
+2947:7  Warning: Unexpected console statement.  no-console
+2995:7  Warning: Unexpected console statement.  no-console
+3095:7  Warning: Unexpected console statement.  no-console
+3662:7  Warning: Unexpected console statement.  no-console
+3687:7  Warning: Unexpected console statement.  no-console
+3748:7  Warning: Unexpected console statement.  no-console
+3812:7  Warning: Unexpected console statement.  no-console
+4715:7  Warning: Unexpected console statement.  no-console
+4772:11  Warning: Unexpected console statement.  no-console
+4809:7  Warning: Unexpected console statement.  no-console
+4817:11  Warning: Unexpected console statement.  no-console
+4839:11  Warning: Unexpected console statement.  no-console
+4862:11  Warning: Unexpected console statement.  no-console
+4866:9  Warning: Unexpected console statement.  no-console
+4871:9  Warning: Unexpected console statement.  no-console
+4879:11  Warning: Unexpected console statement.  no-console
+4883:9  Warning: Unexpected console statement.  no-console
+4900:9  Warning: Unexpected console statement.  no-console
+4938:7  Warning: Unexpected console statement.  no-console
+4942:7  Warning: Unexpected console statement.  no-console
+5023:9  Warning: Unexpected console statement.  no-console
+5041:7  Warning: Unexpected console statement.  no-console
+5159:7  Warning: Unexpected console statement.  no-console
+5236:7  Warning: Unexpected console statement.  no-console
+6306:10  Warning: 'showForceDeleteModal' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+6309:9  Warning: 'handleForceDeleteConfirm' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+6353:8  Warning: Unexpected console statement.  no-console
+6371:7  Warning: Unexpected console statement.  no-console
+6384:5  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/exams/[examId]/page.tsx
+140:11  Warning: Unexpected console statement.  no-console
+469:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/exams/[examId]/peer-tutor/[peerTutorId]/page.tsx
+257:7  Warning: Unexpected console statement.  no-console
+388:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/exams/page.tsx
+164:15  Warning: Unexpected console statement.  no-console
+176:11  Warning: Unexpected console statement.  no-console
+261:7  Warning: Unexpected console statement.  no-console
+387:15  Warning: Unexpected console statement.  no-console
+457:11  Warning: Unexpected console statement.  no-console
+468:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/feedback-analytics/[formId]/page.tsx
+95:7  Warning: Unexpected console statement.  no-console
+96:7  Warning: Unexpected console statement.  no-console
+109:7  Warning: Unexpected console statement.  no-console
+113:9  Warning: Unexpected console statement.  no-console
+116:9  Warning: Unexpected console statement.  no-console
+120:7  Warning: Unexpected console statement.  no-console
+121:7  Warning: Unexpected console statement.  no-console
+122:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/peer-tutor/[tutorId]/page.tsx
+148:7  Warning: Unexpected console statement.  no-console
+342:68  Warning: Unexpected console statement.  no-console
+349:68  Warning: Unexpected console statement.  no-console
+357:64  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/peer-tutor/[tutorId]/reports/[subjectId]/page.tsx
+105:9  Warning: Unexpected console statement.  no-console
+119:9  Warning: Unexpected console statement.  no-console
+129:7  Warning: Unexpected console statement.  no-console
+143:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/peer-tutor/page.tsx
+252:7  Warning: Unexpected console statement.  no-console
+302:7  Warning: Unexpected console statement.  no-console
+389:6  Warning: React Hook useEffect has a missing dependency: 'peerTutor'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+407:13  Warning: Unexpected console statement.  no-console
+425:9  Warning: Unexpected console statement.  no-console
+522:9  Warning: 'handleDeletepeertutors' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+522:52  Warning: 'tutorName' is defined but never used.  @typescript-eslint/no-unused-vars
+581:14  Warning: Unexpected console statement.  no-console
+647:17  Warning: Unexpected console statement.  no-console
+698:13  Warning: Unexpected console statement.  no-console
+743:13  Warning: Unexpected console statement.  no-console
+783:10  Warning: Unexpected console statement.  no-console
+816:9  Warning: 'handleDeleteRenumerationTemplate' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+947:7  Warning: Unexpected console statement.  no-console
+962:7  Warning: Unexpected console statement.  no-console
+983:13  Warning: Unexpected console statement.  no-console
+994:7  Warning: Unexpected console statement.  no-console
+1123:7  Warning: Unexpected console statement.  no-console
+1133:5  Warning: Unexpected console statement.  no-console
+1149:7  Warning: Unexpected console statement.  no-console
+1174:15  Warning: Unexpected console statement.  no-console
+1183:13  Warning: Unexpected console statement.  no-console
+1196:7  Warning: Unexpected console statement.  no-console
+1197:7  Warning: Unexpected console statement.  no-console
+1198:7  Warning: Unexpected console statement.  no-console
+1265:7  Warning: Unexpected console statement.  no-console
+1271:7  Warning: Unexpected console statement.  no-console
+1277:9  Warning: Unexpected console statement.  no-console
+1278:9  Warning: Unexpected console statement.  no-console
+1282:7  Warning: Unexpected console statement.  no-console
+1283:7  Warning: Unexpected console statement.  no-console
+1330:7  Warning: Unexpected console statement.  no-console
+1592:7  Warning: Unexpected console statement.  no-console
+1605:7  Warning: Unexpected console statement.  no-console
+1620:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/renumeration/page.tsx
+136:9  Warning: Unexpected console statement.  no-console
+155:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/faculty/settings/page.tsx
+93:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/peer/attendance/[studentId]/page.tsx
+95:9  Warning: Unexpected console statement.  no-console
+101:7  Warning: Unexpected console statement.  no-console
+139:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/peer/classes/page.tsx
+244:15  Warning: '_' is defined but never used.  @typescript-eslint/no-unused-vars
+266:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/peer/exams/[examId]/page.tsx
+266:7  Warning: Unexpected console statement.  no-console
+382:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/peer/exams/page.tsx
+135:9  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/peer/renumeration/page.tsx
+72:7  Warning: Unexpected console statement.  no-console
+135:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/peer/reports/subject/page.tsx
+71:7  Warning: Unexpected console statement.  no-console
+95:7  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/student/dashboard/page.tsx
+84:9  Warning: Unexpected console statement.  no-console
+
+./src/app/(dashboard)/student/students/page.tsx
+63:11  Warning: Unexpected console statement.  no-console
+86:7  Warning: Unexpected console statement.  no-console
+
+./src/app/page.tsx
+15:5  Warning: Unexpected console statement.  no-console
+16:5  Warning: Unexpected console statement.  no-console
+17:5  Warning: Unexpected console statement.  no-console
+22:7  Warning: Unexpected console statement.  no-console
+
+./src/components/auth/AdminProtectedRoute.tsx
+26:7  Warning: Unexpected console statement.  no-console
+38:11  Warning: Unexpected console statement.  no-console
+57:7  Warning: Unexpected console statement.  no-console
+64:5  Warning: Unexpected console statement.  no-console
+
+./src/components/auth/FacultyProtectedRoute.tsx
+26:7  Warning: Unexpected console statement.  no-console
+42:7  Warning: Unexpected console statement.  no-console
+
+./src/components/auth/PeerProtectedRoute.tsx
+29:7  Warning: Unexpected console statement.  no-console
+55:5  Warning: Unexpected console statement.  no-console
+
+./src/components/auth/ProtectedRoute.tsx
+16:5  Warning: Unexpected console statement.  no-console
+18:7  Warning: Unexpected console statement.  no-console
+24:5  Warning: Unexpected console statement.  no-console
+33:5  Warning: Unexpected console statement.  no-console
+37:3  Warning: Unexpected console statement.  no-console
+
+./src/components/auth/StudentProtectedRoute.tsx
+26:7  Warning: Unexpected console statement.  no-console
+42:11  Warning: Unexpected console statement.  no-console
+49:5  Warning: Unexpected console statement.  no-console
+
+./src/components/common/TransferModal.tsx
+86:7  Warning: Unexpected console statement.  no-console
+143:7  Warning: Unexpected console statement.  no-console
+171:7  Warning: Unexpected console statement.  no-console
+
+./src/components/features/classes/AdditionalClassesTab.tsx
+88:7  Warning: Unexpected console statement.  no-console
+120:7  Warning: Unexpected console statement.  no-console
+181:7  Warning: Unexpected console statement.  no-console
+249:7  Warning: Unexpected console statement.  no-console
+330:7  Warning: Unexpected console statement.  no-console
+
+./src/components/features/classes/AssignTab.tsx
+68:7  Warning: Unexpected console statement.  no-console
+86:7  Warning: Unexpected console statement.  no-console
+99:7  Warning: Unexpected console statement.  no-console
+110:7  Warning: Unexpected console statement.  no-console
+
+./src/components/features/classes/ClassDetailsModal.tsx
+114:7  Warning: Unexpected console statement.  no-console
+180:11  Warning: Unexpected console statement.  no-console
+222:9  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/feedback/FeedbackAnalyticsPage.tsx
+8:8  Warning: 'StarRating' is defined but never used.  @typescript-eslint/no-unused-vars
+12:30  Warning: 'TrendingUp' is defined but never used.  @typescript-eslint/no-unused-vars
+12:42  Warning: 'TrendingDown' is defined but never used.  @typescript-eslint/no-unused-vars
+20:7  Warning: 'getDeltaColor' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+48:9  Warning: 'strokeDashoffset' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+193:7  Warning: Unexpected console statement.  no-console
+205:7  Warning: Unexpected console statement.  no-console
+218:7  Warning: Unexpected console statement.  no-console
+228:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/feedback/FeedbackFormModal.tsx
+174:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/feedback/FeedbackSubmissionModal.tsx
+129:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/AssignmentImportModal.tsx
+170:7  Warning: Unexpected console statement.  no-console
+186:7  Warning: Unexpected console statement.  no-console
+206:9  Warning: Unexpected console statement.  no-console
+226:9  Warning: Unexpected console statement.  no-console
+236:9  Warning: Unexpected console statement.  no-console
+240:11  Warning: Unexpected console statement.  no-console
+249:7  Warning: Unexpected console statement.  no-console
+258:10  Warning: Unexpected console statement.  no-console
+265:5  Warning: Unexpected console statement.  no-console
+278:7  Warning: Unexpected console statement.  no-console
+298:9  Warning: Unexpected console statement.  no-console
+314:9  Warning: Unexpected console statement.  no-console
+322:9  Warning: Unexpected console statement.  no-console
+326:11  Warning: Unexpected console statement.  no-console
+335:7  Warning: Unexpected console statement.  no-console
+344:9  Warning: Unexpected console statement.  no-console
+351:5  Warning: Unexpected console statement.  no-console
+496:7  Warning: Unexpected console statement.  no-console
+530:13  Warning: Unexpected console statement.  no-console
+559:15  Warning: Unexpected console statement.  no-console
+576:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/BulkImportExport.tsx
+101:7  Warning: Unexpected console statement.  no-console
+132:7  Warning: Unexpected console statement.  no-console
+148:7  Warning: Unexpected console statement.  no-console
+184:13  Warning: Unexpected console statement.  no-console
+201:13  Warning: Unexpected console statement.  no-console
+350:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/ClassImportModal.tsx
+114:7  Warning: Unexpected console statement.  no-console
+339:7  Warning: Unexpected console statement.  no-console
+456:9  Warning: Unexpected console statement.  no-console
+463:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/ClassesExportModal.tsx
+82:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/ClassesImportExport.tsx
+169:7  Warning: Unexpected console statement.  no-console
+213:7  Warning: Unexpected console statement.  no-console
+468:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/EmailExportModal.tsx
+87:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/ExcelExportModal.tsx
+328:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/ImportMarksModal.tsx
+149:9  Warning: Unexpected console statement.  no-console
+230:11  Warning: Unexpected console statement.  no-console
+402:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/PeerTutorImportModal.tsx
+99:7  Warning: Unexpected console statement.  no-console
+147:11  Warning: Unexpected console statement.  no-console
+168:7  Warning: Unexpected console statement.  no-console
+206:9  Warning: Unexpected console statement.  no-console
+218:9  Warning: Unexpected console statement.  no-console
+280:16  Warning: Unexpected console statement.  no-console
+353:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/PeerTutorMappingExport.tsx
+95:7  Warning: Unexpected console statement.  no-console
+195:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/import-export/StudentImportModal.tsx
+97:7  Warning: Unexpected console statement.  no-console
+146:11  Warning: Unexpected console statement.  no-console
+167:7  Warning: Unexpected console statement.  no-console
+205:9  Warning: Unexpected console statement.  no-console
+217:9  Warning: Unexpected console statement.  no-console
+275:16  Warning: Unexpected console statement.  no-console
+347:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/AddPeerTutorModal.tsx
+74:6  Warning: React Hook useCallback has an unnecessary dependency: 'dept'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/forms/modals/CreateDepartmentModal.tsx
+32:9  Warning: Unexpected console statement.  no-console
+35:7  Warning: Unexpected console statement.  no-console
+79:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/CreateExamModal.tsx
+90:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/DateAssignmentModal.tsx
+49:7  Warning: Unexpected console statement.  no-console
+65:7  Warning: Unexpected console statement.  no-console
+104:13  Warning: Unexpected console statement.  no-console
+105:19  Warning: 'newClass' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+119:15  Warning: Unexpected console statement.  no-console
+128:13  Warning: Unexpected console statement.  no-console
+150:11  Warning: Unexpected console statement.  no-console
+202:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/DeleteConfirmationModal.tsx
+54:5  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/ExamPeerTutorsModal.tsx
+95:5  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/PeerRenumerationModal.tsx
+68:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/PeerTutorMarksModal.tsx
+27:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/PeerTutorMarksViewModal.tsx
+29:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/RenumerationDetailsModal.tsx
+40:10  Warning: 'loading' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+45:3  Warning: Unexpected console statement.  no-console
+142:57  Warning: 'index' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/forms/modals/RenumerationModal.tsx
+112:7  Warning: Unexpected console statement.  no-console
+149:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/SendNotificationModal.tsx
+4:13  Warning: 'Bell' is defined but never used.  @typescript-eslint/no-unused-vars
+60:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/StudentAttendanceModal.tsx
+54:7  Warning: Unexpected console statement.  no-console
+
+./src/components/forms/modals/VersionInfo.tsx
+28:7  Warning: Unexpected console statement.  no-console
+
+./src/components/layout/FacultySidebar.tsx
+78:7  Warning: Unexpected console statement.  no-console
+
+./src/components/layout/PeerSidebar.tsx
+97:7  Warning: Unexpected console statement.  no-console
+
+./src/components/layout/Sidebar.tsx
+47:7  Warning: Unexpected console statement.  no-console
+
+./src/components/layout/StudentSidebar.tsx
+60:7  Warning: Unexpected console statement.  no-console
+
+./src/components/ui/DatePicker.tsx
+16:3  Warning: 'eachDayOfInterval' is defined but never used.  @typescript-eslint/no-unused-vars
+18:3  Warning: 'parseISO' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/ui/NotificationDropdown.tsx
+29:7  Warning: Unexpected console statement.  no-console
+44:6  Warning: React Hook useEffect has a missing dependency: 'fetchNotifications'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/ui/StarRating.tsx
+12:73  Warning: 'readonly' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/lib/hooks/usePeerDashboardData.ts
+99:13  Warning: Unexpected console statement.  no-console
+301:20  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/lib/logger.ts
+28:25  Warning: Unexpected console statement.  no-console
+29:24  Warning: Unexpected console statement.  no-console
+30:24  Warning: Unexpected console statement.  no-console
+31:25  Warning: Unexpected console statement.  no-console
+
+./src/lib/services/classService.ts
+1009:43  Warning: '_classesError' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+1019:45  Warning: '_scheduledError' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/lib/services/peerTutorService.ts
+277:45  Warning: 'forceDelete' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+709:13  Warning: 'insertedCount' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/lib/services/roleDetectionService.ts
+44:16  Warning: '_error' is defined but never used.  @typescript-eslint/no-unused-vars
+56:16  Warning: '_error' is defined but never used.  @typescript-eslint/no-unused-vars
+85:16  Warning: '_error' is defined but never used.  @typescript-eslint/no-unused-vars
+102:16  Warning: '_error' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/lib/suppress-console.ts
+17:10  Warning: Unexpected console statement.  no-console
+18:11  Warning: Unexpected console statement.  no-console
+19:12  Warning: Unexpected console statement.  no-console
+20:11  Warning: Unexpected console statement.  no-console
+21:12  Warning: Unexpected console statement.  no-console
+22:12  Warning: Unexpected console statement.  no-console
+23:10  Warning: Unexpected console statement.  no-console
+24:12  Warning: Unexpected console statement.  no-console
+25:12  Warning: Unexpected console statement.  no-console
+26:15  Warning: Unexpected console statement.  no-console
+27:21  Warning: Unexpected console statement.  no-console
+28:11  Warning: Unexpected console statement.  no-console
+29:14  Warning: Unexpected console statement.  no-console
+30:14  Warning: Unexpected console statement.  no-console
+31:13  Warning: Unexpected console statement.  no-console
+32:12  Warning: Unexpected console statement.  no-console
+33:17  Warning: Unexpected console statement.  no-console
+44:3  Warning: Unexpected console statement.  no-console
+45:3  Warning: Unexpected console statement.  no-console
+46:3  Warning: Unexpected console statement.  no-console
+47:3  Warning: Unexpected console statement.  no-console
+48:3  Warning: Unexpected console statement.  no-console
+49:3  Warning: Unexpected console statement.  no-console
+50:3  Warning: Unexpected console statement.  no-console
+51:3  Warning: Unexpected console statement.  no-console
+52:3  Warning: Unexpected console statement.  no-console
+53:3  Warning: Unexpected console statement.  no-console
+54:3  Warning: Unexpected console statement.  no-console
+55:3  Warning: Unexpected console statement.  no-console
+56:3  Warning: Unexpected console statement.  no-console
+57:3  Warning: Unexpected console statement.  no-console
+58:3  Warning: Unexpected console statement.  no-console
+59:3  Warning: Unexpected console statement.  no-console
+60:3  Warning: Unexpected console statement.  no-console
+
+./src/lib/tests/feedbackVersioningTests.ts
+17:5  Warning: Unexpected console statement.  no-console
+34:7  Warning: Unexpected console statement.  no-console
+35:7  Warning: Unexpected console statement.  no-console
+38:7  Warning: Unexpected console statement.  no-console
+47:5  Warning: Unexpected console statement.  no-console
+54:5  Warning: Unexpected console statement.  no-console
+57:7  Warning: Unexpected console statement.  no-console
+59:7  Warning: Unexpected console statement.  no-console
+69:5  Warning: Unexpected console statement.  no-console
+83:7  Warning: Unexpected console statement.  no-console
+85:7  Warning: Unexpected console statement.  no-console
+95:5  Warning: Unexpected console statement.  no-console
+102:5  Warning: Unexpected console statement.  no-console
+105:7  Warning: Unexpected console statement.  no-console
+107:7  Warning: Unexpected console statement.  no-console
+117:5  Warning: Unexpected console statement.  no-console
+138:5  Warning: Unexpected console statement.  no-console
+141:7  Warning: Unexpected console statement.  no-console
+143:7  Warning: Unexpected console statement.  no-console
+153:5  Warning: Unexpected console statement.  no-console
+176:7  Warning: Unexpected console statement.  no-console
+177:7  Warning: Unexpected console statement.  no-console
+179:7  Warning: Unexpected console statement.  no-console
+189:5  Warning: Unexpected console statement.  no-console
+207:7  Warning: Unexpected console statement.  no-console
+209:7  Warning: Unexpected console statement.  no-console
+219:5  Warning: Unexpected console statement.  no-console
+223:5  Warning: Unexpected console statement.  no-console
+225:7  Warning: Unexpected console statement.  no-console
+235:5  Warning: Unexpected console statement.  no-console
+243:7  Warning: Unexpected console statement.  no-console
+247:7  Warning: Unexpected console statement.  no-console
+251:7  Warning: Unexpected console statement.  no-console
+255:7  Warning: Unexpected console statement.  no-console
+259:7  Warning: Unexpected console statement.  no-console
+263:7  Warning: Unexpected console statement.  no-console
+267:7  Warning: Unexpected console statement.  no-console
+271:7  Warning: Unexpected console statement.  no-console
+273:7  Warning: Unexpected console statement.  no-console
+274:7  Warning: Unexpected console statement.  no-console
+276:7  Warning: Unexpected console statement.  no-console
+279:7  Warning: Unexpected console statement.  no-console
+291:5  Warning: Unexpected console statement.  no-console
+306:5  Warning: Unexpected console statement.  no-console
+322:5  Warning: Unexpected console statement.  no-console
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/35) ...
+   Generating static pages (8/35) 
+PeerProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+AdminProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+PeerProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+PeerProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+AdminProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+   Generating static pages (17/35) 
+StudentProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+PeerProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+PeerProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+PeerProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+PeerProtectedRoute: Showing loading state { loading: true, isVerifying: false }
+   Generating static pages (26/35) 
+ ✓ Generating static pages (35/35)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                            Size  First Load JS
+┌ ○ /                                                               9.42 kB         191 kB
+├ ○ /_not-found                                                         0 B         182 kB
+├ ○ /admin/analytics                                                  16 kB         206 kB
+├ ○ /admin/dashboard                                                20.3 kB         218 kB
+├ ƒ /api/detect-roles                                                   0 B            0 B
+├ ƒ /api/microsoft/refresh-token                                        0 B            0 B
+├ ƒ /api/microsoft/token                                                0 B            0 B
+├ ƒ /api/send-export-email                                              0 B            0 B
+├ ƒ /api/set-role                                                       0 B            0 B
+├ ○ /auth/auth-code-error                                           4.11 kB         186 kB
+├ ƒ /auth/callback                                                      0 B            0 B
+├ ○ /auth/detect-role                                               1.65 kB         184 kB
+├ ○ /auth/select-role                                               3.31 kB         185 kB
+├ ○ /faculty/analytics                                              8.09 kB         217 kB
+├ ○ /faculty/attendance                                             19.7 kB         229 kB
+├ ○ /faculty/classes                                                11.4 kB         360 kB
+├ ○ /faculty/dashboard                                              32.7 kB         342 kB
+├ ƒ /faculty/department/[deptId]/year/[yearId]                      28.8 kB         326 kB
+├ ƒ /faculty/department/[deptId]/year/[yearId]/section/[sectionId]  76.8 kB         420 kB
+├ ○ /faculty/exams                                                  17.6 kB         366 kB
+├ ƒ /faculty/exams/[examId]                                         15.4 kB         364 kB
+├ ƒ /faculty/exams/[examId]/peer-tutor/[peerTutorId]                17.9 kB         366 kB
+├ ƒ /faculty/feedback-analytics/[formId]                            22.9 kB         501 kB
+├ ○ /faculty/peer-tutor                                             67.3 kB         552 kB
+├ ƒ /faculty/peer-tutor/[tutorId]                                   15.7 kB         225 kB
+├ ƒ /faculty/peer-tutor/[tutorId]/reports/[subjectId]               15.3 kB         211 kB
+├ ○ /faculty/renumeration                                           18.7 kB         217 kB
+├ ○ /faculty/settings                                               19.1 kB         217 kB
+├ ○ /login                                                          8.19 kB         190 kB
+├ ƒ /microsoft/refresh-token                                            0 B            0 B
+├ ƒ /microsoft/token                                                    0 B            0 B
+├ ○ /peer/attendance                                                8.17 kB         223 kB
+├ ƒ /peer/attendance/[studentId]                                    6.92 kB         222 kB
+├ ○ /peer/classes                                                   69.1 kB         424 kB
+├ ○ /peer/dashboard                                                 22.6 kB         377 kB
+├ ○ /peer/exams                                                     8.82 kB         218 kB
+├ ƒ /peer/exams/[examId]                                            18.1 kB         366 kB
+├ ○ /peer/renumeration                                              7.45 kB         217 kB
+├ ○ /peer/reports                                                   13.8 kB         368 kB
+├ ○ /peer/reports/subject                                           10.1 kB         226 kB
+├ ○ /student/dashboard                                              27.3 kB         217 kB
+└ ○ /student/students                                               16.3 kB         206 kB
++ First Load JS shared by all                                        206 kB
+  ├ chunks/58ef58c3cf2ecc56.js                                      13.1 kB
+  ├ chunks/5b0e2769adfa3353.js                                      10.1 kB
+  ├ chunks/6776ec96477ad562.js                                      42.9 kB
+  ├ chunks/929b06cc00ae16ff.js                                      17.2 kB
+  ├ chunks/c262c49f15ce2f1f.js                                      59.2 kB
+  ├ chunks/ec3b43edb13a9474.js                                      13.8 kB
+  ├ chunks/5edc5a29b79e1953.css                                     21.9 kB
+  └ other shared chunks (total)                                     27.5 kB
+
+
+ƒ Middleware                                                        39.1 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -20,15 +20,15 @@ import {
   generateAttentionItems,
   generateInsights
 } from '@/lib/utils/examAnalytics'
-import { Card, CardHeader, CardTitle, CardContent, LoadingOverlay, StudentPerformanceChart } from '@/components/ui'
+import { Card, CardContent, LoadingOverlay, StudentPerformanceChart } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
-import { ArrowLeft, Edit, Save, X, Plus, Upload, Download, Filter, Calendar, Users, Activity, ChevronLeft, Search, Clock, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Edit, Save, X, Plus, Upload, Download, Filter, Calendar, Users, Activity, ChevronLeft, Search, CheckCircle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { Input } from '@/components/ui'
-import ImportMarksModal from '@/components/forms/ImportMarksModal'
+import ImportMarksModal from '@/components/forms/import-export/ImportMarksModal'
 
 export default function PeerExamDetailsPage() {
   return (

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { logger } from '@/lib/logger'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET() {
   try {
@@ -23,7 +24,7 @@ export async function GET() {
     const { data: { session: currentSession } } = await supabase.auth.getSession()
     
     if (!currentSession?.provider_token) {
-      console.warn('No provider token found - user may not have Microsoft OAuth session')
+      logger.warn('No provider token found - user may not have Microsoft OAuth session')
       return NextResponse.json({ error: 'No Microsoft token available' }, { status: 401 })
     }
 
@@ -31,7 +32,7 @@ export async function GET() {
       accessToken: currentSession.provider_token 
     })
   } catch (error) {
-    console.error('Error getting Microsoft token:', error)
+    logger.error('Error getting Microsoft token:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

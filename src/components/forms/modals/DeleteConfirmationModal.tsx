@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, AlertTriangle } from 'lucide-react'
+import { X } from 'lucide-react'
 
 interface DeleteConfirmationModalProps {
   isOpen: boolean

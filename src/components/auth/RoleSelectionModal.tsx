@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { Shield, GraduationCap, Users, User, Check, Loader2, LogOut } from 'lucide-react'
 
 type UserRole = 'admin' | 'faculty' | 'peer' | 'student'

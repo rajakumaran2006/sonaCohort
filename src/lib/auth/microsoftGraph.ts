@@ -1,6 +1,7 @@
 import { MicrosoftUser } from '@/lib/types'
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { NotificationService } from '@/lib/utils/notificationService'
+import { logger } from '@/lib/logger'
 
 export class MicrosoftGraphService {
   private static async getAccessToken(): Promise<string | null> {
@@ -12,11 +13,11 @@ export class MicrosoftGraphService {
         return data.accessToken
       } else {
         const errorData = await response.json()
-        console.warn('Failed to get Microsoft token:', errorData.error)
+        logger.warn('Failed to get Microsoft token:', errorData.error)
         
         // If token is missing or expired, try to refresh
         if (errorData.error === 'No Microsoft token available') {
-          console.log('Attempting to refresh Microsoft token...')
+          logger.info('Attempting to refresh Microsoft token...')
           const refreshResponse = await fetch('/api/microsoft/refresh-token', {
             method: 'POST'
           })
@@ -26,7 +27,7 @@ export class MicrosoftGraphService {
             return refreshData.accessToken
           } else {
             // If refresh fails, sign out the user and redirect to login
-            console.warn('Token refresh failed, signing out user for re-authentication')
+            logger.warn('Token refresh failed, signing out user for re-authentication')
             await this.handleTokenExpiration()
             return null
           }
@@ -35,7 +36,7 @@ export class MicrosoftGraphService {
         return null
       }
     } catch (error) {
-      console.error('Error getting Microsoft Graph access token:', error)
+      logger.error('Error getting Microsoft Graph access token:', error)
       // If there's a network error or other issue, sign out the user
       await this.handleTokenExpiration()
       return null
@@ -62,7 +63,7 @@ export class MicrosoftGraphService {
         }, 2000) // 2 second delay to show notification
       }
     } catch (error) {
-      console.error('Error handling token expiration:', error)
+      logger.error('Error handling token expiration:', error)
       // Force redirect even if sign out fails
       if (typeof window !== 'undefined') {
         window.location.href = '/login'
@@ -107,12 +108,12 @@ export class MicrosoftGraphService {
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error(`Graph API error ${response.status}:`, errorText)
-        console.error('Request URL:', url.toString())
+        logger.error(`Graph API error ${response.status}:`, errorText)
+        logger.error('Request URL:', url.toString())
         
         // If it's an authentication error, handle token expiration
         if (response.status === 401 || response.status === 403) {
-          console.warn('Graph API authentication failed, handling token expiration')
+          logger.warn('Graph API authentication failed, handling token expiration')
           await this.handleTokenExpiration()
         }
         
@@ -122,7 +123,7 @@ export class MicrosoftGraphService {
       const data = await response.json()
       return data.value || []
     } catch (error) {
-      console.error('Error searching Microsoft users:', error)
+      logger.error('Error searching Microsoft users:', error)
       return []
     }
   }
@@ -150,7 +151,7 @@ export class MicrosoftGraphService {
 
       return await response.json()
     } catch (error) {
-      console.error('Error getting Microsoft user:', error)
+      logger.error('Error getting Microsoft user:', error)
       return null
     }
   }
@@ -159,7 +160,7 @@ export class MicrosoftGraphService {
     try {
       const accessToken = await this.getAccessToken()
       if (!accessToken) {
-        console.error('No access token available for Microsoft Graph')
+        logger.error('No access token available for Microsoft Graph')
         return null
       }
 
@@ -176,14 +177,14 @@ export class MicrosoftGraphService {
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error(`Graph API error ${response.status}:`, errorText)
+        logger.error(`Graph API error ${response.status}:`, errorText)
         return null
       }
 
       const data = await response.json()
       return data.value && data.value.length > 0 ? data.value[0] : null
     } catch (error) {
-      console.error('Error searching Microsoft user by email:', error)
+      logger.error('Error searching Microsoft user by email:', error)
       return null
     }
   }

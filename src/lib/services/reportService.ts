@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { AttendanceService } from './attendanceService'
 import { ScheduledClassWithDetails } from './scheduledClassService'
 import { AdditionalClassService } from './additionalClassService'
@@ -99,7 +100,7 @@ export class ReportService {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor info:', tutorError)
+        logger.error('Error getting peer tutor info:', tutorError)
         return []
       }
 
@@ -127,7 +128,7 @@ export class ReportService {
         .eq('peer_tutor_id', peertutorsId)
 
       if (allScheduledError) {
-        console.error('Error getting scheduled classes:', allScheduledError)
+        logger.error('Error getting scheduled classes:', allScheduledError)
         return []
       }
 
@@ -144,7 +145,7 @@ export class ReportService {
           .eq('section', peertutors.section)
 
         if (classesError) {
-          console.error('Error getting classes:', classesError)
+          logger.error('Error getting classes:', classesError)
           return []
         }
 
@@ -247,7 +248,7 @@ export class ReportService {
 
       return subjects
     } catch (error) {
-      console.error('Error in getpeerTutorubjects:', error)
+      logger.error('Error in getpeerTutorubjects:', error)
       return []
     }
   }
@@ -267,7 +268,7 @@ export class ReportService {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor info:', tutorError)
+        logger.error('Error getting peer tutor info:', tutorError)
         return []
       }
 
@@ -302,13 +303,13 @@ export class ReportService {
         .order('scheduled_date', { ascending: true })
 
       if (scheduledError) {
-        console.error('Error getting scheduled classes:', scheduledError)
+        logger.error('Error getting scheduled classes:', scheduledError)
         return []
       }
 
       return scheduledClasses || []
     } catch (error) {
-      console.error('Error in getSubjectScheduledClasses:', error)
+      logger.error('Error in getSubjectScheduledClasses:', error)
       return []
     }
   }
@@ -334,7 +335,7 @@ export class ReportService {
         .single()
 
       if (classError || !scheduledClass) {
-        console.error('Error getting scheduled class:', classError)
+        logger.error('Error getting scheduled class:', classError)
         return null
       }
 
@@ -361,7 +362,7 @@ export class ReportService {
         total_students: attendanceRecords.length
       }
     } catch (error) {
-      console.error('Error in getClassAttendanceReport:', error)
+      logger.error('Error in getClassAttendanceReport:', error)
       return null
     }
   }
@@ -381,7 +382,7 @@ export class ReportService {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor info:', tutorError)
+        logger.error('Error getting peer tutor info:', tutorError)
         return null
       }
 
@@ -398,7 +399,7 @@ export class ReportService {
         subjects
       }
     } catch (error) {
-      console.error('Error in getpeertutorsReportData:', error)
+      logger.error('Error in getpeertutorsReportData:', error)
       return null
     }
   }
@@ -418,7 +419,7 @@ export class ReportService {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor info:', tutorError)
+        logger.error('Error getting peer tutor info:', tutorError)
         return null
       }
 
@@ -445,7 +446,7 @@ export class ReportService {
         .order('scheduled_date', { ascending: true })
 
       if (scheduledError) {
-        console.error('Error getting scheduled classes:', scheduledError)
+        logger.error('Error getting scheduled classes:', scheduledError)
         return null
       }
 
@@ -458,7 +459,7 @@ export class ReportService {
         .order('class_date', { ascending: true })
 
       if (additionalError) {
-        console.error('Error getting additional classes:', additionalError)
+        logger.error('Error getting additional classes:', additionalError)
         return null
       }
 
@@ -493,34 +494,34 @@ export class ReportService {
         .order('name')
 
       if (studentsError) {
-        console.error('Error getting students:', studentsError)
+        logger.error('Error getting students:', studentsError)
         return null
       }
 
       // 6. Get Attendance Records
       // Scheduled
       const scheduledIds = scheduledClasses?.map(c => c.id) || []
-      let scheduledAttendance: any[] = []
+      let scheduledAttendance: { student_id: string; scheduled_class_id: string; status: string }[] = []
       if (scheduledIds.length > 0) {
         const { data: sa, error: saError } = await supabase
           .from('attendance')
           .select('student_id, scheduled_class_id, status')
           .in('scheduled_class_id', scheduledIds)
         
-        if (saError) console.error('Error fetching scheduled attendance', saError)
+        if (saError) logger.error('Error fetching scheduled attendance', saError)
         else scheduledAttendance = sa || []
       }
 
       // Additional
       const additionalIds = additionalClasses?.map(c => c.id) || []
-      let additionalAttendance: any[] = []
+      let additionalAttendance: { student_id: string; additional_class_id: string; status: string }[] = []
       if (additionalIds.length > 0) {
         const { data: aa, error: aaError } = await supabase
           .from('additional_class_attendance')
           .select('student_id, additional_class_id, status')
           .in('additional_class_id', additionalIds)
 
-        if (aaError) console.error('Error fetching additional attendance', aaError)
+        if (aaError) logger.error('Error fetching additional attendance', aaError)
         else additionalAttendance = aa || []
       }
 
@@ -532,18 +533,18 @@ export class ReportService {
 
         // Process columns to populate map and stats
         columns.forEach(col => {
-          let status: any = null
+          let status: string | null = null
           
           if (!col.is_additional) {
             const record = scheduledAttendance.find(r => r.student_id === student.id && r.scheduled_class_id === col.id)
-            status = record?.status
+            status = record?.status ?? null
           } else {
             const record = additionalAttendance.find(r => r.student_id === student.id && r.additional_class_id === col.id)
-            status = record?.status
+            status = record?.status ?? null
           }
 
           if (status) {
-            attendanceMap[col.id] = status
+            attendanceMap[col.id] = status as 'present' | 'absent' | 'on_duty' | 'late'
             totalCount++
             if (status === 'present') presentCount++
           } else {
@@ -584,7 +585,7 @@ export class ReportService {
       }
 
     } catch (error) {
-      console.error('Error in getSubjectFullClassReport:', error)
+      logger.error('Error in getSubjectFullClassReport:', error)
       return null
     }
   }
@@ -604,7 +605,7 @@ export class ReportService {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor info:', tutorError)
+        logger.error('Error getting peer tutor info:', tutorError)
         return []
       }
 
@@ -629,7 +630,7 @@ export class ReportService {
         .order('scheduled_date', { ascending: true })
 
       if (scheduledError) {
-        console.error('Error getting scheduled classes:', scheduledError)
+        logger.error('Error getting scheduled classes:', scheduledError)
         return []
       }
 
@@ -641,7 +642,7 @@ export class ReportService {
         .eq('peer_tutor', false)
 
       if (studentsError) {
-        console.error('Error getting students:', studentsError)
+        logger.error('Error getting students:', studentsError)
         return []
       }
 
@@ -652,7 +653,7 @@ export class ReportService {
         .eq('peer_tutor_id', peertutorsId)
 
       if (attendanceError) {
-        console.error('Error getting attendance records:', attendanceError)
+        logger.error('Error getting attendance records:', attendanceError)
         return []
       }
 
@@ -718,7 +719,7 @@ export class ReportService {
 
       return exportData
     } catch (error) {
-      console.error('Error in getExcelExportData:', error)
+      logger.error('Error in getExcelExportData:', error)
       return []
     }
   }
@@ -743,7 +744,7 @@ export class ReportService {
       const { data: peerTutor, error: tutorsError } = await query
 
       if (tutorsError) {
-        console.error('Error getting peer tutors:', tutorsError)
+        logger.error('Error getting peer tutors:', tutorsError)
         return []
       }
 
@@ -765,7 +766,7 @@ export class ReportService {
 
       return reports
     } catch (error) {
-      console.error('Error in getAllpeertutorsReports:', error)
+      logger.error('Error in getAllpeertutorsReports:', error)
       return []
     }
   }
@@ -796,7 +797,7 @@ export class ReportService {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor info:', tutorError)
+        logger.error('Error getting peer tutor info:', tutorError)
         return []
       }
 
@@ -822,7 +823,7 @@ export class ReportService {
         .order('scheduled_date', { ascending: true })
 
       if (scheduledError) {
-        console.error('Error getting scheduled classes:', scheduledError)
+        logger.error('Error getting scheduled classes:', scheduledError)
         return []
       }
 
@@ -834,14 +835,14 @@ export class ReportService {
         .order('class_date', { ascending: true })
 
       if (additionalError) {
-        console.error('Error getting additional classes:', additionalError)
+        logger.error('Error getting additional classes:', additionalError)
         return []
       }
 
       // 5. Populate classes
       // Process Scheduled Classes
       scheduledClasses?.forEach(sc => {
-        // @ts-ignore
+        // @ts-expect-error - Supabase returns nested class object
         const subjectName = sc.class?.subject_name
         if (!subjectName) return
 
@@ -886,7 +887,7 @@ export class ReportService {
 
       return result
     } catch (error) {
-      console.error('Error in getTopicSheetData:', error)
+      logger.error('Error in getTopicSheetData:', error)
       return []
     }
   }
@@ -911,7 +912,7 @@ export class ReportService {
       // Filter out nulls
       return reports.filter((r): r is FullClassReport => r !== null)
     } catch (error) {
-      console.error('Error in getAttendanceSheetData:', error)
+      logger.error('Error in getAttendanceSheetData:', error)
       return []
     }
   }

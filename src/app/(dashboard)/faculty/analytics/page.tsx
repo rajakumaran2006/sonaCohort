@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService } from '@/lib/services/facultyService'
 import { AnalyticsService, PendingClassStudent } from '@/lib/services/analyticsService'
 import { Card } from '@/components/ui'
-import { Users, TrendingUp, AlertCircle, Calendar, Search, Download } from 'lucide-react'
+import { Users, Search, Download } from 'lucide-react'
 
 export default function AnalyticsPage() {
   return (

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { logger } from '@/lib/logger'
+import { createClient } from '@/lib/supabase/server'
 
 export async function POST() {
   try {
@@ -16,13 +17,13 @@ export async function POST() {
     const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession()
     
     if (refreshError || !refreshedSession) {
-      console.error('Error refreshing session:', refreshError)
+      logger.error('Error refreshing session:', refreshError)
       return NextResponse.json({ error: 'Failed to refresh session' }, { status: 401 })
     }
 
     // Check if we now have a provider token
     if (!refreshedSession.provider_token) {
-      console.warn('No provider token after refresh - user may need to re-authenticate')
+      logger.warn('No provider token after refresh - user may need to re-authenticate')
       return NextResponse.json({ error: 'No Microsoft token available after refresh' }, { status: 401 })
     }
 
@@ -30,7 +31,7 @@ export async function POST() {
       accessToken: refreshedSession.provider_token 
     })
   } catch (error) {
-    console.error('Error refreshing Microsoft token:', error)
+    logger.error('Error refreshing Microsoft token:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

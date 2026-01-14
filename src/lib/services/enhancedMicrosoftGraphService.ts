@@ -1,4 +1,5 @@
 import { MicrosoftUser } from '@/lib/types'
+import { logger } from '@/lib/logger'
 import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { NotificationService } from '@/lib/utils/notificationService'
 
@@ -14,7 +15,7 @@ export class EnhancedMicrosoftGraphService {
       const users = await MicrosoftGraphService.searchUsers(query)
       return users
     } catch (error) {
-      console.error('Error in enhanced Microsoft Graph search:', error)
+      logger.error('Error in enhanced Microsoft Graph search:', error)
       
       // Show user-friendly error notification
       NotificationService.showNotification(
@@ -34,7 +35,7 @@ export class EnhancedMicrosoftGraphService {
       const profile = await MicrosoftGraphService.getUserById(userId)
       return profile
     } catch (error) {
-      console.error('Error getting user profile:', error)
+      logger.error('Error getting user profile:', error)
       
       NotificationService.showNotification(
         'Unable to load user profile. Please try again.',

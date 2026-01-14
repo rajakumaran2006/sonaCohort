@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import RoleSelectionModal from '@/components/auth/RoleSelectionModal'
 import { Loader2 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 type UserRole = 'admin' | 'faculty' | 'peer' | 'student'
 
@@ -51,8 +52,9 @@ function SelectRoleContent() {
       // Redirect to the appropriate dashboard
       const dashboardPath = dashboardPaths[role]
       router.push(dashboardPath)
+      router.push(dashboardPath)
     } catch (error) {
-      // console.error('Error setting role:', error)
+      logger.error('Error setting role:', error)
       setIsTransitioning(false)
     }
   }
@@ -65,8 +67,9 @@ function SelectRoleContent() {
       // Redirect to login with a flag to force account selection
       // The signInWithMicrosoft function already has prompt: 'select_account'
       router.push('/login')
+      router.push('/login')
     } catch (error) {
-      // console.error('Error switching account:', error)
+      logger.error('Error switching account:', error)
       setIsTransitioning(false)
     }
   }

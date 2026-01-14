@@ -1,6 +1,7 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { peertutors } from '../services/peertutorservice'
+import { peertutors } from '../services/peerTutorService'
 
 export class peertutorsAuthService {
   /**
@@ -20,13 +21,13 @@ export class peertutorsAuthService {
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error checking if user is peer tutor:', error)
+        logger.error('Error checking if user is peer tutor:', error)
         return false
       }
 
       return !!data
     } catch (error) {
-      console.error('Error in ispeertutors:', error)
+      logger.error('Error in ispeertutors:', error)
       return false
     }
   }
@@ -48,13 +49,13 @@ export class peertutorsAuthService {
         .single()
 
       if (error && error.code !== 'PGRST116') {
-        console.error('Error getting peer tutor:', error)
+        logger.error('Error getting peer tutor:', error)
         return null
       }
 
       return data
     } catch (error) {
-      console.error('Error in getpeertutorsByEmail:', error)
+      logger.error('Error in getpeertutorsByEmail:', error)
       return null
     }
   }

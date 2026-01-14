@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { ChevronRight, Loader2, LayoutDashboard, AlertCircle, Sparkles } from 'lucide-react'
+import { ChevronRight, Loader2, AlertCircle } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, loading: authLoading, signInWithMicrosoft, signOut } = useAuth()
@@ -24,7 +25,7 @@ export default function LoginPage() {
       setIsSigningIn(true)
       await signInWithMicrosoft()
     } catch (err) {
-      console.error('Login error:', err)
+      logger.error('Login error:', err)
       setIsSigningIn(false)
     }
   }
@@ -39,7 +40,8 @@ export default function LoginPage() {
       await signOut()
       setIsSwitching(false)
     } catch (error) {
-      console.error('Error switching account:', error)
+    } catch (error) {
+      logger.error('Error switching account:', error)
       setIsSwitching(false)
     }
   }
@@ -69,22 +71,30 @@ export default function LoginPage() {
         <div className="bg-white/80 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-white/60 p-8 sm:p-10 transition-all duration-500 hover:shadow-[0_48px_80px_-20px_rgba(0,0,0,0.12)]">
           
           {/* Header Section */}
-          <div className="text-center mb-10">
-            <div className="flex justify-center mb-6">
-              <Image 
-                src="/peers.png" 
-                alt="Peers Logo" 
-                width={80} 
-                height={80} 
-                className="w-20 h-20 object-contain"
-                priority
-              />
+          <div className="mb-10">
+            {/* Logo and Brand - Horizontal Layout */}
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <div className="relative flex-shrink-0 rounded-xl overflow-hidden bg-gray-100  p-3">
+                <Image 
+                  src="/peers.png" 
+                  alt="Peers Logo" 
+                  width={24} 
+                  height={24} 
+                  className="w-14 h-14 object-contain"
+                  priority
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-black text-gray-900 tracking-[0.15em] leading-none mb-1">
+                  SONA
+                </span>
+                <span className="text-sm font-bold text-[#84cc16] tracking-[0.2em] leading-none uppercase">
+                  Cohort
+                </span>
+              </div>
             </div>
             
-            <h1 className="text-2xl font-black uppercase text-gray-900 tracking-tight mb-2">
-              SONA COHORT
-            </h1>
-            <h2 className="text-[10px] font-bold text-gray-400 mb-0 uppercase tracking-widest opacity-60">
+            <h2 className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest opacity-60">
               Welcome Back
             </h2>
           </div>
@@ -171,5 +181,20 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="relative">
+          <div className="absolute inset-0 bg-green-500/20 blur-xl rounded-full animate-pulse"></div>
+          <Loader2 className="relative z-10 w-10 h-10 animate-spin text-green-600" />
+        </div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }

@@ -14,7 +14,8 @@ export interface CreateNotificationParams {
   recipient_emails: string[]
 }
 
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export class NotificationService {
   private static supabase = createClient()
@@ -30,19 +31,20 @@ export class NotificationService {
         recipient_email: recipientEmail,
         is_read: false
       }))
+      logger.info('Sending notifications:', notifications) // Added this line based on the example's intent
 
       const { error } = await this.supabase
         .from('notifications')
         .insert(notifications)
 
       if (error) {
-        console.error('Error sending notification:', error)
+        logger.error('Error sending notification:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in sendNotification:', error)
+      logger.error('Error in sendNotification:', error)
       return false
     }
   }
@@ -61,13 +63,13 @@ export class NotificationService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching notifications:', error)
+        logger.error('Error fetching notifications:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error in getNotificationsByRecipient:', error)
+      logger.error('Error in getNotificationsByRecipient:', error)
       return []
     }
   }
@@ -86,13 +88,13 @@ export class NotificationService {
         .eq('is_read', false)
 
       if (error) {
-        console.error('Error fetching unread count:', error)
+        logger.error('Error fetching unread count:', error)
         return 0
       }
 
       return count || 0
     } catch (error) {
-      console.error('Error in getUnreadCount:', error)
+      logger.error('Error in getUnreadCount:', error)
       return 0
     }
   }
@@ -111,13 +113,13 @@ export class NotificationService {
         .eq('id', notificationId)
 
       if (error) {
-        console.error('Error marking notification as read:', error)
+        logger.error('Error marking notification as read:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in markAsRead:', error)
+      logger.error('Error in markAsRead:', error)
       return false
     }
   }
@@ -137,13 +139,13 @@ export class NotificationService {
         .eq('is_read', false)
 
       if (error) {
-        console.error('Error marking all as read:', error)
+        logger.error('Error marking all as read:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in markAllAsRead:', error)
+      logger.error('Error in markAllAsRead:', error)
       return false
     }
   }
@@ -159,13 +161,13 @@ export class NotificationService {
         .eq('id', notificationId)
 
       if (error) {
-        console.error('Error deleting notification:', error)
+        logger.error('Error deleting notification:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteNotification:', error)
+      logger.error('Error in deleteNotification:', error)
       return false
     }
   }
@@ -181,13 +183,13 @@ export class NotificationService {
         .eq('recipient_email', recipientEmail)
 
       if (error) {
-        console.error('Error deleting all notifications:', error)
+        logger.error('Error deleting all notifications:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteAllNotifications:', error)
+      logger.error('Error in deleteAllNotifications:', error)
       return false
     }
   }

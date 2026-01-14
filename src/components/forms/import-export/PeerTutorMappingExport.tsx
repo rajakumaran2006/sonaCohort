@@ -7,7 +7,7 @@ import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { toast } from 'sonner'
 
-interface peertutorsMappingExportProps {
+interface PeerTutorsMappingExportProps {
   dept: string
   year: string
   section: string
@@ -35,10 +35,10 @@ interface YearSectionGroup {
   peerTutorWithStudents: peertutorsWithStudents[]
 }
 
-export default function peertutorsMappingExport({ 
+export default function PeerTutorsMappingExport({ 
   dept, 
   onClose 
-}: peertutorsMappingExportProps) {
+}: PeerTutorsMappingExportProps) {
   const [isExporting, setIsExporting] = useState(false)
   const [header, setHeader] = useState<ExportHeader>({
     collegeName: 'SONA COLLEGE OF TECHNOLOGY (Autonomous)',

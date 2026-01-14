@@ -15,6 +15,7 @@ import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import ExportButton from '@/components/ui/ExportButton'
+import { logger } from '@/lib/logger'
 
 interface ClassWithAttendance extends ScheduledClassWithDetails {
   peertutorsAttendance: 'present' | 'absent'
@@ -139,7 +140,7 @@ function FacultyAttendanceContent() {
           const tutors = await groupClassesBypeertutors(allClasses)
           setpeerTutor(tutors)
         } catch (error) {
-          console.error('Error grouping peer tutors:', error)
+          logger.error('Error grouping peer tutors:', error)
           setpeerTutor([])
         } finally {
           setLoadingpeerTutor(false)
@@ -168,15 +169,15 @@ function FacultyAttendanceContent() {
       // Get faculty's department
       if (user?.email) {
         const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
-        console.log('Faculty department data:', facultyDept)
+        logger.info('Faculty department data:', facultyDept)
         if (facultyDept) {
-          console.log('Setting faculty department to:', facultyDept.name)
+          logger.info('Setting faculty department to:', facultyDept.name)
           setFacultyDepartment(facultyDept.name)
         } else {
-          console.error('No faculty department found for user:', user.email)
+          logger.error('No faculty department found for user:', user.email)
         }
       } else {
-        console.error('No user email available')
+        logger.error('No user email available')
       }
       
       // Load years
@@ -192,7 +193,7 @@ function FacultyAttendanceContent() {
       setSubjects([])
       
     } catch (error) {
-      console.error('Error loading initial data:', error)
+      logger.error('Error loading initial data:', error)
     } finally {
       setLoading(false)
     }
@@ -202,17 +203,17 @@ function FacultyAttendanceContent() {
     try {
       setLoading(true)
       
-      console.log('loadClassStatus called with facultyDepartment:', facultyDepartment)
-      console.log('facultyDepartment type:', typeof facultyDepartment)
-      console.log('facultyDepartment length:', facultyDepartment?.length)
+      logger.info('loadClassStatus called with facultyDepartment:', facultyDepartment)
+      logger.info('facultyDepartment type:', typeof facultyDepartment)
+      logger.info('facultyDepartment length:', facultyDepartment?.length)
       
       if (!facultyDepartment) {
-        console.log('No faculty department, skipping loadClassStatus')
+        logger.info('No faculty department, skipping loadClassStatus')
         return
       }
 
       // Load stats data without filters - get all classes for the department
-      console.log('Loading stats data for department:', facultyDepartment)
+      logger.info('Loading stats data for department:', facultyDepartment)
       try {
         const status = await ScheduledClassService.getAllClassesForDepartment(facultyDepartment)
         
@@ -236,12 +237,12 @@ function FacultyAttendanceContent() {
           pending: statsPending
         })
       } catch (error) {
-        console.error('Error calling getAllClassesForDepartment:', error)
+        logger.error('Error calling getAllClassesForDepartment:', error)
         setClassStatus({ completed: [], pending: [] })
       }
 
     } catch (error) {
-      console.error('Error loading class status:', error)
+      logger.error('Error loading class status:', error)
     } finally {
       setLoading(false)
     }
@@ -251,17 +252,17 @@ function FacultyAttendanceContent() {
     try {
       setTableLoading(true)
       
-      console.log('loadTableData called with filters:', filters)
+      logger.info('loadTableData called with filters:', filters)
       
       if (!facultyDepartment) {
-        console.log('No faculty department, skipping loadTableData')
+        logger.info('No faculty department, skipping loadTableData')
         return
       }
 
       let status: { completed: ScheduledClassWithDetails[]; pending: ScheduledClassWithDetails[] }
       
       // Debug logging for filter combination
-      console.log('Filter combination:', {
+      logger.info('Filter combination:', {
         year: filters.year,
         section: filters.section,
         date: filters.date,
@@ -277,7 +278,7 @@ function FacultyAttendanceContent() {
       
       if (filters.year && filters.section && dateFilter && dateFilter !== '') {
         // Year + Section + Date
-        console.log('Using: Year + Section + Date filter', { year: filters.year, section: filters.section, date: dateFilter })
+        logger.info('Using: Year + Section + Date filter', { year: filters.year, section: filters.section, date: dateFilter })
         status = await ScheduledClassService.getpeertutorsClassStatusWithDate(
           facultyDepartment,
           filters.year,
@@ -286,7 +287,7 @@ function FacultyAttendanceContent() {
         )
       } else if (filters.year && filters.section) {
         // Year + Section (all dates)
-        console.log('Using: Year + Section filter (all dates)')
+        logger.info('Using: Year + Section filter (all dates)')
         status = await ScheduledClassService.getpeertutorsClassStatus(
           facultyDepartment,
           filters.year,
@@ -294,7 +295,7 @@ function FacultyAttendanceContent() {
         )
       } else if (filters.year && dateFilter && dateFilter !== '') {
         // Year + Date (all sections)
-        console.log('Using: Year + Date filter (all sections)', { year: filters.year, date: dateFilter })
+        logger.info('Using: Year + Date filter (all sections)', { year: filters.year, date: dateFilter })
         status = await ScheduledClassService.getpeertutorsClassStatusByYearAndDate(
           facultyDepartment,
           filters.year,
@@ -302,24 +303,24 @@ function FacultyAttendanceContent() {
         )
       } else if (filters.year) {
         // Year only (all sections, all dates)
-        console.log('Using: Year only filter (all sections, all dates)')
+        logger.info('Using: Year only filter (all sections, all dates)')
         status = await ScheduledClassService.getpeertutorsClassStatusByYear(
           facultyDepartment,
           filters.year
         )
       } else {
         // No filters - get all classes for the department
-        console.log('Using: No filters - all department classes')
-        console.log('Calling getAllClassesForDepartment with:', facultyDepartment)
+        logger.info('Using: No filters - all department classes')
+        logger.info('Calling getAllClassesForDepartment with:', facultyDepartment)
         try {
           status = await ScheduledClassService.getAllClassesForDepartment(facultyDepartment)
         } catch (error) {
-          console.error('Error calling getAllClassesForDepartment:', error)
+          logger.error('Error calling getAllClassesForDepartment:', error)
           status = { completed: [], pending: [] }
         }
       }
       
-      console.log('Service result:', {
+      logger.info('Service result:', {
         completedCount: status.completed.length,
         pendingCount: status.pending.length
       })
@@ -349,7 +350,7 @@ function FacultyAttendanceContent() {
         const isCompleted = cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)
         
         // Debug logging
-        console.log('Attendance calculation:', {
+        logger.info('Attendance calculation:', {
           peertutors: cls.peer_tutor?.name,
           scheduledDate: scheduledDate.toISOString().split('T')[0],
           referenceDate: referenceDate.toISOString().split('T')[0],
@@ -381,7 +382,7 @@ function FacultyAttendanceContent() {
           const attendanceData = await AttendanceService.getAttendanceByScheduledClass(cls.id)
           const peertutorsAttendance = getpeertutorsAttendance(cls)
           
-          console.log('Attendance data for class:', {
+          logger.info('Attendance data for class:', {
             classId: cls.id,
             className: cls.class?.subject_name,
             scheduledDate: cls.scheduled_date,
@@ -406,7 +407,7 @@ function FacultyAttendanceContent() {
         status.pending.map(async (cls) => {
           const peertutorsAttendance = getpeertutorsAttendance(cls)
           
-          console.log('Pending class (no attendance data):', {
+          logger.info('Pending class (no attendance data):', {
             classId: cls.id,
             className: cls.class?.subject_name,
             scheduledDate: cls.scheduled_date,
@@ -435,7 +436,7 @@ function FacultyAttendanceContent() {
       })
 
     } catch (error) {
-      console.error('Error loading table data:', error)
+      logger.error('Error loading table data:', error)
     } finally {
       setTableLoading(false)
     }
@@ -605,7 +606,7 @@ function FacultyAttendanceContent() {
           // Total classes should remain as allocated scheduled classes only
           peertutors.completedClasses += additionalClasses.length
         } catch (error) {
-          console.error('Error fetching peer tutor data:', peertutors.id, error)
+          logger.error('Error fetching peer tutor data:', peertutors.id, error)
           peertutors.additionalClasses = 0
         }
       })

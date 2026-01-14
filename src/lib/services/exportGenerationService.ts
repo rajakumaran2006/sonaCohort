@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { logger } from '@/lib/logger'
 import { ScheduledClassService } from './scheduledClassService'
 import { AttendanceService } from './attendanceService'
 import { peertutorservice } from './peerTutorService'
@@ -31,7 +32,7 @@ export class ExportGenerationService {
           files.push(file)
         }
       } catch (error) {
-        console.error(`Error generating export ${exportId}:`, error)
+        logger.error(`Error generating export ${exportId}:`, error)
         // Continue with other exports even if one fails
       }
     }
@@ -68,7 +69,7 @@ export class ExportGenerationService {
         return this.generatepeertutorsReports(department)
         
       default:
-        console.warn(`Unknown export ID: ${exportId}`)
+        logger.warn(`Unknown export ID: ${exportId}`)
         return null
     }
   }

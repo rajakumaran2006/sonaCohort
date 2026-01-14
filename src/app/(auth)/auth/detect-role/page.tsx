@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { Loader2 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 function DetectRoleContent() {
   const router = useRouter()
@@ -75,7 +76,7 @@ function DetectRoleContent() {
         router.push(`/auth/select-role?roles=${roles.join(',')}`)
 
       } catch (error) {
-        // console.error('Error detecting roles:', error)
+        logger.error('Error detecting roles:', error)
         setStatus('Error detecting roles, please try again...')
         router.push('/login?error=role_detection_failed')
       }

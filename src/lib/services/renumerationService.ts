@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export interface RenumerationField {
   id: string
@@ -69,7 +70,7 @@ export class RenumerationService {
         .single()
 
       if (templateError) {
-        console.error('Error creating renumeration template:', {
+        logger.error('Error creating renumeration template:', {
           message: templateError.message,
           details: templateError.details,
           hint: templateError.hint,
@@ -88,7 +89,7 @@ export class RenumerationService {
         options: field.field_type === 'dropdown' ? (field.options || []) : []
       }))
 
-      console.log('Creating fields for template:', {
+      logger.info('Creating fields for template:', {
         templateId: template.id,
         fieldsCount: fields.length,
         fieldsWithTemplateId
@@ -100,7 +101,7 @@ export class RenumerationService {
         .select()
 
       if (fieldsError) {
-        console.error('Error creating renumeration fields:', {
+        logger.error('Error creating renumeration fields:', {
           message: fieldsError.message,
           details: fieldsError.details,
           hint: fieldsError.hint,
@@ -112,7 +113,7 @@ export class RenumerationService {
         return { template: null, error: fieldsError.message }
       }
 
-      console.log('Fields created successfully:', {
+      logger.info('Fields created successfully:', {
         templateId: template.id,
         createdFields,
         fieldsCount: createdFields?.length || 0
@@ -125,7 +126,7 @@ export class RenumerationService {
         }
       }
     } catch (error) {
-      console.error('Error in createRenumerationTemplate:', {
+      logger.error('Error in createRenumerationTemplate:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         fullError: error
@@ -147,13 +148,13 @@ export class RenumerationService {
         .eq('id', templateId)
 
       if (error) {
-        console.error('Error updating template status:', error)
+        logger.error('Error updating template status:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateTemplateStatus:', error)
+      logger.error('Error in updateTemplateStatus:', error)
       return false
     }
   }
@@ -172,12 +173,12 @@ export class RenumerationService {
         .eq('faculty_id', facultyId)
 
       if (tutorsError) {
-        console.error('Error getting peer tutors:', tutorsError)
+        logger.error('Error getting peer tutors:', tutorsError)
         return { success: false, error: tutorsError.message }
       }
 
       if (!peerTutor || peerTutor.length === 0) {
-        console.log('No peer tutors found for this faculty')
+        logger.info('No peer tutors found for this faculty')
         return { success: true }
       }
 
@@ -194,13 +195,13 @@ export class RenumerationService {
         .insert(renumerationRecords)
 
       if (insertError) {
-        console.error('Error creating renumeration records:', insertError)
+        logger.error('Error creating renumeration records:', insertError)
         return { success: false, error: insertError.message }
       }
 
       return { success: true }
     } catch (error) {
-      console.error('Error in sendRenumerationToAllpeerTutor:', error)
+      logger.error('Error in sendRenumerationToAllpeerTutor:', error)
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
@@ -222,13 +223,13 @@ export class RenumerationService {
         .order('created_at', { ascending: false })
 
       if (templatesError) {
-        console.error('Error getting renumeration templates:', templatesError)
+        logger.error('Error getting renumeration templates:', templatesError)
         return []
       }
 
       return templates || []
     } catch (error) {
-      console.error('Error in getRenumerationTemplates:', error)
+      logger.error('Error in getRenumerationTemplates:', error)
       return []
     }
   }
@@ -250,7 +251,7 @@ export class RenumerationService {
         .eq('faculty_id', facultyId)
 
       if (templatesError) {
-        console.error('Error getting renumeration templates:', {
+        logger.error('Error getting renumeration templates:', {
           message: templatesError.message,
           details: templatesError.details,
           hint: templatesError.hint,
@@ -277,7 +278,7 @@ export class RenumerationService {
         .order('created_at', { ascending: false })
 
       if (submissionsError) {
-        console.error('Error getting renumeration submissions:', {
+        logger.error('Error getting renumeration submissions:', {
           message: submissionsError.message,
           details: submissionsError.details,
           hint: submissionsError.hint,
@@ -303,7 +304,7 @@ export class RenumerationService {
               .single()
             peertutors = tutor
           } catch (error) {
-            console.warn('Could not fetch peer tutor details:', error)
+            logger.warn('Could not fetch peer tutor details:', error)
           }
 
           return {
@@ -316,7 +317,7 @@ export class RenumerationService {
 
       return enrichedSubmissions
     } catch (error) {
-      console.error('Error in getRenumerationSubmissions:', {
+      logger.error('Error in getRenumerationSubmissions:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         fullError: error
@@ -339,7 +340,7 @@ export class RenumerationService {
         .order('created_at', { ascending: false })
 
       if (renumerationError) {
-        console.error('Error getting peer tutor renumeration:', {
+        logger.error('Error getting peer tutor renumeration:', {
           message: renumerationError.message,
           details: renumerationError.details,
           hint: renumerationError.hint,
@@ -371,7 +372,7 @@ export class RenumerationService {
 
       return enrichedRenumerations
     } catch (error) {
-      console.error('Error in getpeertutorsRenumeration:', {
+      logger.error('Error in getpeertutorsRenumeration:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         fullError: error
@@ -400,13 +401,13 @@ export class RenumerationService {
         .eq('id', renumerationId)
 
       if (error) {
-        console.error('Error submitting renumeration response:', error)
+        logger.error('Error submitting renumeration response:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in submitRenumerationResponse:', error)
+      logger.error('Error in submitRenumerationResponse:', error)
       return false
     }
   }
@@ -432,13 +433,13 @@ export class RenumerationService {
         .eq('id', renumerationId)
 
       if (error) {
-        console.error('Error updating renumeration status:', error)
+        logger.error('Error updating renumeration status:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateRenumerationStatus:', error)
+      logger.error('Error in updateRenumerationStatus:', error)
       return false
     }
   }
@@ -456,7 +457,7 @@ export class RenumerationService {
         .eq('id', renumerationId)
 
       if (error) {
-        console.error('Error deleting renumeration response:', {
+        logger.error('Error deleting renumeration response:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -468,7 +469,7 @@ export class RenumerationService {
 
       return true
     } catch (error) {
-      console.error('Error in deleteRenumerationResponse:', {
+      logger.error('Error in deleteRenumerationResponse:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         fullError: error
@@ -503,13 +504,13 @@ export class RenumerationService {
         .eq('id', templateId)
 
       if (error) {
-        console.error('Error deleting renumeration template:', error)
+        logger.error('Error deleting renumeration template:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteRenumerationTemplate:', error)
+      logger.error('Error in deleteRenumerationTemplate:', error)
       return false
     }
   }
@@ -529,7 +530,7 @@ export class RenumerationService {
         .order('created_at', { ascending: false })
 
       if (submissionsError) {
-        console.error('Error getting renumeration submissions by template:', {
+        logger.error('Error getting renumeration submissions by template:', {
           message: submissionsError.message,
           details: submissionsError.details,
           hint: submissionsError.hint,
@@ -550,7 +551,7 @@ export class RenumerationService {
         .single()
 
       if (templateError) {
-        console.error('Error getting template details:', {
+        logger.error('Error getting template details:', {
           message: templateError.message,
           details: templateError.details,
           hint: templateError.hint,
@@ -571,7 +572,7 @@ export class RenumerationService {
               .single()
             peertutors = tutor
           } catch (error) {
-            console.warn('Could not fetch peer tutor details:', error)
+            logger.warn('Could not fetch peer tutor details:', error)
           }
 
           return {
@@ -584,7 +585,7 @@ export class RenumerationService {
 
       return enrichedSubmissions
     } catch (error) {
-      console.error('Error in getRenumerationSubmissionsByTemplate:', {
+      logger.error('Error in getRenumerationSubmissionsByTemplate:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         fullError: error
@@ -625,7 +626,7 @@ export class RenumerationService {
         .eq('faculty_id', facultyId)
 
       if (submissionsError) {
-        console.error('Error getting submissions for stats:', submissionsError)
+        logger.error('Error getting submissions for stats:', submissionsError)
       }
 
       const allSubmissions = submissionTemplates?.flatMap(t => t.submissions as unknown as { status: string }[]) || []
@@ -640,7 +641,7 @@ export class RenumerationService {
 
       return stats
     } catch (error) {
-      console.error('Error in getRenumerationStats:', error)
+      logger.error('Error in getRenumerationStats:', error)
       return {
         totalTemplates: 0,
         totalSubmissions: 0,

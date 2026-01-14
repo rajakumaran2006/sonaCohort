@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import Image from 'next/image'
@@ -10,7 +10,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 
-import PeerRenumerationModal from '@/components/forms/PeerRenumerationModal'
+import PeerRenumerationModal from '@/components/forms/modals/PeerRenumerationModal'
 import PeerLeaderboard from '@/components/dashboard/PeerLeaderboard'
 import { Card, LoadingSpinner } from '@/components/ui'
 import { 
@@ -21,7 +21,7 @@ import {
 import * as XLSX from 'xlsx'
 import { useQueryClient } from '@tanstack/react-query'
 import { 
-  usepeertutorsInfo, 
+  usePeerTutorInfo, 
   useAssignedStudents, 
   useRenumerations, 
   useClassStats, 
@@ -54,7 +54,7 @@ function PeerDashboardContent() {
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
   // --- DATA FETCHING WITH HOOKS ---
-  const { data: peertutorsInfo, isLoading: isTutorLoading } = usepeertutorsInfo(user?.email)
+  const { data: peertutorsInfo, isLoading: isTutorLoading } = usePeerTutorInfo(user?.email)
   
   const { data: assignedStudents = [], isLoading: isStudentsLoading } = useAssignedStudents(peertutorsInfo?.id)
   
@@ -71,7 +71,8 @@ function PeerDashboardContent() {
   const showPendingAlert = alertData?.showPendingAlert ?? false
   const consecutivePendingCount = alertData?.consecutivePendingCount ?? 0
 
-  const { data: activeFeedbackForms = [] } = useActiveFeedbackForms(peertutorsInfo?.id)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { data: _activeFeedbackForms = [] } = useActiveFeedbackForms(peertutorsInfo?.id)
   const { data: leaderboardData, isLoading: isLeaderboardLoading } = usePeerLeaderboard(peertutorsInfo)
 
   // Combined Loading State
@@ -248,7 +249,7 @@ function PeerDashboardContent() {
                     {loadingAttendance ? (
                        <div className="flex items-center justify-center py-12">
                           <LoadingSpinner size="sm" className="mr-2" />
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Loading stats...</span>
+                          <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Loading...</span>
                        </div>
                     ) : studentsWithAttendance.length > 0 ? (
                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 max-h-[500px]">

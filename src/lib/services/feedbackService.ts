@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { FeedbackVersioningService, FeedbackFormVersion, FormEditStrategy } from './feedbackVersioningService'
 
 export interface FeedbackForm {
@@ -98,7 +99,7 @@ export class FeedbackService {
         .single()
 
       if (formError) {
-        console.error('Error creating feedback form:', formError)
+        logger.error('Error creating feedback form:', formError)
         return null
       }
 
@@ -115,7 +116,7 @@ export class FeedbackService {
         .select()
 
       if (questionsError) {
-        console.error('Error creating feedback questions:', questionsError)
+        logger.error('Error creating feedback questions:', questionsError)
         // Clean up the form if questions creation failed
         await supabase.from('feedback_forms').delete().eq('id', formData.id)
         return null
@@ -126,7 +127,7 @@ export class FeedbackService {
         questions: questionsData
       } as FeedbackForm
     } catch (error) {
-      console.error('Error in createFeedbackForm:', error)
+      logger.error('Error in createFeedbackForm:', error)
       return null
     }
   }
@@ -138,13 +139,13 @@ export class FeedbackService {
     try {
       const supabase = createClient()
       
-      console.log('getFeedbackFormsByFaculty called with facultyId:', facultyId)
-      console.log('facultyId type:', typeof facultyId)
-      console.log('facultyId length:', facultyId?.length)
+      logger.info('getFeedbackFormsByFaculty called with facultyId:', facultyId)
+      logger.info('facultyId type:', typeof facultyId)
+      logger.info('facultyId length:', facultyId?.length)
       
       // Validate faculty ID parameter
       if (!facultyId || typeof facultyId !== 'string' || facultyId.trim() === '') {
-        console.error('Invalid faculty ID parameter:', facultyId)
+        logger.error('Invalid faculty ID parameter:', facultyId)
         return []
       }
       
@@ -157,8 +158,8 @@ export class FeedbackService {
           .eq('faculty_id', facultyId.trim())
         
         if (countError) {
-          console.log('feedback_forms table test failed, falling back to legacy schema. Error:', countError)
-          console.log('Count error details:', {
+          logger.info('feedback_forms table test failed, falling back to legacy schema. Error:', countError)
+          logger.info('Count error details:', {
             message: countError.message || 'Unknown error',
             details: countError.details || 'No details available',
             hint: countError.hint || 'No hint available',
@@ -167,7 +168,7 @@ export class FeedbackService {
           throw countError
         }
         
-        console.log('feedback_forms table accessible, count:', count)
+        logger.info('feedback_forms table accessible, count:', count)
         
         const { data, error } = await supabase
           .from('feedback_forms')
@@ -197,7 +198,7 @@ export class FeedbackService {
                   total_versions: stats.totalVersions
                 } as FeedbackForm
               } catch (statsError) {
-                console.log('Error getting form stats, using defaults:', statsError)
+                logger.info('Error getting form stats, using defaults:', statsError)
                 return {
                   ...form,
                   questions: form.current_version?.questions || [],
@@ -209,15 +210,15 @@ export class FeedbackService {
           )
           return formsWithVersioning
         } else if (error) {
-          console.log('Versioning query failed, falling back to legacy schema. Error:', error)
+          logger.info('Versioning query failed, falling back to legacy schema. Error:', error)
           throw error // This will trigger the catch block below
         }
       } catch (versioningError) {
-        console.log('Versioning tables not available, falling back to legacy schema. Error:', versioningError)
+        logger.info('Versioning tables not available, falling back to legacy schema. Error:', versioningError)
       }
 
       // Fallback to legacy schema
-      console.log('Using legacy schema fallback')
+      logger.info('Using legacy schema fallback')
       const { data, error } = await supabase
         .from('feedback_forms')
         .select(`
@@ -230,8 +231,8 @@ export class FeedbackService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting feedback forms (legacy schema):', error)
-        console.error('Error details:', {
+        logger.error('Error getting feedback forms (legacy schema):', error)
+        logger.error('Error details:', {
           message: error.message || 'Unknown error',
           details: error.details || 'No details available',
           hint: error.hint || 'No hint available',
@@ -249,10 +250,10 @@ export class FeedbackService {
       })) as FeedbackForm[]
 
     } catch (error) {
-      console.error('Error in getFeedbackFormsByFaculty:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
-      console.error('Faculty ID parameter:', facultyId)
+      logger.error('Error in getFeedbackFormsByFaculty:', error)
+      logger.error('Error type:', typeof error)
+      logger.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+      logger.error('Faculty ID parameter:', facultyId)
       return []
     }
   }
@@ -288,7 +289,7 @@ export class FeedbackService {
           })) as FeedbackForm[]
         }
       } catch {
-        console.log('Versioning tables not available, falling back to legacy schema')
+        logger.info('Versioning tables not available, falling back to legacy schema')
       }
 
       // Fallback to legacy schema
@@ -304,7 +305,7 @@ export class FeedbackService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting active feedback forms:', error)
+        logger.error('Error getting active feedback forms:', error)
         return []
       }
 
@@ -313,7 +314,7 @@ export class FeedbackService {
         questions: form.questions || []
       })) as FeedbackForm[]
     } catch (error) {
-      console.error('Error in getActiveFeedbackForms:', error)
+      logger.error('Error in getActiveFeedbackForms:', error)
       return []
     }
   }
@@ -331,7 +332,7 @@ export class FeedbackService {
       
       // If only updating is_active (status toggle), bypass versioning completely
       if (updates.is_active !== undefined && !updates.name && !updates.description && !questions) {
-        console.log('Performing simple status update without versioning')
+        logger.info('Performing simple status update without versioning')
         const { error } = await supabase
           .from('feedback_forms')
           .update({
@@ -341,7 +342,7 @@ export class FeedbackService {
           .eq('id', formId)
 
         if (error) {
-          console.error('Error updating feedback form status:', error)
+          logger.error('Error updating feedback form status:', error)
           return { 
             success: false, 
             strategy: {
@@ -407,7 +408,7 @@ export class FeedbackService {
           return { success, strategy }
         }
       } catch {
-        console.log('Versioning not available, using legacy update method')
+        logger.info('Versioning not available, using legacy update method')
       }
 
       // Fallback to legacy update method
@@ -420,7 +421,7 @@ export class FeedbackService {
         .eq('id', formId)
 
       if (error) {
-        console.error('Error updating feedback form:', error)
+        logger.error('Error updating feedback form:', error)
         return { 
           success: false, 
           strategy: {
@@ -442,7 +443,7 @@ export class FeedbackService {
         }
       }
     } catch (error) {
-      console.error('Error in updateFeedbackForm:', error)
+      logger.error('Error in updateFeedbackForm:', error)
       return { 
         success: false, 
         strategy: {
@@ -469,7 +470,7 @@ export class FeedbackService {
         .eq('feedback_form_id', formId)
 
       if (questionsError) {
-        console.error('Error deleting feedback questions:', questionsError)
+        logger.error('Error deleting feedback questions:', questionsError)
         return false
       }
 
@@ -480,7 +481,7 @@ export class FeedbackService {
         .eq('feedback_form_id', formId)
 
       if (responsesError) {
-        console.error('Error deleting feedback responses:', responsesError)
+        logger.error('Error deleting feedback responses:', responsesError)
         return false
       }
 
@@ -491,13 +492,13 @@ export class FeedbackService {
         .eq('id', formId)
 
       if (formError) {
-        console.error('Error deleting feedback form:', formError)
+        logger.error('Error deleting feedback form:', formError)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteFeedbackForm:', error)
+      logger.error('Error in deleteFeedbackForm:', error)
       return false
     }
   }
@@ -536,10 +537,10 @@ export class FeedbackService {
             if (errorCode === 'PGRST204' || errorCode === '42P01' || 
                 responseError.message?.includes('does not exist') ||
                 responseError.message?.includes('column') && responseError.message?.includes('not found')) {
-              console.log('Versioning column not found, falling back to legacy method')
+              logger.info('Versioning column not found, falling back to legacy method')
               throw new Error('Versioning not available')
             }
-            console.error('Error creating feedback response:', responseError)
+            logger.error('Error creating feedback response:', responseError)
             return false
           }
 
@@ -598,11 +599,11 @@ export class FeedbackService {
             if (errorCode === 'PGRST204' || errorCode === '42P01' || 
                 answersError.message?.includes('does not exist') ||
                 answersError.message?.includes('column') && answersError.message?.includes('not found')) {
-              console.log('Versioning column not found in answers, falling back to legacy method')
+              logger.info('Versioning column not found in answers, falling back to legacy method')
               await supabase.from('feedback_responses').delete().eq('id', responseData.id)
               throw new Error('Versioning not available')
             }
-            console.error('Error creating feedback answers:', answersError)
+            logger.error('Error creating feedback answers:', answersError)
             await supabase.from('feedback_responses').delete().eq('id', responseData.id)
             return false
           }
@@ -610,7 +611,7 @@ export class FeedbackService {
           return true
         }
       } catch {
-        console.log('Versioning not available, using legacy response method')
+        logger.info('Versioning not available, using legacy response method')
       }
 
       // Fallback to legacy method
@@ -625,7 +626,7 @@ export class FeedbackService {
         .single()
 
       if (responseError) {
-        console.error('Error creating feedback response:', responseError)
+        logger.error('Error creating feedback response:', responseError)
         return false
       }
 
@@ -673,14 +674,14 @@ export class FeedbackService {
         .select()
 
       if (answersError) {
-        console.error('Error creating feedback answers:', answersError)
+        logger.error('Error creating feedback answers:', answersError)
         await supabase.from('feedback_responses').delete().eq('id', responseData.id)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in submitFeedbackResponse:', error)
+      logger.error('Error in submitFeedbackResponse:', error)
       return false
     }
   }
@@ -724,13 +725,13 @@ export class FeedbackService {
         .order('submitted_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting feedback responses:', error)
+        logger.error('Error getting feedback responses:', error)
         return []
       }
 
       return data as FeedbackResponseWithDetails[] || []
     } catch (error) {
-      console.error('Error in getFeedbackResponses:', error)
+      logger.error('Error in getFeedbackResponses:', error)
       return []
     }
   }
@@ -750,13 +751,13 @@ export class FeedbackService {
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error checking feedback submission:', error)
+        logger.error('Error checking feedback submission:', error)
         return false
       }
 
       return !!data
     } catch (error) {
-      console.error('Error in hasStudentSubmittedFeedback:', error)
+      logger.error('Error in hasStudentSubmittedFeedback:', error)
       return false
     }
   }
@@ -768,11 +769,11 @@ export class FeedbackService {
     try {
       const supabase = createClient()
       
-      console.log('getFeedbackFormById called with formId:', formId)
+      logger.info('getFeedbackFormById called with formId:', formId)
       
       // Validate form ID parameter
       if (!formId || typeof formId !== 'string' || formId.trim() === '') {
-        console.error('Invalid form ID parameter:', formId)
+        logger.error('Invalid form ID parameter:', formId)
         return null
       }
       
@@ -794,7 +795,7 @@ export class FeedbackService {
           .single()
 
         if (!error && data) {
-          console.log('Found form with versioning schema:', data)
+          logger.info('Found form with versioning schema:', data)
           return {
             ...data,
             questions: data.current_version?.questions || [],
@@ -802,15 +803,15 @@ export class FeedbackService {
             total_versions: 1 // Default for now
           } as FeedbackForm
         } else if (error) {
-          console.log('Versioning query failed, falling back to legacy schema. Error:', error)
+          logger.info('Versioning query failed, falling back to legacy schema. Error:', error)
           throw error
         }
       } catch (versioningError) {
-        console.log('Versioning tables not available, falling back to legacy schema. Error:', versioningError)
+        logger.info('Versioning tables not available, falling back to legacy schema. Error:', versioningError)
       }
 
       // Fallback to legacy schema
-      console.log('Using legacy schema fallback for getFeedbackFormById')
+      logger.info('Using legacy schema fallback for getFeedbackFormById')
       const { data, error } = await supabase
         .from('feedback_forms')
         .select(`
@@ -823,8 +824,8 @@ export class FeedbackService {
         .single()
 
       if (error) {
-        console.error('Error getting feedback form by ID (legacy schema):', error)
-        console.error('Error details:', {
+        logger.error('Error getting feedback form by ID (legacy schema):', error)
+        logger.error('Error details:', {
           message: error.message || 'Unknown error',
           details: error.details || 'No details available',
           hint: error.hint || 'No hint available',
@@ -834,11 +835,11 @@ export class FeedbackService {
       }
 
       if (!data) {
-        console.log('No form found with ID:', formId)
+        logger.info('No form found with ID:', formId)
         return null
       }
 
-      console.log('Found form with legacy schema:', data)
+      logger.info('Found form with legacy schema:', data)
       return {
         ...data,
         questions: data.questions || [],
@@ -847,10 +848,10 @@ export class FeedbackService {
       } as FeedbackForm
 
     } catch (error) {
-      console.error('Error in getFeedbackFormById:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
-      console.error('Form ID parameter:', formId)
+      logger.error('Error in getFeedbackFormById:', error)
+      logger.error('Error type:', typeof error)
+      logger.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+      logger.error('Form ID parameter:', formId)
       return null
     }
   }
@@ -888,7 +889,7 @@ export class FeedbackService {
         .single()
         
       if (formError || !form) {
-        console.error('Error getting form details for stats:', formError)
+        logger.error('Error getting form details for stats:', formError)
         return { totalResponses: 0, totalStudents: 0, responseRate: 0 }
       }
 
@@ -899,7 +900,7 @@ export class FeedbackService {
         .eq('feedback_form_id', formId)
 
       if (responseError) {
-        console.error('Error getting response count:', responseError)
+        logger.error('Error getting response count:', responseError)
         return { totalResponses: 0, totalStudents: 0, responseRate: 0 }
       }
 
@@ -912,7 +913,7 @@ export class FeedbackService {
         .not('assigned_peer_tutor_id', 'is', null)
 
       if (studentError) {
-        console.error('Error getting student count:', studentError)
+        logger.error('Error getting student count:', studentError)
         return { totalResponses: responseCount || 0, totalStudents: 0, responseRate: 0 }
       }
 
@@ -926,7 +927,7 @@ export class FeedbackService {
         responseRate: Math.round(responseRate * 100) / 100
       }
     } catch (error) {
-      console.error('Error in getFeedbackStats:', error)
+      logger.error('Error in getFeedbackStats:', error)
       return { totalResponses: 0, totalStudents: 0, responseRate: 0 }
     }
   }

@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export interface ScheduledClass {
   id: string
@@ -56,22 +57,22 @@ export class ScheduledClassService {
       const supabase = createClient()
       
       // Validate required fields with detailed logging
-      console.log('createScheduledClass called with data:', data)
+      logger.info('createScheduledClass called with data:', data)
       
       if (!data.class_id) {
-        console.error('class_id is required')
+        logger.error('class_id is required')
         return false
       }
       if (!data.faculty_id) {
-        console.error('faculty_id is required')
+        logger.error('faculty_id is required')
         return false
       }
       if (!data.scheduled_date) {
-        console.error('scheduled_date is required')
+        logger.error('scheduled_date is required')
         return false
       }
       if (!data.dept || !data.year || !data.section) {
-        console.error('dept, year, and section are required', { dept: data.dept, year: data.year, section: data.section })
+        logger.error('dept, year, and section are required', { dept: data.dept, year: data.year, section: data.section })
         return false
       }
       
@@ -83,7 +84,7 @@ export class ScheduledClassService {
         .single()
 
       if (classError || !classData) {
-        console.error('Error getting class data:', classError)
+        logger.error('Error getting class data:', classError)
         return false
       }
 
@@ -101,7 +102,7 @@ export class ScheduledClassService {
 
       // Verify the class section matches the provided section
       if (classData.section !== normalizedSection) {
-        console.warn(`Class section (${classData.section}) does not match provided section (${normalizedSection}). Using class section.`)
+        logger.warn(`Class section (${classData.section}) does not match provided section (${normalizedSection}). Using class section.`)
       }
 
       // Check if the scheduled date is valid (today or future, not past)
@@ -119,12 +120,12 @@ export class ScheduledClassService {
         }
 
         if (isNaN(scheduledDate.getTime())) {
-          console.error('Invalid scheduled_date format:', data.scheduled_date)
+          logger.error('Invalid scheduled_date format:', data.scheduled_date)
           return false
         }
         scheduledDate.setHours(0, 0, 0, 0)
       } catch (error) {
-        console.error('Error parsing scheduled_date:', data.scheduled_date, error)
+        logger.error('Error parsing scheduled_date:', data.scheduled_date, error)
         return false
       }
       
@@ -133,12 +134,12 @@ export class ScheduledClassService {
       
       // Allow scheduling for today and future dates (reject only past dates)
       if (scheduledDate < today) {
-        console.log('Scheduled date is in the past. Not creating scheduled classes.')
+        logger.info('Scheduled date is in the past. Not creating scheduled classes.')
         return false
       }
 
       // Always create scheduled classes for ALL peer tutors in this section
-      console.log('Fetching peer tutors for:', { dept: normalizedDept, year: normalizedYear, section: normalizedSection })
+      logger.info('Fetching peer tutors for:', { dept: normalizedDept, year: normalizedYear, section: normalizedSection })
       
       const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
@@ -148,14 +149,14 @@ export class ScheduledClassService {
         .eq('section', normalizedSection)
 
       if (tutorsError) {
-        console.error('Error fetching peer tutors:', tutorsError)
+        logger.error('Error fetching peer tutors:', tutorsError)
         return false
       }
 
-      console.log('Found peer tutors:', peerTutor?.length || 0)
+      logger.info('Found peer tutors:', peerTutor?.length || 0)
 
       if (!peerTutor || peerTutor.length === 0) {
-        console.warn('No peer tutors found for this section. Creating a placeholder scheduled class.')
+        logger.warn('No peer tutors found for this section. Creating a placeholder scheduled class.')
         
         // Check if a placeholder already exists
         const { data: existingPlaceholder } = await supabase
@@ -170,7 +171,7 @@ export class ScheduledClassService {
           .maybeSingle()
 
         if (existingPlaceholder) {
-            console.log('Placeholder scheduled class already exists')
+            logger.info('Placeholder scheduled class already exists')
             return true
         }
 
@@ -189,7 +190,7 @@ export class ScheduledClassService {
           })
 
         if (placeholderError) {
-            console.error('Error creating placeholder scheduled class:', placeholderError)
+            logger.error('Error creating placeholder scheduled class:', placeholderError)
             return false
         }
         
@@ -198,10 +199,10 @@ export class ScheduledClassService {
 
       // Check which peer tutors already have this scheduled class
       const peertutorsIds = peerTutor.map(t => t.id).filter(id => id) // Remove any undefined/null IDs
-      console.log('Checking existing scheduled classes for peer tutor IDs:', peertutorsIds.length)
+      logger.info('Checking existing scheduled classes for peer tutor IDs:', peertutorsIds.length)
       
       if (peertutorsIds.length === 0) {
-        console.error('No valid peer tutor IDs found')
+        logger.error('No valid peer tutor IDs found')
         return false
       }
       
@@ -218,10 +219,10 @@ export class ScheduledClassService {
       let existingTutorIds = new Set<string>()
       
       if (existErr) {
-        console.error('Error checking existing scheduled classes:', existErr)
+        logger.error('Error checking existing scheduled classes:', existErr)
         // Don't return false here - continue to create if the check fails
         // This handles cases where the query might fail but we can still create
-        console.warn('Continuing despite error checking existing classes - will create for all peer tutors')
+        logger.warn('Continuing despite error checking existing classes - will create for all peer tutors')
       } else {
         // Only use existing data if there was no error
         existingTutorIds = new Set((existing || []).map(e => e.peer_tutor_id))
@@ -230,11 +231,11 @@ export class ScheduledClassService {
       const tutorsToCreate = peerTutor.filter(t => !existingTutorIds.has(t.id))
 
       if (tutorsToCreate.length === 0) {
-        console.log('All peer tutors already have this scheduled class')
+        logger.info('All peer tutors already have this scheduled class')
         return true
       }
 
-      console.log(`Creating scheduled classes for ${tutorsToCreate.length} peer tutor(s)`)
+      logger.info(`Creating scheduled classes for ${tutorsToCreate.length} peer tutor(s)`)
 
       // Create scheduled classes for all peer tutors that don't have it
       const recordsToInsert = tutorsToCreate.map(tutor => ({
@@ -253,14 +254,14 @@ export class ScheduledClassService {
         .insert(recordsToInsert)
 
       if (insertError) {
-        console.error('Error creating scheduled classes for peer tutors:', insertError)
+        logger.error('Error creating scheduled classes for peer tutors:', insertError)
         return false
       }
 
-      console.log(`✓ Created scheduled classes for ${tutorsToCreate.length} peer tutor(s) in section:`, normalizedSection)
+      logger.info(`✓ Created scheduled classes for ${tutorsToCreate.length} peer tutor(s) in section:`, normalizedSection)
       return true
     } catch (error) {
-      console.error('Error in createScheduledClass:', error)
+      logger.error('Error in createScheduledClass:', error)
       return false
     }
   }
@@ -318,13 +319,13 @@ export class ScheduledClassService {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error getting scheduled classes:', error)
+        logger.error('Error getting scheduled classes:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error in getScheduledClassesByYearSection:', error)
+      logger.error('Error in getScheduledClassesByYearSection:', error)
       return []
     }
   }
@@ -370,13 +371,13 @@ export class ScheduledClassService {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error getting scheduled classes by date:', error)
+        logger.error('Error getting scheduled classes by date:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error in getScheduledClassesByDate:', error)
+      logger.error('Error in getScheduledClassesByDate:', error)
       return []
     }
   }
@@ -408,13 +409,13 @@ export class ScheduledClassService {
         .eq('section', normalizedSection)
 
       if (error) {
-        console.error('Error getting occupied dates:', error)
+        logger.error('Error getting occupied dates:', error)
         return []
       }
 
       return data.map(item => item.scheduled_date).filter(Boolean)
     } catch (error) {
-      console.error('Error in getOccupiedDates:', error)
+      logger.error('Error in getOccupiedDates:', error)
       return []
     }
   }
@@ -453,13 +454,13 @@ export class ScheduledClassService {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error checking date availability:', error)
+        logger.error('Error checking date availability:', error)
         return false
       }
 
       return data.length === 0
     } catch (error) {
-      console.error('Error in isDateAvailable:', error)
+      logger.error('Error in isDateAvailable:', error)
       return false
     }
   }
@@ -495,7 +496,7 @@ export class ScheduledClassService {
         .eq('section', normalizedSection)
 
       if (error) {
-        console.error('Error getting unique subjects with schedules:', error)
+        logger.error('Error getting unique subjects with schedules:', error)
         return []
       }
 
@@ -506,7 +507,7 @@ export class ScheduledClassService {
       }))].filter(Boolean)
       return uniqueSubjects
     } catch (error) {
-      console.error('Error in getUniqueSubjectsWithSchedules:', error)
+      logger.error('Error in getUniqueSubjectsWithSchedules:', error)
       return []
     }
   }
@@ -526,7 +527,7 @@ export class ScheduledClassService {
         .eq('section', section)
 
       if (error) {
-        console.error('Error getting all subjects:', error)
+        logger.error('Error getting all subjects:', error)
         return []
       }
 
@@ -534,7 +535,7 @@ export class ScheduledClassService {
       const uniqueSubjects = [...new Set(data.map(item => item.subject_name))]
       return uniqueSubjects
     } catch (error) {
-      console.error('Error in getAllSubjects:', error)
+      logger.error('Error in getAllSubjects:', error)
       return []
     }
   }
@@ -552,13 +553,13 @@ export class ScheduledClassService {
         .eq('id', scheduledClassId)
 
       if (error) {
-        console.error('Error deleting scheduled class:', error)
+        logger.error('Error deleting scheduled class:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteScheduledClass:', error)
+      logger.error('Error in deleteScheduledClass:', error)
       return false
     }
   }
@@ -576,13 +577,13 @@ export class ScheduledClassService {
         .eq('id', scheduledClassId)
 
       if (error) {
-        console.error('Error updating scheduled class date:', error)
+        logger.error('Error updating scheduled class date:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateScheduledClassDate:', error)
+      logger.error('Error in updateScheduledClassDate:', error)
       return false
     }
   }
@@ -601,13 +602,13 @@ export class ScheduledClassService {
         .single()
 
       if (error) {
-        console.error('Error getting scheduled class by ID:', error)
+        logger.error('Error getting scheduled class by ID:', error)
         return null
       }
 
       return data
     } catch (error) {
-      console.error('Error in getScheduledClassById:', error)
+      logger.error('Error in getScheduledClassById:', error)
       return null
     }
   }
@@ -628,13 +629,13 @@ export class ScheduledClassService {
         .single()
 
       if (error) {
-        console.error('Error getting scheduled class by class_id:', error)
+        logger.error('Error getting scheduled class by class_id:', error)
         return null
       }
 
       return data
     } catch (error) {
-      console.error('Error in getScheduledClassByClassId:', error)
+      logger.error('Error in getScheduledClassByClassId:', error)
       return null
     }
   }
@@ -653,13 +654,13 @@ export class ScheduledClassService {
         .order('scheduled_date', { ascending: true })
 
       if (error) {
-        console.error('Error getting all scheduled classes by class_id:', error)
+        logger.error('Error getting all scheduled classes by class_id:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error in getAllScheduledClassesByClassId:', error)
+      logger.error('Error in getAllScheduledClassesByClassId:', error)
       return []
     }
   }
@@ -681,13 +682,13 @@ export class ScheduledClassService {
         .eq('id', scheduledClassId)
 
       if (error) {
-        console.error('Error updating scheduled class topics:', error)
+        logger.error('Error updating scheduled class topics:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateScheduledClassTopics:', error)
+      logger.error('Error in updateScheduledClassTopics:', error)
       return false
     }
   }
@@ -708,13 +709,13 @@ export class ScheduledClassService {
         .eq('id', scheduledClassId)
 
       if (error) {
-        console.error('Error updating scheduled class image link:', error)
+        logger.error('Error updating scheduled class image link:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateScheduledClassImageLink:', error)
+      logger.error('Error in updateScheduledClassImageLink:', error)
       return false
     }
   }
@@ -747,13 +748,13 @@ export class ScheduledClassService {
         .eq('id', scheduledClassId)
 
       if (error) {
-        console.error('Error updating scheduled class completion:', error)
+        logger.error('Error updating scheduled class completion:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateScheduledClassCompletion:', error)
+      logger.error('Error in updateScheduledClassCompletion:', error)
       return false
     }
   }
@@ -777,13 +778,13 @@ export class ScheduledClassService {
         .single()
 
       if (error) {
-        console.error('Error getting scheduled class completion:', error)
+        logger.error('Error getting scheduled class completion:', error)
         return null
       }
 
       return data
     } catch (error) {
-      console.error('Error in getScheduledClassCompletion:', error)
+      logger.error('Error in getScheduledClassCompletion:', error)
       return null
     }
   }
@@ -841,17 +842,17 @@ export class ScheduledClassService {
 
       const { data, error } = await query
 
-      console.log('Query result for peer tutor class status:', { dept, year, section, subject }, 'Data count:', data?.length || 0)
+      logger.info('Query result for peer tutor class status:', { dept, year, section, subject }, 'Data count:', data?.length || 0)
       
       if (error) {
-        console.error('Error getting peer tutor class status:', error)
-        console.error('Error details:', {
+        logger.error('Error getting peer tutor class status:', error)
+        logger.error('Error details:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
           code: error.code
         })
-        console.error('Query filters:', { dept, year, section, subject })
+        logger.error('Query filters:', { dept, year, section, subject })
         return { completed: [], pending: [] }
       }
 
@@ -880,7 +881,7 @@ export class ScheduledClassService {
 
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getpeertutorsClassStatus:', error)
+      logger.error('Error in getpeertutorsClassStatus:', error)
       return { completed: [], pending: [] }
     }
   }
@@ -910,7 +911,7 @@ export class ScheduledClassService {
         dateString = targetDate.toISOString().split('T')[0]
       }
       
-      console.log('Date filter processing:', {
+      logger.info('Date filter processing:', {
         originalDateFilter: dateFilter,
         targetDate: targetDate.toISOString(),
         dateString: dateString
@@ -955,10 +956,10 @@ export class ScheduledClassService {
 
       const { data, error } = await query
 
-      console.log('Query result for peer tutor class status with date:', { dept, year, section, dateFilter }, 'Data count:', data?.length || 0)
+      logger.info('Query result for peer tutor class status with date:', { dept, year, section, dateFilter }, 'Data count:', data?.length || 0)
       
       if (error) {
-        console.error('Error getting peer tutor class status with date:', error)
+        logger.error('Error getting peer tutor class status with date:', error)
         return { completed: [], pending: [] }
       }
 
@@ -987,7 +988,7 @@ export class ScheduledClassService {
 
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getpeertutorsClassStatusWithDate:', error)
+      logger.error('Error in getpeertutorsClassStatusWithDate:', error)
       return { completed: [], pending: [] }
     }
   }
@@ -1027,10 +1028,10 @@ export class ScheduledClassService {
 
       const { data, error } = await query
 
-      console.log('Query result for peer tutor class status by year:', { dept, year }, 'Data count:', data?.length || 0)
+      logger.info('Query result for peer tutor class status by year:', { dept, year }, 'Data count:', data?.length || 0)
       
       if (error) {
-        console.error('Error getting peer tutor class status by year:', error)
+        logger.error('Error getting peer tutor class status by year:', error)
         return { completed: [], pending: [] }
       }
 
@@ -1051,7 +1052,7 @@ export class ScheduledClassService {
 
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getpeertutorsClassStatusByYear:', error)
+      logger.error('Error in getpeertutorsClassStatusByYear:', error)
       return { completed: [], pending: [] }
     }
   }
@@ -1081,7 +1082,7 @@ export class ScheduledClassService {
         dateString = targetDate.toISOString().split('T')[0]
       }
       
-      console.log('Date filter processing (year+date):', {
+      logger.info('Date filter processing (year+date):', {
         originalDateFilter: dateFilter,
         targetDate: targetDate.toISOString(),
         dateString: dateString
@@ -1113,10 +1114,10 @@ export class ScheduledClassService {
 
       const { data, error } = await query
 
-      console.log('Query result for peer tutor class status by year and date:', { dept, year, dateFilter }, 'Data count:', data?.length || 0)
+      logger.info('Query result for peer tutor class status by year and date:', { dept, year, dateFilter }, 'Data count:', data?.length || 0)
       
       if (error) {
-        console.error('Error getting peer tutor class status by year and date:', error)
+        logger.error('Error getting peer tutor class status by year and date:', error)
         return { completed: [], pending: [] }
       }
 
@@ -1137,7 +1138,7 @@ export class ScheduledClassService {
 
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getpeertutorsClassStatusByYearAndDate:', error)
+      logger.error('Error in getpeertutorsClassStatusByYearAndDate:', error)
       return { completed: [], pending: [] }
     }
   }
@@ -1149,11 +1150,11 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
       
-      console.log('Getting all classes for department:', dept)
+      logger.info('Getting all classes for department:', dept)
       
       // Validate department parameter
       if (!dept || typeof dept !== 'string' || dept.trim() === '') {
-        console.error('Invalid department parameter:', dept)
+        logger.error('Invalid department parameter:', dept)
         return { completed: [], pending: [] }
       }
       
@@ -1165,8 +1166,8 @@ export class ScheduledClassService {
         .order('scheduled_date', { ascending: false })
 
       if (scheduledError) {
-        console.error('Error getting scheduled classes for department:', scheduledError)
-        console.error('Error details:', {
+        logger.error('Error getting scheduled classes for department:', scheduledError)
+        logger.error('Error details:', {
           message: scheduledError.message || 'Unknown error',
           details: scheduledError.details || 'No details available',
           hint: scheduledError.hint || 'No hint available',
@@ -1175,18 +1176,18 @@ export class ScheduledClassService {
         
         // Check if it's a table not found error
         if (scheduledError.code === '42P01' || scheduledError.message?.includes('relation') || scheduledError.message?.includes('does not exist')) {
-          console.error('Table "scheduled_classes" may not exist or be accessible')
+          logger.error('Table "scheduled_classes" may not exist or be accessible')
         }
         
         return { completed: [], pending: [] }
       }
 
       if (!scheduledClasses || scheduledClasses.length === 0) {
-        console.log('No scheduled classes found for department:', dept)
+        logger.info('No scheduled classes found for department:', dept)
         return { completed: [], pending: [] }
       }
 
-      console.log('Found scheduled classes:', scheduledClasses.length)
+      logger.info('Found scheduled classes:', scheduledClasses.length)
 
       // Get unique class IDs and peer tutor IDs
       const classIds = [...new Set(scheduledClasses.map(sc => sc.class_id))]
@@ -1199,7 +1200,7 @@ export class ScheduledClassService {
         .in('id', classIds)
 
       if (classesError) {
-        console.error('Error getting class details:', classesError)
+        logger.error('Error getting class details:', classesError)
         return { completed: [], pending: [] }
       }
 
@@ -1210,7 +1211,7 @@ export class ScheduledClassService {
         .in('id', peertutorsIds)
 
       if (tutorsError) {
-        console.error('Error getting peer tutor details:', tutorsError)
+        logger.error('Error getting peer tutor details:', tutorsError)
         return { completed: [], pending: [] }
       }
 
@@ -1259,13 +1260,13 @@ export class ScheduledClassService {
                (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
-      console.log('Processed classes - Completed:', completed.length, 'Pending:', pending.length)
+      logger.info('Processed classes - Completed:', completed.length, 'Pending:', pending.length)
       return { completed, pending }
     } catch (error) {
-      console.error('Error in getAllClassesForDepartment:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
-      console.error('Department parameter:', dept)
+      logger.error('Error in getAllClassesForDepartment:', error)
+      logger.error('Error type:', typeof error)
+      logger.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+      logger.error('Department parameter:', dept)
       return { completed: [], pending: [] }
     }
   }
@@ -1292,7 +1293,7 @@ export class ScheduledClassService {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor:', tutorError)
+        logger.error('Error getting peer tutor:', tutorError)
         return { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0 }
       }
 
@@ -1310,7 +1311,7 @@ export class ScheduledClassService {
         .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0]) // Only classes from day after creation
 
       if (error) {
-        console.error('Error getting peer tutor class stats:', error)
+        logger.error('Error getting peer tutor class stats:', error)
         return { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0 }
       }
 
@@ -1375,7 +1376,7 @@ export class ScheduledClassService {
         overdueClasses   // New Split: Pending/Overdue
       }
     } catch (error) {
-      console.error('Error in getpeertutorsClassStats:', error)
+      logger.error('Error in getpeertutorsClassStats:', error)
       return { totalClasses: 0, completedClasses: 0, pendingClasses: 0, upcomingClasses: 0, overdueClasses: 0 }
     }
   }
@@ -1393,13 +1394,13 @@ export class ScheduledClassService {
         .eq('class_id', classId)
 
       if (error) {
-        console.error('Error getting scheduled class count:', error)
+        logger.error('Error getting scheduled class count:', error)
         return 0
       }
 
       return data?.length || 0
     } catch (error) {
-      console.error('Error in getScheduledClassCount:', error)
+      logger.error('Error in getScheduledClassCount:', error)
       return 0
     }
   }
@@ -1444,7 +1445,7 @@ export class ScheduledClassService {
         .eq('section', normalizedSection)
 
       if (error) {
-        console.error('Error getting peer tutors for scheduled class:', error)
+        logger.error('Error getting peer tutors for scheduled class:', error)
         return []
       }
 
@@ -1461,7 +1462,7 @@ export class ScheduledClassService {
 
       return uniquepeerTutor
     } catch (error) {
-      console.error('Error in getpeerTutorForScheduledClass:', error)
+      logger.error('Error in getpeerTutorForScheduledClass:', error)
       return []
     }
   }

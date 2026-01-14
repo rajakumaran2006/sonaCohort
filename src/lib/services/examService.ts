@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export interface Exam {
   id: string
@@ -68,13 +69,13 @@ export class ExamService {
         .single()
 
       if (error) {
-        console.error('Error creating exam:', error)
+        logger.error('Error creating exam:', error)
         return null
       }
 
       return exam as Exam
     } catch (error) {
-      console.error('Error in createExam:', error)
+      logger.error('Error in createExam:', error)
       return null
     }
   }
@@ -92,13 +93,13 @@ export class ExamService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting exams:', error)
+        logger.error('Error getting exams:', error)
         return []
       }
 
       return (data || []) as Exam[]
     } catch (error) {
-      console.error('Error in getAllExams:', error)
+      logger.error('Error in getAllExams:', error)
       return []
     }
   }
@@ -118,7 +119,7 @@ export class ExamService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting exams by year:', error)
+        logger.error('Error getting exams by year:', error)
         return []
       }
 
@@ -129,7 +130,7 @@ export class ExamService {
 
       return filteredExams as Exam[]
     } catch (error) {
-      console.error('Error in getExamsByYear:', error)
+      logger.error('Error in getExamsByYear:', error)
       return []
     }
   }
@@ -148,13 +149,13 @@ export class ExamService {
         .single()
 
       if (error) {
-        console.error('Error getting exam by ID:', error)
+        logger.error('Error getting exam by ID:', error)
         return null
       }
 
       return data as Exam
     } catch (error) {
-      console.error('Error in getExamById:', error)
+      logger.error('Error in getExamById:', error)
       return null
     }
   }
@@ -172,13 +173,13 @@ export class ExamService {
         .eq('id', id)
 
       if (error) {
-        console.error('Error deleting exam:', error)
+        logger.error('Error deleting exam:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteExam:', error)
+      logger.error('Error in deleteExam:', error)
       return false
     }
   }
@@ -201,13 +202,13 @@ export class ExamService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting exam marks:', error)
+        logger.error('Error getting exam marks:', error)
         return []
       }
 
       return (data || []) as ExamMark[]
     } catch (error) {
-      console.error('Error in getExamMarks:', error)
+      logger.error('Error in getExamMarks:', error)
       return []
     }
   }
@@ -230,7 +231,7 @@ export class ExamService {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error getting peer tutor marks:', error)
+        logger.error('Error getting peer tutor marks:', error)
         return []
       }
 
@@ -241,7 +242,7 @@ export class ExamService {
         subject_name: mark.subject?.subject_name
       })) as ExamMarkWithDetails[]
     } catch (error) {
-      console.error('Error in getpeertutorsMarks:', error)
+      logger.error('Error in getpeertutorsMarks:', error)
       return []
     }
   }

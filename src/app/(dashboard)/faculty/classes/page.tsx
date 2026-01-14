@@ -11,9 +11,10 @@ import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import ClassesPageSkeleton from '@/components/skeletons/ClassesPageSkeleton'
-import ClassesExportModal from '@/components/forms/ClassesExportModal'
+import ClassesExportModal from '@/components/forms/import-export/ClassesExportModal'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import ExportButton from '@/components/ui/ExportButton'
+import { logger } from '@/lib/logger'
 
 export default function FacultyClassesPage() {
   return (
@@ -38,12 +39,12 @@ function FacultyClassesContent() {
     queryKey: ['all-classes'],
     queryFn: async () => {
       try {
-        console.log('Fetching all classes...')
+        logger.info('Fetching all classes...')
         const data = await ClassService.getAllClasses()
-        console.log('Fetched all classes:', data)
+        logger.info('Fetched all classes:', data)
         return data
       } catch (error) {
-        console.error('Error fetching all classes:', error)
+        logger.error('Error fetching all classes:', error)
         throw error
       }
     },

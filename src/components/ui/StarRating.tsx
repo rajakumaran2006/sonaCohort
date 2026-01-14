@@ -6,9 +6,10 @@ interface StarRatingProps {
   value: number
   onChange: (rating: number) => void
   disabled?: boolean
+  readonly?: boolean
 }
 
-export default function StarRating({ value, onChange, disabled = false }: StarRatingProps) {
+export default function StarRating({ value, onChange, disabled = false, readonly = false }: StarRatingProps) {
   const [hover, setHover] = useState(0)
 
   return (

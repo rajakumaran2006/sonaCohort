@@ -5,11 +5,10 @@ import { Class } from '@/lib/services/classService'
 import { AttendanceService, AttendanceRecord } from '@/lib/services/attendanceService'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { motion, AnimatePresence, Variants } from 'framer-motion'
 import { 
   X, 
-  Check, 
   ArrowRight, 
   Link as LinkIcon, 
   Camera, 
@@ -59,7 +58,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
       const students = await AttendanceService.getStudentsForAttendance(tutorInfo.id)
       
       let currentScheduledClassId = classItem.scheduled_class_id
-      let existingAttendance: any[] = []
+      let existingAttendance: AttendanceRecord[] = []
 
       // If we don't have a direct scheduled_class_id prop, try to find one for TODAY or specific date
       if (!currentScheduledClassId) {

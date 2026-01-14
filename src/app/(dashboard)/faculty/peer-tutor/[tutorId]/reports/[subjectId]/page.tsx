@@ -7,6 +7,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { ReportService, ClassAttendanceReport } from '@/lib/services/reportService'
 import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import SubjectReportSkeleton from '@/components/skeletons/SubjectReportSkeleton'
+import { logger } from '@/lib/logger'
 
 export default function SubjectReportsPage() {
   return (
@@ -92,7 +93,7 @@ function SubjectReportsContent() {
     setLoading(true)
     try {
       // Get peer tutor info
-      const { createClient } = await import('@/utils/supabase/client')
+      const { createClient } = await import('@/lib/supabase/client')
       const supabase = createClient()
       
       const { data: peertutors, error: tutorError } = await supabase
@@ -102,7 +103,7 @@ function SubjectReportsContent() {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor info:', tutorError)
+        logger.error('Error getting peer tutor info:', tutorError)
         return
       }
 
@@ -116,7 +117,7 @@ function SubjectReportsContent() {
         .single()
 
       if (classError || !classData) {
-        console.error('Error getting class info:', classError)
+        logger.error('Error getting class info:', classError)
         return
       }
 
@@ -126,7 +127,7 @@ function SubjectReportsContent() {
       const classes = await ReportService.getSubjectScheduledClasses(tutorId, classData.subject_name)
       setScheduledClasses(classes)
     } catch (error) {
-      console.error('Error loading subject data:', error)
+      logger.error('Error loading subject data:', error)
     } finally {
       setLoading(false)
     }
@@ -140,7 +141,7 @@ function SubjectReportsContent() {
         setShowClassModal(true)
       }
     } catch (error) {
-      console.error('Error loading class attendance report:', error)
+      logger.error('Error loading class attendance report:', error)
     }
   }
 

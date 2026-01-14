@@ -23,12 +23,10 @@ export default function PageHeader({
   context,
   tagline,
   subtitle, // Deprecated
-  lastRefresh,
   onRefresh,
   isRefreshing = false,
   showRefresh = true,
   onToggleSidebar,
-  // isSidebarCollapsed, - keeping as comment or remove line? The interface has it but it is unused. I should remove from destructuring.
   children,
 }: PageHeaderProps) {
   // Use tagline if provided, otherwise fall back to subtitle for backward compatibility

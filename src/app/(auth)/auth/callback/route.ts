@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
-import{ RoleDetectionService } from '@/lib/services/roleDetectionService'
+import { createClient } from '@/lib/supabase/server'
+import { RoleDetectionService } from '@/lib/services/roleDetectionService'
+import { logger } from '@/lib/logger'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
       const userEmail = data.user.email
       
       if (!userEmail) {
-        console.error('No email found for user')
+        logger.error('No email found for user')
         return NextResponse.redirect(`${origin}/login?error=no_email`)
       }
 
@@ -56,12 +57,12 @@ export async function GET(request: Request) {
         return response
 
       } catch (roleError) {
-        console.error('Error detecting user roles:', roleError)
+        logger.error('Error detecting user roles:', roleError)
         await supabase.auth.signOut()
         return NextResponse.redirect(`${origin}/login?error=role_detection_failed`)
       }
     } else if (error) {
-      console.error('Error exchanging code for session:', error)
+      logger.error('Error exchanging code for session:', error)
       return NextResponse.redirect(`${origin}/login?error=auth_failed`)
     }
   }

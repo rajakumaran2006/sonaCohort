@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { AttendanceRecord } from './attendanceService'
 
 export interface AdditionalClass {
@@ -44,7 +45,7 @@ export class AdditionalClassService {
         .single()
 
       if (tutorError || !peertutors) {
-        console.error('Error getting peer tutor info:', tutorError)
+        logger.error('Error getting peer tutor info:', tutorError)
         return []
       }
 
@@ -57,7 +58,7 @@ export class AdditionalClassService {
         .eq('section', peertutors.section)
 
       if (classesError) {
-        console.error('Error getting classes:', classesError)
+        logger.error('Error getting classes:', classesError)
         return []
       }
 
@@ -65,7 +66,7 @@ export class AdditionalClassService {
       const subjects = [...new Set(classes.map(cls => cls.subject_name))]
       return subjects
     } catch (error) {
-      console.error('Error in getAvailableSubjectsForpeertutors:', error)
+      logger.error('Error in getAvailableSubjectsForpeertutors:', error)
       return []
     }
   }
@@ -96,7 +97,7 @@ export class AdditionalClassService {
         .single()
 
       if (classError) {
-        console.error('Error creating additional class:', classError)
+        logger.error('Error creating additional class:', classError)
         return null
       }
 
@@ -111,26 +112,26 @@ export class AdditionalClassService {
           status: record.status
         }))
 
-        // console.log('Attendance data to insert:', attendanceData)
+        // logger.info('Attendance data to insert:', attendanceData)
 
         const { error: attendanceError } = await supabase
           .from('additional_class_attendance')
           .insert(attendanceData)
 
         if (attendanceError) {
-          console.error('Error creating attendance records for additional class:', attendanceError)
+          logger.error('Error creating attendance records for additional class:', attendanceError)
           // Note: We don't rollback the additional class creation here
           // In a production app, you might want to implement proper transaction handling
         } else {
-          // console.log('Successfully created attendance records for additional class:', additionalClass.id)
+          // logger.info('Successfully created attendance records for additional class:', additionalClass.id)
         }
       } else {
-        // console.log('No attendance records to create for additional class:', additionalClass.id)
+        // logger.info('No attendance records to create for additional class:', additionalClass.id)
       }
 
       return additionalClass
     } catch (error) {
-      console.error('Error in createAdditionalClass:', error)
+      logger.error('Error in createAdditionalClass:', error)
       return null
     }
   }
@@ -150,7 +151,7 @@ export class AdditionalClassService {
         .order('class_date', { ascending: false })
 
       if (classesError) {
-        console.error('Error getting additional classes:', classesError)
+        logger.error('Error getting additional classes:', classesError)
         return []
       }
 
@@ -167,7 +168,7 @@ export class AdditionalClassService {
 
       return classesWithAttendance
     } catch (error) {
-      console.error('Error in getAdditionalClassesBypeertutors:', error)
+      logger.error('Error in getAdditionalClassesBypeertutors:', error)
       return []
     }
   }
@@ -179,7 +180,7 @@ export class AdditionalClassService {
     try {
       const supabase = createClient()
       
-      // console.log('Fetching attendance for additional class:', additionalClassId)
+      // logger.info('Fetching attendance for additional class:', additionalClassId)
       
       const { data: attendanceRecords, error } = await supabase
         .from('additional_class_attendance')
@@ -194,11 +195,11 @@ export class AdditionalClassService {
         .eq('additional_class_id', additionalClassId)
 
       if (error) {
-        console.error('Error getting attendance for additional class:', error)
+        logger.error('Error getting attendance for additional class:', error)
         return []
       }
 
-      // console.log('Raw attendance records from DB:', attendanceRecords)
+      // logger.info('Raw attendance records from DB:', attendanceRecords)
 
       const mappedRecords = (attendanceRecords || [])
         .filter(record => record.student) // Filter out records where student join failed
@@ -214,10 +215,10 @@ export class AdditionalClassService {
           updated_at: record.updated_at
         }))
 
-      // console.log('Mapped attendance records:', mappedRecords)
+      // logger.info('Mapped attendance records:', mappedRecords)
       return mappedRecords
     } catch (error) {
-      console.error('Error in getAttendanceForAdditionalClass:', error)
+      logger.error('Error in getAttendanceForAdditionalClass:', error)
       return []
     }
   }
@@ -240,7 +241,7 @@ export class AdditionalClassService {
         .eq('additional_class_id', additionalClassId)
 
       if (deleteError) {
-        console.error('Error deleting existing attendance records:', deleteError)
+        logger.error('Error deleting existing attendance records:', deleteError)
         return false
       }
 
@@ -258,14 +259,14 @@ export class AdditionalClassService {
           .insert(attendanceData)
 
         if (insertError) {
-          console.error('Error inserting new attendance records:', insertError)
+          logger.error('Error inserting new attendance records:', insertError)
           return false
         }
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateAttendanceForAdditionalClass:', error)
+      logger.error('Error in updateAttendanceForAdditionalClass:', error)
       return false
     }
   }
@@ -284,7 +285,7 @@ export class AdditionalClassService {
         .eq('additional_class_id', additionalClassId)
 
       if (attendanceError) {
-        console.error('Error deleting attendance records:', attendanceError)
+        logger.error('Error deleting attendance records:', attendanceError)
         return false
       }
 
@@ -295,13 +296,13 @@ export class AdditionalClassService {
         .eq('id', additionalClassId)
 
       if (classError) {
-        console.error('Error deleting additional class:', classError)
+        logger.error('Error deleting additional class:', classError)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteAdditionalClass:', error)
+      logger.error('Error in deleteAdditionalClass:', error)
       return false
     }
   }
@@ -324,13 +325,13 @@ export class AdditionalClassService {
         .order('class_date', { ascending: false })
 
       if (error) {
-        console.error('Error getting all additional classes for department:', error)
+        logger.error('Error getting all additional classes for department:', error)
         return []
       }
 
       return data as AdditionalClass[] || []
     } catch (error) {
-      console.error('Error in getAllAdditionalClassesForDepartment:', error)
+      logger.error('Error in getAllAdditionalClassesForDepartment:', error)
       return []
     }
   }

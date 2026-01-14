@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export interface Class {
   id: string
@@ -48,17 +49,17 @@ export class ClassService {
       
       // Validate that section is not 'ALL' - classes should be section-specific
       if (normalizedSection.toUpperCase() === 'ALL') {
-        console.error('Cannot create class with section="ALL". Classes must be section-specific.')
+        logger.error('Cannot create class with section="ALL". Classes must be section-specific.')
         return false
       }
       
       // Validate that section is not empty
       if (!normalizedSection || normalizedSection.length === 0) {
-        console.error('Section cannot be empty when creating a class.')
+        logger.error('Section cannot be empty when creating a class.')
         return false
       }
       
-      console.log('Creating class with data:', classData, 'Normalized:', { dept: normalizedDept, year: normalizedYear, section: normalizedSection })
+      logger.info('Creating class with data:', classData, 'Normalized:', { dept: normalizedDept, year: normalizedYear, section: normalizedSection })
       
       // Validate and get the correct faculty_id (department UUID)
       let validFacultyId = classData.faculty_id
@@ -66,7 +67,7 @@ export class ClassService {
       
       // If faculty_id is not a valid UUID, or if we need to verify it exists, look it up
       if (!uuidRegex.test(classData.faculty_id)) {
-        console.log('faculty_id is not a valid UUID, looking up department by name...')
+        logger.info('faculty_id is not a valid UUID, looking up department by name...')
         const { data: deptData, error: deptError } = await supabase
           .from('departments')
           .select('id')
@@ -75,12 +76,12 @@ export class ClassService {
           .single()
         
         if (deptError || !deptData) {
-          console.error('Could not find department in database:', normalizedDept, deptError)
+          logger.error('Could not find department in database:', normalizedDept, deptError)
           return false
         }
         
         validFacultyId = deptData.id
-        console.log('Found department ID:', validFacultyId)
+        logger.info('Found department ID:', validFacultyId)
       } else {
         // Verify the UUID exists in departments table
         const { data: deptCheck, error: deptCheckError } = await supabase
@@ -91,7 +92,7 @@ export class ClassService {
           .single()
         
         if (deptCheckError || !deptCheck) {
-          console.warn('faculty_id UUID does not exist in departments table, looking up by name...')
+          logger.warn('faculty_id UUID does not exist in departments table, looking up by name...')
           const { data: deptData, error: deptError } = await supabase
             .from('departments')
             .select('id')
@@ -100,12 +101,12 @@ export class ClassService {
             .single()
           
           if (deptError || !deptData) {
-            console.error('Could not find department in database:', normalizedDept, deptError)
+            logger.error('Could not find department in database:', normalizedDept, deptError)
             return false
           }
           
           validFacultyId = deptData.id
-          console.log('Found department ID:', validFacultyId)
+          logger.info('Found department ID:', validFacultyId)
         } else {
           validFacultyId = classData.faculty_id
         }
@@ -122,12 +123,12 @@ export class ClassService {
         .limit(1)
 
       if (classError) {
-        console.error('Error checking existing class:', classError)
+        logger.error('Error checking existing class:', classError)
         return false
       }
 
       if (existingClass && existingClass.length > 0) {
-        console.log('Class already exists for this section; no action needed')
+        logger.info('Class already exists for this section; no action needed')
         return true
       }
 
@@ -144,14 +145,14 @@ export class ClassService {
         .select()
 
       if (insertErr) {
-        console.error('Failed to create class:', insertErr)
+        logger.error('Failed to create class:', insertErr)
         return false
       }
 
-      console.log('✓ Created section-specific class:', inserted?.[0]?.id)
+      logger.info('✓ Created section-specific class:', inserted?.[0]?.id)
       return true
     } catch (error) {
-      console.error('Error in createClass:', error)
+      logger.error('Error in createClass:', error)
       return false
     }
   }
@@ -170,13 +171,13 @@ export class ClassService {
         .order('created_at', { ascending: true })
 
       if (error) {
-        console.error('Error getting classes by faculty:', error)
+        logger.error('Error getting classes by faculty:', error)
         return []
       }
 
       return data as Class[] || []
     } catch (error) {
-      console.error('Error in getClassesByFaculty:', error)
+      logger.error('Error in getClassesByFaculty:', error)
       return []
     }
   }
@@ -203,13 +204,13 @@ export class ClassService {
         .order('created_at', { ascending: true })
 
       if (error) {
-        console.error('Error getting classes by year and section:', error)
+        logger.error('Error getting classes by year and section:', error)
         return []
       }
 
       return (data as Class[]) || []
     } catch (error) {
-      console.error('Error in getClassesByYearSection:', error)
+      logger.error('Error in getClassesByYearSection:', error)
       return []
     }
   }
@@ -227,13 +228,13 @@ export class ClassService {
         .order('created_at', { ascending: true })
 
       if (error) {
-        console.error('Error getting all classes:', error)
+        logger.error('Error getting all classes:', error)
         return []
       }
 
       return data as Class[] || []
     } catch (error) {
-      console.error('Error in getAllClasses:', error)
+      logger.error('Error in getAllClasses:', error)
       return []
     }
   }
@@ -251,7 +252,7 @@ export class ClassService {
         .eq('class_id', classId)
 
       if (scheduledFetchError) {
-        console.error('Error fetching scheduled classes for delete:', scheduledFetchError)
+        logger.error('Error fetching scheduled classes for delete:', scheduledFetchError)
         return false
       }
 
@@ -264,7 +265,7 @@ export class ClassService {
         .eq('class_id', classId)
 
       if (attendanceByClassError) {
-        console.error('Error deleting attendance by class_id:', attendanceByClassError)
+        logger.error('Error deleting attendance by class_id:', attendanceByClassError)
         return false
       }
 
@@ -275,7 +276,7 @@ export class ClassService {
         .eq('class_id', classId)
 
       if (completionError) {
-        console.error('Error deleting class completion records:', completionError)
+        logger.error('Error deleting class completion records:', completionError)
         return false
       }
 
@@ -287,7 +288,7 @@ export class ClassService {
           .in('scheduled_class_id', scheduledIds)
 
         if (attendanceByScheduledError) {
-          console.error('Error deleting attendance by scheduled_class_id:', attendanceByScheduledError)
+          logger.error('Error deleting attendance by scheduled_class_id:', attendanceByScheduledError)
           return false
         }
       }
@@ -299,7 +300,7 @@ export class ClassService {
         .eq('class_id', classId)
 
       if (topicsError) {
-        console.warn('Warning: could not delete class topics. Proceeding with class delete.', {
+        logger.warn('Warning: could not delete class topics. Proceeding with class delete.', {
           message: topicsError.message,
           details: topicsError.details,
           hint: topicsError.hint,
@@ -314,7 +315,7 @@ export class ClassService {
         .eq('class_id', classId)
 
       if (scheduledDeleteError) {
-        console.error('Error deleting scheduled classes:', scheduledDeleteError)
+        logger.error('Error deleting scheduled classes:', scheduledDeleteError)
         return false
       }
 
@@ -326,7 +327,7 @@ export class ClassService {
         .eq('class_id', classId)
 
       if (examSubjectsError) {
-        console.error('Error fetching exam subjects for delete:', examSubjectsError)
+        logger.error('Error fetching exam subjects for delete:', examSubjectsError)
         return false
       }
 
@@ -341,7 +342,7 @@ export class ClassService {
           .in('exam_subject_id', examSubjectIds)
 
         if (examMarksError) {
-          console.error('Error deleting exam marks:', examMarksError)
+          logger.error('Error deleting exam marks:', examMarksError)
           return false
         }
 
@@ -353,7 +354,7 @@ export class ClassService {
           .eq('class_id', classId)
 
         if (examSubjectsDeleteError) {
-          console.error('Error deleting exam subjects:', examSubjectsDeleteError)
+          logger.error('Error deleting exam subjects:', examSubjectsDeleteError)
           return false
         }
       }
@@ -365,13 +366,13 @@ export class ClassService {
         .eq('id', classId)
 
       if (classDeleteError) {
-        console.error('Error deleting class:', classDeleteError)
+        logger.error('Error deleting class:', classDeleteError)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteClass:', error)
+      logger.error('Error in deleteClass:', error)
       return false
     }
   }
@@ -390,7 +391,7 @@ export class ClassService {
         .eq('peer_tutor', false)
 
       if (error) {
-        console.error('Error getting year-section combinations:', error)
+        logger.error('Error getting year-section combinations:', error)
         return []
       }
 
@@ -404,7 +405,7 @@ export class ClassService {
 
       return uniqueCombinations
     } catch (error) {
-      console.error('Error in getYearSectionCombinations:', error)
+      logger.error('Error in getYearSectionCombinations:', error)
       return []
     }
   }
@@ -444,7 +445,7 @@ export class ClassService {
       const normalizedYear = this.normalizeYear(year)
       const normalizedDept = this.normalizeDepartment(dept)
       
-      console.log('getSectionsForYear called with:', { dept, year, normalizedDept, normalizedYear })
+      logger.info('getSectionsForYear called with:', { dept, year, normalizedDept, normalizedYear })
       
       // Collect sections from multiple sources to ensure we get all available sections
       const allSections = new Set<string>()
@@ -457,7 +458,7 @@ export class ClassService {
         .eq('year', normalizedYear)
 
       if (peerStudentsError) {
-        console.error('Error getting sections from peer_students:', peerStudentsError)
+        logger.error('Error getting sections from peer_students:', peerStudentsError)
       } else if (peerStudentsData) {
         peerStudentsData.forEach(item => {
           if (item.section) allSections.add(item.section)
@@ -472,7 +473,7 @@ export class ClassService {
         .eq('year', normalizedYear)
 
       if (classesError) {
-        console.error('Error getting sections from classes:', classesError)
+        logger.error('Error getting sections from classes:', classesError)
       } else if (classesData) {
         classesData.forEach(item => {
           if (item.section) allSections.add(item.section)
@@ -481,7 +482,7 @@ export class ClassService {
       
       let uniqueSections = [...allSections].filter(Boolean).sort()
       
-      console.log('Found sections from all sources:', uniqueSections, 'for dept:', normalizedDept, 'year:', normalizedYear)
+      logger.info('Found sections from all sources:', uniqueSections, 'for dept:', normalizedDept, 'year:', normalizedYear)
       
       // If no sections found with case-insensitive, try exact match
       if (uniqueSections.length === 0) {
@@ -510,12 +511,12 @@ export class ClassService {
         }
         
         uniqueSections = [...allSections].filter(Boolean).sort()
-        console.log('Found sections with exact match:', uniqueSections)
+        logger.info('Found sections with exact match:', uniqueSections)
       }
       
       // If still no sections found, try year-only query
       if (uniqueSections.length === 0) {
-        console.log('No sections found with department filter, trying year-only query...')
+        logger.info('No sections found with department filter, trying year-only query...')
         const { data: dataYearOnly, error: errorYearOnly } = await supabase
           .from('peer_students')
           .select('section')
@@ -526,13 +527,13 @@ export class ClassService {
             if (item.section) allSections.add(item.section)
           })
           uniqueSections = [...allSections].filter(Boolean).sort()
-          console.log('Found sections for year (all departments):', uniqueSections)
+          logger.info('Found sections for year (all departments):', uniqueSections)
         }
       }
 
       return uniqueSections
     } catch (error) {
-      console.error('Error in getSectionsForYear:', error)
+      logger.error('Error in getSectionsForYear:', error)
       return []
     }
   }
@@ -559,7 +560,7 @@ export class ClassService {
         .limit(1)
 
       if (error) {
-        console.error('Error checking if class exists:', error)
+        logger.error('Error checking if class exists:', error)
         // Try exact match if case-insensitive fails
         const { data: dataExact, error: errorExact } = await supabase
           .from('classes')
@@ -578,7 +579,7 @@ export class ClassService {
 
       return (data?.length || 0) > 0
     } catch (error) {
-      console.error('Error in classExists:', error)
+      logger.error('Error in classExists:', error)
       return false
     }
   }
@@ -623,8 +624,8 @@ export class ClassService {
           .single()
 
         if (insertError) {
-          console.error('Error creating class completion:', insertError)
-          console.error('Insert error details:', {
+          logger.error('Error creating class completion:', insertError)
+          logger.error('Insert error details:', {
             message: insertError.message,
             details: insertError.details,
             hint: insertError.hint,
@@ -644,8 +645,8 @@ export class ClassService {
         }
         data = newData
       } else if (error) {
-        console.error('Error getting class completion:', error)
-        console.error('Get error details:', {
+        logger.error('Error getting class completion:', error)
+        logger.error('Get error details:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -666,7 +667,7 @@ export class ClassService {
 
       return data as ClassCompletion
     } catch (error) {
-      console.error('Error in getClassCompletion:', error)
+      logger.error('Error in getClassCompletion:', error)
       // Return a default completion object instead of null
       return {
         id: '',
@@ -693,13 +694,13 @@ export class ClassService {
     try {
       const supabase = createClient()
       
-      console.log('Updating class completion for class:', classId, 'peer tutor:', peertutorsId)
-      console.log('Attendance completed:', attendanceCompleted, 'Topics completed:', topicsCompleted)
+      logger.info('Updating class completion for class:', classId, 'peer tutor:', peertutorsId)
+      logger.info('Attendance completed:', attendanceCompleted, 'Topics completed:', topicsCompleted)
       
       const completionStatus = attendanceCompleted && topicsCompleted ? 'completed' : 'pending'
       const completedAt = completionStatus === 'completed' ? new Date().toISOString() : null
 
-      console.log('Completion status:', completionStatus, 'Completed at:', completedAt)
+      logger.info('Completion status:', completionStatus, 'Completed at:', completedAt)
 
       const { data, error } = await supabase
         .from('class_completion')
@@ -717,8 +718,8 @@ export class ClassService {
         .select()
 
       if (error) {
-        console.error('Error updating class completion:', error)
-        console.error('Completion error details:', {
+        logger.error('Error updating class completion:', error)
+        logger.error('Completion error details:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -727,10 +728,10 @@ export class ClassService {
         return false
       }
 
-      console.log('Successfully updated class completion:', data)
+      logger.info('Successfully updated class completion:', data)
       return true
     } catch (error) {
-      console.error('Error in updateClassCompletion:', error)
+      logger.error('Error in updateClassCompletion:', error)
       return false
     }
   }
@@ -759,7 +760,7 @@ export class ClassService {
         .order('created_at', { ascending: true })
 
       if (error) {
-        console.error('Error getting classes with completion:', error)
+        logger.error('Error getting classes with completion:', error)
         return []
       }
 
@@ -773,7 +774,7 @@ export class ClassService {
         }
       }))
     } catch (error) {
-      console.error('Error in getClassesWithCompletion:', error)
+      logger.error('Error in getClassesWithCompletion:', error)
       return []
     }
   }
@@ -798,7 +799,7 @@ export class ClassService {
         .eq('section', normalizedSection)
 
       if (error) {
-        console.error('Error getting unique subjects:', error)
+        logger.error('Error getting unique subjects:', error)
         return []
       }
 
@@ -809,7 +810,7 @@ export class ClassService {
       
       return uniqueSubjects
     } catch (error) {
-      console.error('Error in getUniqueSubjects:', error)
+      logger.error('Error in getUniqueSubjects:', error)
       return []
     }
   }
@@ -826,7 +827,7 @@ export class ClassService {
         .select('subject_name')
 
       if (error) {
-        console.error('Error getting all unique subjects:', error)
+        logger.error('Error getting all unique subjects:', error)
         return []
       }
 
@@ -837,7 +838,7 @@ export class ClassService {
       
       return uniqueSubjects
     } catch (error) {
-      console.error('Error in getAllUniqueSubjects:', error)
+      logger.error('Error in getAllUniqueSubjects:', error)
       return []
     }
   }
@@ -860,7 +861,7 @@ export class ClassService {
           .single()
         
         if (scheduledError) {
-          console.error('Error getting scheduled class:', scheduledError)
+          logger.error('Error getting scheduled class:', scheduledError)
           return false
         }
         
@@ -877,8 +878,8 @@ export class ClassService {
         }])
 
       if (error) {
-        console.error('Error adding class topic:', error)
-        console.error('Error details:', {
+        logger.error('Error adding class topic:', error)
+        logger.error('Error details:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -889,7 +890,7 @@ export class ClassService {
 
       return true
     } catch (error) {
-      console.error('Error in addClassTopic:', error)
+      logger.error('Error in addClassTopic:', error)
       return false
     }
   }
@@ -950,7 +951,7 @@ export class ClassService {
             failedCount++
           }
         } catch (err) {
-          console.error(`Error creating class for section ${section}:`, err)
+          logger.error(`Error creating class for section ${section}:`, err)
           failedCount++
         }
       }))
@@ -966,7 +967,7 @@ export class ClassService {
         message
       }
     } catch (error) {
-      console.error('Error in createClassForAllSections:', error)
+      logger.error('Error in createClassForAllSections:', error)
       return { 
         success: false, 
         message: 'An unexpected error occurred while creating classes for all sections.' 
@@ -1005,7 +1006,7 @@ export class ClassService {
       // Fetch actual subjects and scheduled classes for each section
       const sectionData = await Promise.all(sections.map(async (section) => {
         // Get all subjects for this section
-        const { data: classesData, error: classesError } = await supabase
+        const { data: classesData, error: _classesError } = await supabase
           .from('classes')
           .select('subject_name')
           .ilike('dept', normalizedDept)
@@ -1015,7 +1016,7 @@ export class ClassService {
         const subjects = new Set(classesData?.map(c => c.subject_name.toLowerCase().trim()) || [])
         
         // Get all scheduled dates (unique by subject name and date)
-        const { data: scheduledData, error: scheduledError } = await supabase
+        const { data: scheduledData, error: _scheduledError } = await supabase
           .from('scheduled_classes')
           .select(`
             scheduled_date,
@@ -1069,7 +1070,7 @@ export class ClassService {
       return { isSynced, details }
 
     } catch (error) {
-      console.error('Error checking sync status:', error)
+      logger.error('Error checking sync status:', error)
       return { isSynced: false, details: [] }
     }
   }

@@ -54,6 +54,8 @@ export const AVAILABLE_EXPORTS: ExportOption[] = [
   }
 ]
 
+import { logger } from '@/lib/logger'
+
 export class EmailService {
   private static SUPER_ADMIN_EMAIL = 'admin@peerTutor.edu' // Default, can be configured
 
@@ -182,7 +184,7 @@ ${department}
         adminEmail: data.adminEmail
       }
     } catch (error) {
-      console.error('Error sending email:', error)
+      logger.error('Error sending email:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'

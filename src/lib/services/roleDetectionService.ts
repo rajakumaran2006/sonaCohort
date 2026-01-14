@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
 import { AdminService } from './adminService'
 import { FacultyService } from './facultyService'
 import { peertutorservice} from './peerTutorService'
@@ -108,7 +109,7 @@ export class RoleDetectionService {
         dashboardPaths: dashboardPaths as Record<UserRole, string> 
       }
     } catch (error) {
-      console.error('Error detecting user roles:', error)
+      logger.error('Error detecting user roles:', error)
       return { roles, dashboardPaths: dashboardPaths as Record<UserRole, string> }
     }
   }

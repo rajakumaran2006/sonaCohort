@@ -3,17 +3,18 @@
 import { useState, useEffect } from 'react'
 import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
 import Sidebar from '@/components/layout/Sidebar'
-import CreateDepartmentModal from '@/components/forms/CreateDepartmentModal'
-import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
+import CreateDepartmentModal from '@/components/forms/modals/CreateDepartmentModal'
+import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { DepartmentService } from '@/lib/services/departmentService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 import { Department } from '@/lib/types'
-import { Card, Button, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
+import { Button, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import { AdminDashboardSkeleton } from '@/components/skeletons/AdminDashboardSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Users, Building2, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 export default function AdminDashboardPage() {
   return (
@@ -79,7 +80,7 @@ function AdminDashboardContent() {
       
       setDepartments(enrichedDepartments)
     } catch (error) {
-      console.error('Error loading departments:', error)
+      logger.error('Error loading departments:', error)
       setDepartments([]) 
     } finally {
       setIsLoading(false)
@@ -107,7 +108,7 @@ function AdminDashboardContent() {
         loadDepartments()
       }
     } catch (error) {
-      console.error('Error deleting department:', error)
+      logger.error('Error deleting department:', error)
     } finally {
       setIsDeleting(false)
     }

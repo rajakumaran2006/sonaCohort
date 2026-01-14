@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 type UserMode = 'admin' | 'faculty' | 'peer' | 'student'
 
@@ -50,18 +51,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Get initial session
     const getInitialSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
+        const { data: { session } } = await supabase.auth.getSession()
         
         if (session?.user) {
           setSession(session)
           setUser(session.user)
         } else {
-          console.log('No initial session found')
+          logger.info('No initial session found')
           setSession(null)
           setUser(null)
         }
       } catch (error) {
-        console.error('Error getting initial session:', error)
+        logger.error('Error getting initial session:', error)
         setSession(null)
         setUser(null)
       } finally {
@@ -75,18 +76,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('Auth state change:', _event, session)
+      // console.log('Auth state change:', _event, session)
       
       if (session?.user) {
-        console.log('User authenticated:', session.user)
+        // console.log('User authenticated:', session.user)
         setUser(session.user)
         setSession(session)
-        console.log('User state updated, setting loading to false')
+        // console.log('User state updated, setting loading to false')
       } else {
-        console.log('User signed out')
+        // console.log('User signed out')
         setUser(null)
         setSession(null)
-        console.log('User state cleared, setting loading to false')
+        // console.log('User state cleared, setting loading to false')
       }
       setLoading(false)
     })
@@ -112,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
       if (error) throw error
     } catch (error) {
-      console.error('Error signing in with Microsoft:', error)
+      logger.error('Error signing in with Microsoft:', error)
       throw error
     }
   }
@@ -135,20 +136,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Clear user state
       setUser(null)
       setSession(null)
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle case where it might throw directly
+      const err = error as { name?: string; message?: string } | null
       const isSessionMissing = 
-        error?.name === 'AuthSessionMissingError' || 
-        error?.message === 'Auth session missing!'
+        err?.name === 'AuthSessionMissingError' || 
+        err?.message === 'Auth session missing!'
 
       if (isSessionMissing) {
-        console.log('Auth session missing during sign out, clearing local state')
+        logger.info('Auth session missing during sign out, clearing local state')
         setUser(null)
         setSession(null)
         return
       }
 
-      console.error('Error signing out:', error)
+      logger.error('Error signing out:', error)
       throw error
     }
   }

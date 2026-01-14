@@ -28,7 +28,9 @@ import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/compon
 import { Input } from '@/components/ui'
 import { ArrowLeft, Edit, Save, Plus, Filter, RotateCw } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
+import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
+import { logger } from '@/lib/logger'
 
 export default function peertutorsExamDetailsPage() {
   return (
@@ -254,7 +256,7 @@ function PeerTutorsExamDetailsContent() {
         alert('Failed to save marks. Please try again.')
       }
     } catch (error) {
-      console.error('Error saving marks:', error)
+      logger.error('Error saving marks:', error)
       alert('An error occurred while saving marks')
     } finally {
       setIsSaving(false)
@@ -385,7 +387,7 @@ function PeerTutorsExamDetailsContent() {
       // Write file
       XLSX.writeFile(workbook, filename)
     } catch (error) {
-      console.error('Error exporting to Excel:', error)
+      logger.error('Error exporting to Excel:', error)
       alert('Error exporting to Excel. Please try again.')
     }
   }

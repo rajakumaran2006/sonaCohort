@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx'
 import { peertutorsReportData } from '@/lib/services/reportService'
 import { ReportService } from '@/lib/services/reportService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
-import ExcelPreviewModal from './ExcelPreviewModal'
+import ExcelPreviewModal from '../modals/ExcelPreviewModal'
 import { toast } from 'sonner'
 
 interface ExcelExportModalProps {

@@ -11,6 +11,11 @@ interface NotificationDropdownProps {
 
 export default function NotificationDropdown({ peerTutorId }: NotificationDropdownProps) {
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Fetch notifications
   const fetchNotifications = async () => {

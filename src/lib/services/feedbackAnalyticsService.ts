@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { FeedbackForm, FeedbackResponseWithDetails, FeedbackAnswerWithDetails } from './feedbackService'
 import { FacultyService } from './facultyService'
 
@@ -88,7 +89,7 @@ export class FeedbackAnalyticsService {
           return await this.processVersionedAnalytics(formData, formId, filters)
         }
       } catch {
-        console.log('Versioning tables not available, falling back to legacy schema')
+        logger.info('Versioning tables not available, falling back to legacy schema')
       }
 
       // Fallback to legacy schema
@@ -104,14 +105,14 @@ export class FeedbackAnalyticsService {
         .single()
 
       if (formError || !formData) {
-        console.error('Error getting form data:', formError)
+        logger.error('Error getting form data:', formError)
         return null
       }
 
       return await this.processLegacyAnalytics(formData, formId, filters)
 
     } catch (error) {
-      console.error('Error in getFormAnalytics:', error)
+      logger.error('Error in getFormAnalytics:', error)
       return null
     }
   }
@@ -150,7 +151,7 @@ export class FeedbackAnalyticsService {
       .order('submitted_at', { ascending: false })
 
     if (responsesError) {
-      console.error('Error getting responses:', responsesError)
+      logger.error('Error getting responses:', responsesError)
     }
 
     return this.calculateAnalytics(formData, responsesData || [], formId, filters)
@@ -190,7 +191,7 @@ export class FeedbackAnalyticsService {
       .order('submitted_at', { ascending: false })
 
     if (responsesError) {
-      console.error('Error getting responses:', responsesError)
+      logger.error('Error getting responses:', responsesError)
     }
 
     return this.calculateAnalytics(formData, responsesData || [], formId, filters)
@@ -230,7 +231,7 @@ export class FeedbackAnalyticsService {
     const departmentName = facultyDept?.name
 
     if (!departmentName) {
-        console.warn('Could not determine department for analytics student count')
+        logger.warn('Could not determine department for analytics student count')
         // Fallback or return early? For now let's set totalStudents to 0 to be strict
     }
 
@@ -246,7 +247,7 @@ export class FeedbackAnalyticsService {
       const { count: totalStudents, error: studentCountError } = await studentQuery
 
       if (studentCountError) {
-        console.error('Error getting student count:', studentCountError)
+        logger.error('Error getting student count:', studentCountError)
       } else {
         totalStudentsCount = totalStudents || 0
       }
@@ -548,7 +549,7 @@ export class FeedbackAnalyticsService {
         .order('submitted_at', { ascending: true })
 
       if (error) {
-        console.error('Error getting response trends:', error)
+        logger.error('Error getting response trends:', error)
         return []
       }
 
@@ -564,7 +565,7 @@ export class FeedbackAnalyticsService {
         responses
       }))
     } catch (error) {
-      console.error('Error in getResponseTrends:', error)
+      logger.error('Error in getResponseTrends:', error)
       return []
     }
   }
@@ -588,7 +589,7 @@ export class FeedbackAnalyticsService {
         .order('submitted_at', { ascending: true })
 
       if (error) {
-        console.error('Error getting response trends (range):', error)
+        logger.error('Error getting response trends (range):', error)
         return []
       }
 
@@ -600,7 +601,7 @@ export class FeedbackAnalyticsService {
 
       return Object.entries(trends).map(([date, responses]) => ({ date, responses }))
     } catch (error) {
-      console.error('Error in getResponseTrendsRange:', error)
+      logger.error('Error in getResponseTrendsRange:', error)
       return []
     }
   }
@@ -623,7 +624,7 @@ export class FeedbackAnalyticsService {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       
       if (authError || !user) {
-        console.warn('Authentication required/failed to get pending students', authError)
+        logger.warn('Authentication required/failed to get pending students', authError)
         return []
       }
       
@@ -638,7 +639,7 @@ export class FeedbackAnalyticsService {
       }
 
       if (!departmentName) {
-        console.warn('Could not determine department for pending students. Enforcing strict filtering.')
+        logger.warn('Could not determine department for pending students. Enforcing strict filtering.')
         return []
       }
 
@@ -649,7 +650,7 @@ export class FeedbackAnalyticsService {
         .eq('feedback_form_id', formId)
 
       if (responsesError) {
-        console.error('Error getting submitted responses:', responsesError)
+        logger.error('Error getting submitted responses:', responsesError)
         return []
       }
 
@@ -665,7 +666,7 @@ export class FeedbackAnalyticsService {
 
       if (studentsError) {
         // Log the error properly
-        console.error('Error getting all students:', JSON.stringify(studentsError))
+        logger.error('Error getting all students:', JSON.stringify(studentsError))
         return []
       }
 
@@ -676,7 +677,7 @@ export class FeedbackAnalyticsService {
 
       return pendingStudents
     } catch (error) {
-      console.error('Error in getPendingStudents:', error)
+      logger.error('Error in getPendingStudents:', error)
       return []
     }
   }

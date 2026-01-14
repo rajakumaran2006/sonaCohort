@@ -1,5 +1,6 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { Student } from '../services/studentService'
+import { logger } from '@/lib/logger'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export class StudentAuthService {
@@ -23,13 +24,13 @@ export class StudentAuthService {
         if (error.code === 'PGRST116') { // No rows returned
           return null
         }
-        console.error('Error verifying student:', error)
+        logger.error('Error verifying student:', error)
         return null
       }
 
       return data as Student
     } catch (error) {
-      console.error('Error in verifyStudent:', error)
+      logger.error('Error in verifyStudent:', error)
       return null
     }
   }
@@ -49,7 +50,7 @@ export class StudentAuthService {
       
       throw new Error('Student not found')
     } catch (error) {
-      console.error('Error getting student dashboard path:', error)
+      logger.error('Error getting student dashboard path:', error)
       throw error
     }
   }

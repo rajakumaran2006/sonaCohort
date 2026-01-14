@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
 import { peertutorservice } from './peerTutorService'
 
@@ -64,13 +65,13 @@ export class StudentService {
         .single()
 
       if (error) {
-        console.error('Error creating student from Microsoft user:', error)
+        logger.error('Error creating student from Microsoft user:', error)
         return null
       }
 
       return data as Student
     } catch (error) {
-      console.error('Error in createFromMicrosoftUser:', error)
+      logger.error('Error in createFromMicrosoftUser:', error)
       return null
     }
   }
@@ -89,13 +90,13 @@ export class StudentService {
         .order('name')
 
       if (error) {
-        console.error('Error getting all students:', error)
+        logger.error('Error getting all students:', error)
         return []
       }
 
       return data as Student[] || []
     } catch (error) {
-      console.error('Error in getAllStudents:', error)
+      logger.error('Error in getAllStudents:', error)
       return []
     }
   }
@@ -115,13 +116,13 @@ export class StudentService {
         .order('year, section, name')
 
       if (error) {
-        console.error('Error getting students by department:', error)
+        logger.error('Error getting students by department:', error)
         return []
       }
 
       return data as Student[] || []
     } catch (error) {
-      console.error('Error in getStudentsByDepartment:', error)
+      logger.error('Error in getStudentsByDepartment:', error)
       return []
     }
   }
@@ -142,13 +143,13 @@ export class StudentService {
         .order('name')
 
       if (error) {
-        console.error('Error getting students by section:', error)
+        logger.error('Error getting students by section:', error)
         return []
       }
 
       return data as Student[] || []
     } catch (error) {
-      console.error('Error in getStudentsBySection:', error)
+      logger.error('Error in getStudentsBySection:', error)
       return []
     }
   }
@@ -167,13 +168,13 @@ export class StudentService {
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error checking if student exists:', error)
+        logger.error('Error checking if student exists:', error)
         return false
       }
 
       return !!data
     } catch (error) {
-      console.error('Error in isStudentExists:', error)
+      logger.error('Error in isStudentExists:', error)
       return false
     }
   }
@@ -193,13 +194,13 @@ export class StudentService {
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error checking if email is student:', error)
+        logger.error('Error checking if email is student:', error)
         return false
       }
 
       return !!data
     } catch (error) {
-      console.error('Error in isStudent:', error)
+      logger.error('Error in isStudent:', error)
       return false
     }
   }
@@ -220,14 +221,14 @@ export class StudentService {
 
       if (error) {
         if (error.code !== 'PGRST116') {
-          console.error('Error getting student by email:', error)
+          logger.error('Error getting student by email:', error)
         }
         return null
       }
 
       return data as Student
     } catch (error) {
-      console.error('Error in getStudentByEmail:', error)
+      logger.error('Error in getStudentByEmail:', error)
       return null
     }
   }
@@ -244,13 +245,13 @@ export class StudentService {
         .insert([student])
 
       if (error) {
-        console.error('Error adding student:', error)
+        logger.error('Error adding student:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in addStudent:', error)
+      logger.error('Error in addStudent:', error)
       return false
     }
   }
@@ -265,7 +266,7 @@ export class StudentService {
     try {
       const supabase = createClient()
       
-      console.log(`Starting student removal for: ${id}`)
+      logger.info(`Starting student removal for: ${id}`)
       
       // 1. Delete authentication/attendance records linked to this student
       // Note: We need to check if there are any other tables linking to students
@@ -279,7 +280,7 @@ export class StudentService {
         .eq('student_id', id)
 
       if (attendanceError) {
-        console.warn('Error deleting student attendance (or records not found):', attendanceError)
+        logger.warn('Error deleting student attendance (or records not found):', attendanceError)
         // Proceeding anyway as it might be a schema mismatch or no records
       }
 
@@ -290,7 +291,7 @@ export class StudentService {
         .eq('student_id', id)
 
       if (additionalAttendanceError) {
-         console.warn('Error deleting additional class attendance:', additionalAttendanceError)
+         logger.warn('Error deleting additional class attendance:', additionalAttendanceError)
       }
 
       // 2. Delete the student record
@@ -300,13 +301,13 @@ export class StudentService {
         .eq('id', id)
 
       if (error) {
-        console.error('Error removing student:', error)
+        logger.error('Error removing student:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in removeStudent:', error)
+      logger.error('Error in removeStudent:', error)
       return false
     }
   }
@@ -337,7 +338,7 @@ export class StudentService {
 
       return availableStudents
     } catch (error) {
-      console.error('Error searching available students:', error)
+      logger.error('Error searching available students:', error)
       return []
     }
   }
@@ -369,13 +370,13 @@ export class StudentService {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error getting students with peer tutors:', error)
+        logger.error('Error getting students with peer tutors:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error in getAllStudentsWithpeerTutor:', error)
+      logger.error('Error in getAllStudentsWithpeerTutor:', error)
       return []
     }
   }
@@ -395,13 +396,13 @@ export class StudentService {
         .order('name')
 
       if (error) {
-        console.error('Error getting students by peer tutor:', error)
+        logger.error('Error getting students by peer tutor:', error)
         return []
       }
 
       return data as Student[] || []
     } catch (error) {
-      console.error('Error in getStudentsBypeertutors:', error)
+      logger.error('Error in getStudentsBypeertutors:', error)
       return []
     }
   }
@@ -417,13 +418,13 @@ export class StudentService {
         .in('id', ids)
 
       if (error) {
-        console.error('Error transferring students:', error)
+        logger.error('Error transferring students:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in transferStudents:', error)
+      logger.error('Error in transferStudents:', error)
       return false
     }
   }
@@ -451,13 +452,13 @@ export class StudentService {
         .order('name')
 
       if (error) {
-        console.error('Error getting students with peer tutors by department:', error)
+        logger.error('Error getting students with peer tutors by department:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error in getStudentsWithpeerTutorByDepartment:', error)
+      logger.error('Error in getStudentsWithpeerTutorByDepartment:', error)
       return []
     }
   }

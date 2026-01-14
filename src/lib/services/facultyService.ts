@@ -1,4 +1,5 @@
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export interface FacultyDepartment {
@@ -20,7 +21,7 @@ export class FacultyService {
   static async verifyFacultyAccess(email: string, supabaseClient?: SupabaseClient): Promise<FacultyDepartment | null> {
     try {
       if (!email || email.trim() === '') {
-        console.log('No email provided for faculty verification')
+        logger.info('No email provided for faculty verification')
         return null
       }
 
@@ -35,14 +36,14 @@ export class FacultyService {
           .limit(1)
 
         if (error) {
-          console.log('Departments table not accessible:', error.message)
-          console.log('Full error object:', error)
+          logger.info('Departments table not accessible:', error.message)
+          logger.info('Full error object:', error)
           return null
         }
         
-        console.log('Departments table is accessible, proceeding with faculty verification')
+        logger.info('Departments table is accessible, proceeding with faculty verification')
       } catch (tableError) {
-        console.log('Departments table check failed:', tableError)
+        logger.info('Departments table check failed:', tableError)
         return null
       }
       
@@ -54,9 +55,9 @@ export class FacultyService {
         .maybeSingle() // Use maybeSingle to avoid errors when no record found
 
       if (error) {
-        console.error('Error verifying faculty access:', error)
+        logger.error('Error verifying faculty access:', error)
         // Log the error details for debugging
-        console.error('Error details:', {
+        logger.error('Error details:', {
           message: error.message,
           code: error.code,
           details: error.details,
@@ -66,11 +67,11 @@ export class FacultyService {
       }
 
       if (data) {
-        console.log('Faculty access verified for department:', data.name, 'for email:', normalizedEmail)
+        logger.info('Faculty access verified for department:', data.name, 'for email:', normalizedEmail)
         return data as FacultyDepartment
       }
 
-      console.log('No department found for email (normalized):', normalizedEmail)
+      logger.info('No department found for email (normalized):', normalizedEmail)
 
       // Fallback: fetch potential matches and compare after trimming/lowercasing
       const { data: candidates, error: fallbackError } = await supabase
@@ -79,7 +80,7 @@ export class FacultyService {
         .ilike('faculty_email', `%${normalizedEmail}%`)
 
       if (fallbackError) {
-        console.log('Fallback email search failed:', fallbackError)
+        logger.info('Fallback email search failed:', fallbackError)
         return null
       }
 
@@ -91,16 +92,16 @@ export class FacultyService {
         })
 
         if (match) {
-          console.log('Faculty access verified via fallback for department:', match.name, 'stored email:', match.faculty_email)
+          logger.info('Faculty access verified via fallback for department:', match.name, 'stored email:', match.faculty_email)
           return match as unknown as FacultyDepartment
         }
 
-        console.log('Fallback search found candidates but none matched after normalization:', candidates.map(c => c.faculty_email))
+        logger.info('Fallback search found candidates but none matched after normalization:', candidates.map(c => c.faculty_email))
       }
 
       return null
     } catch (error) {
-      console.error('Error in verifyFacultyAccess:', error)
+      logger.error('Error in verifyFacultyAccess:', error)
       return null
     }
   }
@@ -121,13 +122,13 @@ export class FacultyService {
         .single()
 
       if (error) {
-        console.error('Error getting faculty department:', error)
+        logger.error('Error getting faculty department:', error)
         return null
       }
 
       return data as FacultyDepartment
     } catch (error) {
-      console.error('Error in getFacultyDepartment:', error)
+      logger.error('Error in getFacultyDepartment:', error)
       return null
     }
   }
@@ -146,13 +147,13 @@ export class FacultyService {
         .order('name')
 
       if (error) {
-        console.error('Error getting all departments:', error)
+        logger.error('Error getting all departments:', error)
         return []
       }
 
       return data as FacultyDepartment[] || []
     } catch (error) {
-      console.error('Error in getAllDepartments:', error)
+      logger.error('Error in getAllDepartments:', error)
       return []
     }
   }
@@ -167,7 +168,7 @@ export class FacultyService {
       const department = await this.verifyFacultyAccess(email)
       return department !== null
     } catch (error) {
-      console.error('Error checking faculty access:', error)
+      logger.error('Error checking faculty access:', error)
       return false
     }
   }

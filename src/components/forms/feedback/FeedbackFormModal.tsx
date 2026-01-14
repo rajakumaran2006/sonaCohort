@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
 import { FormEditStrategy } from '@/lib/services/feedbackVersioningService'
 import StarRating from '@/components/ui/StarRating'
@@ -12,11 +12,8 @@ import {
   Check, 
   Loader2, 
   MessageSquare, 
-  Star,
-  Info,
   Settings,
-  AlertTriangle,
-  Zap
+  AlertTriangle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

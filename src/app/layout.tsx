@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Roboto_Condensed } from "next/font/google";
 import "./globals.css";
+import "@/lib/suppress-console"; // Suppress console logs in production
 import { AuthProvider } from "@/lib/auth/AuthContext";
 import QueryProvider from "@/lib/providers/QueryProvider";
 

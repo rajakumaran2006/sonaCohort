@@ -13,17 +13,17 @@ import { peertutorservice } from '@/lib/services/peerTutorService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { AssignmentService } from '@/lib/services/assignmentService'
-import { LoadingOverlay } from '@/components/ui'
 import ExamPageSkeleton from '@/components/skeletons/ExamPageSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
-import CreateExamModal from '@/components/forms/CreateExamModal'
-import DeleteConfirmationModal from '@/components/forms/DeleteConfirmationModal'
-import { FileText, Plus, Trash2, Eye } from 'lucide-react'
+import CreateExamModal from '@/components/forms/modals/CreateExamModal'
+import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
+import { FileText, Plus } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
 import { calculatepeertutorsAscendScore } from '@/lib/utils/ascendScore'
+import { logger } from '@/lib/logger'
 
 export default function FacultyExamsPage() {
   return (
@@ -162,7 +162,7 @@ function FacultyExamsContent() {
                 pending++
               }
             } catch (error) {
-              console.error(`Error calculating stats for tutor ${tutor.id}:`, error)
+              logger.error(`Error calculating stats for tutor ${tutor.id}:`, error)
               pending++
             }
           }
@@ -174,7 +174,7 @@ function FacultyExamsContent() {
             ongoing,
           }
         } catch (error) {
-          console.error(`Error calculating stats for exam ${exam.id}:`, error)
+          logger.error(`Error calculating stats for exam ${exam.id}:`, error)
           stats[exam.id] = {
             total: 0,
             completed: 0,
@@ -259,7 +259,7 @@ function FacultyExamsContent() {
       setIsDeleteMode(false)
       setDeleteModalOpen(false)
     } catch (error) {
-      console.error('Error deleting exams:', error)
+      logger.error('Error deleting exams:', error)
       alert('An error occurred while deleting exams')
     } finally {
       setIsDeleting(false)
@@ -385,7 +385,7 @@ function FacultyExamsContent() {
                 completionPercentages[peertutors.id] = 0
               }
             } catch (error) {
-              console.error(`Error calculating scores for tutor ${peertutors.id}:`, error)
+              logger.error(`Error calculating scores for tutor ${peertutors.id}:`, error)
               ascendScores[peertutors.id] = 0
               completionPercentages[peertutors.id] = 0
             }
@@ -455,7 +455,7 @@ function FacultyExamsContent() {
           // Add worksheet to workbook
           XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
         } catch (error) {
-          console.error(`Error exporting exam ${exam.id}:`, error)
+          logger.error(`Error exporting exam ${exam.id}:`, error)
           // Continue with next exam even if one fails
         }
       }
@@ -466,7 +466,7 @@ function FacultyExamsContent() {
       // Write file
       XLSX.writeFile(workbook, filename)
     } catch (error) {
-      console.error('Error exporting to Excel:', error)
+      logger.error('Error exporting to Excel:', error)
       alert('Error exporting to Excel. Please try again.')
     } finally {
       setIsExporting(false)

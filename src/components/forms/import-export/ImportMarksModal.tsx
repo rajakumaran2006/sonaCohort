@@ -6,7 +6,7 @@ import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/compon
 import { Button } from '@/components/ui'
 
 import * as XLSX from 'xlsx'
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubject } from '@/lib/services/examSubjectService'
 import { toast } from 'sonner'

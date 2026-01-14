@@ -13,10 +13,7 @@ import { RenumerationService, peertutorsRenumeration } from '@/lib/services/renu
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Card } from '@/components/ui'
 import { 
-  BookOpen, 
   CheckCircle, 
-  Clock, 
-  Users, 
   ChevronLeft,
   Mail,
   GraduationCap,
@@ -27,6 +24,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import PeerTutorProfileSkeleton from '@/components/skeletons/PeerTutorProfileSkeleton'
+import { logger } from '@/lib/logger'
 
 export default function PeerTutorsProfilePage() {
   return (
@@ -148,7 +146,7 @@ function PeerTutorsProfileContent() {
         })
       }
     } catch (error) {
-      console.error('Error loading peer tutor data:', error)
+      logger.error('Error loading peer tutor data:', error)
     } finally {
       setLoading(false)
     }
@@ -342,14 +340,14 @@ function PeerTutorsProfileContent() {
                                                   <button 
                                                     className="p-1.5 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
                                                     title="Approve"
-                                                    onClick={() => console.log('Approve', renumeration.id)}
+                                                    onClick={() => logger.info('Approve', renumeration.id)}
                                                    >
                                                       <CheckCircle size={14} />
                                                   </button>
                                                   <button 
                                                     className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
                                                     title="Reject"
-                                                    onClick={() => console.log('Reject', renumeration.id)}
+                                                    onClick={() => logger.info('Reject', renumeration.id)}
                                                    >
                                                       <AlertCircle size={14} />
                                                   </button>
@@ -357,7 +355,7 @@ function PeerTutorsProfileContent() {
                                               )}
                                                <button
                                                 className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-900 transition-all shadow-sm"
-                                                onClick={() => console.log('View', renumeration)}
+                                                onClick={() => logger.info('View', renumeration)}
                                               >
                                                 View
                                               </button>

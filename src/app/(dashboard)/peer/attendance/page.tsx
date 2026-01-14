@@ -14,7 +14,7 @@ import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { useRouter } from 'next/navigation'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import FilterDropdown from '@/components/ui/FilterDropdown'
-import { FileText, CheckCircle, Clock, Download, TrendingUp } from 'lucide-react'
+import { FileText, CheckCircle, Clock, Download } from 'lucide-react'
 
 export default function PeerAttendancePage() {
   return (
@@ -194,7 +194,7 @@ function PeerAttendanceContent(): ReactNode {
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading attendance data...</p>
+            <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Loading...</span>
           </div>
         </div>
       )

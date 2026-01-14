@@ -11,7 +11,7 @@ import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Card, LoadingSpinner } from '@/components/ui'
-import { ArrowLeft, CheckCircle, AlertCircle, Calendar, Eye } from 'lucide-react'
+import { ArrowLeft, Calendar, Eye } from 'lucide-react'
 
 export default function PeerSubjectDetailsPage() {
   return (
