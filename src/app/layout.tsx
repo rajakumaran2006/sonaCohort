@@ -4,6 +4,7 @@ import "./globals.css";
 import "@/lib/suppress-console"; // Suppress console logs in production
 import { AuthProvider } from "@/lib/auth/AuthContext";
 import QueryProvider from "@/lib/providers/QueryProvider";
+import { Analytics } from '@vercel/analytics/next';
 
 // Note: BBH Sans fonts are not available on Google Fonts, using Roboto as fallback
 // Noto Sans JP will also use Roboto Condensed as it's not available via Next.js font optimization
@@ -107,6 +108,7 @@ export default function RootLayout({
           <AuthProvider>
             <Toaster position="top-right" expand={false} richColors />
             {children}
+            <Analytics />
           </AuthProvider>
         </QueryProvider>
       </body>
