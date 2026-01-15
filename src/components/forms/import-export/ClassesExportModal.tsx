@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { Class } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface ClassesExportModalProps {
   filteredClasses: Class[]
@@ -79,7 +80,7 @@ export default function ClassesExportModal({
       
       onClose()
     } catch (error) {
-      console.error('Error exporting classes:', error)
+      logger.error('Error exporting classes:', error)
       toast.error('Error exporting data. Please try again.')
     } finally {
       setIsExporting(false)

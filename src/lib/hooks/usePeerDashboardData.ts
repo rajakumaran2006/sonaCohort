@@ -299,7 +299,7 @@ export function usePeerLeaderboard(peertutorsInfo: { id?: string, dept?: string,
               score: score, // Ascend Score
               total: stats.totalClasses
             }
-          } catch (e) {
+          } catch {
             return { id: tutor.id, name: tutor.name, score: 0, total: 0 }
           }
         })

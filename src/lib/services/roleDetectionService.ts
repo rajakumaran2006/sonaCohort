@@ -41,7 +41,7 @@ export class RoleDetectionService {
           dashboardPaths.faculty = '/faculty/dashboard'
           // console.log('User has faculty role')
         }
-      } catch (_error) {
+      } catch {
         // console.log('Faculty check failed:', error)
       }
 
@@ -53,7 +53,7 @@ export class RoleDetectionService {
           dashboardPaths.admin = '/admin/dashboard'
           // console.log('User has admin role')
         }
-      } catch (_error) {
+      } catch {
         // console.log('Admin check failed:', error)
       }
 
@@ -82,7 +82,7 @@ export class RoleDetectionService {
             // console.log('User has peer tutor role (form check skipped - no client)')
           }
         }
-      } catch (_error) {
+      } catch {
         // console.log('Peer tutor check failed:', error)
       }
 
@@ -99,7 +99,7 @@ export class RoleDetectionService {
             // console.log('User is student but not assigned to any peer tutor')
           }
         }
-      } catch (_error) {
+      } catch {
         // console.log('Student check failed:', error)
       }
 

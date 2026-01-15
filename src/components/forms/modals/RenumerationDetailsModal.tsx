@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+
 
 interface RenumerationFieldType {
   id: string
@@ -37,17 +37,11 @@ export default function RenumerationDetailsModal({
   isOpen, 
   onClose
 }: RenumerationDetailsModalProps) {
-  const [loading] = useState(false)
+
 
   if (!isOpen || !submission) return null
 
-  // Debug logging
-  console.log('RenumerationDetailsModal - submission data:', {
-    submission,
-    template: submission.template,
-    fields: submission.template?.fields,
-    fieldResponses: submission.field_responses
-  })
+
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 sm:p-6 animate-in fade-in duration-300">
@@ -139,7 +133,7 @@ export default function RenumerationDetailsModal({
             
             {submission.template?.fields && submission.template.fields.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                {submission.template.fields.map((field, index) => (
+                {submission.template.fields.map((field) => (
                   <div key={field.id} className="relative pl-6 border-l-2 border-gray-50 group hover:border-blue-500 transition-all">
                     <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-gray-100 flex items-center justify-center group-hover:border-blue-500 transition-all">
                       <div className="w-1.5 h-1.5 rounded-full bg-gray-200 group-hover:bg-blue-500 transition-all"></div>

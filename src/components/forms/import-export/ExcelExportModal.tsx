@@ -7,6 +7,7 @@ import { ReportService } from '@/lib/services/reportService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import ExcelPreviewModal from '../modals/ExcelPreviewModal'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface ExcelExportModalProps {
   isOpen: boolean
@@ -325,7 +326,7 @@ export default function ExcelExportModal({ isOpen, onClose, peertutorsInfo, repo
       // Close modal
       onClose()
     } catch (error) {
-      console.error('Error exporting Excel:', error)
+      logger.error('Error exporting Excel:', error)
       toast.error('Error exporting Excel file. Please try again.')
     } finally {
       setExporting(false)

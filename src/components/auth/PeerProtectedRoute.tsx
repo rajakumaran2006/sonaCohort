@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { logger } from '@/lib/logger'
 import { useQuery } from '@tanstack/react-query'
 import { LoadingSpinner } from '@/components/ui'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+
 
 interface PeerProtectedRouteProps {
   children: React.ReactNode
@@ -26,7 +28,7 @@ export default function PeerProtectedRoute({ children }: PeerProtectedRouteProps
       if (!user?.email) {
         throw new Error('No user email')
       }
-      console.log('PeerProtectedRoute: Verifying peer tutor access for:', user.email)
+      logger.info('PeerProtectedRoute: Verifying peer tutor access for:', user.email)
       return await peertutorsAuthService.ispeertutors(user.email)
     },
     enabled: !!user && !loading,
@@ -52,7 +54,7 @@ export default function PeerProtectedRoute({ children }: PeerProtectedRouteProps
   }
 
   if (loading || isVerifying) {
-    console.log('PeerProtectedRoute: Showing loading state', { loading, isVerifying })
+    logger.info('PeerProtectedRoute: Showing loading state', { loading, isVerifying })
     return (
       <div className="min-h-screen bg-gray-50">
         <PeerSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />

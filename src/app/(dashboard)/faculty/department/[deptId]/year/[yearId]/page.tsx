@@ -13,7 +13,6 @@ import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { 
   ArrowUpRight, 
-  ArrowUpRight, 
   LayoutGrid
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
@@ -97,12 +96,9 @@ function YearContent() {
         }
       }
 
-      }
       
       logger.info('Year Page - Loading data for:', { deptId, yearId, facultyDeptName })
       
-      setDepartment({
-
       setDepartment({
         id: deptId as string,
         name: facultyDeptName,
@@ -137,8 +133,6 @@ function YearContent() {
 
           const totalCompleted = completed.length + sectionAdditional.length
           
-          const totalCompleted = completed.length + sectionAdditional.length
-          
           logger.info(`Year Page - Section ${section} data:`, {
             tutorsCount: tutors.length,
             completedCount: totalCompleted,
@@ -159,12 +153,10 @@ function YearContent() {
       // Sort sections alphabetically
       sectionData.sort((a, b) => a.section.localeCompare(b.section))
       
-      sectionData.sort((a, b) => a.section.localeCompare(b.section))
-      
       logger.info('Year Page - Final section data:', sectionData)
       setSectionStats(sectionData)
     } catch (error) {
-      console.error('Error loading year data:', error)
+      logger.error('Error loading year data:', error)
     } finally {
       setLoading(false)
     }

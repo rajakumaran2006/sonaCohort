@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Bell, Loader2, Send } from 'lucide-react'
+import { X, Loader2, Send } from 'lucide-react'
 import { peertutors } from '@/lib/services/peerTutorService'
+import { logger } from '@/lib/logger'
 
 interface SendNotificationModalProps {
   isOpen: boolean
@@ -57,7 +58,7 @@ export default function SendNotificationModal({
         setError('Failed to send notification. Please try again.')
       }
     } catch (err) {
-      console.error('Error sending notification:', err)
+      logger.error('Error sending notification:', err)
       setError('An error occurred while sending the notification')
     } finally {
       setIsSending(false)

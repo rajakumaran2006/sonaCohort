@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
+import { logger } from '@/lib/logger'
 import { useEffect } from 'react'
 
 interface ProtectedRouteProps {
@@ -13,15 +14,15 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter()
 
   useEffect(() => {
-    console.log('ProtectedRoute useEffect:', { user: !!user, loading })
+    logger.info('ProtectedRoute useEffect:', { user: !!user, loading })
     if (!loading && !user) {
-      console.log('No user found, redirecting to login')
+      logger.info('No user found, redirecting to login')
       router.push('/login')
     }
   }, [user, loading, router])
 
   if (loading) {
-    console.log('ProtectedRoute: Loading state')
+    logger.info('ProtectedRoute: Loading state')
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
@@ -30,10 +31,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
-    console.log('ProtectedRoute: No user, returning null')
+    logger.info('ProtectedRoute: No user, returning null')
     return null
   }
 
-  console.log('ProtectedRoute: User authenticated, rendering children')
+  logger.info('ProtectedRoute: User authenticated, rendering children')
   return <>{children}</>
 }

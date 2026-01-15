@@ -3,6 +3,8 @@
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
+
+import { logger } from '@/lib/logger'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -132,7 +134,7 @@ function PeerExamsContent() {
         })
 
       } catch (error) {
-        console.error("Error calculating stats:", error)
+        logger.error("Error calculating stats:", error)
       }
     }
 

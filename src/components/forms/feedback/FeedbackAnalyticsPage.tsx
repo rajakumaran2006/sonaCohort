@@ -5,11 +5,11 @@ import { toast } from 'sonner'
 import { FeedbackForm } from '@/lib/services/feedbackService'
 import { FeedbackAnalyticsService, ResponseAnalytics, StudentResponseAnalytics } from '@/lib/services/feedbackAnalyticsService'
 import { DepartmentService } from '@/lib/services/departmentService'
-import StarRating from '@/components/ui/StarRating'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import jsPDF from 'jspdf'
 import * as XLSX from 'xlsx'
-import { Star, Users, Clock, TrendingUp, TrendingDown, Download, Filter, X, UserX } from 'lucide-react'
+import { Star, Users, Clock, Download, Filter, X, UserX } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 // Helper functions
 const formatCompletionTime = (seconds: number): string => {
@@ -17,11 +17,7 @@ const formatCompletionTime = (seconds: number): string => {
   return `${(seconds / 60).toFixed(1)}m`
 }
 
-const getDeltaColor = (delta: number): string => {
-  if (delta > 0) return 'text-emerald-500'
-  if (delta < 0) return 'text-red-500'
-  return 'text-gray-900'
-}
+
 
 const getSatisfactionColor = (score: number): string => {
   if (score >= 4) return 'text-emerald-500'
@@ -44,8 +40,7 @@ interface FeedbackAnalyticsPageProps {
 // Satisfaction Arc Component
 function SatisfactionArc({ score, maxScore = 5 }: { score: number; maxScore?: number }) {
   const percentage = (score / maxScore) * 100
-  const strokeDasharray = 283 // Circumference of circle with r=45
-  const strokeDashoffset = strokeDasharray - (strokeDasharray * percentage * 0.5) / 100
+  /* const strokeDasharray = 283 */ // Circumference of circle with r=45
   
   return (
     <div className="relative w-32 h-16 mx-auto">
@@ -190,7 +185,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
       })
       setAnalytics(data)
     } catch (err) {
-      console.error('Error loading analytics:', err)
+      logger.error('Error loading analytics:', err)
       setError('Failed to load analytics data')
     } finally {
       setLoading(false)
@@ -202,7 +197,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
       const trendData = await FeedbackAnalyticsService.getResponseTrends(form.id, 30)
       setTrends(trendData)
     } catch (err) {
-      console.error('Error loading trends:', err)
+      logger.error('Error loading trends:', err)
     }
   }, [form.id])
 
@@ -215,7 +210,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
       setYears(yearsData)
       setSections(sectionsData)
     } catch (err) {
-      console.error('Error loading years and sections:', err)
+      logger.error('Error loading years and sections:', err)
     }
   }, [])
 
@@ -225,7 +220,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
       const pending = await FeedbackAnalyticsService.getPendingStudents(form.id)
       setPendingStudents(pending)
     } catch (err) {
-      console.error('Error loading pending students:', err)
+      logger.error('Error loading pending students:', err)
     } finally {
       setLoadingPending(false)
     }

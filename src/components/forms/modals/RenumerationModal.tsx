@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+
+import { logger } from '@/lib/logger'
 import { RenumerationService } from '@/lib/services/renumerationService'
 
 interface RenumerationModalProps {
@@ -109,7 +111,7 @@ export default function RenumerationModal({ isOpen, onClose, onSuccess, facultyI
 
     setLoading(true)
     try {
-      console.log('Creating renumeration template with data:', {
+      logger.info('Creating renumeration template with data:', {
         templateName,
         templateDescription,
         facultyId,
@@ -146,7 +148,7 @@ export default function RenumerationModal({ isOpen, onClose, onSuccess, facultyI
       onSuccess()
       onClose()
     } catch (error) {
-      console.error('Error creating renumeration:', error)
+      logger.error('Error fetching renumeration data:', error)
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)

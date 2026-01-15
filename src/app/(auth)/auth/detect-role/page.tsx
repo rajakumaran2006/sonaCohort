@@ -41,8 +41,8 @@ function DetectRoleContent() {
 
         const { roles, dashboardPaths } = await response.json()
 
-        // console.log('Detected roles:', roles)
-        // console.log('Dashboard paths:', dashboardPaths)
+        logger.info('Detected roles:', roles)
+        logger.info('Dashboard paths:', dashboardPaths)
 
         // If user has no roles, they don't have access
         if (!roles || roles.length === 0) {

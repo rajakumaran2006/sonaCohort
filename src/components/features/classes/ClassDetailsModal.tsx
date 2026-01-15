@@ -18,6 +18,7 @@ import {
   Calendar
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface ClassDetailsModalProps {
   isOpen: boolean
@@ -111,7 +112,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
       }))
 
     } catch (error) {
-      console.error('Error loading class details:', error)
+      logger.error('Error loading class details:', error)
       toast.error('Failed to load class details')
     } finally {
       setLoading(false)
@@ -177,7 +178,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
               toast.error("Failed to initialize class session.")
           }
       } catch (err) {
-          console.error("Error saving topics:", err)
+          logger.error("Error saving topics:", err)
       } finally {
           setSaving(false)
       }
@@ -219,7 +220,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
         }, 2000)
 
     } catch (error) {
-        console.error('Complete class error:', error)
+        logger.error('Complete class error:', error)
         toast.error('Failed to complete class. Please try again.')
     } finally {
         setSaving(false)

@@ -10,6 +10,7 @@ import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { MicrosoftUser } from '@/lib/types'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface AssignmentImportModalProps {
   dept: string
@@ -167,7 +168,7 @@ export default function AssignmentImportModal({
       await processImportData(rows, tutors, students.filter(s => !s.peer_tutor))
 
     } catch (error) {
-      console.error('Error processing file:', error)
+      logger.error('Error processing file:', error)
       toast.error('Error processing file. Please check the format and try again.')
     } finally {
       setIsProcessing(false)
@@ -183,7 +184,7 @@ export default function AssignmentImportModal({
   ): Promise<{ tutor: peertutors | null, microsoftUser?: MicrosoftUser, foundIn: 'local' | 'microsoft' | 'not_found' }> => {
     // Must have at least one identifier
     if (!name && !email) {
-      console.log(`❌ Peer Tutor: No identifiers provided`)
+      logger.info(`❌ Peer Tutor: No identifiers provided`)
       return { tutor: null, foundIn: 'not_found' }
     }
 
@@ -203,7 +204,7 @@ export default function AssignmentImportModal({
       )
       
       if (match) {
-        console.log(`✅ Peer Tutor found LOCALLY by NAME: "${name}" → ${match.name} (${match.email})`)
+        logger.info(`✅ Peer Tutor found LOCALLY by NAME: "${name}" → ${match.name} (${match.email})`)
         return { tutor: match, foundIn: 'local' }
       }
     }
@@ -223,7 +224,7 @@ export default function AssignmentImportModal({
       )
       
       if (match) {
-        console.log(`✅ Peer Tutor found LOCALLY by EMAIL: "${email}" → ${match.name} (${match.email})`)
+        logger.info(`✅ Peer Tutor found LOCALLY by EMAIL: "${email}" → ${match.name} (${match.email})`)
         return { tutor: match, foundIn: 'local' }
       }
     }
@@ -233,11 +234,11 @@ export default function AssignmentImportModal({
       // If we are validating, the input email must match the suffix to even be valid for search, 
       // OR the result must match. If input "john@gmail.com" and suffix "@sona.ac.in", it shouldn't match.
       if (checkSuffix(email)) {
-        console.log(`🔍 Searching Microsoft Graph for peer tutor by EMAIL: "${email}"`)
+        logger.info(`🔍 Searching Microsoft Graph for peer tutor by EMAIL: "${email}"`)
         const microsoftUser = await MicrosoftGraphService.getUserByEmail(email)
         
         if (microsoftUser && checkSuffix(microsoftUser.mail)) {
-          console.log(`✨ Peer Tutor found in MICROSOFT: "${email}"`)
+          logger.info(`✨ Peer Tutor found in MICROSOFT: "${email}"`)
           // Defer creation - return the microsoft user object
           return { tutor: null, microsoftUser, foundIn: 'microsoft' }
         }
@@ -246,7 +247,7 @@ export default function AssignmentImportModal({
 
     // Priority 4: Search Microsoft Graph by Name (Exact Match)
     if (name && user?.id) {
-      console.log(`🔍 Searching Microsoft Graph for peer tutor by NAME: "${name}"`)
+      logger.info(`🔍 Searching Microsoft Graph for peer tutor by NAME: "${name}"`)
       const microsoftUsers = await MicrosoftGraphService.searchUsers(name)
       
       const exactMatch = microsoftUsers.find(u => 
@@ -255,14 +256,14 @@ export default function AssignmentImportModal({
       )
       
       if (exactMatch) {
-         console.log(`✨ Peer Tutor found in MICROSOFT by NAME: "${name}" → ${exactMatch.mail}`)
+         logger.info(`✨ Peer Tutor found in MICROSOFT by NAME: "${name}" → ${exactMatch.mail}`)
          // Defer creation
          return { tutor: null, microsoftUser: exactMatch, foundIn: 'microsoft' }
       }
     }
     
     // Not found anywhere
-    console.log(`❌ Peer Tutor NOT FOUND: ${name ? `Name="${name}"` : ''}${name && email ? ', ' : ''}${email ? `Email="${email}"` : ''}`)
+    logger.info(`❌ Peer Tutor NOT FOUND: ${name ? `Name="${name}"` : ''}${name && email ? ', ' : ''}${email ? `Email="${email}"` : ''}`)
     return { tutor: null, foundIn: 'not_found' }
   }
 
@@ -275,7 +276,7 @@ export default function AssignmentImportModal({
   ): Promise<{ student: Student | null, microsoftUser?: MicrosoftUser, foundIn: 'local' | 'microsoft' | 'not_found' }> => {
     // Must have at least one identifier
     if (!name && !email) {
-      console.log(`❌ Student: No identifiers provided`)
+      logger.info(`❌ Student: No identifiers provided`)
       return { student: null, foundIn: 'not_found' }
     }
 
@@ -295,7 +296,7 @@ export default function AssignmentImportModal({
       )
       
       if (match) {
-        console.log(`✅ Student found LOCALLY by NAME: "${name}" → ${match.name} (${match.email})`)
+        logger.info(`✅ Student found LOCALLY by NAME: "${name}" → ${match.name} (${match.email})`)
         return { student: match, foundIn: 'local' }
       }
     }
@@ -311,7 +312,7 @@ export default function AssignmentImportModal({
       )
       
       if (match) {
-        console.log(`✅ Student found LOCALLY by EMAIL: "${email}" → ${match.name} (${match.email})`)
+        logger.info(`✅ Student found LOCALLY by EMAIL: "${email}" → ${match.name} (${match.email})`)
         return { student: match, foundIn: 'local' }
       }
     }
@@ -319,11 +320,11 @@ export default function AssignmentImportModal({
     // Priority 3: Search Microsoft Graph by Email
     if (email && user?.id) {
       if (checkSuffix(email)) {
-        console.log(`🔍 Searching Microsoft Graph for student by EMAIL: "${email}"`)
+        logger.info(`🔍 Searching Microsoft Graph for student by EMAIL: "${email}"`)
         const microsoftUser = await MicrosoftGraphService.getUserByEmail(email)
         
         if (microsoftUser && checkSuffix(microsoftUser.mail)) {
-          console.log(`✨ Student found in MICROSOFT: "${email}"`)
+          logger.info(`✨ Student found in MICROSOFT: "${email}"`)
           // Defer creation
           return { student: null, microsoftUser, foundIn: 'microsoft' }
         }
@@ -332,7 +333,7 @@ export default function AssignmentImportModal({
 
     // Priority 4: Search Microsoft Graph by Name (Exact Match)
     if (name && user?.id) {
-      console.log(`🔍 Searching Microsoft Graph for student by NAME: "${name}"`)
+      logger.info(`🔍 Searching Microsoft Graph for student by NAME: "${name}"`)
       const microsoftUsers = await MicrosoftGraphService.searchUsers(name)
       
       const exactMatch = microsoftUsers.find(u => 
@@ -341,14 +342,14 @@ export default function AssignmentImportModal({
       )
       
       if (exactMatch) {
-        console.log(`✨ Student found in MICROSOFT by NAME: "${name}" → ${exactMatch.mail}`)
+        logger.info(`✨ Student found in MICROSOFT by NAME: "${name}" → ${exactMatch.mail}`)
         // Defer creation
         return { student: null, microsoftUser: exactMatch, foundIn: 'microsoft' }
       }
     }
     
     // Not found anywhere
-    console.log(`❌ Student NOT FOUND: ${name ? `Name="${name}"` : ''}${name && email ? ', ' : ''}${email ? `Email="${email}"` : ''}`)
+    logger.info(`❌ Student NOT FOUND: ${name ? `Name="${name}"` : ''}${name && email ? ', ' : ''}${email ? `Email="${email}"` : ''}`)
     return { student: null, foundIn: 'not_found' }
   }
 
@@ -493,7 +494,7 @@ export default function AssignmentImportModal({
       XLSX.writeFile(wb, 'not_found_entities.xlsx')
 
     } catch (error) {
-      console.error('Error exporting not found entities:', error)
+      logger.error('Error exporting not found entities:', error)
       toast.error('Error exporting not found entities.')
     }
   }
@@ -527,7 +528,7 @@ export default function AssignmentImportModal({
               group.section || section // Use group section or default to current import context
             )
           } catch (err) {
-            console.error(`Failed to create peer tutor ${group.peertutorsName}:`, err)
+            logger.error(`Failed to create peer tutor ${group.peertutorsName}:`, err)
             continue // Skip this group if critical creation fails
           }
         }
@@ -556,7 +557,7 @@ export default function AssignmentImportModal({
                 studentData.section || section
               )
             } catch (err) {
-              console.error(`Failed to create student ${studentData.studentName}:`, err)
+              logger.error(`Failed to create student ${studentData.studentName}:`, err)
               continue
             }
           }
@@ -573,7 +574,7 @@ export default function AssignmentImportModal({
       onClose()
 
     } catch (error) {
-      console.error('Error importing assignments:', error)
+      logger.error('Error importing assignments:', error)
       toast.error('Error importing assignments. Please try again.')
     } finally {
       setIsProcessing(false)

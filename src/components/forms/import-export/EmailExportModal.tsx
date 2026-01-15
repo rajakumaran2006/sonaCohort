@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { X, Mail, Download, CheckCircle2 } from 'lucide-react'
 import { EmailService, ExportOption, AVAILABLE_EXPORTS } from '@/lib/services/emailService'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface EmailExportModalProps {
   isOpen: boolean
@@ -84,7 +85,7 @@ export default function EmailExportModal({
         setStep('select')
       }
     } catch (error) {
-      console.error('Error sending email:', error)
+      logger.error('Error sending email:', error)
       toast.error('An error occurred while sending the email. Please try again.')
       setStep('select')
     }

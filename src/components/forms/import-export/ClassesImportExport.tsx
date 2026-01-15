@@ -6,6 +6,7 @@ import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { useAuth } from '@/lib/auth/AuthContext'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface ClassesImportExportProps {
   dept: string
@@ -166,7 +167,7 @@ export default function ClassesImportExport({
       XLSX.writeFile(wb, `classes_export_${dept}_${year}_${section}_${today}.xlsx`)
       
     } catch (error) {
-      console.error('Error exporting data:', error)
+      logger.error('Error exporting data:', error)
       toast.error('Error exporting data. Please try again.')
     } finally {
       setIsExporting(false)
@@ -210,7 +211,7 @@ export default function ClassesImportExport({
       setShowImportPreview(true)
       
     } catch (error) {
-      console.error('Error reading Excel file:', error)
+      logger.error('Error reading Excel file:', error)
       toast.error('Error reading Excel file. Please check the file format and try again.')
     } finally {
       setIsImporting(false)
@@ -465,7 +466,7 @@ export default function ClassesImportExport({
       }
       
     } catch (error) {
-      console.error('Error importing classes:', error)
+      logger.error('Error importing classes:', error)
       toast.error('Error importing classes. Please try again.')
     } finally {
       setIsImporting(false)

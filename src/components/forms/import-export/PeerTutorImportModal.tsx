@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface peertutorsImportModalProps {
   dept: string
@@ -96,7 +97,7 @@ export default function PeerTutorImportModal({
       XLSX.writeFile(wb, fileName)
       
     } catch (error) {
-      console.error('Error exporting peer tutors:', error)
+      logger.error('Error exporting peer tutors:', error)
       toast.error('Error exporting data. Please try again.')
     } finally {
       setIsProcessing(false)
@@ -144,7 +145,7 @@ export default function PeerTutorImportModal({
         const targetSection = cleanSection
         
         if (!targetYear || !targetSection) {
-          console.warn(`Missing year or section for ${cleanName || cleanEmail}`)
+          logger.warn(`Missing year or section for ${cleanName || cleanEmail}`)
         }
         
         const result = await findpeertutors(existingpeerTutor, cleanName, cleanEmail, targetYear, targetSection)
@@ -165,7 +166,7 @@ export default function PeerTutorImportModal({
       setShowPreview(true)
       
     } catch (error) {
-      console.error('Error processing file:', error)
+      logger.error('Error processing file:', error)
       toast.error('Error processing file. Please check the format and try again.')
     } finally {
       setIsProcessing(false)
@@ -203,7 +204,7 @@ export default function PeerTutorImportModal({
         .single()
       
       if (studentExists) {
-        console.log(`❌ Email "${email}" already allocated as STUDENT`)
+        logger.info(`❌ Email "${email}" already allocated as STUDENT`)
         return { tutor: null, microsoftUser: null, foundIn: 'allocated' }
       }
       
@@ -215,7 +216,7 @@ export default function PeerTutorImportModal({
         .single()
       
       if (facultyExists) {
-        console.log(`❌ Email "${email}" already allocated as FACULTY/ADMIN`)
+        logger.info(`❌ Email "${email}" already allocated as FACULTY/ADMIN`)
         return { tutor: null, microsoftUser: null, foundIn: 'allocated' }
       }
     }
@@ -277,7 +278,7 @@ export default function PeerTutorImportModal({
               .single()
               
             if (studentExists) {
-               console.log(`❌ Name "${name}" (Email: ${exactMatch.mail}) already allocated as STUDENT`)
+               logger.info(`❌ Name "${name}" (Email: ${exactMatch.mail}) already allocated as STUDENT`)
                return { tutor: null, microsoftUser: null, foundIn: 'allocated' }
             }
          }
@@ -350,7 +351,7 @@ export default function PeerTutorImportModal({
       onClose()
       
     } catch (error) {
-      console.error('Error importing peer tutors:', error)
+      logger.error('Error importing peer tutors:', error)
       toast.error('Error importing peer tutors. Please try again.')
     } finally {
       setIsProcessing(false)

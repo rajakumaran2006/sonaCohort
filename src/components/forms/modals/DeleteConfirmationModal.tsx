@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface DeleteConfirmationModalProps {
   isOpen: boolean
@@ -51,7 +52,7 @@ export default function DeleteConfirmationModal({
   if (!isOpen) return null
   
   if (itemsToDelete.length === 0) {
-    console.error('DeleteConfirmationModal: No items to delete')
+    logger.error('DeleteConfirmationModal: No items to delete')
     return null
   }
 

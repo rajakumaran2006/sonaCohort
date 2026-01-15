@@ -12,6 +12,7 @@ import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Card, LoadingSpinner } from '@/components/ui'
 import { ArrowLeft, Calendar, Eye } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 export default function PeerSubjectDetailsPage() {
   return (
@@ -68,7 +69,7 @@ function PeerSubjectDetailsContent() {
       setFullReport(report)
 
     } catch (error) {
-      console.error('Error loading subject data:', error)
+      logger.error('Error loading subject data:', error)
     } finally {
       setLoading(false)
     }
@@ -92,7 +93,7 @@ function PeerSubjectDetailsContent() {
         setShowClassModal(true)
       }
     } catch (error) {
-      console.error('Error loading class attendance report:', error)
+      logger.error('Error loading class attendance report:', error)
     }
   }
 

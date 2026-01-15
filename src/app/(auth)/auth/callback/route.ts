@@ -24,11 +24,11 @@ export async function GET(request: Request) {
         // Detect all available roles for the user
         const { roles, dashboardPaths } = await RoleDetectionService.detectUserRoles(userEmail, supabase)
         
-        // console.log(`Detected roles for ${userEmail}:`, roles)
+        logger.info(`Detected roles for ${userEmail}:`, roles)
 
         // If user has no roles, they don't have access
         if (roles.length === 0) {
-          // console.log(`User ${userEmail} has no access`)
+          logger.info(`User ${userEmail} has no access`)
           // Sign out the user
           await supabase.auth.signOut()
           return NextResponse.redirect(`${origin}/login?error=no_access`)
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         if (roles.length === 1) {
           const role = roles[0]
           const dashboardPath = dashboardPaths[role]
-          // console.log(`User has single role: ${role}, redirecting to ${dashboardPath}`)
+          logger.info(`User has single role: ${role}, redirecting to ${dashboardPath}`)
           
           // Store the selected role
           const response = NextResponse.redirect(`${origin}${dashboardPath}`)
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
         }
 
         // If user has multiple roles, redirect to role selection page
-        // console.log(`User has multiple roles: ${roles.join(', ')}, redirecting to role selection`)
+        logger.info(`User has multiple roles: ${roles.join(', ')}, redirecting to role selection`)
         const response = NextResponse.redirect(`${origin}/auth/select-role?roles=${roles.join(',')}&next=${encodeURIComponent(next)}`)
         return response
 

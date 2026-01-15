@@ -5,6 +5,7 @@ import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { DepartmentService } from '@/lib/services/departmentService'
 import { MicrosoftUser, CreateDepartmentData } from '@/lib/types'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Input, Button } from '@/components/ui'
+import { logger } from '@/lib/logger'
 
 interface CreateDepartmentModalProps {
   isOpen: boolean
@@ -29,10 +30,10 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
       setSearchResults(users)
       
       if (users.length === 0) {
-        console.log('No faculty members found for query:', facultySearch)
+        logger.info('No faculty members found for query:', facultySearch)
       }
     } catch (error) {
-      console.error('Error searching faculty:', error)
+      logger.error('Error searching faculty:', error)
       setSearchResults([])
     } finally {
       setIsSearching(false)
@@ -76,7 +77,7 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
         resetForm()
       }
     } catch (error) {
-      console.error('Error creating department:', error)
+      logger.error('Error creating department:', error)
     } finally {
       setIsLoading(false)
     }

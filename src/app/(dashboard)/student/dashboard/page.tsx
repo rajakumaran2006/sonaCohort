@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
+import { logger } from '@/lib/logger'
 import { StudentService, StudentWithpeertutors } from '@/lib/services/studentService'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
 import FeedbackSubmissionModal from '@/components/forms/feedback/FeedbackSubmissionModal'
@@ -81,7 +82,7 @@ export default function StudentDashboard() {
           setFeedbackForms(formsWithStatus)
         }
       } catch (error) {
-        console.error('Error loading student data:', error)
+        logger.error('Error loading student data:', error)
       } finally {
         setLoading(false)
       }

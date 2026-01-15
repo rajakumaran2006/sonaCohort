@@ -3,7 +3,7 @@
 
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
-import PageHeader from '@/components/layout/PageHeader'
+
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useState, useEffect, useRef, Fragment, useMemo, useCallback, Suspense } from 'react'
@@ -15,8 +15,7 @@ import { StudentService, Student } from '@/lib/services/studentService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import AssignpeertutorsModal from '@/components/forms/modals/AssignPeerTutorModal'
 import AddStudentModal from '@/components/forms/modals/AddStudentModal'
-import BulkImportExport from '@/components/forms/import-export/BulkImportExport'
-import ClassesImportExport from '@/components/forms/import-export/ClassesImportExport'
+
 import AssignmentImportModal from '@/components/forms/import-export/AssignmentImportModal'
 import PeerTutorsImportModal from '@/components/forms/import-export/PeerTutorImportModal'
 import StudentImportModal from '@/components/forms/import-export/StudentImportModal'
@@ -37,6 +36,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, Search, X, Eye, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { logger } from '@/lib/logger'
+
 
 
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
@@ -122,7 +122,7 @@ interface PeerTutorTabProps {
 
 function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertutors, onpeertutorsClick, dept, year, section, onRefresh }: PeerTutorTabProps) {
   const [peerTutorWithStats, setpeerTutorWithStats] = useState<peertutorsWithStats[]>([])
-  const { user } = useAuth()
+
 
   const [loading, setLoading] = useState(true)
   const [peerTutortudentCounts, setpeerTutortudentCounts] = useState<{[key: string]: number}>({})
@@ -1042,7 +1042,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
         toast.success('Students transferred successfully')
       }
     } catch (error) {
-      console.error('Failed to transfer students:', error)
+      logger.error('Failed to transfer students:', error)
     }
   }
 
@@ -1089,7 +1089,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
     }
 
     setFilteredStudents(filtered)
-  }, [students, selectedpeertutors, searchQuery])
+  }, [students, selectedpeertutors, searchQuery, peerTutor])
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -1213,7 +1213,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
         )
       }
     } catch (error) {
-       console.error("Deletion failed", error)
+       logger.error("Deletion failed", error)
        toast.error("FAILED TO DELETE STUDENTS")
     } finally {
       setIsDeleting(false)
@@ -1842,7 +1842,7 @@ function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack }: Peertuto
 
       setSubjectsData(subjectsWithData)
     } catch (error) {
-      console.error('Error loading detail data:', error)
+      logger.error('Error loading detail data:', error)
       setSubjectsData([])
     } finally {
       setLoading(false)
@@ -2045,7 +2045,7 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
       
       setGeneralData(tutorsWithStats)
     } catch (error) {
-      console.error('Error loading general data:', error)
+      logger.error('Error loading general data:', error)
       setGeneralData([])
     } finally {
       setLoading(false)
@@ -2199,7 +2199,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
         .order('scheduled_date', { ascending: true })
 
       if (error) {
-        console.error('Error loading scheduled classes:', error)
+        logger.error('Error loading scheduled classes:', error)
         setAttendanceData([])
         setDates([])
         return
@@ -2304,7 +2304,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
 
       setAttendanceData(rows)
     } catch (error) {
-      console.error('Error loading attendance data:', error)
+      logger.error('Error loading attendance data:', error)
       setAttendanceData([])
       setDates([])
     } finally {
@@ -2419,7 +2419,7 @@ interface ImportExportTabProps {
   onImportComplete: () => void
 }
 
-function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: ImportExportTabProps) {
+function ImportExportTab({ dept, year, section }: ImportExportTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'import' | 'export' | 'advanced'>('export')
   const [activeAdvancedTab, setActiveAdvancedTab] = useState<'general' | 'attendance' | 'nextTopicSheet' | 'mark'>('general')
 
@@ -2510,7 +2510,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       XLSX.utils.book_append_sheet(wb, ws, 'Peer Tutors')
       XLSX.writeFile(wb, `peer_tutors_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
-      console.error('Error exporting peer details:', error)
+      logger.error('Error exporting peer details:', error)
       toast.error('Failed to export peer tutor details')
     }
   }
@@ -2534,7 +2534,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       XLSX.utils.book_append_sheet(wb, ws, 'Students')
       XLSX.writeFile(wb, `students_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
-      console.error('Error exporting students:', error)
+      logger.error('Error exporting students:', error)
       toast.error('Failed to export students')
     }
   }
@@ -2565,7 +2565,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       XLSX.utils.book_append_sheet(wb, ws, 'Assignments')
       XLSX.writeFile(wb, `assignments_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
-      console.error('Error exporting assignments:', error)
+      logger.error('Error exporting assignments:', error)
       toast.error('Failed to export assignments')
     }
   }
@@ -2606,7 +2606,7 @@ function ImportExportTab({ dept, year, section, facultyId, onImportComplete }: I
       XLSX.utils.book_append_sheet(wb, ws, 'Attendance')
       XLSX.writeFile(wb, `attendance_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
-      console.error('Error exporting attendance:', error)
+      logger.error('Error exporting attendance:', error)
       toast.error('Failed to export attendance records')
     }
   }
@@ -2889,7 +2889,8 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
   })
 
   // Check sync status across all sections
-  const { data: syncStatus, isLoading: loadingSync } = useQuery({
+  // Check sync status across all sections
+  useQuery({
     queryKey: ['yearSyncStatus', dept, dbYear],
     queryFn: () => ClassService.getYearSyncStatus(dept, dbYear),
     refetchInterval: 30000 // Check every 30s
@@ -2908,13 +2909,13 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
 
   const handleAutoAssign = async () => {
     try {
-      console.log('Auto assigning for:', { dept, year: dbYear, section: dbSection })
+      logger.info('Auto assigning for:', { dept, year: dbYear, section: dbSection })
       const success = await AssignmentService.autoAssignStudents(dept, dbYear, dbSection)
       if (success) {
         invalidateQueries()
       }
     } catch (error) {
-      console.error('Error auto-assigning students:', error)
+      logger.error('Error auto-assigning students:', error)
     }
   }
 
@@ -2929,7 +2930,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
         invalidateQueries()
       }
     } catch (error) {
-      console.error('Error manually assigning student:', error)
+      logger.error('Error manually assigning student:', error)
     }
   }
 
@@ -2946,7 +2947,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
         invalidateQueries()
       }
     } catch (error) {
-      console.error('Error unassigning all students:', error)
+      logger.error('Error unassigning all students:', error)
     }
   }
 
@@ -2994,7 +2995,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
       toast.success(`Successfully unassigned ${selectedStudents.size} student(s)`)
       setShowBulkUnassignModal(false)
     } catch (error) {
-      console.error('Error bulk unassigning students:', error)
+      logger.error('Error bulk unassigning students:', error)
       toast.error('Failed to unassign some students')
     } finally {
         setIsBulkUnassigning(false)
@@ -3094,7 +3095,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
       const fileName = `assignments_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`
       XLSX.writeFile(wb, fileName)
     } catch (error) {
-      console.error('Error exporting assignments:', error)
+      logger.error('Error exporting assignments:', error)
       toast.error('Failed to export assignments. Please try again.')
     }
   }
@@ -3661,7 +3662,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
         toast.error(result.message || 'Failed to create class. Please check the console for details.')
       }
     } catch (error) {
-      console.error('Error adding class:', error)
+      logger.error('Error adding class:', error)
       toast.error('Error creating class: ' + (error instanceof Error ? error.message : 'Unknown error'))
     }
   }
@@ -3686,7 +3687,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
       XLSX.writeFile(wb, fileName)
       setShowExportModal(false)
     } catch (error) {
-      console.error('Error exporting subjects:', error)
+      logger.error('Error exporting subjects:', error)
       toast.error('Failed to export subjects')
     }
   }
@@ -3747,7 +3748,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
       setShowScheduledDeleteModal(false)
       toast.success(`Successfully deleted ${groupsToDelete.length} scheduled class group(s)`)
     } catch (error) {
-      console.error('Error deleting scheduled groups:', error)
+      logger.error('Error deleting scheduled groups:', error)
       toast.error('Failed to delete scheduled groups')
     } finally {
         setIsDeletingScheduled(false)
@@ -3811,7 +3812,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
       invalidateQueries()
       toast.success(`Successfully deleted ${deletableSubjects.length} subject(s)`)
     } catch (error) {
-      console.error('Error deleting subjects:', error)
+      logger.error('Error deleting subjects:', error)
       toast.error('Failed to delete some subjects. Please try again.')
     } finally {
       setIsDeletingSubjects(false)
@@ -4714,7 +4715,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   const { data: scheduledClasses = [], isLoading: loadingScheduled } = useQuery({
     queryKey: ['scheduledClasses', dept, dbYear, dbSection],
     queryFn: async () => {
-      console.log('Loading scheduled classes for:', { dept, dbYear, dbSection })
+      logger.info('Loading scheduled classes for:', { dept, dbYear, dbSection })
       const classes = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
       return classes.sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
     }
@@ -4771,7 +4772,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           .in('scheduled_class_id', scheduledIds)
 
         if (error) {
-          console.error('Error loading attendance for rate calc:', error)
+          logger.error('Error loading attendance for rate calc:', error)
           return {}
         }
 
@@ -4808,7 +4809,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       setLoading(true)
       const supabase = createClient()
       
-      console.log('Loading peer tutor attendance for class:', classIdOrSubject, 'isAdditional:', isAdditional)
+      logger.info('Loading peer tutor attendance for class:', classIdOrSubject, 'isAdditional:', isAdditional)
       
       const peertutorsAttendanceList: any[] = []
       
@@ -4816,7 +4817,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         // Handle additional class
         const additionalClass = additionalClasses.find(ac => ac.id === classIdOrSubject)
         if (!additionalClass) {
-          console.error('Additional class not found')
+          logger.error('Additional class not found')
           return
         }
         
@@ -4838,7 +4839,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         // Handle scheduled class
         const selectedScheduledClass = scheduledClasses.find(sc => sc.id === classIdOrSubject)
         if (!selectedScheduledClass) {
-          console.error('Scheduled class not found')
+          logger.error('Scheduled class not found')
           return
         }
 
@@ -4861,16 +4862,16 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           .eq('scheduled_date', selectedScheduledClass.scheduled_date)
 
         if (scheduledClassError) {
-          console.error('Error loading scheduled classes:', scheduledClassError)
+          logger.error('Error loading scheduled classes:', scheduledClassError)
           return
         }
 
-        console.log('All scheduled classes for this class:', allScheduledClasses)
+        logger.info('All scheduled classes for this class:', allScheduledClasses)
 
         // For each scheduled class, check if there are any attendance records (student attendance)
         // If the peer tutor marked any student attendance, they were present
         const scheduledClassIds = allScheduledClasses?.map(sc => sc.id) || []
-        console.log('Querying attendance for scheduled class IDs:', scheduledClassIds)
+        logger.info('Querying attendance for scheduled class IDs:', scheduledClassIds)
         
         const { data: attendanceRecords, error: attendanceError } = await supabase
           .from('attendance')
@@ -4878,11 +4879,11 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           .in('scheduled_class_id', scheduledClassIds)
 
         if (attendanceError) {
-          console.error('Error loading attendance records:', attendanceError)
+          logger.error('Error loading attendance records:', attendanceError)
           return
         }
 
-        console.log('Attendance records found:', attendanceRecords?.length || 0, attendanceRecords)
+        logger.info('Attendance records found:', attendanceRecords?.length || 0, attendanceRecords)
 
         // Create a map to track if peer tutor marked attendance (has any student records)
         // Group attendance records by scheduled_class_id
@@ -4899,7 +4900,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           })
         }
 
-        console.log('Attendance map by scheduled class:', attendanceByScheduledClass)
+        logger.info('Attendance map by scheduled class:', attendanceByScheduledClass)
 
         // Process scheduled classes to create peer tutor attendance list
         if (allScheduledClasses) {
@@ -4937,11 +4938,11 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         }
       }
 
-      console.log('Peer tutor attendance for class:', peertutorsAttendanceList)
+      logger.info('Peer tutor attendance for class:', peertutorsAttendanceList)
       setpeertutorsAttendance(peertutorsAttendanceList)
       
     } catch (error) {
-      console.error('Error loading peer tutor attendance:', error)
+      logger.error('Error loading peer tutor attendance:', error)
     } finally {
       setLoading(false)
     }
@@ -5022,7 +5023,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         .eq('peer_tutor_id', peertutorsId)
       
       if (error) {
-        console.error('Error loading student details:', error)
+        logger.error('Error loading student details:', error)
         return
       }
       
@@ -5040,7 +5041,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       newMap.set(peertutorsId, students)
       setpeerTutortudentDetails(newMap)
     } catch (error) {
-      console.error('Error in loadStudentDetailsForpeertutors:', error)
+      logger.error('Error in loadStudentDetailsForpeertutors:', error)
     }
   }
 
@@ -5158,7 +5159,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       const fileName = `attendance_${selectedScheduledClass.class?.subject_name}_${new Date(selectedScheduledClass.scheduled_date).toISOString().split('T')[0]}.xlsx`
       XLSX.writeFile(wb, fileName)
     } catch (error) {
-      console.error('Error exporting attendance:', error)
+      logger.error('Error exporting attendance:', error)
       toast.error('Failed to export attendance. Please try again.')
     }
   }
@@ -5235,7 +5236,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
       XLSX.utils.book_append_sheet(wb, ws, 'All Attendance')
       XLSX.writeFile(wb, `all_attendance_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
     } catch (error) {
-      console.error('Error exporting all attendance:', error)
+      logger.error('Error exporting all attendance:', error)
       toast.error('Failed to export all attendance. Please try again.')
     }
   }
@@ -6305,27 +6306,8 @@ function SectionContent() {
     queryClient.invalidateQueries({ queryKey: ['assignmentStats'] })
   }
 
-  const [showForceDeleteModal, setShowForceDeleteModal] = useState(false)
-  const [tutorToForceDelete, setTutorToForceDelete] = useState<{id: string, message: string} | null>(null)
-  
-  const handleForceDeleteConfirm = async () => {
-    if (!tutorToForceDelete) return
-    
-    const forceResult = await peertutorservice.removepeertutors(tutorToForceDelete.id, true)
-    
-    if (forceResult.success) {
-      toast.success(forceResult.message)
-      // Refresh logic would go here if needed, but the original logic returned true/false to caller
-      // Since this is async/modal based now, we can't return to caller immediately.
-      // We must assume the UI updates via react-query invalidation.
-      handlepeertutorsAssigned() // Re-use this to invalidate queries
-    } else {
-      toast.error(forceResult.message)
-    }
-    
-    setShowForceDeleteModal(false)
-    setTutorToForceDelete(null)
-  }
+  // Force delete logic removed as per cleanup
+
 
   const handleRemovepeertutors = async (tutorId: string, silent: boolean = false) => {
     try {
@@ -6336,23 +6318,11 @@ function SectionContent() {
         if (!silent) toast.success(result.message)
         return { success: true }
       } else {
-        // Check if the error is about assigned students (only happens when forceDelete is false)
-        if (result.message.includes('students are still assigned')) {
-           // Instead of confirm(), show Modal
-           setTutorToForceDelete({
-             id: tutorId,
-             message: result.message
-           })
-           setShowForceDeleteModal(true)
-           // We return false here because we haven't deleted yet. The Modal will handle the rest.
-           return { success: false, pendingConfirmation: true } 
-        } else {
           if (!silent) toast.error(result.message)
           return { success: false }
-        }
       }
     } catch (error) {
-       console.error('Error removing peer tutor:', error)
+       logger.error('Error removing peer tutor:', error)
        if (!silent) toast.error('Failed to remove peer tutor')
        return { success: false }
     }
@@ -6370,7 +6340,7 @@ function SectionContent() {
         return false
       }
     } catch (error) {
-      console.error('Error removing student:', error)
+      logger.error('Error removing student:', error)
       if (!silent) toast.error('An unexpected error occurred while deleting the student.')
       return false
     }
@@ -6383,7 +6353,7 @@ function SectionContent() {
   const handleBulkImportComplete = () => {
     // This will be called when bulk import is completed
     // We can reload the assignments data if needed
-    console.log('Bulk import completed')
+    logger.info('Bulk import completed')
   }
 
   // Ensure params are defined and cast to string

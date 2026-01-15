@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { LayoutGrid, Users, GraduationCap, ClipboardList, FileText, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
+import { logger } from '@/lib/logger'
 
 interface FacultySidebarProps {
   isOpen: boolean
@@ -75,7 +76,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
       await signOut()
       router.push('/')
     } catch (error) {
-      console.error('Error signing out:', error)
+      logger.error('Error signing out:', error)
     } finally {
       setIsLoggingOut(false)
     }

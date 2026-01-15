@@ -7,6 +7,7 @@ import StudentSidebar from '@/components/layout/StudentSidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { AssignmentService } from '@/lib/services/assignmentService'
+import { logger } from '@/lib/logger'
 
 export default function StudentStudentsPage() {
   return (
@@ -60,7 +61,7 @@ function StudentStudentsContent() {
             setAssignedStudents(students)
           }
         } catch (error) {
-          console.error('Error loading data:', error)
+          logger.error('Error loading data:', error)
         } finally {
           setLoading(false)
         }
@@ -83,7 +84,7 @@ function StudentStudentsContent() {
       await signOut()
       router.push('/login')
     } catch (error) {
-      console.error('Error signing out:', error)
+      logger.error('Error signing out:', error)
     }
   }
 

@@ -19,7 +19,6 @@ import {
   Download, 
   Filter,
   ChevronDown,
-  ChevronDown,
   X 
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
@@ -224,7 +223,7 @@ function AnalyticsContent() {
         link.setAttribute('href', url)
         link.setAttribute('download', `peer-tutors-and-students-${new Date().toISOString().split('T')[0]}.csv`)
         document.body.appendChild(link); link.click(); document.body.removeChild(link)
-      } catch (error) { logger.error(error); alert('Failed to export') }
+      } catch (error) { logger.error('Failed to export CSV', error); alert('Failed to export') }
   }
 
   const exportpeerTutorOnly = () => {
@@ -265,7 +264,7 @@ function AnalyticsContent() {
         link.setAttribute('href', url)
         link.setAttribute('download', `students-${new Date().toISOString().split('T')[0]}.csv`)
         document.body.appendChild(link); link.click(); document.body.removeChild(link)
-     } catch(e) { logger.error(e); alert('Error')}
+     } catch(e) { logger.error('Failed to export students CSV', e); alert('Error')}
   }
 
   return (

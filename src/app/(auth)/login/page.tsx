@@ -40,7 +40,6 @@ function LoginPageContent() {
       await signOut()
       setIsSwitching(false)
     } catch (error) {
-    } catch (error) {
       logger.error('Error switching account:', error)
       setIsSwitching(false)
     }

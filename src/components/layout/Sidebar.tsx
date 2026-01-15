@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { LayoutGrid, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface SidebarProps {
   isOpen: boolean
@@ -44,7 +45,7 @@ export default function Sidebar({ isOpen, onClose, onToggleCollapse }: SidebarPr
       await signOut()
       router.push('/')
     } catch (error) {
-      console.error('Error signing out:', error)
+      logger.error('Error signing out:', error)
     } finally {
       setIsLoggingOut(false)
     }

@@ -8,6 +8,7 @@ import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface StudentImportModalProps {
   dept: string
@@ -94,7 +95,7 @@ export default function StudentImportModal({
       XLSX.writeFile(wb, fileName)
       
     } catch (error) {
-      console.error('Error exporting students:', error)
+      logger.error('Error exporting students:', error)
       toast.error('Error exporting data. Please try again.')
     } finally {
       setIsProcessing(false)
@@ -143,7 +144,7 @@ export default function StudentImportModal({
         const targetSection = cleanSection
         
         if (!targetYear || !targetSection) {
-          console.warn(`Missing year or section for ${cleanName || cleanEmail}`)
+          logger.warn(`Missing year or section for ${cleanName || cleanEmail}`)
         }
 
         const result = await findStudent(existingStudents, cleanName, cleanEmail, targetYear, targetSection)
@@ -164,7 +165,7 @@ export default function StudentImportModal({
       setShowPreview(true)
       
     } catch (error) {
-      console.error('Error processing file:', error)
+      logger.error('Error processing file:', error)
       toast.error('Error processing file. Please check the format and try again.')
     } finally {
       setIsProcessing(false)
@@ -202,7 +203,7 @@ export default function StudentImportModal({
         .single()
       
       if (tutorExists) {
-        console.log(`❌ Email "${email}" already allocated as PEER TUTOR`)
+        logger.info(`❌ Email "${email}" already allocated as PEER TUTOR`)
         return { student: null, microsoftUser: null, foundIn: 'allocated' }
       }
       
@@ -214,7 +215,7 @@ export default function StudentImportModal({
         .single()
       
       if (facultyExists) {
-        console.log(`❌ Email "${email}" already allocated as FACULTY/ADMIN`)
+        logger.info(`❌ Email "${email}" already allocated as FACULTY/ADMIN`)
         return { student: null, microsoftUser: null, foundIn: 'allocated' }
       }
     }
@@ -272,7 +273,7 @@ export default function StudentImportModal({
               .single()
               
             if (tutorExists) {
-               console.log(`❌ Name "${name}" (Email: ${exactMatch.mail}) already allocated as PEER TUTOR`)
+               logger.info(`❌ Name "${name}" (Email: ${exactMatch.mail}) already allocated as PEER TUTOR`)
                return { student: null, microsoftUser: null, foundIn: 'allocated' }
             }
          }
@@ -344,7 +345,7 @@ export default function StudentImportModal({
       onClose()
       
     } catch (error) {
-      console.error('Error importing students:', error)
+      logger.error('Error importing students:', error)
       toast.error('Error importing students. Please try again.')
     } finally {
       setIsProcessing(false)

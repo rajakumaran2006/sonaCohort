@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui'
 import { Button } from '@/components/ui'
 import { ExamService, ExamMarkWithDetails } from '@/lib/services/examService'
+import { logger } from '@/lib/logger'
 import { LoadingOverlay, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 
 interface peertutorsMarksViewModalProps {
@@ -26,7 +27,7 @@ export default function PeerTutorMarksViewModal({
       const data = await ExamService.getpeertutorsMarks(examAssignmentId)
       setMarks(data)
     } catch (error) {
-      console.error('Error loading marks:', error)
+      logger.error('Error loading marks:', error)
     } finally {
       setLoading(false)
     }

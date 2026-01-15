@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { LayoutGrid, Users, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface StudentSidebarProps {
   isOpen: boolean
@@ -57,7 +58,7 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
       await signOut()
       router.push('/login')
     } catch (error) {
-      console.error('Error signing out:', error)
+      logger.error('Error signing out:', error)
     } finally {
       setIsLoggingOut(false)
     }

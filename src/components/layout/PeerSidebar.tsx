@@ -7,6 +7,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
+import { logger } from '@/lib/logger'
 import { ExamService } from '@/lib/services/examService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { LayoutGrid, GraduationCap, ClipboardList, FileText, FileBarChart, LogOut, User, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -94,7 +95,7 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
       await signOut()
       router.push('/')
     } catch (error) {
-      console.error('Error signing out:', error)
+      logger.error('Error signing out:', error)
     } finally {
       setIsLoggingOut(false)
     }

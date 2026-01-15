@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { ClassService } from '@/lib/services/classService'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface DateAssignmentModalProps {
   isOpen: boolean
@@ -46,7 +47,7 @@ export default function DateAssignmentModal({
       
       setSubjects(Array.from(subjectSet).sort())
     } catch (error) {
-      console.error('Error loading subjects:', error)
+      logger.error('Error loading subjects:', error)
       // Fallback to current section only
       try {
         const uniqueSubjects = await ClassService.getUniqueSubjects(dept, year, section)
@@ -62,7 +63,7 @@ export default function DateAssignmentModal({
       const dates = await ScheduledClassService.getOccupiedDates(dept, year, section)
       setOccupiedDates(dates)
     } catch (error) {
-      console.error('Error loading occupied dates:', error)
+      logger.error('Error loading occupied dates:', error)
     }
   }, [dept, year, section])
 
@@ -101,8 +102,8 @@ export default function DateAssignmentModal({
           let targetClass = classes.find(cls => cls.subject_name === selectedSubject)
 
           if (!targetClass) {
-            console.log(`Class ${selectedSubject} missing in Section ${currentSection}. Creating...`)
-            const newClass = await ClassService.createClass({
+            logger.info(`Class ${selectedSubject} missing in Section ${currentSection}. Creating...`)
+            await ClassService.createClass({
               subject_name: selectedSubject,
               dept,
               year,
@@ -116,7 +117,7 @@ export default function DateAssignmentModal({
 
             if (!targetClass) {
               results.failed.push(currentSection)
-              console.error(`Failed to create class ${selectedSubject} in Section ${currentSection}`)
+              logger.error(`Failed to create class ${selectedSubject} in Section ${currentSection}`)
               continue
             }
           }
@@ -125,7 +126,7 @@ export default function DateAssignmentModal({
           const isDateFree = await ScheduledClassService.isDateAvailable(selectedDate, dept, year, currentSection)
           if (!isDateFree) {
             results.conflicts.push(currentSection)
-            console.warn(`Date ${selectedDate} already occupied in Section ${currentSection}`)
+            logger.warn(`Date ${selectedDate} already occupied in Section ${currentSection}`)
             continue
           }
 
@@ -147,7 +148,7 @@ export default function DateAssignmentModal({
           }
 
         } catch (sectionError) {
-          console.error(`Error processing Section ${currentSection}:`, sectionError)
+          logger.error(`Error processing Section ${currentSection}:`, sectionError)
           results.failed.push(currentSection)
         }
       }
@@ -199,7 +200,7 @@ export default function DateAssignmentModal({
       }
 
     } catch (error) {
-      console.error('Error assigning date:', error)
+      logger.error('Error assigning date:', error)
       setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)

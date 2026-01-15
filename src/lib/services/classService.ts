@@ -1006,7 +1006,7 @@ export class ClassService {
       // Fetch actual subjects and scheduled classes for each section
       const sectionData = await Promise.all(sections.map(async (section) => {
         // Get all subjects for this section
-        const { data: classesData, error: _classesError } = await supabase
+        const { data: classesData } = await supabase
           .from('classes')
           .select('subject_name')
           .ilike('dept', normalizedDept)
@@ -1016,7 +1016,7 @@ export class ClassService {
         const subjects = new Set(classesData?.map(c => c.subject_name.toLowerCase().trim()) || [])
         
         // Get all scheduled dates (unique by subject name and date)
-        const { data: scheduledData, error: _scheduledError } = await supabase
+        const { data: scheduledData } = await supabase
           .from('scheduled_classes')
           .select(`
             scheduled_date,

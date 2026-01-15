@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
+import { logger } from '@/lib/logger'
 
 export default function Home() {
   const { user, loading, session } = useAuth()
@@ -12,14 +13,14 @@ export default function Home() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   useEffect(() => {
-    console.log('Home page - User:', user)
-    console.log('Home page - Loading:', loading)
-    console.log('Home page - Session:', session)
+    logger.info('Home page - User:', user)
+    logger.info('Home page - Loading:', loading)
+    logger.info('Home page - Session:', session)
     
     // Only redirect logged-in users to role detection
     // Do NOT redirect to /login - that causes a loop
     if (user && !loading && user.email) {
-      console.log('User authenticated, redirecting to role detection...')
+      logger.info('User authenticated, redirecting to role detection...')
       // Redirect to a page that will detect roles and redirect appropriately
       router.push('/auth/detect-role')
     }

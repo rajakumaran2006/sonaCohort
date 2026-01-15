@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface PeerTutorsMappingExportProps {
   dept: string
@@ -92,7 +93,7 @@ export default function PeerTutorsMappingExport({
       
       onClose()
     } catch (error) {
-      console.error('Error exporting peer tutor mapping:', error)
+      logger.error('Error exporting peer tutor mapping:', error)
       toast.error('Error exporting data. Please try again.')
     } finally {
       setIsExporting(false)
@@ -192,7 +193,7 @@ export default function PeerTutorsMappingExport({
       
       return yearSectionGroups
     } catch (error) {
-      console.error('Error getting peer tutors with students:', error)
+      logger.error('Error getting peer tutors with students:', error)
       return []
     }
   }

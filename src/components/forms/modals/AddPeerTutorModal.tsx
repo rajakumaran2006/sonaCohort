@@ -71,7 +71,7 @@ export default function AddPeerTutorModal({
     } finally {
       setIsSearching(false)
     }
-  }, [searchQuery, dept, selectedYear, selectedSection])
+  }, [searchQuery, selectedYear, selectedSection])
 
   // Handle search input change with debouncing
   useEffect(() => {

@@ -387,7 +387,7 @@ function FacultypeertutorsContent() {
     })
 
     setFilteredStudents(filtered)
-  }, [students, selectedStudentYear, selectedStudentSection, selectedpeertutors, studentSearchQuery])
+  }, [students, selectedStudentYear, selectedStudentSection, selectedpeertutors, studentSearchQuery, peerTutor])
 
   // Load peer tutor statistics when filtered peer tutors change
   useEffect(() => {
@@ -519,46 +519,7 @@ function FacultypeertutorsContent() {
     XLSX.writeFile(wb, fileName)
   }
 
-  // Handle peer tutor deletion (Single)
-  const handleDeletepeertutors = (tutorId: string, tutorName: string) => {
-    // Find the tutor to get details
-    const tutor = peerTutorWithStats.find(t => t.id === tutorId)
-    if (!tutor) return
 
-    setItemsToDelete([{
-      name: tutor.name,
-      email: tutor.email,
-      additionalInfo: `${peerTutortudentCounts[tutorId] || 0} student(s) assigned`
-    }])
-    setDeleteType('peer-tutors')
-    setDeleteModalOpen(true)
-    
-    // Also set this for legacy compatibility if needed, using the setpeertutorsToDelete to track ID for single delete logic if we didn't use itemsToDelete fully
-    // But itemsToDelete is better. We'll use itemsToDelete for display and logic.
-    // Actually, for single delete, we need the ID. We can store it.
-    // Let's use `selectedpeertutorsIds` for consistency or just find by name/email? 
-    // Safer to just set selectedpeertutorsIds to this one ID temporarily if we want to reuse bulk logic?
-    // Or simpler: handle single delete by setting ID in a state?
-    // Let's reuse itemsToDelete but we need the ID. 
-    // We can add ID to itemsToDelete? define it as any?
-    // The modal expects {name, email, additionalInfo}.
-    // Let's use a separate state `singleDeleteId` or reuse `selectedpeertutorsIds`.
-    
-    // Strategy: Clear selection, add this ID, trigger "bulk" delete flow (which is just "delete selected").
-    // But this clears user's existing selection.
-    // Better: Just execute delete for this one ID.
-    // But modal onConfirm needs to know what to do.
-    // Let's use `itemsToDelete` for display. And check `itemsToDelete` length or rely on `selectedpeertutorsIds`.
-    // If I use `selectedpeertutorsIds`, I must update it.
-    setSelectedpeertutorsIds(new Set([tutorId]))
-    setItemsToDelete([{
-      name: tutor.name, 
-      email: tutor.email,
-      additionalInfo: `${peerTutortudentCounts[tutor.id] || 0} student(s) assigned`
-    }])
-    setDeleteType('peer-tutors')
-    setDeleteModalOpen(true)
-  }
 
   // Unified Delete Confirmation Handler
   const handleDeleteConfirm = async () => {
@@ -814,17 +775,8 @@ function FacultypeertutorsContent() {
     setSelectedRenumerationTemplateIds(newSelected)
   }
 
-  const handleDeleteRenumerationTemplate = (template: RenumerationTemplate) => {
-    setDeleteType('renumeration-templates')
-    const item = {
-      name: template.name,
-      email: template.description || 'No description',
-      additionalInfo: `${template.fields.length} field(s)`,
-      originalId: template.id
-    }
-    setItemsToDelete([item])
-    setDeleteModalOpen(true)
-  }
+
+
 
   const handleBulkDeleteRenumerationTemplates = () => {
     setDeleteType('renumeration-templates')
@@ -945,7 +897,7 @@ function FacultypeertutorsContent() {
       const templates = await RenumerationService.getRenumerationTemplates(user.id)
       setRenumerationTemplates(templates)
     } catch (error) {
-      console.error('Error loading renumeration templates:', error)
+
       logger.error('Error loading renumeration templates:', error)
     } finally {
       setTemplatesLoading(false)

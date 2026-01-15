@@ -13,9 +13,7 @@ import {
   isSameMonth, 
   isSameDay, 
   addDays, 
-  eachDayOfInterval,
   isToday,
-  parseISO,
   isValid
 } from 'date-fns'
 

@@ -6,6 +6,7 @@ import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
 import { X, Upload, AlertCircle, Calendar } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface ClassImportModalProps {
   isOpen: boolean
@@ -111,7 +112,7 @@ export default function ClassImportModal({
       XLSX.writeFile(wb, `class_schedule_template_${dept}_${year}_${section}.xlsx`)
       toast.success('Template downloaded successfully!')
     } catch (error) {
-      console.error('Error downloading template:', error)
+      logger.error('Error downloading template:', error)
       toast.error('Failed to generate template')
     } finally {
       setLoading(false)
@@ -336,7 +337,7 @@ export default function ClassImportModal({
       setShowPreview(true)
       toast.success(`Parsed ${rows.length} rows from Excel file`)
     } catch (error) {
-      console.error('Error parsing Excel file:', error)
+      logger.error('Error parsing Excel file:', error)
       toast.error('Failed to parse Excel file')
     } finally {
       setLoading(false)
@@ -453,14 +454,14 @@ export default function ClassImportModal({
       } else if (failCount > 0 || errors.length > 0) {
         // Only show error toast if NOTHING succeeded
         toast.error(`Failed to import. ${failCount} row errors. ${errors.length} section issues.`)
-        console.error('Import errors:', errors)
+        logger.error('Import errors:', errors)
       } else {
         toast.info('No changes made (possibly already scheduled).')
         onClose() 
       }
 
     } catch (error) {
-      console.error('Error importing classes:', error)
+      logger.error('Error importing classes:', error)
       toast.error('An error occurred during import')
     } finally {
       setImporting(false)

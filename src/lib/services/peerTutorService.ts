@@ -274,7 +274,8 @@ export class peertutorservice {
   /**
    * Remove a peer tutor and unassign related students (students and their attendance remain intact)
    */
-  static async removepeertutors(id: string, forceDelete: boolean = false): Promise<{ success: boolean; message: string }> {
+  static async removepeertutors(id: string, // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _forceDelete: boolean = false): Promise<{ success: boolean; message: string }> {
     try {
       const supabase = createClient()
       
@@ -660,7 +661,7 @@ export class peertutorservice {
       }))
 
       // Insert all records in a batch (Supabase allows batch inserts)
-      const { error: insertError, count } = await supabase
+      const { error: insertError } = await supabase
         .from('scheduled_classes')
         .insert(recordsToInsert)
         .select()
@@ -706,8 +707,7 @@ export class peertutorservice {
         return successCount > 0
       }
 
-      const insertedCount = count || recordsToInsert.length
-      // logger.info(`Successfully allocated ${insertedCount} classes to new peer tutor starting from ${allocateFromDateString}`)
+
 
       // CLEANUP: Remove "placeholder" scheduled classes (where peer_tutor_id is null)
       // for the class_id/date combinations we just filled.

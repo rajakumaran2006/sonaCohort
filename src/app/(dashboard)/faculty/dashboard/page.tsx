@@ -229,7 +229,7 @@ function FacultyDashboardContent() {
       const attendanceRate = totalAllocated > 0 ? Math.round((totalTaken / totalAllocated) * 100) : 0
 
       // Additional Classes Logic
-      const totalAdditionalClasses = additionalClasses.length
+
       const addClassCounts: Record<string, number> = { '2': 0, '3': 0, '4': 0 }
       additionalClasses.forEach((cls: AdditionalClass & { peer_tutors?: { year: string } }) => {
            let y = cls.year || (cls.peer_tutors ? cls.peer_tutors.year : '')

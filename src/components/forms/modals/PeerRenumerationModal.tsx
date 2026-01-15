@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { logger } from '@/lib/logger'
 import { RenumerationService, peertutorsRenumeration, RenumerationField } from '@/lib/services/renumerationService'
 
 interface PeerRenumerationModalProps {
@@ -65,7 +66,7 @@ export default function PeerRenumerationModal({
         setError('Failed to submit renumeration response')
       }
     } catch (error) {
-      console.error('Error submitting renumeration:', error)
+      logger.error('Error submitting renumeration:', error)
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)

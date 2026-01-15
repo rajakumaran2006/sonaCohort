@@ -28,7 +28,6 @@ import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/compon
 import { Input } from '@/components/ui'
 import { ArrowLeft, Edit, Save, Plus, Filter, RotateCw } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
-import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
 import { logger } from '@/lib/logger'
 

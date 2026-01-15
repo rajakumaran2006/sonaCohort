@@ -9,6 +9,7 @@ import DatePicker from '@/components/ui/DatePicker'
 import * as XLSX from 'xlsx'
 import { Plus, Trash2, FileDown, ChevronDown, CheckCircle, XCircle, User, FileText } from 'lucide-react'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 // Helper to parse "YYYY-MM-DD" as a local date (prevents timezone shifts)
 const parseLocalDate = (dateStr: string) => {
@@ -85,7 +86,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
       const classes = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsInfo.id)
       setAdditionalClasses(classes)
     } catch (error) {
-      console.error('Error loading additional classes:', error)
+      logger.error('Error loading additional classes:', error)
     } finally {
       setLoading(false)
     }
@@ -117,7 +118,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
       const subjects = await AdditionalClassService.getAvailableSubjectsForpeertutors(peertutorsInfo.id)
       setAvailableSubjects(subjects)
     } catch (error) {
-      console.error('Error loading available subjects:', error)
+      logger.error('Error loading available subjects:', error)
     } finally {
       setLoadingSubjects(false)
     }
@@ -178,7 +179,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
         toast.error('Error creating additional class. Please try again.')
       }
     } catch (error) {
-      console.error('Error saving additional class:', error)
+      logger.error('Error saving additional class:', error)
       toast.error('Error saving additional class. Please try again.')
     } finally {
       setSaving(false)
@@ -246,7 +247,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
       setShowDeleteModal(false)
       
     } catch (error) {
-      console.error('Error deleting classes:', error)
+      logger.error('Error deleting classes:', error)
       toast.error('Error deleting classes. Please try again.')
     } finally {
 
@@ -327,7 +328,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
       const fileName = `Additional_Classes_${peertutorsInfo?.name?.replace(/\s+/g, '_') || 'Report'}_${new Date().toISOString().split('T')[0]}.xlsx`
       XLSX.writeFile(workbook, fileName)
     } catch (error) {
-      console.error('Error exporting to Excel:', error)
+      logger.error('Error exporting to Excel:', error)
     }
   }
 

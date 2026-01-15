@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubject } from '@/lib/services/examSubjectService'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface ImportMarksModalProps {
   isOpen: boolean
@@ -146,7 +147,7 @@ export default function ImportMarksModal({
         .eq('peer_tutor', false)
 
       if (studentsError) {
-        console.error('Error fetching students:', studentsError)
+        logger.error('Error fetching students:', studentsError)
         toast.error('Error fetching students from database. Please try again.')
         return
       }
@@ -227,7 +228,7 @@ export default function ImportMarksModal({
         
         // Debug: log if no exact match found (helps troubleshoot)
         if (foundStudents.length === 0 && studentName) {
-          console.log(`No exact match for: "${studentName}" -> normalized: "${normalizedName}"`)
+          logger.info(`No exact match for: "${studentName}" -> normalized: "${normalizedName}"`)
         }
         
         // If exact match not found, try to find students with very similar names
@@ -399,7 +400,7 @@ export default function ImportMarksModal({
       onImportComplete()
 
     } catch (error) {
-      console.error('Error importing marks:', error)
+      logger.error('Error importing marks:', error)
       toast.error('Error importing marks. Please check the file format and try again.')
     } finally {
       setIsImporting(false)

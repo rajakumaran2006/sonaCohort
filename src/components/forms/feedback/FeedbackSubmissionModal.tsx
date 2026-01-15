@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { FeedbackForm, FeedbackService } from '@/lib/services/feedbackService'
+
+import { logger } from '@/lib/logger'
 import StarRating from '@/components/ui/StarRating'
 
 interface FeedbackSubmissionModalProps {
@@ -126,7 +128,7 @@ export default function FeedbackSubmissionModal({
         }, 2000)
       }
     } catch (error) {
-      console.error('Error submitting feedback:', error)
+      logger.error('Error submitting feedback:', error)
     } finally {
       setLoading(false)
     }

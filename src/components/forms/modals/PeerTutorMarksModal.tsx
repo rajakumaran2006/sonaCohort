@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ExamService, ExamAssignment, ExamMark } from '@/lib/services/examService'
+
+import { logger } from '@/lib/logger'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Button } from '@/components/ui'
 
 interface peertutorsMarksModalProps {
@@ -24,7 +26,7 @@ export default function PeerTutorMarksModal({
       const marksData = await ExamService.getExamMarks(examAssignment.id)
       setMarks(marksData)
     } catch (error) {
-      console.error('Error loading marks:', error)
+      logger.error('Error loading marks:', error)
     } finally {
       setLoading(false)
     }

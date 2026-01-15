@@ -18,7 +18,7 @@ export default function StarRating({ value, onChange, disabled = false, readonly
         <button
           key={star}
           type="button"
-          disabled={disabled}
+          disabled={disabled || readonly}
           className={`p-1 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           onClick={() => onChange(star)}
           onMouseEnter={() => !disabled && setHover(star)}

@@ -1,6 +1,7 @@
 'use client'
 
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import PageHeader from '@/components/layout/PageHeader'
@@ -263,7 +264,7 @@ function PeerExamDetailsContent() {
         toast.error('Failed to save marks. Please try again.')
       }
     } catch (error) {
-      console.error('Error saving marks:', error)
+      logger.error('Error saving marks:', error)
       toast.error('An error occurred while saving marks')
     } finally {
       setIsSaving(false)
@@ -379,7 +380,7 @@ function PeerExamDetailsContent() {
       // Write file
       XLSX.writeFile(workbook, filename)
     } catch (error) {
-      console.error('Error exporting to Excel:', error)
+      logger.error('Error exporting to Excel:', error)
       toast.error('Error exporting to Excel. Please try again.')
     }
   }

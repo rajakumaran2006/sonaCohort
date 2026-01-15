@@ -15,6 +15,8 @@ import {
   Settings,
   AlertTriangle
 } from 'lucide-react'
+
+import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
 interface FeedbackFormModalProps {
@@ -171,7 +173,7 @@ export default function FeedbackFormModal({
         if (result) onSuccess()
       }
     } catch (error) {
-      console.error('Error saving feedback form:', error)
+      logger.error('Error saving feedback form:', error)
     } finally {
       setLoading(false)
     }

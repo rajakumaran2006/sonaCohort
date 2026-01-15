@@ -1,0 +1,61 @@
+
+> peerTutor@0.1.0 lint
+> eslint
+
+
+/Users/raja/Desktop/projects/sonaCohort/src/app/(dashboard)/faculty/dashboard/page.tsx
+  232:13  warning  'totalAdditionalClasses' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/raja/Desktop/projects/sonaCohort/src/app/(dashboard)/faculty/department/[deptId]/year/[yearId]/page.tsx
+  159:7  warning  Unexpected console statement  no-console
+
+/Users/raja/Desktop/projects/sonaCohort/src/app/(dashboard)/faculty/department/[deptId]/year/[yearId]/section/[sectionId]/page.tsx
+     6:8   warning  'PageHeader' is defined but never used                                                                        @typescript-eslint/no-unused-vars
+    18:8   warning  'BulkImportExport' is defined but never used                                                                  @typescript-eslint/no-unused-vars
+    19:8   warning  'ClassesImportExport' is defined but never used                                                               @typescript-eslint/no-unused-vars
+   126:11  warning  'user' is assigned a value but never used                                                                     @typescript-eslint/no-unused-vars
+  1046:7   warning  Unexpected console statement                                                                                  no-console
+  1093:6   warning  React Hook useEffect has a missing dependency: 'peerTutor'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  1217:8   warning  Unexpected console statement                                                                                  no-console
+  1846:7   warning  Unexpected console statement                                                                                  no-console
+  2049:7   warning  Unexpected console statement                                                                                  no-console
+  2203:9   warning  Unexpected console statement                                                                                  no-console
+  2308:7   warning  Unexpected console statement                                                                                  no-console
+  2423:49  warning  'facultyId' is defined but never used                                                                         @typescript-eslint/no-unused-vars
+  2423:60  warning  'onImportComplete' is defined but never used                                                                  @typescript-eslint/no-unused-vars
+  2514:7   warning  Unexpected console statement                                                                                  no-console
+  2538:7   warning  Unexpected console statement                                                                                  no-console
+  2569:7   warning  Unexpected console statement                                                                                  no-console
+  2610:7   warning  Unexpected console statement                                                                                  no-console
+  2893:17  warning  'syncStatus' is assigned a value but never used                                                               @typescript-eslint/no-unused-vars
+  2893:40  warning  'loadingSync' is assigned a value but never used                                                              @typescript-eslint/no-unused-vars
+  2912:7   warning  Unexpected console statement                                                                                  no-console
+  2918:7   warning  Unexpected console statement                                                                                  no-console
+  2933:7   warning  Unexpected console statement                                                                                  no-console
+  2950:7   warning  Unexpected console statement                                                                                  no-console
+  2998:7   warning  Unexpected console statement                                                                                  no-console
+  3098:7   warning  Unexpected console statement                                                                                  no-console
+  3665:7   warning  Unexpected console statement                                                                                  no-console
+  3690:7   warning  Unexpected console statement                                                                                  no-console
+  3751:7   warning  Unexpected console statement                                                                                  no-console
+  3815:7   warning  Unexpected console statement                                                                                  no-console
+  4718:7   warning  Unexpected console statement                                                                                  no-console
+  4775:11  warning  Unexpected console statement                                                                                  no-console
+  4812:7   warning  Unexpected console statement                                                                                  no-console
+  4820:11  warning  Unexpected console statement                                                                                  no-console
+  4842:11  warning  Unexpected console statement                                                                                  no-console
+  4865:11  warning  Unexpected console statement                                                                                  no-console
+  4869:9   warning  Unexpected console statement                                                                                  no-console
+  4874:9   warning  Unexpected console statement                                                                                  no-console
+  4882:11  warning  Unexpected console statement                                                                                  no-console
+  4886:9   warning  Unexpected console statement                                                                                  no-console
+  4903:9   warning  Unexpected console statement                                                                                  no-console
+  4941:7   warning  Unexpected console statement                                                                                  no-console
+  4945:7   warning  Unexpected console statement                                                                                  no-console
+  5026:9   warning  Unexpected console statement                                                                                  no-console
+  5044:7   warning  Unexpected console statement                                                                                  no-console
+  5162:7   warning  Unexpected console statement                                                                                  no-console
+  5239:7   warning  Unexpected console statement                                                                                  no-console
+
+✖ 48 problems (0 errors, 48 warnings)
+

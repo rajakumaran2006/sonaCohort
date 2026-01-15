@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
+import { logger } from '@/lib/logger'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
@@ -23,7 +24,7 @@ export default function FacultyProtectedRoute({ children }: FacultyProtectedRout
       if (!user?.email) {
         throw new Error('No user email')
       }
-      console.log('Verifying faculty access for:', user.email)
+      logger.info('Verifying faculty access for:', user.email)
       return await FacultyService.verifyFacultyAccess(user.email)
     },
     enabled: !!user && !loading,
@@ -39,7 +40,7 @@ export default function FacultyProtectedRoute({ children }: FacultyProtectedRout
     }
 
     if (error || !department) {
-      console.log('No faculty access found for user:', user.email)
+      logger.info('No faculty access found for user:', user.email)
       router.push('/login?error=faculty_access_denied')
       return null
     }

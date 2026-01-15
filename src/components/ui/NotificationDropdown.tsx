@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Bell, X } from 'lucide-react'
 import { NotificationService, Notification } from '@/lib/services/notificationService'
 import { formatDistanceToNow } from 'date-fns'
+import { logger } from '@/lib/logger'
 
 interface NotificationDropdownProps {
   peerTutorId: string
@@ -18,7 +19,7 @@ export default function NotificationDropdown({ peerTutorId }: NotificationDropdo
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Fetch notifications
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     setLoading(true)
     try {
       const data = await NotificationService.getNotificationsByRecipient(peerTutorId)
@@ -26,11 +27,11 @@ export default function NotificationDropdown({ peerTutorId }: NotificationDropdo
       const unread = data.filter(n => !n.is_read).length
       setUnreadCount(unread)
     } catch (error) {
-      console.error('Error fetching notifications:', error)
+      logger.error('Error fetching notifications:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [peerTutorId])
 
   // Initial fetch
   useEffect(() => {
@@ -41,7 +42,7 @@ export default function NotificationDropdown({ peerTutorId }: NotificationDropdo
       const interval = setInterval(fetchNotifications, 30000)
       return () => clearInterval(interval)
     }
-  }, [peerTutorId])
+  }, [peerTutorId, fetchNotifications])
 
   // Close dropdown when clicking outside
   useEffect(() => {

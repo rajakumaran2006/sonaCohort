@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { logger } from '@/lib/logger'
 import { FeedbackForm } from '@/lib/services/feedbackService'
 import { FeedbackVersioningService, FeedbackFormVersion } from '@/lib/services/feedbackVersioningService'
 
@@ -25,7 +26,7 @@ export default function VersionInfo({ form }: VersionInfoProps) {
       setVersions(formVersions)
       setShowVersions(true)
     } catch (error) {
-      console.error('Error loading versions:', error)
+      logger.error('Error loading versions:', error)
     } finally {
       setLoading(false)
     }

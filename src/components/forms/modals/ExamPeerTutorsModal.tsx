@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui'
 import { Exam } from '@/lib/services/examService'
+import { logger } from '@/lib/logger'
 import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { useQuery } from '@tanstack/react-query'
 import { Filter, Eye } from 'lucide-react'
@@ -92,7 +93,7 @@ export default function ExampeerTutorModal({ isOpen, onClose, exam }: ExampeerTu
 
   const handleView = (peertutors: peertutors) => {
     // TODO: Implement view functionality in the future
-    console.log('View peer tutor:', peertutors)
+    logger.info('View peer tutor:', peertutors)
   }
 
   const hasActiveFilters = selectedYear !== 'all' || selectedSection !== 'all'

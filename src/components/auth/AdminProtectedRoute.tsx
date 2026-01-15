@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
+import { logger } from '@/lib/logger'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AdminService } from '@/lib/services/adminService'
@@ -23,7 +24,7 @@ export default function AdminProtectedRoute({ children }: AdminProtectedRoutePro
       if (!user?.email) {
         throw new Error('No user email')
       }
-      console.log('AdminProtectedRoute: Verifying admin access for:', user.email)
+      logger.info('AdminProtectedRoute: Verifying admin access for:', user.email)
       
       try {
         return await AdminService.isAdmin(user.email)
@@ -35,7 +36,7 @@ export default function AdminProtectedRoute({ children }: AdminProtectedRoutePro
         ]
         
         if (knownAdminEmails.includes(user.email.toLowerCase())) {
-          console.log('AdminProtectedRoute: Error occurred but user is in known admin list, allowing access')
+          logger.info('AdminProtectedRoute: Error occurred but user is in known admin list, allowing access')
           return true
         }
         throw error
@@ -54,14 +55,14 @@ export default function AdminProtectedRoute({ children }: AdminProtectedRoutePro
     }
 
     if (error || !isAdmin) {
-      console.log('AdminProtectedRoute: No admin access found for user:', user.email)
+      logger.info('AdminProtectedRoute: No admin access found for user:', user.email)
       router.push('/login?error=admin_access_denied')
       return null
     }
   }
 
   if (loading || isVerifying) {
-    console.log('AdminProtectedRoute: Showing loading state', { loading, isVerifying })
+    logger.info('AdminProtectedRoute: Showing loading state', { loading, isVerifying })
     return (
       <div className="flex h-screen bg-gray-100">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />

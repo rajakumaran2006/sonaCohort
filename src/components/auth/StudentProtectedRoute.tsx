@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
+import { logger } from '@/lib/logger'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { StudentService } from '@/lib/services/studentService'
@@ -23,7 +24,7 @@ export default function StudentProtectedRoute({ children }: StudentProtectedRout
       if (!user?.email) {
         throw new Error('No user email')
       }
-      console.log('StudentProtectedRoute: Verifying student access for:', user.email)
+      logger.info('StudentProtectedRoute: Verifying student access for:', user.email)
       return await StudentService.isStudent(user.email)
     },
     enabled: !!user && !loading,
@@ -39,14 +40,14 @@ export default function StudentProtectedRoute({ children }: StudentProtectedRout
     }
 
     if (error || !isStudent) {
-          console.log('StudentProtectedRoute: No student access found for user:', user.email)
+          logger.info('StudentProtectedRoute: No student access found for user:', user.email)
           router.push('/login?error=student_access_denied')
       return null
     }
   }
 
   if (loading || isVerifying) {
-    console.log('StudentProtectedRoute: Showing loading state', { loading, isVerifying })
+    logger.info('StudentProtectedRoute: Showing loading state', { loading, isVerifying })
     return (
       <div className="flex h-screen bg-gray-100">
         <StudentSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />

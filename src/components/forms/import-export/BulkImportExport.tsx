@@ -8,6 +8,7 @@ import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import { useAuth } from '@/lib/auth/AuthContext'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface BulkImportExportProps {
   dept: string
@@ -98,7 +99,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       XLSX.writeFile(wb, `peer_tutor_assignments_${dept}_${year}_${section}.xlsx`)
       
     } catch (error) {
-      console.error('Error exporting data:', error)
+      logger.error('Error exporting data:', error)
       toast.error('Error exporting data. Please try again.')
     } finally {
       setIsExporting(false)
@@ -129,7 +130,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       setShowImportPreview(true)
       
     } catch (error) {
-      console.error('Error reading Excel file:', error)
+      logger.error('Error reading Excel file:', error)
       toast.error('Error reading Excel file. Please check the file format and try again.')
     } finally {
       setIsImporting(false)
@@ -145,7 +146,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
     const invalidAssignments: ImportPreview['invalidAssignments'] = []
     
     if (!user?.id) {
-      console.error('No user ID available for validation')
+      logger.error('No user ID available for validation')
       return { validAssignments, invalidAssignments }
     }
     
@@ -181,7 +182,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
             section
           )
           if (peerTutors) {
-            console.log(`Auto-created peer tutor: ${peerTutors.name} (${peerTutors.email})`)
+            logger.info(`Auto-created peer tutor: ${peerTutors.name} (${peerTutors.email})`)
           }
         }
       }
@@ -198,7 +199,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
             section
           )
           if (student) {
-            console.log(`Auto-created student: ${student.name} (${student.email})`)
+            logger.info(`Auto-created student: ${student.name} (${student.email})`)
           }
         }
       }
@@ -347,7 +348,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       }
       
     } catch (error) {
-      console.error('Error importing assignments:', error)
+      logger.error('Error importing assignments:', error)
       toast.error('Error importing assignments. Please try again.')
     } finally {
       setIsImporting(false)

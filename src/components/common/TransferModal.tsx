@@ -6,6 +6,7 @@ import { ClassService } from '@/lib/services/classService'
 import { StudentService } from '@/lib/services/studentService'
 import { peertutorservice as PeerTutorService } from '@/lib/services/peerTutorService'
 import { AlertCircle, CheckCircle, XCircle, Loader2, Users } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface ItemToTransfer {
   id: string
@@ -66,16 +67,16 @@ export default function TransferModal({
     setLoading(true)
     setError(null)
     try {
-      // console.log('Loading sections for:', { dept, year, currentSection })
+      // logger.info('Loading sections for:', { dept, year, currentSection })
       const sections = await ClassService.getSectionsForYear(dept, year)
-      // console.log('All sections found:', sections)
+      // logger.info('All sections found:', sections)
       
       // Filter out current section (case-insensitive comparison)
       const otherSections = sections.filter(s => 
         s.toUpperCase() !== currentSection.toUpperCase()
       )
       
-      // console.log('Available sections after filtering:', otherSections)
+      // logger.info('Available sections after filtering:', otherSections)
       
       if (otherSections.length === 0) {
         setError('No other sections available for this year. Please create additional sections first.')
@@ -83,7 +84,7 @@ export default function TransferModal({
       
       setAvailableSections(otherSections)
     } catch (err) {
-      console.error('Error loading sections:', err)
+      logger.error('Error loading sections:', err)
       setError('Failed to load sections. Please try again.')
     } finally {
       setLoading(false)
@@ -140,7 +141,7 @@ export default function TransferModal({
 
       setSectionValidations(prev => new Map(prev).set(section, validation))
     } catch (err) {
-      console.error('Error validating section:', err)
+      logger.error('Error validating section:', err)
     } finally {
       setValidating(false)
     }
@@ -168,7 +169,7 @@ export default function TransferModal({
       await onTransfer(selectedSection, transferableItems.map(i => i.id))
       onClose()
     } catch (err) {
-      console.error('Transfer failed:', err)
+      logger.error('Transfer failed:', err)
       setError('Transfer failed. Please try again.')
     } finally {
       setConfirming(false)

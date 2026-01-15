@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { RenumerationService, peertutorsRenumeration, RenumerationField } from '@/lib/services/renumerationService'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
+import { logger } from '@/lib/logger'
 
 
 export default function PeerRenumerationPage() {
@@ -69,7 +70,7 @@ function PeerRenumerationContent() {
         setFieldResponses(responses)
       }
     } catch (error) {
-      console.error('Error loading peer tutor data:', error)
+      logger.error('Error loading peer tutor data:', error)
     } finally {
       setLoading(false)
     }
@@ -132,7 +133,7 @@ function PeerRenumerationContent() {
         alert('Failed to submit renumeration response. Please try again.')
       }
     } catch (error) {
-      console.error('Error submitting renumeration:', error)
+      logger.error('Error submitting renumeration:', error)
       alert('An error occurred while submitting. Please try again.')
     } finally {
       setSubmitting(null)

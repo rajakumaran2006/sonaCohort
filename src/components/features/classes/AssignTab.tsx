@@ -7,6 +7,7 @@ import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { Upload, Download } from 'lucide-react'
 import AssignmentImportModal from '@/components/forms/import-export/AssignmentImportModal'
 import PeerTutorsMappingExport from '@/components/forms/import-export/PeerTutorMappingExport'
+import { logger } from '@/lib/logger'
 
 interface AssignTabProps {
   dept: string
@@ -65,7 +66,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
       setUnassignedStudents(studentsData.filter((s: Student) => !s.assigned_peer_tutor_id && !s.peer_tutor))
       setPeerTutors(tutorsData)
     } catch (error) {
-      console.error('Error loading assignment data:', error)
+      logger.error('Error loading assignment data:', error)
     } finally {
       setLoading(false)
     }
@@ -83,7 +84,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
         await loadData() // Reload data
       }
     } catch (error) {
-      console.error('Error auto-assigning students:', error)
+      logger.error('Error auto-assigning students:', error)
     } finally {
       setAutoAssigning(false)
     }
@@ -96,7 +97,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
         await loadData() // Reload data
       }
     } catch (error) {
-      console.error('Error manually assigning student:', error)
+      logger.error('Error manually assigning student:', error)
     }
   }
 
@@ -107,7 +108,7 @@ export default function AssignTab({ dept, year, section }: AssignTabProps) {
         await loadData() // Reload data
       }
     } catch (error) {
-      console.error('Error unassigning student:', error)
+      logger.error('Error unassigning student:', error)
     }
   }
 

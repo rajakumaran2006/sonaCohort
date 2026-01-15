@@ -1,5 +1,7 @@
 'use client'
 
+
+import { logger } from '@/lib/logger'
 import { useState, useEffect, useCallback } from 'react'
 import { AttendanceService, AttendanceHistoryRecord } from '@/lib/services/attendanceService'
 
@@ -51,7 +53,7 @@ export default function StudentAttendanceModal({
         attendanceRate
       })
     } catch (error) {
-      console.error('Error loading student attendance:', error)
+      logger.error('Error loading student attendance:', error)
     } finally {
       setLoading(false)
     }

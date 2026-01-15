@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+
+import { logger } from '@/lib/logger'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Input, Button } from '@/components/ui'
 import { ExamService, CreateExamData } from '@/lib/services/examService'
 
@@ -87,7 +89,7 @@ export default function CreateExamModal({ isOpen, onClose, onSuccess, facultyId 
         setError('Failed to create exam. Please try again.')
       }
     } catch (error) {
-      console.error('Error creating exam:', error)
+      logger.error('Error creating exam:', error)
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)

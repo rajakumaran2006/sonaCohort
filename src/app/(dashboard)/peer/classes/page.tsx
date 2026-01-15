@@ -28,7 +28,6 @@ import {
   Lock,
   ChevronDown
 } from 'lucide-react'
-} from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { logger } from '@/lib/logger'
 
@@ -243,7 +242,7 @@ function PeerClassesContent() {
        const wb = XLSX.utils.book_new()
        XLSX.utils.book_append_sheet(wb, ws, "Classes")
        XLSX.writeFile(wb, `Classes_Export_${new Date().toISOString().split('T')[0]}.xlsx`)
-     } catch (_) {
+     } catch {
        toast.error('Error exporting to Excel. Please try again.')
      }
   }
