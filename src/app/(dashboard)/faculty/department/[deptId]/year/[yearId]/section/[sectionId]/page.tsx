@@ -3793,6 +3793,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
     const subjectsWithStatus = selectedSubjectNames.map(subjectName => {
       // Check if subject has scheduled classes
       const hasScheduledClasses = scheduledClasses.some(sc => sc.class.subject_name === subjectName)
+      
       return {
         name: subjectName,
         canDelete: !hasScheduledClasses,
