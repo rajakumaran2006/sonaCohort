@@ -1,6 +1,11 @@
 import React from 'react'
 import { ReportService } from '@/lib/services/reportService'
 import { useCachedData } from '@/lib/hooks/useCachedData'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import ExportButton from '@/components/ui/ExportButton'
+import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface PeerTopicSheetProps {
   peertutorId: string
@@ -30,10 +35,10 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
       const [start, end] = timeStr.split(' - ')
       return `${formatTime(start)} - ${formatTime(end)}`
     }
-    
+
     // Check if valid time format HH:MM
     if (!timeStr.match(/^\d{1,2}:\d{2}$/) && !timeStr.match(/^\d{1,2}:\d{2}:\d{2}$/)) {
-        return timeStr
+      return timeStr
     }
 
     try {
@@ -47,11 +52,117 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
     }
   }
 
+  const handleExport = () => {
+    if (!topicData || topicData.length === 0) {
+      toast.error('No data available to export')
+      return
+    }
+
+    try {
+      const doc = new jsPDF()
+      const pageHeight = doc.internal.pageSize.height
+      const pageWidth = doc.internal.pageSize.width
+      let finalY = 20
+
+      topicData.forEach((subject, index) => {
+        // Calculate estimated height needed for header and at least one row
+        // Header (10) + Table Header (10) + Row (10) + Spacing (5) approx 35
+        if (finalY + 35 > pageHeight) {
+          doc.addPage()
+          finalY = 20
+        } else if (index > 0) {
+          finalY += 5 // Reduced spacing between subjects (was 10)
+        }
+
+        // Title
+        doc.setFontSize(14)
+        doc.setFont('helvetica', 'bold')
+        doc.text(`SUBJECT NAME ${index + 1}: ${subject.subject_name}`, 14, finalY)
+
+        // Prepare table data
+        const tableBody = subject.classes.map((cls, idx) => [
+          idx + 1,
+          `${formatDate(cls.date)}${cls.is_additional ? ' (A)' : ''}`,
+          formatTime(cls.hour),
+          cls.topic
+        ])
+
+        // Generate table
+        autoTable(doc, {
+          startY: finalY + 5,
+          head: [['S.NO', 'DATE', 'HOUR', 'TOPIC DETAILS']],
+          body: tableBody,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [255, 255, 255],
+            textColor: [0, 0, 0],
+            lineColor: [0, 0, 0],
+            lineWidth: 0.1,
+            fontStyle: 'bold',
+            halign: 'center'
+          },
+          bodyStyles: {
+            textColor: [0, 0, 0],
+            lineColor: [0, 0, 0],
+            lineWidth: 0.1,
+          },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 15 },
+            1: { halign: 'center', cellWidth: 30 },
+            2: { halign: 'center', cellWidth: 35 },
+            3: { halign: 'left' }
+          },
+          styles: {
+            font: 'helvetica',
+            fontSize: 10,
+            cellPadding: 3
+          },
+          margin: { top: 20, bottom: 20, left: 14, right: 14 }
+        })
+
+        // Update finalY to the end of the table
+        // We need to cast doc to any to access lastAutoTable
+        finalY = (doc as any).lastAutoTable.finalY + 2 // Minimized spacing (was 5)
+
+        // Add Signature space
+        // Check if there is space for signature (approx 15 units)
+        if (finalY + 15 > pageHeight) {
+          doc.addPage()
+          finalY = 20
+        }
+
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        // Draw signature much closer to table
+        doc.text('SIGNATURE OF FACULTY:', 14, finalY + 6)
+
+        finalY += 10 // Reduced buffer after signature for next subject (was 15)
+      })
+
+      // Add Borders to all pages
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setDrawColor(0) // Black
+        doc.setLineWidth(0.5)
+        // Draw rect with 5mm margin
+        doc.rect(5, 5, pageWidth - 10, pageHeight - 10)
+      }
+
+      const fileName = `Topic_Sheet_${new Date().toISOString().split('T')[0]}.pdf`
+      doc.save(fileName)
+      toast.success('Topic Sheet exported successfully!')
+    } catch (error) {
+      logger.error('Error exporting topic sheet:', error)
+      toast.error('Failed to export topic sheet')
+    }
+  }
+
   if (isLoading) {
     return (
-       <div className="flex items-center justify-center min-h-[40vh]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-       </div>
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
     )
   }
 
@@ -64,15 +175,19 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
   }
 
   return (
-    <div className="bg-white p-8 shadow-sm border border-gray-200 rounded-none print:shadow-none print:border-none">
+    <div className="bg-white p-8 shadow-sm border border-gray-200 rounded-none print:shadow-none print:border-none relative">
+      <div className="absolute top-6 right-6 print:hidden">
+        <ExportButton onClick={handleExport} />
+      </div>
+
       {topicData.map((subject, index) => (
-        <div key={index} className={index > 0 ? "mt-12" : ""}>
+        <div key={index} className={index > 0 ? "mt-12" : "mt-8"}>
           <div className="mb-6">
             <h3 className="text-lg font-bold text-gray-900 border-b-2 border-gray-800 pb-2 uppercase">
               SUBJECT NAME {index + 1}: <span className="text-gray-700 ml-2 font-normal">{subject.subject_name}</span>
             </h3>
           </div>
-          
+
           <div className="overflow-hidden">
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
@@ -129,7 +244,7 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
                       {cls.is_additional ? 'A' : 'R'}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <p className="text-sm text-gray-500 font-medium uppercase text-xs tracking-wider">Topic Covered</p>
                     <p className="text-sm text-gray-900 leading-relaxed font-medium">
@@ -144,9 +259,9 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
                 </div>
               )}
             </div>
-            
+
             <div className="mt-12 pt-4">
-                <p className="text-sm font-bold uppercase text-gray-900">Signature of Faculty:</p>
+              <p className="text-sm font-bold uppercase text-gray-900">Signature of Faculty:</p>
             </div>
           </div>
         </div>

@@ -1,6 +1,11 @@
 import React from 'react'
 import { ReportService } from '@/lib/services/reportService'
 import { useCachedData } from '@/lib/hooks/useCachedData'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import ExportButton from '@/components/ui/ExportButton'
+import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 interface PeerAttendanceSheetProps {
   peertutorId: string
@@ -15,13 +20,128 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
     enabled: !!peertutorId
   })
 
+  const handleExport = () => {
+    if (!attendanceData || attendanceData.length === 0) {
+      toast.error('No data available to export')
+      return
+    }
 
+    try {
+      const doc = new jsPDF('l', 'mm', 'a4') // Landscape mode for wider tables
+      const pageHeight = doc.internal.pageSize.height
+      const pageWidth = doc.internal.pageSize.width
+      let finalY = 20
+
+      attendanceData.forEach((subject, index) => {
+        // Check space
+        // Header (10) + Table Header (10) + Row (10) = 30
+        if (finalY + 30 > pageHeight) {
+          doc.addPage()
+          finalY = 20
+        } else if (index > 0) {
+          finalY += 5 // Reduced spacing between subjects (was 10)
+        }
+
+        doc.setFontSize(14)
+        doc.setFont('helvetica', 'bold')
+        doc.text(`SUBJECT NAME ${index + 1}: ${subject.subject_name}`, 14, finalY)
+
+        // Prepare headers
+        const headers = ['S.No', 'Name']
+        subject.columns.forEach(col => {
+          const date = new Date(col.date)
+          const formattedDate = `${date.getDate().toString().padStart(2, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getFullYear()}`
+          headers.push(`${formattedDate}${col.is_additional ? ' (A)' : ''}`)
+        })
+        headers.push('No of Hours Present', '%')
+
+        // Prepare rows
+        const tableBody = subject.rows.map((student, idx) => {
+          const row: (string | number)[] = [
+            idx + 1,
+            student.student_name
+          ]
+
+          subject.columns.forEach(col => {
+            const status = student.attendance[col.id];
+            row.push(status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : '-')
+          })
+
+          row.push(student.stats.present, `${student.stats.percentage}%`)
+          return row
+        })
+
+        // Generate table
+        autoTable(doc, {
+          startY: finalY + 5,
+          head: [headers],
+          body: tableBody,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [255, 255, 255],
+            textColor: [0, 0, 0],
+            lineColor: [0, 0, 0],
+            lineWidth: 0.1,
+            fontStyle: 'bold',
+            halign: 'center',
+            fontSize: 8
+          },
+          bodyStyles: {
+            textColor: [0, 0, 0],
+            lineColor: [0, 0, 0],
+            lineWidth: 0.1,
+            fontSize: 8,
+            halign: 'center'
+          },
+          columnStyles: {
+            1: { halign: 'left' } // Name column align left
+          },
+          styles: {
+            font: 'helvetica',
+            cellPadding: 2
+          },
+          margin: { top: 20, bottom: 20, left: 14, right: 14 }
+        })
+
+        // Update finalY
+        finalY = (doc as any).lastAutoTable.finalY + 2 // Minimized spacing (was 5)
+
+        // Add Signature space
+        if (finalY + 15 > pageHeight) {
+          doc.addPage()
+          finalY = 20
+        }
+
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.text('SIGNATURE OF FACULTY:', 14, finalY + 6)
+
+        finalY += 10 // Reduced buffer (was 15)
+      })
+
+      // Add Borders
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setDrawColor(0)
+        doc.setLineWidth(0.5)
+        doc.rect(5, 5, pageWidth - 10, pageHeight - 10)
+      }
+
+      const fileName = `Attendance_Sheet_${new Date().toISOString().split('T')[0]}.pdf`
+      doc.save(fileName)
+      toast.success('Attendance Sheet exported successfully!')
+    } catch (error) {
+      logger.error('Error exporting attendance sheet:', error)
+      toast.error('Failed to export attendance sheet')
+    }
+  }
 
   if (isLoading) {
     return (
-       <div className="flex items-center justify-center min-h-[40vh]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-       </div>
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
     )
   }
 
@@ -34,15 +154,19 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
   }
 
   return (
-    <div className="bg-white p-8 shadow-sm border border-gray-200 rounded-none print:shadow-none print:border-none">
+    <div className="bg-white p-8 shadow-sm border border-gray-200 rounded-none print:shadow-none print:border-none relative">
+      <div className="absolute top-6 right-6 print:hidden">
+        <ExportButton onClick={handleExport} />
+      </div>
+
       {attendanceData.map((subject, index) => (
-        <div key={index} className={index > 0 ? "mt-16" : ""}>
+        <div key={index} className={index > 0 ? "mt-16" : "mt-8"}>
           <div className="mb-6">
             <h3 className="text-lg font-bold text-gray-900 border-b-2 border-gray-800 pb-2 uppercase">
               SUBJECT NAME {index + 1}: <span className="text-gray-700 ml-2 font-normal">{subject.subject_name}</span>
             </h3>
           </div>
-          
+
           <div className="overflow-x-auto">
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
@@ -71,16 +195,16 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
                     <tr key={student.student_id}>
                       <td className="border border-gray-800 p-2 text-center text-xs">{idx + 1}</td>
                       <td className="border border-gray-800 p-2 text-left text-xs font-medium whitespace-nowrap w-[1%]">{student.student_name}</td>
-                      
+
                       {subject.columns.map(col => {
                         const status = student.attendance[col.id];
                         return (
                           <td key={`${student.student_id}-${col.id}`} className="border border-gray-800 p-2 text-center text-xs">
-                              {status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : ''}
+                            {status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : ''}
                           </td>
                         )
                       })}
-                      
+
                       <td className="border border-gray-800 p-2 text-center text-xs font-bold">{student.stats.present}</td>
                       <td className="border border-gray-800 p-2 text-center text-xs font-bold">{student.stats.percentage}%</td>
                     </tr>
@@ -126,11 +250,11 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
                         const date = new Date(col.date)
                         const formattedDate = `${date.getDate()}/${date.getMonth() + 1}`
                         const status = student.attendance[col.id]
-                        
+
                         return (
                           <div key={col.id} className="flex flex-col items-center p-2 rounded-lg border bg-gray-50 border-gray-200">
                             <span className="text-[10px] text-gray-500 font-bold mb-1">
-                               {formattedDate} <span className="text-gray-400 font-medium">({col.is_additional ? 'A' : 'R'})</span>
+                              {formattedDate} <span className="text-gray-400 font-medium">({col.is_additional ? 'A' : 'R'})</span>
                             </span>
                             <span className="text-xs font-black text-gray-900">
                               {status === 'present' ? 'P' : status === 'absent' ? 'Ab' : status === 'on_duty' ? 'OD' : '-'}
@@ -143,9 +267,9 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
                 </div>
               ))}
             </div>
-            
+
             <div className="mt-12 pt-4">
-                <p className="text-sm font-bold uppercase text-gray-900">Signature of Faculty:</p>
+              <p className="text-sm font-bold uppercase text-gray-900">Signature of Faculty:</p>
             </div>
           </div>
         </div>
