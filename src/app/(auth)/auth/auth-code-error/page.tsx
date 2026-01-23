@@ -6,6 +6,7 @@ import { Suspense } from 'react'
 import { motion, Variants } from 'framer-motion'
 import { RefreshCw, Home } from 'lucide-react'
 
+
 export default function AuthCodeError() {
   return (
     <Suspense fallback={

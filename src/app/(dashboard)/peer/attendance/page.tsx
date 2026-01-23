@@ -121,7 +121,7 @@ function PeerAttendanceContent(): ReactNode {
     attendanceRate: 0
   }
   const attendanceHistory = useMemo(() => attendanceHistoryData || [], [attendanceHistoryData])
-  const scheduledClasses = scheduledClassesData || []
+  const scheduledClasses = useMemo(() => scheduledClassesData || [], [scheduledClassesData])
 
   const completedClassesCount = useMemo(() => 
     scheduledClasses.filter(c => c.completion_status === 'completed').length,

@@ -63,7 +63,6 @@ export const getOneDriveDirectLink = (url: string): string | null => {
         }
 
     } catch (e) {
-        console.error("Invalid URL passed to getOneDriveDirectLink", e);
         return null;
     }
 
