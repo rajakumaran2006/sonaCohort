@@ -404,7 +404,7 @@ function PeerClassesContent() {
             {!loading && activeTab === 'scheduled' && (
               <div>
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   {/* Total Subjects */}
                   <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
                     <div className="p-5">
@@ -565,7 +565,7 @@ function PeerClassesContent() {
                             {/* Date */}
                             <div className="flex items-center gap-2 text-xs">
                               <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                              <span className="font-bold text-gray-900">
+                              <span className="font-bold uppercase text-gray-900">
                                 {new Date(classItem.scheduled_date || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                               </span>
                               <span className="text-[10px] text-gray-400 font-medium uppercase">
@@ -728,11 +728,8 @@ function PeerClassesContent() {
                                        <p className="text-xs font-bold text-gray-900 uppercase leading-tight hover:underline">{classItem.subject_name}</p>
                                     </TableCell>
                                     <TableCell className="py-3 sm:py-4 text-center">
-                                       <p className="text-xs font-bold text-gray-900">
-                                          {new Date(classItem.scheduled_date || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                       </p>
-                                       <p className="text-[10px] text-gray-400 font-medium uppercase mt-0.5">
-                                          {new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'short' })}
+                                       <p className="text-xs font-bold uppercase text-gray-900">
+                                          {new Date(classItem.scheduled_date || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} /                                           {new Date(classItem.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'short' })}
                                        </p>
                                     </TableCell>
                                     <TableCell className="py-3 sm:py-4 text-center">
@@ -932,6 +929,14 @@ function PeerClassesContent() {
         onClose={handleCloseModal}
         classItem={selectedClass}
         userEmail={user?.email || ''}
+        availableSubjects={classes
+          .reduce((acc, curr) => {
+            if (!acc.some(item => item.subject_name === curr.subject_name)) {
+              acc.push({ id: curr.class_id || '', subject_name: curr.subject_name })
+            }
+            return acc
+          }, [] as { id: string, subject_name: string }[])
+        }
       />
     </div>
   )

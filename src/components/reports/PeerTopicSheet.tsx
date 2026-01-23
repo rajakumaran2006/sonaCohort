@@ -123,10 +123,10 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
                         {formatDate(cls.date)}
                       </span>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      cls.is_additional ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                    <span className={`px-3 py-1 rounded text-xs font-bold ${
+                      cls.is_additional ? 'bg-purple-700 text-white' : 'bg-blue-700 text-white'
                     }`}>
-                      {cls.is_additional ? 'Additional' : 'Regular'}
+                      {cls.is_additional ? 'A' : 'R'}
                     </span>
                   </div>
                   

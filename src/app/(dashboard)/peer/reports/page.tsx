@@ -237,8 +237,8 @@ function PeerReportsContent() {
                   <div className="space-y-6">
                     
                     {/* Stats Overview */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-8">
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative group overflow-hidden">
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Total Subjects</p>
@@ -257,7 +257,7 @@ function PeerReportsContent() {
                         </div>
                       </div>
 
-                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative group overflow-hidden">
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Completed Classes</p>
@@ -278,7 +278,7 @@ function PeerReportsContent() {
                         </div>
                       </div>
 
-                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative group overflow-hidden">
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Additional Classes</p>
@@ -299,7 +299,7 @@ function PeerReportsContent() {
                         </div>
                       </div>
 
-                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group overflow-hidden">
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative group overflow-hidden">
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Pending Classes</p>
@@ -327,7 +327,7 @@ function PeerReportsContent() {
                         <div className="flex items-center justify-between mb-0">
                           <div>
                             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">My Subjects</h3>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">
                               {reportData.subjects.length} subject(s) assigned
                             </p>
                           </div>

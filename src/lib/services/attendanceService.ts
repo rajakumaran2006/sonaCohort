@@ -702,6 +702,7 @@ export class AttendanceService {
    */
   static async getAttendanceSummary(peertutorsId: string): Promise<{
     totalClasses: number
+    additionalClasses: number
     totalStudents: number
     presentCount: number
     absentCount: number
@@ -729,6 +730,7 @@ export class AttendanceService {
         })
         return {
           totalClasses: 0,
+          additionalClasses: 0,
           totalStudents: 0,
           presentCount: 0,
           absentCount: 0,
@@ -740,6 +742,7 @@ export class AttendanceService {
         logger.error('No peer tutor data found for ID:', peertutorsId)
         return {
           totalClasses: 0,
+          additionalClasses: 0,
           totalStudents: 0,
           presentCount: 0,
           absentCount: 0,
@@ -768,12 +771,35 @@ export class AttendanceService {
         })
         return {
           totalClasses: 0,
+          additionalClasses: 0,
           totalStudents: 0,
           presentCount: 0,
           absentCount: 0,
           attendanceRate: 0
         }
       }
+
+      // Get total scheduled classes for this peer tutor (ALL classes, including extra ones)
+      const { data: allScheduledClasses, error: allScheduledError } = await supabase
+        .from('scheduled_classes')
+        .select('id')
+        .eq('peer_tutor_id', peertutorsId)
+
+      if (allScheduledError) {
+        logger.error('Error getting all scheduled classes count:', allScheduledError)
+        return {
+          totalClasses: 0,
+          additionalClasses: 0,
+          totalStudents: 0,
+          presentCount: 0,
+          absentCount: 0,
+          attendanceRate: 0
+        }
+      }
+
+      const totalScheduledCount = allScheduledClasses?.length || 0
+      const sectionScheduledCount = scheduledClassesData?.length || 0
+      const additionalClasses = Math.max(0, totalScheduledCount - sectionScheduledCount)
 
       // Get total students assigned to this peer tutor
       const { data: studentsData, error: studentsError } = await supabase
@@ -792,6 +818,7 @@ export class AttendanceService {
         })
         return {
           totalClasses: 0,
+          additionalClasses: 0,
           totalStudents: 0,
           presentCount: 0,
           absentCount: 0,
@@ -815,6 +842,7 @@ export class AttendanceService {
         })
         return {
           totalClasses: 0,
+          additionalClasses: 0,
           totalStudents: 0,
           presentCount: 0,
           absentCount: 0,
@@ -828,7 +856,8 @@ export class AttendanceService {
       const attendanceRate = totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0
 
       logger.info('Attendance summary calculated:', {
-        totalClasses: scheduledClassesData?.length || 0,
+        totalClasses: sectionScheduledCount,
+        additionalClasses,
         totalStudents: studentsData?.length || 0,
         presentCount,
         absentCount,
@@ -836,7 +865,8 @@ export class AttendanceService {
       })
 
       return {
-        totalClasses: scheduledClassesData?.length || 0,
+        totalClasses: sectionScheduledCount,
+        additionalClasses,
         totalStudents: studentsData?.length || 0,
         presentCount,
         absentCount,
@@ -846,6 +876,7 @@ export class AttendanceService {
       logger.error('Error in getAttendanceSummary:', error)
       return {
         totalClasses: 0,
+        additionalClasses: 0,
         totalStudents: 0,
         presentCount: 0,
         absentCount: 0,

@@ -686,7 +686,8 @@ export class ScheduledClassService {
       topics?: string, 
       start_time?: string, 
       end_time?: string, 
-      link?: string 
+      link?: string,
+      class_id?: string
     }
   ): Promise<boolean> {
     try {
@@ -724,6 +725,7 @@ export class ScheduledClassService {
       if (data.start_time !== undefined) updateData.start_time = data.start_time
       if (data.end_time !== undefined) updateData.end_time = data.end_time
       if (data.link !== undefined) updateData.link = data.link
+      if (data.class_id !== undefined) updateData.class_id = data.class_id
 
       logger.info('Updating with data:', updateData)
 
