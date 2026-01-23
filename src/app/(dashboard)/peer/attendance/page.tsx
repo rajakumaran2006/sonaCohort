@@ -74,6 +74,7 @@ function PeerAttendanceContent(): ReactNode {
     queryFn: async () => {
       if (!tutorInfoData?.id) return {
         totalClasses: 0,
+        additionalClasses: 0,
         totalStudents: 0,
         presentCount: 0,
         absentCount: 0,
@@ -84,6 +85,7 @@ function PeerAttendanceContent(): ReactNode {
     enabled: !!tutorInfoData?.id,
     initialData: {
       totalClasses: 0,
+      additionalClasses: 0,
       totalStudents: 0,
       presentCount: 0,
       absentCount: 0,
@@ -112,6 +114,7 @@ function PeerAttendanceContent(): ReactNode {
   const loading = tutorLoading || scheduledLoading || summaryLoading || historyLoading
   const summary = summaryData || {
     totalClasses: 0,
+    additionalClasses: 0,
     totalStudents: 0,
     presentCount: 0,
     absentCount: 0,
@@ -119,6 +122,12 @@ function PeerAttendanceContent(): ReactNode {
   }
   const attendanceHistory = useMemo(() => attendanceHistoryData || [], [attendanceHistoryData])
   const scheduledClasses = scheduledClassesData || []
+
+  const completedClassesCount = useMemo(() => 
+    scheduledClasses.filter(c => c.completion_status === 'completed').length,
+    [scheduledClasses]
+  )
+
 
   // Filter attendance history based on status and search
   const filteredHistory = useMemo(() => {
@@ -202,31 +211,33 @@ function PeerAttendanceContent(): ReactNode {
     return (
       <div className="space-y-4 sm:space-y-6">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
-          {/* Total Classes Card */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+
+
+          {/* Total Students Card */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative overflow-hidden">
             <div className="flex justify-between items-start mb-2">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-2">Total Classes</p>
-                <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.totalClasses}</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-2">Total Students</p>
+                <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.totalStudents}</p>
               </div>
               <div className="p-2 border border-gray-100 rounded-lg">
-                <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 30 30" fill="currentColor">
-                <path d="M 5 4 C 3.895 4 3 4.895 3 6 L 3 9 L 3 25 A 1.0001 1.0001 0 0 0 4 26 L 26 26 A 1.0001 1.0001 0 0 0 27 25 L 27 8 L 27 6 C 27 4.895 26.105 4 25 4 L 5 4 z M 5 9 L 25 9 L 25 24 L 5 24 L 5 9 z M 9 11 A 1.0001 1.0001 0 1 0 9 13 L 9 15 A 1.0001 1.0001 0 1 0 11 15 L 11 12 A 1.0001 1.0001 0 0 0 10 11 L 9 11 z M 15 11 C 13.895 11 13 11.895 13 13 L 13 14 C 13 15.105 13.895 16 15 16 C 16.105 16 17 15.105 17 14 L 17 13 C 17 11.895 16.105 11 15 11 z M 20 11 A 1.0001 1.0001 0 1 0 20 13 L 20 15 A 1.0001 1.0001 0 1 0 22 15 L 22 12 A 1.0001 1.0001 0 0 0 21 11 L 20 11 z M 10 17 C 8.895 17 8 17.895 8 19 L 8 20 C 8 21.105 8.895 22 10 22 C 11.105 22 12 21.105 12 20 L 12 19 C 12 17.895 11.105 17 10 17 z M 15 17 A 1.0001 1.0001 0 1 0 15 19 L 15 21 A 1.0001 1.0001 0 1 0 17 21 L 17 18 A 1.0001 1.0001 0 0 0 16 17 L 15 17 z M 20 17 A 1.0001 1.0001 0 1 0 20 19 L 20 21 A 1.0001 1.0001 0 1 0 22 21 L 22 18 A 1.0001 1.0001 0 0 0 21 17 L 20 17 z"></path>
-              </svg>
+                <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 24 24" fill="currentColor">
+                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
               </div>
             </div>
             <div className="mt-4">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">ASSIGNED FOR YEAR {tutorInfoData?.year || 3}</span>
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">ASSIGNED</span>
             </div>
           </div>
 
-          {/* Present Card */}
+          {/* Completed Classes (Fixed Calculation) */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative overflow-hidden">
             <div className="flex justify-between items-start mb-2">
               <div>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-2">Completed Classes</p>
-                <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.presentCount}</p>
+                <p className="text-3xl font-bold text-gray-900 tracking-tight">{completedClassesCount}</p>
               </div>
               <div className="p-2 border border-gray-100 rounded-lg">
                 <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 24 24" fill="currentColor">
@@ -238,22 +249,39 @@ function PeerAttendanceContent(): ReactNode {
               <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">FINISHED</span>
             </div>
           </div>
-
-          {/* Absent/Pending Classes Card */}
+                    {/* Additional Classes Card */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative overflow-hidden">
             <div className="flex justify-between items-start mb-2">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-2">Pending Classes</p>
-                <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.totalClasses - summary.presentCount}</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-2">Additional Classes</p>
+                <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.additionalClasses}</p>
               </div>
               <div className="p-2 border border-gray-100 rounded-lg">
-                <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 30 30" fill="currentColor">
-                <path d="M15,3C8.373,3,3,8.373,3,15c0,6.627,5.373,12,12,12s12-5.373,12-12C27,8.373,21.627,3,15,3z M16,16H7.995 C7.445,16,7,15.555,7,15.005v-0.011C7,14.445,7.445,14,7.995,14H14V5.995C14,5.445,14.445,5,14.995,5h0.011 C15.555,5,16,5.445,16,5.995V16z"></path>
-              </svg>
+                          <svg className="w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 30 30" fill="currentColor">
+                            <path d="M 5 4 C 3.895 4 3 4.895 3 6 L 3 9 L 3 25 A 1.0001 1.0001 0 0 0 4 26 L 26 26 A 1.0001 1.0001 0 0 0 27 25 L 27 8 L 27 6 C 27 4.895 26.105 4 25 4 L 5 4 z M 5 9 L 25 9 L 25 24 L 5 24 L 5 9 z M 9 11 A 1.0001 1.0001 0 1 0 9 13 L 9 15 A 1.0001 1.0001 0 1 0 11 15 L 11 12 A 1.0001 1.0001 0 0 0 10 11 L 9 11 z M 15 11 C 13.895 11 13 11.895 13 13 L 13 14 C 13 15.105 13.895 16 15 16 C 16.105 16 17 15.105 17 14 L 17 13 C 17 11.895 16.105 11 15 11 z M 20 11 A 1.0001 1.0001 0 1 0 20 13 L 20 15 A 1.0001 1.0001 0 1 0 22 15 L 22 12 A 1.0001 1.0001 0 0 0 21 11 L 20 11 z M 10 17 C 8.895 17 8 17.895 8 19 L 8 20 C 8 21.105 8.895 22 10 22 C 11.105 22 12 21.105 12 20 L 12 19 C 12 17.895 11.105 17 10 17 z M 15 17 A 1.0001 1.0001 0 1 0 15 19 L 15 21 A 1.0001 1.0001 0 1 0 17 21 L 17 18 A 1.0001 1.0001 0 0 0 16 17 L 15 17 z M 20 17 A 1.0001 1.0001 0 1 0 20 19 L 20 21 A 1.0001 1.0001 0 1 0 22 21 L 22 18 A 1.0001 1.0001 0 0 0 21 17 L 20 17 z"></path>
+                          </svg>
               </div>
             </div>
             <div className="mt-4">
-              <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">REMAINING</span>
+              <span className="text-[10px] font-bold text-purple-500 uppercase tracking-widest">EXTRA SESSIONS</span>
+            </div>
+          </div>
+
+          {/* Avg Attendance Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative overflow-hidden">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-2">Avg Attendance</p>
+                <p className="text-3xl font-bold text-gray-900 tracking-tight">{summary.attendanceRate}%</p>
+              </div>
+              <div className="p-2 border border-gray-100 rounded-lg">
+                <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+              </div>
+            </div>
+            <div className="mt-4">
+              <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">PER SESSION</span>
             </div>
           </div>
         </div>
@@ -265,7 +293,7 @@ function PeerAttendanceContent(): ReactNode {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h3 className="text-lg font-bold text-gray-700 uppercase tracking-wider">Attendance History</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">
                   Showing {filteredHistory.length} of {attendanceHistory.length} records
                 </p>
               </div>
@@ -416,7 +444,7 @@ function PeerAttendanceContent(): ReactNode {
                       <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
                         <div>
                           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Class</p>
-                          <p className="text-xs font-bold text-gray-900 truncate">
+                          <p className="text-xs font-bold uppercase text-gray-900 truncate">
                             {record.classes?.subject_name || 'No Class'}
                           </p>
                         </div>

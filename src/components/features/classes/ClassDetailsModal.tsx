@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner'
 import { logger } from '@/lib/logger'
 import { isValidUrl } from '@/lib/utils/validators'
+import { getOneDriveDirectLink } from '@/lib/utils/onedrive'
 import ClassDetailsSkeleton from '@/components/skeletons/ClassDetailsSkeleton'
 
 interface ClassDetailsModalProps {
@@ -24,12 +25,13 @@ interface ClassDetailsModalProps {
   onClose: () => void
   classItem: Class | null
   userEmail: string
+  availableSubjects?: { id: string, subject_name: string }[]
 }
 
 const getInitials = (name: string): string => name.split(' ').map(word => word.charAt(0)).join('').toUpperCase().slice(0, 2)
 
 
-export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmail }: ClassDetailsModalProps) {
+export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmail, availableSubjects }: ClassDetailsModalProps) {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
   const [topics, setTopics] = useState<string>('')
   const [startTime, setStartTime] = useState<string>('')
@@ -41,6 +43,8 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
   const [peertutorsId, setpeertutorsId] = useState<string>('')
   const [scheduledClassId, setScheduledClassId] = useState<string>('')
   const [isCompletedClass, setIsCompletedClass] = useState(false)
+  const [selectedClassId, setSelectedClassId] = useState<string>('')
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
 
 
 
@@ -53,6 +57,13 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
   const [originalAttendance, setOriginalAttendance] = useState<AttendanceRecord[]>([])
   
   const supabase = createClient()
+  
+  // Initialize selected class ID
+  useEffect(() => {
+    if (classItem?.id) {
+        setSelectedClassId(classItem.id)
+    }
+  }, [classItem])
 
   const loadClassDetails = useCallback(async () => {
     if (!classItem) return
@@ -77,7 +88,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
          const { data: foundScheduledClass } = await supabase
             .from('scheduled_classes')
             .select('id, topics, start_time, end_time, link, image_link, completion_status')
-            .eq('class_id', classItem.id)
+            .eq('class_id', selectedClassId || classItem.id)
             .eq('peer_tutor_id', tutorInfo.id)
             .eq('scheduled_date', targetDate)
             .maybeSingle()
@@ -131,7 +142,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
       } else {
           setScheduledClassId('')
           // If no scheduled class yet, check if there was any legacy attendance by class ID (unlikely for new system but good fallback)
-          existingAttendance = await AttendanceService.getAttendanceByClass(classItem.id)
+          existingAttendance = await AttendanceService.getAttendanceByClass(selectedClassId || classItem.id)
       }
 
       // Merge Attendance
@@ -153,7 +164,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
     } finally {
       setLoading(false)
     }
-  }, [classItem, userEmail, supabase])
+  }, [classItem, userEmail, supabase, selectedClassId])
 
   // Load Initial Data
   useEffect(() => {
@@ -161,9 +172,23 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
       // Reset states when opening
       setIsCompletedClass(false)
       setCurrentStep('topics')
-      loadClassDetails()
+      
+      // Only reload if the selectedClassId is set (after the initial useEffect sets it)
+      if (selectedClassId) {
+          loadClassDetails()
+      }
     }
-  }, [isOpen, classItem, userEmail, loadClassDetails])
+  }, [isOpen, classItem, userEmail, selectedClassId, loadClassDetails])
+
+  // Update Image Preview when meeting link changes
+  useEffect(() => {
+    if (meetingLink) {
+        const directLink = getOneDriveDirectLink(meetingLink)
+        setImagePreviewUrl(directLink)
+    } else {
+        setImagePreviewUrl(null)
+    }
+  }, [meetingLink])
 
 
   // Steps Logic
@@ -213,7 +238,8 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
               topics: topics,
               start_time: startTime,
               end_time: endTime,
-              link: meetingLink
+              link: meetingLink,
+              class_id: selectedClassId
             })
             
             if (!detailsSuccess) {
@@ -343,7 +369,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
             // Create new scheduled class
             logger.info('Creating new scheduled class...')
             const success = await ScheduledClassService.createScheduledClass({
-                class_id: classItem.id,
+                class_id: selectedClassId || classItem.id,
                 scheduled_date: targetDate,
                 dept: classItem.dept,
                 year: classItem.year,
@@ -364,7 +390,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
             const { data: newSc, error: fetchError } = await supabase
                 .from('scheduled_classes')
                 .select('id')
-                .eq('class_id', classItem.id)
+                .eq('class_id', selectedClassId || classItem.id)
                 .eq('peer_tutor_id', peertutorsId)
                 .eq('scheduled_date', targetDate)
                 .maybeSingle()
@@ -384,7 +410,8 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
                 topics: topics,
                 start_time: startTime,
                 end_time: endTime,
-                link: meetingLink
+                link: meetingLink,
+                class_id: selectedClassId
             })
 
             if (!updateSuccess) {
@@ -492,9 +519,33 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
             <div className="bg-white px-4 sm:px-8 pt-6 sm:pt-8 pb-3 sm:pb-4 relative z-10 border-b border-gray-100/50">
                 <div className="flex justify-between items-start mb-3 sm:mb-4">
                     <div className="flex-1 min-w-0 pr-2">
-                        <motion.h2 layoutId="title" className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight truncate">
-                            {classItem.subject_name}
-                        </motion.h2>
+                        {availableSubjects && availableSubjects.length > 1 ? (
+                             <div className="relative inline-flex items-center gap-2 group cursor-pointer hover:bg-gray-50 px-2 py-1 -ml-2 rounded-lg transition-colors">
+                                 <motion.h2 layoutId="title" className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight truncate max-w-[250px] uppercase sm:max-w-md">
+                                     {availableSubjects.find(s => s.id === selectedClassId)?.subject_name || classItem.subject_name}
+                                 </motion.h2>
+                                 <svg className="fill-gray-400 group-hover:fill-gray-900 transition-colors h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                     <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                 </svg>
+                                 <select 
+                                     value={selectedClassId}
+                                     onChange={(e) => {
+                                         setSelectedClassId(e.target.value)
+                                     }}
+                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none"
+                                 >
+                                     {availableSubjects.map((subject) => (
+                                         <option key={subject.id} value={subject.id}>
+                                             {subject.subject_name}
+                                         </option>
+                                     ))}
+                                 </select>
+                             </div>
+                        ) : (
+                            <motion.h2 layoutId="title" className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight truncate">
+                                {classItem.subject_name}
+                            </motion.h2>
+                        )}
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-gray-500 text-xs sm:text-sm font-medium">
                             <span className="flex items-center gap-1 sm:gap-1.5 bg-gray-100 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-gray-600 text-[10px] sm:text-xs">
                                 <span className="hidden uppercase sm:inline">{new Date(classItem.class_date || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
@@ -543,7 +594,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
                             <div className="space-y-4 sm:space-y-6">
                                 <div>
                                     <div className="flex justify-between items-end mb-2">
-                                        <label className="block text-base sm:text-lg font-bold text-gray-900">What did you teach today?</label>
+                                        <label className="block text-base sm:text-lg font-bold text-gray-900">TOPIC:</label>
                                         <span className={`text-[10px] font-black uppercase tracking-widest ${topics.length >= 50 ? 'text-red-500' : 'text-gray-400'}`}>
                                             {topics.length}/50 Chars
                                         </span>
@@ -594,6 +645,27 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
                                       placeholder="https://meet.google.com/..."
                                       className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-100 focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:bg-white focus:outline-none transition-all text-gray-800 text-sm sm:text-base shadow-inner"
                                     />
+                                    {/* Link Preview */}
+                                    {imagePreviewUrl && (
+                                        <div className="mt-3 relative rounded-xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
+                                            <div className="absolute top-2 right-2 z-10">
+                                                <span className="bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+                                                    Preview
+                                                </span>
+                                            </div>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img 
+                                                src={imagePreviewUrl} 
+                                                alt="Class Link Preview" 
+                                                className="w-full h-48 sm:h-56 object-cover hover:scale-105 transition-transform duration-500"
+                                                onError={(e) => {
+                                                    // If image fails to load, hide the preview (or maybe show broken link icon)
+                                                    e.currentTarget.style.display = 'none';
+                                                    e.currentTarget.parentElement!.style.display = 'none';
+                                                }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex justify-end pt-3 sm:pt-4">
                                     <button 
@@ -601,7 +673,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
                                         disabled={!topics.trim() || !startTime || !endTime || !meetingLink || saving}
                                         className="flex items-center justify-center gap-2 bg-gray-900 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base shadow-xl shadow-gray-200 hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100"
                                     >
-                                        {saving ? <Loader2 className="animate-spin" size={18} /> : 'Next'} <ArrowRight size={18} />
+                                        {saving ? <Loader2 className="animate-spin" size={18} /> : 'NEXT'} <ArrowRight size={18} />
                                     </button>
                                 </div>
                                 </div>
@@ -679,7 +751,8 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
                                          topics !== originalTopics ||
                                          startTime !== originalStartTime ||
                                          endTime !== originalEndTime ||
-                                         meetingLink !== originalMeetingLink;
+                                         meetingLink !== originalMeetingLink ||
+                                         selectedClassId !== (classItem.id || '');
                                      
                                      // Check if attendance changed
                                      const attendanceChanged = JSON.stringify(attendanceRecords) !== JSON.stringify(originalAttendance);
@@ -711,7 +784,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
                                                     disabled={saving}
                                                     className="flex items-center gap-2 bg-gray-900 text-white uppercase px-10 py-4 rounded-2xl font-bold shadow-xl shadow-gray-200 hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 min-w-[200px] justify-center"
                                                 >
-                                                    {saving ? <Loader2 className="animate-spin" size={20} /> : 'Update'}
+                                                    {saving ? <Loader2 className="animate-spin" size={20} /> : 'UPDATE'}
                                                 </button>
                                              </div>
                                          );

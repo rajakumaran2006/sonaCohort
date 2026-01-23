@@ -111,7 +111,17 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthProvider>
-            <Toaster position="top-right" expand={false} richColors />
+            <Toaster
+          position="top-right"
+          expand={false}
+          richColors
+          toastOptions={{
+            classNames: {
+              success: 'bg-green-700 text-white border-green-800',
+              error: 'bg-red-600 text-white border-red-700',
+            },
+          }}
+        />
             {children}
           </AuthProvider>
         </QueryProvider>

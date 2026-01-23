@@ -364,7 +364,6 @@ function SettingsContent() {
                 
                 <div className="flex flex-col sm:flex-row items-center md:items-start gap-4 mt-6">
                   <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-xl">
-                    <Building2 className="w-5 h-5 text-blue-600" />
                     <div>
                       <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Department</p>
                       <p className="text-sm font-bold text-blue-900">{stats.department}</p>
@@ -372,7 +371,6 @@ function SettingsContent() {
                   </div>
                   {superadmins.length > 0 && (
                     <div className="flex items-center gap-3 px-4 py-2 bg-purple-50 rounded-xl">
-                      <Shield className="w-5 h-5 text-purple-600" />
                       <div>
                         <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Superadmin</p>
                         <p className="text-sm font-bold text-purple-900">{superadmins[0]?.name || 'N/A'}</p>
