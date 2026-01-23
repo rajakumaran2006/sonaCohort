@@ -62,7 +62,7 @@ export const getOneDriveDirectLink = (url: string): string | null => {
              return newUrl.toString();
         }
 
-    } catch (e) {
+    } catch {
         return null;
     }
 

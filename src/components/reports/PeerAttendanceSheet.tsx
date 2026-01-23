@@ -104,7 +104,7 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
         })
 
         // Update finalY
-        finalY = (doc as any).lastAutoTable.finalY + 2 // Minimized spacing (was 5)
+        finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 2 // Minimized spacing (was 5)
 
         // Add Signature space
         if (finalY + 15 > pageHeight) {

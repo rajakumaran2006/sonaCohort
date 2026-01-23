@@ -122,7 +122,7 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
 
         // Update finalY to the end of the table
         // We need to cast doc to any to access lastAutoTable
-        finalY = (doc as any).lastAutoTable.finalY + 2 // Minimized spacing (was 5)
+        finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 2 // Minimized spacing (was 5)
 
         // Add Signature space
         // Check if there is space for signature (approx 15 units)
