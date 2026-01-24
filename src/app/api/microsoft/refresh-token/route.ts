@@ -17,7 +17,7 @@ export async function POST() {
     const userId = user.id
 
     // Get the session for token operations
-    const { data: { session } } = await supabase.auth.getSession()
+    // const { data: { session } } = await supabase.auth.getSession()
 
     // First, try to refresh the Supabase session (this might give us a new provider_token)
     const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession()

@@ -18,7 +18,6 @@ import {
   GraduationCap, 
   Search, 
   Download, 
-  Filter,
   ChevronDown,
   X 
 } from 'lucide-react'
@@ -511,12 +510,13 @@ function AnalyticsContent() {
 
 // Helper Components
 
-function StatCard({ title, value, icon: Icon, color }: { title: string, value: number, icon: React.ComponentType<{ className?: string }>, color: 'purple' | 'blue' | 'orange' | 'emerald' }) {
+function StatCard({ title, value, icon: Icon, color }: { title: string, value: number, icon: React.ComponentType<{ className?: string }>, color: 'purple' | 'blue' | 'orange' | 'emerald' | 'gray' }) {
    const colorStyles = {
       purple: 'bg-purple-50 text-purple-600',
       blue: 'bg-blue-50 text-blue-600',
       orange: 'bg-orange-50 text-orange-600',
       emerald: 'bg-emerald-50 text-emerald-600',
+      gray: 'bg-gray-50 text-gray-600',
    }
 
    return (
