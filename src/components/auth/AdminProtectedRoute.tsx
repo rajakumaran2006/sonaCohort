@@ -3,9 +3,10 @@
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
 import { logger } from '@/lib/logger'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AdminService } from '@/lib/services/adminService'
+import { MicrosoftGraphService } from '@/lib/auth/microsoftGraph'
 import Sidebar from '@/components/layout/Sidebar'
 
 interface AdminProtectedRouteProps {
@@ -46,6 +47,38 @@ export default function AdminProtectedRoute({ children }: AdminProtectedRoutePro
     staleTime: 15 * 60 * 1000, // Cache for 15 minutes
     retry: false,
   })
+
+
+
+  // Keep session alive for admins
+  useEffect(() => {
+    if (isAdmin) {
+      // Check immediately
+      const validateSession = async () => {
+        try {
+          const isValid = await MicrosoftGraphService.ensureSessionValid()
+          if (isValid) {
+            logger.info('AdminProtectedRoute: Session validated successfully')
+          } else {
+            logger.warn('AdminProtectedRoute: Session validation failed')
+          }
+        } catch (error) {
+          logger.error('AdminProtectedRoute: Session validation error:', error)
+        }
+      }
+
+      validateSession()
+
+      // Check periodically (every 14 minutes - token usually expires in 1 hour, so this is safe)
+      // Microsoft tokens often have short lifetimes (e.g. 1 hour), so refreshing before that is good.
+      const intervalId = setInterval(() => {
+        logger.info('AdminProtectedRoute: Running periodic session validation')
+        validateSession()
+      }, 14 * 60 * 1000)
+
+      return () => clearInterval(intervalId)
+    }
+  }, [isAdmin])
 
   // Handle redirects based on query state
   if (!loading && !isVerifying) {

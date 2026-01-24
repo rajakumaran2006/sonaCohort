@@ -4,6 +4,15 @@ import { NotificationService } from '@/lib/utils/notificationService'
 import { logger } from '@/lib/logger'
 
 export class MicrosoftGraphService {
+  /**
+   * Ensure the Microsoft session is valid by checking/refreshing the token
+   * This is useful for keeping the session alive in protected routes
+   */
+  static async ensureSessionValid(): Promise<boolean> {
+    const token = await this.getAccessToken()
+    return !!token
+  }
+
   private static async getAccessToken(): Promise<string | null> {
     try {
       // Get the access token from the current user's session

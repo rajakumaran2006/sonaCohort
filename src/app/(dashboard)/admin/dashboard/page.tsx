@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
 import Sidebar from '@/components/layout/Sidebar'
+import PageHeader from '@/components/layout/PageHeader'
 import CreateDepartmentModal from '@/components/forms/modals/CreateDepartmentModal'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -13,7 +14,7 @@ import { Department } from '@/lib/types'
 import { Button, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import { AdminDashboardSkeleton } from '@/components/skeletons/AdminDashboardSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Building2, Users } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
 export default function AdminDashboardPage() {
@@ -132,35 +133,24 @@ function AdminDashboardContent() {
         suppressHydrationWarning
         className={`transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col`}
       >
+
         {/* Top Header */}
-        <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-gray-200/50">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
-                <p className="text-sm text-gray-500 font-medium hidden sm:block">Manage your departments and faculty members</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-               <button 
-                  onClick={() => setIsModalOpen(true)}
-                  className="hidden sm:flex items-center gap-2 bg-[#0f291e] hover:bg-[#1a4432] text-white px-4 py-2.5 rounded-xl font-medium transition-all shadow-sm hover:shadow"
-               >
-                  <Plus className="w-4 h-4" />
-                  <span>New Department</span>
-               </button>
-            </div>
+        <PageHeader
+          title="DASHBOARD"
+          tagline="Manage your departments and faculty members"
+          onToggleSidebar={() => setIsSidebarOpen(true)}
+          isSidebarCollapsed={isCollapsed}
+        >
+          <div className="flex items-center gap-3">
+             <button 
+                onClick={() => setIsModalOpen(true)}
+                className="hidden sm:flex items-center gap-2 bg-[#0f291e] hover:bg-[#1a4432] text-white px-4 py-2.5 rounded-xl font-medium transition-all shadow-sm hover:shadow"
+             >
+                <Plus className="w-4 h-4" />
+                <span>New Department</span>
+             </button>
           </div>
-        </header>
+        </PageHeader>
 
         {/* Main Dashboard Content */}
         <main className="flex-1 p-6 overflow-y-auto">
@@ -186,27 +176,29 @@ function AdminDashboardContent() {
 
               {/* Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white rounded p-7 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 group">
-                   <div className="flex justify-between items-start mb-4">
-                      <div>
-                         <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Total Departments</p>
-                         <h3 className="text-4xl font-black text-gray-900 mt-2">{totalDepartments}</h3>
+                <div className="bg-white rounded-[2rem] p-7 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 group">
+                   <div className="flex justify-between items-start mb-6">
+                      <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Total Departments</div>
+                      <div className="p-1.5 bg-gray-50 rounded-lg">
+                         <Building2 className="w-3.5 h-3.5 text-gray-400" />
                       </div>
                    </div>
-                   <div className="flex items-center uppercase gap-2 text-sm font-medium text-gray-500 bg-gray-50 w-fit px-3 py-1 rounded-lg">
-                      <span>Active Departments</span>
+                   <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{totalDepartments}</div>
+                   <div className="flex items-center text-[10px] text-black font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
+                      <span>ACTIVE DEPARTMENTS</span>
                    </div>
                 </div>
 
-                <div className="bg-white rounded p-7 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 group">
-                   <div className="flex justify-between items-start mb-4">
-                      <div>
-                         <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Total Faculty</p>
-                         <h3 className="text-4xl font-black text-gray-900 mt-2">{totalFaculty}</h3>
+                <div className="bg-white rounded-[2rem] p-7 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 group">
+                   <div className="flex justify-between items-start mb-6">
+                      <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Total Faculty</div>
+                       <div className="p-1.5 bg-gray-50 rounded-lg">
+                         <Users className="w-3.5 h-3.5 text-gray-400" />
                       </div>
                    </div>
-                   <div className="flex items-center uppercase gap-2 text-sm font-medium text-gray-500 bg-gray-50 w-fit px-3 py-1 rounded-lg">
-                      <span>Allocated Faculty Members</span>
+                   <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{totalFaculty}</div>
+                   <div className="flex items-center text-[10px] text-black font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
+                      <span>ALLOCATED FACULTY MEMBERS</span>
                    </div>
                 </div>
               </div>
@@ -226,13 +218,12 @@ function AdminDashboardContent() {
                 
                 <div className="p-0">
                   {departments.length === 0 ? (
-                    <div className="p-8 align-center">
+                    <div className="p-12 flex flex-col items-center justify-center text-center">
                       <EmptyState
-                        title="No departments"
-                        description="Get started by creating your first department."
+                        title="NO DEPARTMENTS"
                         action={
                           <Button onClick={() => setIsModalOpen(true)}>
-                            Create Department
+                            CREATE
                           </Button>
                         }
                       />

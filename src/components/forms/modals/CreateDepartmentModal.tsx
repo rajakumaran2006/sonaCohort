@@ -105,10 +105,11 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
             onChange={(e) => setDepartmentName(e.target.value)}
             placeholder="Enter department name"
             required
+            className="rounded-xl border-gray-200 focus:border-[#0f291e] focus:ring-[#0f291e]/20"
           />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide text-[11px]">
               Faculty Member
             </label>
             <div className="relative">
@@ -116,29 +117,29 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
                 type="text"
                 value={facultySearch}
                 onChange={(e) => setFacultySearch(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#0f291e]/10 focus:border-[#0f291e] transition-all"
                 placeholder="Search for faculty member"
                 required
               />
               
               {isSearching && (
-                <div className="absolute right-3 top-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <div className="absolute right-4 top-3.5">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#0f291e]"></div>
                 </div>
               )}
             </div>
 
               {/* Search Results */}
               {searchResults.length > 0 && (
-                <div className="mt-2 border border-gray-200 rounded-md max-h-40 overflow-y-auto bg-white">
+                <div className="mt-2 border border-gray-100 rounded-xl max-h-48 overflow-y-auto bg-white shadow-lg custom-scrollbar">
                   {searchResults.map((user) => (
                     <div
                       key={user.id}
                       onClick={() => handleFacultySelect(user)}
-                      className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                      className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-b-0 transition-colors flex flex-col gap-0.5"
                     >
-                      <div className="font-medium text-gray-900">{user.displayName}</div>
-                      <div className="text-sm text-gray-500">{user.mail || user.userPrincipalName}</div>
+                      <div className="font-bold text-sm text-gray-900">{user.displayName}</div>
+                      <div className="text-xs text-gray-500 font-medium">{user.mail || user.userPrincipalName}</div>
                     </div>
                   ))}
                 </div>
@@ -146,9 +147,12 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
 
               {/* Selected Faculty */}
               {selectedFaculty && (
-                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                  <div className="font-medium text-blue-900">{selectedFaculty.displayName}</div>
-                  <div className="text-sm text-blue-700">{selectedFaculty.mail || selectedFaculty.userPrincipalName}</div>
+                <div className="mt-3 p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl flex items-center justify-between group">
+                   <div>
+                      <div className="text-sm font-bold text-emerald-900">{selectedFaculty.displayName}</div>
+                      <div className="text-xs text-emerald-700 font-medium">{selectedFaculty.mail || selectedFaculty.userPrincipalName}</div>
+                   </div>
+                   <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                 </div>
               )}
           </div>

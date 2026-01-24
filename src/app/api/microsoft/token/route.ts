@@ -6,20 +6,20 @@ import { MicrosoftTokenService } from '@/lib/auth/microsoftTokenService'
 export async function GET() {
   try {
     const supabase = await createClient()
-    // Get the current session
-    const { data: { session }, error } = await supabase.auth.getSession()
+    // Authenticate the user securely
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-    if (error || !session) {
-      return NextResponse.json({ error: 'No session found' }, { status: 401 })
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = session.user?.id
-    if (!userId) {
-      return NextResponse.json({ error: 'No user found' }, { status: 401 })
-    }
+    const userId = user.id
+
+    // Get the session to access the provider_token if available
+    const { data: { session } } = await supabase.auth.getSession()
 
     // First, check if we have a valid provider_token in the session
-    if (session.provider_token) {
+    if (session?.provider_token) {
       return NextResponse.json({ 
         accessToken: session.provider_token,
         source: 'session'

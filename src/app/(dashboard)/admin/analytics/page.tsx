@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
 import Sidebar from '@/components/layout/Sidebar'
+import PageHeader from '@/components/layout/PageHeader'
 import { DepartmentService } from '@/lib/services/departmentService'
 import { peertutorservice, peertutors as Basepeertutors } from '@/lib/services/peerTutorService'
 import { Student as BaseStudent } from '@/lib/services/studentService'
@@ -277,26 +278,16 @@ function AnalyticsContent() {
 
       <div className={`transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col`}>
         {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-gray-200/50">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100"
-              >
-                <Filter className="w-6 h-6" />
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Analytics</h1>
-                <p className="text-sm text-gray-500 font-medium hidden sm:block">Monitor performance and allocations across departments</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-               {/* Could add date range picker or other global controls here */}
-            </div>
+        <PageHeader
+          title="ANALYTICS"
+          tagline="Monitor performance and allocations across departments"
+          onToggleSidebar={() => setIsSidebarOpen(true)}
+          isSidebarCollapsed={isCollapsed}
+        >
+          <div className="flex items-center gap-3">
+             {/* Could add date range picker or other global controls here */}
           </div>
-        </header>
+        </PageHeader>
 
         <main className="flex-1 p-6 overflow-y-auto">
            {isLoading ? (
@@ -310,25 +301,25 @@ function AnalyticsContent() {
                       title="Total Departments" 
                       value={departments.length} 
                       icon={Building2} 
-                      color="purple" 
+                      color="gray" 
                    />
                    <StatCard 
                       title="Total Faculty" 
                       value={departments.length} 
                       icon={Users} 
-                      color="blue" 
+                      color="gray" 
                    />
                    <StatCard 
                       title="Total Peer Tutors" 
                       value={totalpeerTutor} 
                       icon={User} 
-                      color="orange" 
+                      color="gray" 
                    />
                    <StatCard 
                       title="Total Students" 
                       value={totalStudents} 
                       icon={GraduationCap} 
-                      color="emerald" 
+                      color="gray" 
                    />
                 </div>
 
@@ -441,7 +432,7 @@ function AnalyticsContent() {
                                         <div className="text-sm font-medium text-gray-700">{pt.faculty_name}</div>
                                      </td>
                                      <td className="px-6 py-4 text-center">
-                                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold ${pt.student_count > 0 ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-400'}`}>
+                                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pt.student_count > 0 ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-400'}`}>
                                            {pt.student_count} STUDENTS
                                         </span>
                                      </td>
@@ -529,16 +520,14 @@ function StatCard({ title, value, icon: Icon, color }: { title: string, value: n
    }
 
    return (
-      <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
-         <div className="flex justify-between items-start mb-4">
-            <div>
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{title}</p>
-               <h3 className="text-3xl font-black text-gray-900 mt-2 tracking-tight">{value}</h3>
-            </div>
-            <div className={`p-3 rounded-xl ${colorStyles[color]} transition-transform duration-300 hover:scale-110`}>
-               <Icon className="w-5 h-5" />
+      <div className="bg-white rounded-[2rem] p-7 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 group">
+         <div className="flex justify-between items-start mb-6">
+            <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">{title}</div>
+            <div className={`p-1.5 rounded-lg ${colorStyles[color]} bg-opacity-50`}>
+               <Icon className="w-3.5 h-3.5" />
             </div>
          </div>
+         <div className="text-4xl font-black text-gray-900 tracking-tight mb-2">{value}</div>
       </div>
    )
 }

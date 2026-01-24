@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { LayoutGrid, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import Image from 'next/image'
 import { logger } from '@/lib/logger'
 
 interface SidebarProps {
@@ -74,32 +75,31 @@ export default function Sidebar({ isOpen, onClose, onToggleCollapse }: SidebarPr
         {/* Logo Header */}
         <div className={`flex items-center h-20 flex-shrink-0 ${isCollapsed ? 'px-4 justify-center' : 'px-6'} pt-6 mb-6 transition-all duration-300`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-            {/* Using text for logo if image is not desired, but matching faculty sidebar usually implies image too. 
-                However, existing sidebar used text "PEER TUTOR". I will keep text or maybe add an icon if I had one. 
-                I'll stick to text but styled like Faculty one if possible, or maybe a placeholder icon. 
-                The user said "keep the same color as now". 
-                I will use a layout similar to Faculty but with the existing title text style if no image.
-            */}
-             {!isCollapsed ? (
-               <h1 className="font-bold text-white text-xl tracking-wide whitespace-nowrap">
-                 PEER TUTOR
-               </h1>
-             ) : (
-               <h1 className="font-bold text-white text-xl tracking-wide">
-                 PT
-               </h1>
-             )}
+            <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-2 ${isCollapsed ? 'w-10 h-10' : 'w-12 h-12'}`}>
+              <Image 
+                src="/peers.png" 
+                alt="Peers Logo" 
+                layout="fill"
+                objectFit="contain"
+                className="p-2"
+              />
+            </div>
+            {!isCollapsed && (
+              <span className="flex flex-col mb-0 text-[22px] leading-none font-bold text-white tracking-wide whitespace-nowrap">
+                SONA<span className="text-[#bef264]">COHORT</span>
+              </span>
+            )}
           </div>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 px-4 overflow-y-auto">
           {!isCollapsed && (
-            <div className="px-4 mb-4 text-xs font-bold text-gray-400 tracking-wider uppercase">
+            <div className="px-4 mb-4 text-xs font-bold text-gray-500 tracking-wider uppercase">
               Menu
             </div>
           )}
-          <div className="space-y-2">
+          <div className="space-y-2 uppercase">
             {navigation.map((item) => {
               const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`)
               const Icon = item.Icon

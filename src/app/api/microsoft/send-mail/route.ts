@@ -7,17 +7,17 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
     
-    // Get the current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session) {
-      return NextResponse.json({ error: 'No session found. Please sign in.' }, { status: 401 })
+    // Authenticate the user securely
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = session.user?.id
-    if (!userId) {
-      return NextResponse.json({ error: 'No user found' }, { status: 401 })
-    }
+    const userId = user.id
+
+    // Get the session to access the provider_token if available
+    const { data: { session } } = await supabase.auth.getSession()
 
     // Parse request body
     let body
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the provider token - try session first, then refresh
-    let accessToken = session.provider_token
+    let accessToken = session?.provider_token
 
     // If no token in session, try to refresh using our stored refresh token
     if (!accessToken) {
