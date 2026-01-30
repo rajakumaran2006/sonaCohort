@@ -14,6 +14,7 @@ interface CreateExamModalProps {
 }
 
 const availableYears = [
+  { id: '1', name: '1st Year' },
   { id: '2', name: '2nd Year' },
   { id: '3', name: '3rd Year' },
   { id: '4', name: '4th Year' },

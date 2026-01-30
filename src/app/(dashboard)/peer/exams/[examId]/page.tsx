@@ -710,15 +710,6 @@ function PeerExamDetailsContent() {
                         <div className="h-6 sm:h-8 w-px bg-gray-200 mx-0.5 sm:mx-1 hidden sm:block"></div>
 
                         <button
-                           onClick={() => setShowImportModal(true)}
-                           disabled={!examSubjects || examSubjects.length === 0}
-                           className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-1.5 sm:gap-2"
-                        >
-                           <Upload className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                           <span className="hidden sm:inline">Import</span>
-                        </button>
-
-                        <button
                            onClick={() => setShowAddSubjectModal(true)}
                            className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-1.5 sm:gap-2"
                         >

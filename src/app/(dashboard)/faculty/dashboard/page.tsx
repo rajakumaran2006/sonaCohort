@@ -230,16 +230,18 @@ function FacultyDashboardContent() {
 
       // Additional Classes Logic
 
-      const addClassCounts: Record<string, number> = { '2': 0, '3': 0, '4': 0 }
+      const addClassCounts: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0 }
       additionalClasses.forEach((cls: AdditionalClass & { peer_tutors?: { year: string } }) => {
            let y = cls.year || (cls.peer_tutors ? cls.peer_tutors.year : '')
            y = y.toString()
-           if (y.includes('2')) y = '2'
+           if (y.includes('1')) y = '1'
+           else if (y.includes('2')) y = '2'
            else if (y.includes('3')) y = '3'
            else if (y.includes('4')) y = '4'
            if (addClassCounts[y] !== undefined) addClassCounts[y]++
       })
       const additionalClassesByYear = [
+        { year: '1', count: addClassCounts['1'] },
         { year: '2', count: addClassCounts['2'] },
         { year: '3', count: addClassCounts['3'] },
         { year: '4', count: addClassCounts['4'] }
@@ -301,6 +303,7 @@ function FacultyDashboardContent() {
 
       // Year Stats - Calculate based on total scheduled classes with completion percentage
       const yearCounts: Record<string, { allocated: number; cumulative: number; completed: number }> = { 
+        '1': { allocated: 0, cumulative: 0, completed: 0 }, 
         '2': { allocated: 0, cumulative: 0, completed: 0 }, 
         '3': { allocated: 0, cumulative: 0, completed: 0 }, 
         '4': { allocated: 0, cumulative: 0, completed: 0 } 
@@ -309,7 +312,8 @@ function FacultyDashboardContent() {
       allClasses.forEach(cls => {
         const yStr = cls.year?.toString() || ''
         let normalizedYear = ''
-        if (yStr.includes('2')) normalizedYear = '2'
+        if (yStr.includes('1')) normalizedYear = '1'
+        else if (yStr.includes('2')) normalizedYear = '2'
         else if (yStr.includes('3')) normalizedYear = '3'
         else if (yStr.includes('4')) normalizedYear = '4'
         
@@ -327,7 +331,8 @@ function FacultyDashboardContent() {
            let y = cls.year || (cls.peer_tutors ? cls.peer_tutors.year : '')
            y = y.toString()
            let normalizedYear = ''
-           if (y.includes('2')) normalizedYear = '2'
+           if (y.includes('1')) normalizedYear = '1'
+           else if (y.includes('2')) normalizedYear = '2'
            else if (y.includes('3')) normalizedYear = '3'
            else if (y.includes('4')) normalizedYear = '4'
            
@@ -338,6 +343,11 @@ function FacultyDashboardContent() {
       })
       
       const yearStats = [
+        { 
+          year: '1', 
+          count: yearCounts['1'].cumulative, 
+          percentage: yearCounts['1'].allocated > 0 ? (yearCounts['1'].completed / yearCounts['1'].allocated) * 100 : 0 
+        },
         { 
           year: '2', 
           count: yearCounts['2'].cumulative, 
@@ -379,7 +389,8 @@ function FacultyDashboardContent() {
         const dateKey = new Date(cls.scheduled_date).toISOString().split('T')[0]
         const yearStr = cls.year?.toString() || ''
         let normalizedYear = ''
-        if (yearStr.includes('2')) normalizedYear = '2'
+        if (yearStr.includes('1')) normalizedYear = '1'
+        else if (yearStr.includes('2')) normalizedYear = '2'
         else if (yearStr.includes('3')) normalizedYear = '3'
         else if (yearStr.includes('4')) normalizedYear = '4'
         
@@ -463,7 +474,8 @@ function FacultyDashboardContent() {
             
             const yearStr = cls.year?.toString() || ''
             let normalizedYear = ''
-            if (yearStr.includes('2')) normalizedYear = '2'
+            if (yearStr.includes('1')) normalizedYear = '1'
+            else if (yearStr.includes('2')) normalizedYear = '2'
             else if (yearStr.includes('3')) normalizedYear = '3'
             else if (yearStr.includes('4')) normalizedYear = '4'
             

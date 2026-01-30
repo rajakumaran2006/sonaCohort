@@ -232,6 +232,7 @@ function ExamDetailsContent() {
 
   const formatYear = (year: string): string => {
     const yearMap: { [key: string]: string } = {
+      '1': '1st Year',
       '2': '2nd Year',
       '3': '3rd Year',
       '4': '4th Year',

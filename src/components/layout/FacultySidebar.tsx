@@ -8,6 +8,7 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { LayoutGrid, Users, GraduationCap, ClipboardList, FileText, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
 import { logger } from '@/lib/logger'
+import FacultyCommandPalette from '@/components/features/search/FacultyCommandPalette'
 
 interface FacultySidebarProps {
   isOpen: boolean
@@ -88,6 +89,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
 
   return (
     <>
+      <FacultyCommandPalette />
       {/* Mobile backdrop */}
       {isOpen && (
         <div 

@@ -335,7 +335,7 @@ function FacultypeertutorsContent() {
 
     // Sort by year (2, 3, 4) then by section (A, B, C)
     filtered.sort((a, b) => {
-      const yearOrder = { '2nd Year': 1, '3rd Year': 2, '4th Year': 3 }
+      const yearOrder = { '1st Year': 0, '2nd Year': 1, '3rd Year': 2, '4th Year': 3 }
       const sectionOrder = { 'Section A': 1, 'Section B': 2, 'Section C': 3 }
       
       const yearDiff = (yearOrder[a.year as keyof typeof yearOrder] || 0) - (yearOrder[b.year as keyof typeof yearOrder] || 0)
@@ -380,7 +380,7 @@ function FacultypeertutorsContent() {
 
     // Sort by year (2, 3, 4) then by section (A, B, C)
     filtered.sort((a, b) => {
-      const yearOrder = { '2nd Year': 1, '3rd Year': 2, '4th Year': 3 }
+      const yearOrder = { '1st Year': 0, '2nd Year': 1, '3rd Year': 2, '4th Year': 3 }
       const sectionOrder = { 'Section A': 1, 'Section B': 2, 'Section C': 3 }
       
       const yearDiff = (yearOrder[a.year as keyof typeof yearOrder] || 0) - (yearOrder[b.year as keyof typeof yearOrder] || 0)

@@ -317,9 +317,17 @@ export class StudentService {
    */
   static async searchAvailableStudents(query: string, dept: string, year: string, section: string): Promise<MicrosoftUser[]> {
     try {
-      // Get all existing student emails to exclude them
-      const existingStudents = await this.getStudentsBySection(dept, year, section)
-      const existingStudentEmails = existingStudents.map(s => s.email.toLowerCase())
+      // Get all existing student emails to exclude them (globally, not just in this section)
+      const supabase = createClient()
+      const { data: existingStudents, error: fetchError } = await supabase
+        .from('peer_students')
+        .select('email')
+      
+      if (fetchError) {
+        logger.error('Error fetching existing students:', fetchError)
+      }
+
+      const existingStudentEmails = (existingStudents || []).map(s => s.email.toLowerCase())
 
       // Get all existing peer tutor emails to exclude them
       const existingpeerTutor = await peertutorservice.getAllpeerTutor()
