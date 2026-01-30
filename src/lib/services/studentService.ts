@@ -315,6 +315,7 @@ export class StudentService {
   /**
    * Search for available students using Microsoft Graph (excluding existing students and peer tutors)
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   static async searchAvailableStudents(query: string, dept: string, year: string, section: string): Promise<MicrosoftUser[]> {
     try {
       // Get all existing student emails to exclude them (globally, not just in this section)

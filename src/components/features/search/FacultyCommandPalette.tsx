@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { 
   Search, 
-  Command, 
   Users, 
   GraduationCap, 
   FileText, 
@@ -109,7 +108,7 @@ export default function FacultyCommandPalette() {
   })
 
   // Define Static Navigation Pages
-  const staticPages: SearchResult[] = [
+  const staticPages = useMemo<SearchResult[]>(() => [
     { id: 'nav-dashboard', title: 'Dashboard', type: 'page', href: '/faculty/dashboard', icon: LayoutGrid, category: 'Navigation' },
     { id: 'nav-students', title: 'Students', subtitle: 'Manage Students', type: 'page', href: '/faculty/peer-tutor?tab=students', icon: Users, category: 'Navigation' },
     { id: 'nav-peer-tutors', title: 'Peer Tutors', subtitle: 'Manage Peer Tutors', type: 'page', href: '/faculty/peer-tutor?tab=tutors', icon: Users, category: 'Navigation' },
@@ -120,7 +119,7 @@ export default function FacultyCommandPalette() {
     { id: 'nav-feedback', title: 'Feedback', type: 'page', href: '/faculty/peer-tutor?tab=feedback', icon: MessageSquare, category: 'Navigation' },
     { id: 'nav-renumeration', title: 'Remuneration', type: 'page', href: '/faculty/peer-tutor?tab=renumeration', icon: CreditCard, category: 'Navigation' },
     { id: 'nav-leaderboard', title: 'Leaderboard', type: 'page', href: '/faculty/peer-tutor?tab=leaderboard', icon: BarChart3, category: 'Navigation' },
-  ]
+  ], [])
 
   // Filter and Compute Results
   const filteredResults = useMemo(() => {
@@ -274,7 +273,7 @@ export default function FacultyCommandPalette() {
                 <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50/50 mb-1 rounded">
                   {category}
                 </div>
-                {items.map((result, index) => {
+                {items.map((result) => {
                   // Calculate absolute index for selection
                   const absoluteIndex = filteredResults.findIndex(r => r.id === result.id)
                   const isSelected = absoluteIndex === selectedIndex
