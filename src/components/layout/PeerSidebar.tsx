@@ -77,13 +77,13 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
 
     const items = [...baseNavigation]
     
-    // Add Exams if access is allowed
+    // Always add Reports before Exams (as per user request to put exams last)
+    items.push(reportsNavItem)
+
+    // Add Exams at the very end if access is allowed
     if (hasExamAccess) {
       items.push(examNavItem)
     }
-
-    // Always add Reports at the end
-    items.push(reportsNavItem)
 
     return items
   }, [hasExamAccess])

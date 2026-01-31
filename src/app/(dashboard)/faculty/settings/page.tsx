@@ -7,7 +7,7 @@ import { FacultyService } from '@/lib/services/facultyService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Mail, Send, Users, GraduationCap, Shield, X, Check, Loader2 } from 'lucide-react'
+import { ArrowLeft, Mail, Send, Users, GraduationCap, Shield, X, Check, Loader2, Settings, Link as LinkIcon } from 'lucide-react'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { useRouter } from 'next/navigation'
 import { logger } from '@/lib/logger'
@@ -61,6 +61,10 @@ function SettingsContent() {
   const [sendStatus, setSendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [loadingRecipients, setLoadingRecipients] = useState(false)
   const [superadmins, setSuperadmins] = useState<Superadmin[]>([])
+
+  // Class Settings
+  const [isClassLinkMandatory, setIsClassLinkMandatory] = useState(true)
+  const [updatingSettings, setUpdatingSettings] = useState(false)
 
   // Check if sidebar is collapsed
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -120,6 +124,11 @@ function SettingsContent() {
       // Get faculty department
       const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
       const deptName = facultyDept?.name || 'Not Assigned'
+      
+      // Load settings
+      if (facultyDept) {
+        setIsClassLinkMandatory(facultyDept.is_class_link_mandatory !== false) // Default to true if null/undefined
+      }
 
       // Get all peer tutors for this department
       const peerTutor = await peertutorservice.getpeerTutorByDepartment(deptName)
@@ -278,6 +287,35 @@ function SettingsContent() {
     }
   }
 
+  const handleToggleClassLinkMandatory = async () => {
+    if (!stats.department || stats.department === 'Not Assigned') return
+    
+    setUpdatingSettings(true)
+    try {
+      // Get faculty ID (we need to get it again or store it - retrieving from service for now or assuming we can get from dept)
+      // Since we don't have the ID readily available in stats, let's re-verify or better yet, verifyFacultyAccess returns the object with ID.
+      // We should probably store the full department object in state, but to minimize changes, let's fetch ID via service or rely on verifyFacultyAccess being cached/fast
+      
+      const facultyDept = await FacultyService.verifyFacultyAccess(user?.email || '')
+      if (facultyDept) {
+        const newValue = !isClassLinkMandatory
+        const success = await FacultyService.updateFacultySettings(facultyDept.id, {
+          is_class_link_mandatory: newValue
+        })
+        
+        if (success) {
+          setIsClassLinkMandatory(newValue)
+          // toast.success is not available here unless we import toast from sonner, assuming no toast for now or basic alert/no-op? 
+          // The page doesn't seem to import toast. Let's just update state.
+        }
+      }
+    } catch (error) {
+      logger.error('Error updating settings:', error)
+    } finally {
+      setUpdatingSettings(false)
+    }
+  }
+
   // Helper to get initials
   const getInitials = (name: string) => {
     return name
@@ -426,6 +464,45 @@ function SettingsContent() {
                   To Peer Tutors
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Class Configuration Section */}
+          <div className="mb-6">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-6 px-2 flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              Class Configuration
+            </h3>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
+                  <LinkIcon className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Mandatory Class Link</h4>
+                  <p className="text-xs text-gray-500 mt-1 max-w-md">
+                    When enabled, students must provide a valid meeting link when adding an additional class. 
+                    Disable this if you want to allow offline classes or classes without links.
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                onClick={handleToggleClassLinkMandatory}
+                disabled={updatingSettings}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  isClassLinkMandatory ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`${
+                    isClassLinkMandatory ? 'translate-x-6' : 'translate-x-1'
+                  } inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm`}
+                />
+              </button>
             </div>
           </div>
 

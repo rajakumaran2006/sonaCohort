@@ -1,10 +1,11 @@
 'use client'
+import { createClient } from '@/lib/supabase/client'
 import React, { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
-
 import { AttendanceRecord } from '@/lib/services/attendanceService'
 import ExportButton from '@/components/ui/ExportButton'
 import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
+import { FacultyService } from '@/lib/services/facultyService'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 import DatePicker from '@/components/ui/DatePicker'
 import * as XLSX from 'xlsx'
@@ -38,6 +39,8 @@ const parseLocalDate = (dateStr: string) => {
 interface peertutorsInfo {
   id: string
   name: string
+  faculty_id?: string
+  dept?: string
 }
 
 interface Student {
@@ -77,6 +80,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
   const [isDeleting, setIsDeleting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [initialClassState, setInitialClassState] = useState<typeof newClass | null>(null)
+  const [isLinkMandatory, setIsLinkMandatory] = useState(true) // Default to true for safety
 
   const disabledDates = React.useMemo(() => {
     const dates = new Set<string>()
@@ -145,6 +149,57 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
     }
   }
 
+  // Fetch settings on mount or when peer tutor info changes
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (!peertutorsInfo) return
+
+      let settingFound = false
+      const supabase = createClient()
+
+      try {
+        if (peertutorsInfo.faculty_id) {
+          logger.info(`Checking mandatory link setting for faculty: ${peertutorsInfo.faculty_id}`)
+          const facultyDept = await FacultyService.getFacultyDepartment(peertutorsInfo.faculty_id)
+          if (facultyDept) {
+             // Explicit check: only true if it is NOT false. (null/undefined => true)
+             const isMandatory = facultyDept.is_class_link_mandatory !== false
+             logger.info(`Mandatory link setting retrieved via ID: ${isMandatory}`)
+             setIsLinkMandatory(isMandatory)
+             settingFound = true
+          }
+        } 
+        
+        // Fallback: Try by department name if ID lookup failed
+        if (!settingFound && peertutorsInfo.dept) {
+           logger.info(`Checking mandatory link setting for dept: ${peertutorsInfo.dept}`)
+           const { data: deptData } = await supabase
+              .from('departments')
+              .select('is_class_link_mandatory')
+              .ilike('name', peertutorsInfo.dept) // Case insensitive match
+              .limit(1)
+              .maybeSingle()
+           
+           if (deptData) {
+               const isMandatory = deptData.is_class_link_mandatory !== false
+               logger.info(`Mandatory link setting retrieved via Name: ${isMandatory}`)
+               setIsLinkMandatory(isMandatory)
+               settingFound = true
+           }
+        }
+  
+        if (!settingFound) {
+             logger.warn('Could not retrieve faculty settings, defaulting to mandatory link')
+             // Verify if we should default to false if not found? No, safety first.
+        }
+      } catch (error) {
+        logger.error('Error fetching class settings:', error)
+      }
+    }
+
+    fetchSettings()
+  }, [peertutorsInfo])
+
   const handleAddClass = () => {
     if (assignedStudents.length === 0) {
       toast.warning("You need assigned students to create an additional class")
@@ -203,7 +258,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
       return
     }
 
-    if (!newClass.link) {
+    if (isLinkMandatory && !newClass.link) {
       toast.error('Class link is mandatory')
       return
     }
@@ -480,7 +535,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
             )}
         </div>
       </div>
-
+   
       {/* Add Class Form */}
       {showAddForm && (
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 animate-in slide-in-from-top-4 duration-300">
@@ -569,13 +624,15 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
             </div>
 
             <div className="space-y-2 md:col-span-3">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Class Link</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                Class Link {isLinkMandatory ? '' : '(Optional)'}
+              </label>
               <input
                 type="url"
                 value={newClass.link}
                 onChange={(e) => setNewClass(prev => ({ ...prev, link: e.target.value }))}
                 className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl text-sm font-medium transition-all outline-none"
-                placeholder="https://meet.google.com/..."
+                placeholder={isLinkMandatory ? "https://meet.google.com/..." : "https://meet.google.com/... (Optional)"}
               />
             </div>
           </div>

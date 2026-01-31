@@ -36,7 +36,8 @@ function PeerExamsContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [peertutorsYear, setpeertutorsYear] = useState<string | null>(null)
+  // const [peertutorsYear, setpeertutorsYear] = useState<string | null>(null) // Removed state to optimize
+
   
   // Stats state
   const [stats, setStats] = useState({
@@ -62,11 +63,14 @@ function PeerExamsContent() {
     staleTime: 5 * 60 * 1000,
   })
 
-  useEffect(() => {
-    if (peertutorsInfo?.year) {
-      setpeertutorsYear(peertutorsInfo.year)
-    }
-  }, [peertutorsInfo])
+  // Derived year from peer tutor info to avoid useEffect waterfall
+  const peertutorsYear = peertutorsInfo?.year || null
+
+  // useEffect(() => {
+  //   if (peertutorsInfo?.year) {
+  //     setpeertutorsYear(peertutorsInfo.year)
+  //   }
+  // }, [peertutorsInfo])
 
   // Fetch exams for peer tutor's year
   const { data: exams, isLoading: isExamsLoading } = useQuery({

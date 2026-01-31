@@ -9,9 +9,35 @@ export interface FacultyDepartment {
   faculty_email: string
   created_at: string
   admin_email?: string
+  is_class_link_mandatory?: boolean
 }
 
 export class FacultyService {
+  /**
+   * Update faculty department settings
+   * @param facultyId Faculty Department ID
+   * @param settings Settings to update
+   */
+  static async updateFacultySettings(facultyId: string, settings: Partial<FacultyDepartment>): Promise<boolean> {
+    try {
+      const supabase = createClient()
+      
+      const { error } = await supabase
+        .from('departments')
+        .update(settings)
+        .eq('id', facultyId)
+
+      if (error) {
+        logger.error('Error updating faculty settings:', error)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      logger.error('Error in updateFacultySettings:', error)
+      return false
+    }
+  }
   /**
    * Verify if a faculty member's email matches a department record
    * @param email Faculty member's email from Microsoft authentication
