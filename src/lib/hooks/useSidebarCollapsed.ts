@@ -8,7 +8,10 @@ import { useState, useEffect } from 'react'
  */
 export function useSidebarCollapsed() {
   // Initialize state with false to match server-side rendering
+  // Initialize state to false (expanded) to match server-side rendering and avoid hydration mismatch
   const [isCollapsed, setIsCollapsed] = useState(false)
+
+  const [isInitialized, setIsInitialized] = useState(false)
 
   // Sync with localStorage on mount
   useEffect(() => {
@@ -21,15 +24,16 @@ export function useSidebarCollapsed() {
           // Ignore parse error
         }
       }
+      setIsInitialized(true)
     }
   }, [])
 
   // Update localStorage when state changes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && isInitialized) {
       localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed))
     }
-  }, [isCollapsed])
+  }, [isCollapsed, isInitialized])
 
   // Listen for sidebar toggle events from other components
   useEffect(() => {

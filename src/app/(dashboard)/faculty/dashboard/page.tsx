@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
@@ -111,44 +112,16 @@ function FacultyDashboardContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
   // Sidebar collapsed state
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebar-collapsed')
-      if (saved !== null) {
-        return JSON.parse(saved)
-      }
-    }
-    return false
-  })
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarCollapsed()
 
-  // Listen for sidebar collapse state changes
+  // Auto-collapse on mobile resize
   useEffect(() => {
-    const checkSidebarState = () => {
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('sidebar-collapsed')
-        if (saved !== null) {
-          setIsSidebarCollapsed(JSON.parse(saved))
-        } else {
-          const sidebar = document.querySelector('[data-sidebar-collapsed]')
-          if (sidebar) {
-            setIsSidebarCollapsed(sidebar.getAttribute('data-sidebar-collapsed') === 'true')
-          }
-        }
-      }
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const timer = setTimeout(checkSidebarState, 0)
-    const handleSidebarToggle = () => setTimeout(checkSidebarState, 0)
-    window.addEventListener('sidebar-toggle', handleSidebarToggle)
-    window.addEventListener('storage', checkSidebarState)
-    window.addEventListener('resize', () => {
+    const handleResize = () => {
        if (window.innerWidth <= 1024) setIsSidebarCollapsed(true)
-    })
-    return () => {
-      window.removeEventListener('sidebar-toggle', handleSidebarToggle)
-      window.removeEventListener('storage', checkSidebarState)
     }
-  }, [])
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [setIsSidebarCollapsed])
   
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)

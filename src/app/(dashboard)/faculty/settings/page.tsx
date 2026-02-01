@@ -12,6 +12,7 @@ import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { useRouter } from 'next/navigation'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 
 // Types for recipients
 interface Recipient {
@@ -67,32 +68,8 @@ function SettingsContent() {
   const [updatingSettings, setUpdatingSettings] = useState(false)
 
   // Check if sidebar is collapsed
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebar-collapsed')
-      if (saved !== null) {
-        return JSON.parse(saved)
-      }
-    }
-    return false
-  })
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('sidebar-collapsed')
-        if (saved !== null) {
-          setIsSidebarCollapsed(JSON.parse(saved))
-        }
-      }
-    }
-    window.addEventListener('sidebar-toggle', checkSidebarState)
-    window.addEventListener('storage', checkSidebarState)
-    return () => {
-      window.removeEventListener('sidebar-toggle', checkSidebarState)
-      window.removeEventListener('storage', checkSidebarState)
-    }
-  }, [])
+  // Check if sidebar is collapsed
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarCollapsed()
 
   // Fetch superadmins on mount
   useEffect(() => {

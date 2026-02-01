@@ -9,6 +9,7 @@ import { ClassService } from '@/lib/services/classService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { 
@@ -59,32 +60,7 @@ function YearContent() {
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Check if sidebar is collapsed
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebar-collapsed')
-      if (saved !== null) {
-        return JSON.parse(saved)
-      }
-    }
-    return false
-  })
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('sidebar-collapsed')
-        if (saved !== null) {
-          setIsSidebarCollapsed(JSON.parse(saved))
-        }
-      }
-    }
-    window.addEventListener('sidebar-toggle', checkSidebarState)
-    window.addEventListener('storage', checkSidebarState)
-    return () => {
-      window.removeEventListener('sidebar-toggle', checkSidebarState)
-      window.removeEventListener('storage', checkSidebarState)
-    }
-  }, [])
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarCollapsed()
 
   const loadData = useCallback(async () => {
     try {

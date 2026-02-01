@@ -10,6 +10,7 @@ import { FacultyService } from '@/lib/services/facultyService'
 import { AnalyticsService, PendingClassStudent } from '@/lib/services/analyticsService'
 import { Card } from '@/components/ui'
 import { Users, Search, Download } from 'lucide-react'
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 
 export default function AnalyticsPage() {
   return (
@@ -22,15 +23,7 @@ export default function AnalyticsPage() {
 function AnalyticsContent() {
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebar-collapsed')
-      if (saved !== null) {
-        return JSON.parse(saved)
-      }
-    }
-    return false
-  })
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarCollapsed()
 
   const [threshold, setThreshold] = useState<number>(1) // 1-10
   const [excludeAdditionalClasses, setExcludeAdditionalClasses] = useState(false)
@@ -40,25 +33,6 @@ function AnalyticsContent() {
   const [selectedStudent, setSelectedStudent] = useState<PendingClassStudent | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
-
-  // Listen for sidebar collapse state changes
-  useEffect(() => {
-    const checkSidebarState = () => {
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('sidebar-collapsed')
-        if (saved !== null) {
-          setIsSidebarCollapsed(JSON.parse(saved))
-        }
-      }
-    }
-    const handleSidebarToggle = () => setTimeout(checkSidebarState, 0)
-    window.addEventListener('sidebar-toggle', handleSidebarToggle)
-    window.addEventListener('storage', checkSidebarState)
-    return () => {
-      window.removeEventListener('sidebar-toggle', handleSidebarToggle)
-      window.removeEventListener('storage', checkSidebarState)
-    }
-  }, [])
 
   // Get department
   const { data: department, isLoading: isDepartmentLoading } = useQuery({

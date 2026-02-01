@@ -67,6 +67,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
       Icon: BarChart3,
       relatedPaths: ['/faculty/feedback-analytics']
     },
+    { name: 'FACULTY', href: '/faculty/manage-faculty', Icon: User },
   ]
 
 
