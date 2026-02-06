@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import SettingsSkeleton from '@/components/skeletons/SettingsSkeleton'
 
 // Types for recipients
 interface Recipient {
@@ -69,7 +70,7 @@ function SettingsContent() {
 
   // Check if sidebar is collapsed
   // Check if sidebar is collapsed
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarCollapsed()
+  const [isSidebarCollapsed] = useSidebarCollapsed()
 
   // Fetch superadmins on mount
   useEffect(() => {
@@ -80,12 +81,12 @@ function SettingsContent() {
           .from('superadmin')
           .select('*')
           .order('name', { ascending: true })
-        
+
         if (error) {
           logger.error('Error fetching superadmins:', error)
           return
         }
-        
+
         setSuperadmins(data || [])
       } catch (error) {
         logger.error('Error in fetchSuperadmins:', error)
@@ -101,7 +102,7 @@ function SettingsContent() {
       // Get faculty department
       const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
       const deptName = facultyDept?.name || 'Not Assigned'
-      
+
       // Load settings
       if (facultyDept) {
         setIsClassLinkMandatory(facultyDept.is_class_link_mandatory !== false) // Default to true if null/undefined
@@ -109,7 +110,7 @@ function SettingsContent() {
 
       // Get all peer tutors for this department
       const peerTutor = await peertutorservice.getpeerTutorByDepartment(deptName)
-      
+
       // Get all students assigned to these peer tutors
       let totalStudents = 0
       for (const tutor of peerTutor) {
@@ -139,10 +140,10 @@ function SettingsContent() {
   useEffect(() => {
     const loadRecipients = async () => {
       if (!stats.department || stats.department === 'Not Assigned') return
-      
+
       setLoadingRecipients(true)
       setAvailableRecipients([])
-      
+
       try {
         if (recipientType === 'peer_tutor') {
           const tutors = await peertutorservice.getpeerTutorByDepartment(stats.department)
@@ -183,7 +184,7 @@ function SettingsContent() {
         setLoadingRecipients(false)
       }
     }
-    
+
     loadRecipients()
   }, [recipientType, stats.department, superadmins])
 
@@ -255,9 +256,9 @@ function SettingsContent() {
       setContent('')
     } catch (error) {
       logger.error('Error sending email:', error)
-      setSendStatus({ 
-        type: 'error', 
-        message: error instanceof Error ? error.message : 'Failed to send email' 
+      setSendStatus({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to send email'
       })
     } finally {
       setIsSending(false)
@@ -266,20 +267,20 @@ function SettingsContent() {
 
   const handleToggleClassLinkMandatory = async () => {
     if (!stats.department || stats.department === 'Not Assigned') return
-    
+
     setUpdatingSettings(true)
     try {
       // Get faculty ID (we need to get it again or store it - retrieving from service for now or assuming we can get from dept)
       // Since we don't have the ID readily available in stats, let's re-verify or better yet, verifyFacultyAccess returns the object with ID.
       // We should probably store the full department object in state, but to minimize changes, let's fetch ID via service or rely on verifyFacultyAccess being cached/fast
-      
+
       const facultyDept = await FacultyService.verifyFacultyAccess(user?.email || '')
       if (facultyDept) {
         const newValue = !isClassLinkMandatory
         const success = await FacultyService.updateFacultySettings(facultyDept.id, {
           is_class_link_mandatory: newValue
         })
-        
+
         if (success) {
           setIsClassLinkMandatory(newValue)
           // toast.success is not available here unless we import toast from sonner, assuming no toast for now or basic alert/no-op? 
@@ -310,14 +311,15 @@ function SettingsContent() {
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
         <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        <div className={`${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex items-center justify-center w-full lg:w-auto`}>
-          <div className="text-center">
-            <div className="relative w-20 h-20 mx-auto mb-6">
-              <div className="absolute inset-0 rounded-full border-4 border-blue-50/50"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+        <div className={`${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
+          <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 h-20 flex items-center px-8">
+            <div className="flex justify-between items-center w-full">
+              <div>
+                <div className="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
+              </div>
             </div>
-            <p className="text-gray-500 font-medium uppercase tracking-widest text-xs">Loading Profile</p>
-          </div>
+          </header>
+          <SettingsSkeleton />
         </div>
       </div>
     )
@@ -376,7 +378,7 @@ function SettingsContent() {
                   {userName}
                 </h2>
                 <p className="text-sm text-gray-500 mb-4">{user?.email}</p>
-                
+
                 <div className="flex flex-col sm:flex-row items-center md:items-start gap-4 mt-6">
                   <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-xl">
                     <div>
@@ -461,23 +463,21 @@ function SettingsContent() {
                 <div>
                   <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Mandatory Class Link</h4>
                   <p className="text-xs text-gray-500 mt-1 max-w-md">
-                    When enabled, students must provide a valid meeting link when adding an additional class. 
+                    When enabled, students must provide a valid meeting link when adding an additional class.
                     Disable this if you want to allow offline classes or classes without links.
                   </p>
                 </div>
               </div>
-              
+
               <button
                 onClick={handleToggleClassLinkMandatory}
                 disabled={updatingSettings}
-                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                  isClassLinkMandatory ? 'bg-blue-600' : 'bg-gray-200'
-                }`}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isClassLinkMandatory ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
               >
                 <span
-                  className={`${
-                    isClassLinkMandatory ? 'translate-x-6' : 'translate-x-1'
-                  } inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm`}
+                  className={`${isClassLinkMandatory ? 'translate-x-6' : 'translate-x-1'
+                    } inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm`}
                 />
               </button>
             </div>
@@ -494,11 +494,10 @@ function SettingsContent() {
           <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
             {/* Status Message */}
             {sendStatus && (
-              <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${
-                sendStatus.type === 'success' 
-                  ? 'bg-green-50 text-green-800 border border-green-200' 
-                  : 'bg-red-50 text-red-800 border border-red-200'
-              }`}>
+              <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${sendStatus.type === 'success'
+                ? 'bg-green-50 text-green-800 border border-green-200'
+                : 'bg-red-50 text-red-800 border border-red-200'
+                }`}>
                 {sendStatus.type === 'success' ? (
                   <Check className="w-5 h-5 text-green-600" />
                 ) : (
@@ -516,33 +515,30 @@ function SettingsContent() {
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => { setRecipientType('peer_tutor'); setSelectedRecipients([]) }}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${
-                    recipientType === 'peer_tutor'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${recipientType === 'peer_tutor'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   <Users className="w-4 h-4" />
                   Peer Tutors
                 </button>
                 <button
                   onClick={() => { setRecipientType('student'); setSelectedRecipients([]) }}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${
-                    recipientType === 'student'
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${recipientType === 'student'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   <GraduationCap className="w-4 h-4" />
                   Students
                 </button>
                 <button
                   onClick={() => { setRecipientType('superadmin'); setSelectedRecipients([]) }}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${
-                    recipientType === 'superadmin'
-                      ? 'bg-purple-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${recipientType === 'superadmin'
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   <Shield className="w-4 h-4" />
                   Superadmin
@@ -572,7 +568,7 @@ function SettingsContent() {
                   </button>
                 </div>
               </div>
-              
+
               <div className="border border-gray-200 rounded-xl max-h-48 overflow-y-auto">
                 {loadingRecipients ? (
                   <div className="p-4 text-center text-gray-500">
@@ -588,16 +584,14 @@ function SettingsContent() {
                     <button
                       key={recipient.id}
                       onClick={() => toggleRecipient(recipient)}
-                      className={`w-full flex items-center justify-between p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${
-                        selectedRecipients.find(r => r.id === recipient.id) ? 'bg-blue-50' : ''
-                      }`}
+                      className={`w-full flex items-center justify-between p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${selectedRecipients.find(r => r.id === recipient.id) ? 'bg-blue-50' : ''
+                        }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                          selectedRecipients.find(r => r.id === recipient.id)
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-200 text-gray-600'
-                        }`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${selectedRecipients.find(r => r.id === recipient.id)
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-600'
+                          }`}>
                           {recipient.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="text-left">
@@ -646,11 +640,10 @@ function SettingsContent() {
             <button
               onClick={handleSendMail}
               disabled={isSending || selectedRecipients.length === 0 || !subject.trim() || !content.trim()}
-              className={`w-full py-4 rounded-xl text-white font-bold uppercase tracking-wider flex items-center justify-center gap-3 transition-all ${
-                isSending || selectedRecipients.length === 0 || !subject.trim() || !content.trim()
-                  ? 'bg-gray-300 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg'
-              }`}
+              className={`w-full py-4 rounded-xl text-white font-bold uppercase tracking-wider flex items-center justify-center gap-3 transition-all ${isSending || selectedRecipients.length === 0 || !subject.trim() || !content.trim()
+                ? 'bg-gray-300 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg'
+                }`}
             >
               {isSending ? (
                 <>

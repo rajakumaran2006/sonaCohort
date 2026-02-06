@@ -28,7 +28,7 @@ function FacultyRenumerationContent() {
   const [isDeleteMode, setIsDeleteMode] = useState(false)
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set())
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [itemsToDelete, setItemsToDelete] = useState<Array<{name: string, description?: string, additionalInfo?: string}>>([])
+  const [itemsToDelete, setItemsToDelete] = useState<Array<{ name: string, description?: string, additionalInfo?: string }>>([])
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [selectedTemplateForView, setSelectedTemplateForView] = useState<RenumerationTemplate | null>(null)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -62,7 +62,7 @@ function FacultyRenumerationContent() {
   const templates = templatesData || []
   const submissions = submissionsData || []
   const loading = templatesLoading || submissionsLoading
-  
+
   // Use custom hook for sidebar collapsed state (reads from localStorage synchronously)
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
@@ -108,7 +108,7 @@ function FacultyRenumerationContent() {
         description: t.description,
         additionalInfo: `${t.fields.length} field(s) • Created ${new Date(t.created_at).toLocaleDateString()}`
       }))
-    
+
     setItemsToDelete(items)
     setShowDeleteModal(true)
   }
@@ -129,7 +129,7 @@ function FacultyRenumerationContent() {
 
   const confirmDeleteTemplates = async () => {
     const idsToDelete = Array.from(selectedTemplates)
-    
+
     for (const id of idsToDelete) {
       try {
         await RenumerationService.deleteRenumerationTemplate(id)
@@ -159,10 +159,22 @@ function FacultyRenumerationContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <div className="min-h-screen bg-gray-50 flex">
+        {/* Sidebar Skeleton */}
+        <div className="w-20 lg:w-64 bg-gray-900 border-r border-gray-800 animate-pulse hidden lg:block"></div>
+
+        {/* Main Content Skeleton */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Header Skeleton */}
+          <div className="h-20 bg-white border-b border-gray-200 animate-pulse mb-6"></div>
+
+          <main className="flex-1 p-6 overflow-y-auto">
+            {/* Content Skeleton */}
+            <div className="space-y-6">
+              <div className="h-10 w-96 bg-gray-200 rounded animate-pulse mb-8"></div>
+              <div className="bg-white rounded-lg border border-gray-200 h-96 animate-pulse"></div>
+            </div>
+          </main>
         </div>
       </div>
     )
@@ -191,21 +203,19 @@ function FacultyRenumerationContent() {
             <nav className="flex space-x-8">
               <button
                 onClick={() => setActiveTab('templates')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'templates'
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'templates'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 Templates ({templates.length})
               </button>
               <button
                 onClick={() => setActiveTab('submissions')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'submissions'
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'submissions'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 Submissions ({submissions.length})
               </button>
@@ -370,11 +380,10 @@ function FacultyRenumerationContent() {
                         <button
                           onClick={handleBulkDelete}
                           disabled={selectedTemplates.size === 0}
-                          className={`inline-flex items-center px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all duration-200 shadow-sm ${
-                            selectedTemplates.size > 0
+                          className={`inline-flex items-center px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all duration-200 shadow-sm ${selectedTemplates.size > 0
                               ? 'bg-red-600 hover:bg-red-700 cursor-pointer'
                               : 'bg-gray-400 cursor-not-allowed'
-                          }`}
+                            }`}
                         >
                           <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -407,7 +416,7 @@ function FacultyRenumerationContent() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="overflow-x-auto">
                 {templates.length === 0 ? (
                   <div className="p-12 text-center">
@@ -439,23 +448,23 @@ function FacultyRenumerationContent() {
                             />
                           </th>
                         )}
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Template Name
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Description
-                          </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Template Name
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Description
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Fields
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Created
+                        </th>
+                        {!isDeleteMode && (
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Fields
+                            Actions
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Created
-                          </th>
-                          {!isDeleteMode && (
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          )}
+                        )}
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -525,7 +534,7 @@ function FacultyRenumerationContent() {
                   Renumeration Submissions ({submissions.length})
                 </h3>
               </div>
-              
+
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -576,7 +585,7 @@ function FacultyRenumerationContent() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {submission.submitted_at 
+                            {submission.submitted_at
                               ? new Date(submission.submitted_at).toLocaleDateString()
                               : '-'
                             }
@@ -686,11 +695,10 @@ function FacultyRenumerationContent() {
                     Status
                   </label>
                   <div className="text-sm">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      selectedTemplateForView.is_active
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${selectedTemplateForView.is_active
                         ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-800'
-                    }`}>
+                      }`}>
                       {selectedTemplateForView.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </div>

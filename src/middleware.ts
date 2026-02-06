@@ -1,32 +1,59 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(req: NextRequest) {
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  // This will refresh session if needed
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   // Check if the request is for protected routes
-  const isProtectedRoute = req.nextUrl.pathname.startsWith('/admin') || 
-                          req.nextUrl.pathname.startsWith('/faculty') || 
-                          req.nextUrl.pathname.startsWith('/peer')
-  
-  // Get all cookies and check for any Supabase auth cookies
-  const cookies = req.cookies.getAll()
-  const hasSupabaseAuth = cookies.some(cookie => 
-    cookie.name.startsWith('sb-') && cookie.name.includes('auth-token')
-  )
-  
-  // If accessing protected route without Supabase auth cookies, redirect to login
-  if (isProtectedRoute && !hasSupabaseAuth) {
-    return NextResponse.redirect(new URL('/login', req.url))
+  const isProtectedRoute =
+    request.nextUrl.pathname.startsWith("/admin") ||
+    request.nextUrl.pathname.startsWith("/faculty") ||
+    request.nextUrl.pathname.startsWith("/peer");
+
+  // If accessing protected route without authenticated user, redirect to login
+  if (isProtectedRoute && !user) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
-  
-  // If accessing login route with auth cookies, let the login page handle the redirect
-  // This allows the login page to determine the correct dashboard based on user role
-  // if (isLoginRoute && hasSupabaseAuth) {
-  //   return NextResponse.redirect(new URL('/dashboard', req.url))
-  // }
-  
-  return NextResponse.next()
+
+  return response;
 }
 
 export const config = {
-  matcher: ['/login', '/faculty/:path*', '/admin/:path*', '/peer/:path*', '/auth/callback']
-}
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
+};

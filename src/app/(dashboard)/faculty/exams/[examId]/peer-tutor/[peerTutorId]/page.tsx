@@ -20,7 +20,8 @@ import {
   generateAttentionItems,
   generateInsights,
 } from '@/lib/utils/examAnalytics'
-import { Heatmap, Card, CardContent, LoadingOverlay, StudentPerformanceChart } from '@/components/ui'
+import { Heatmap, Card, CardContent, StudentPerformanceChart } from '@/components/ui'
+import ExamTutorDetailSkeleton from '@/components/skeletons/ExamTutorDetailSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
@@ -139,16 +140,16 @@ function PeerTutorsExamDetailsContent() {
   useEffect(() => {
     if (existingMarks && students && examSubjects) {
       const initialMarks: Record<string, Record<string, Record<string, number | string>>> = {}
-      
+
       students.forEach(student => {
         initialMarks[student.id] = {}
         examSubjects.forEach(subject => {
           initialMarks[student.id][subject.id] = {}
-          
+
           const existingMark = existingMarks.find(
             mark => mark.student_id === student.id && mark.exam_subject_id === subject.id
           )
-          
+
           if (existingMark && existingMark.marks) {
             Object.keys(existingMark.marks).forEach(field => {
               initialMarks[student.id][subject.id][field] = existingMark.marks[field]
@@ -160,7 +161,7 @@ function PeerTutorsExamDetailsContent() {
           }
         })
       })
-      
+
       setMarksData(initialMarks)
     }
   }, [existingMarks, students, examSubjects])
@@ -170,7 +171,7 @@ function PeerTutorsExamDetailsContent() {
     if (students && examSubjects && !isEditing) {
       setMarksData(prev => {
         const updated = { ...prev }
-        
+
         students.forEach(student => {
           if (!updated[student.id]) {
             updated[student.id] = {}
@@ -183,7 +184,7 @@ function PeerTutorsExamDetailsContent() {
             }
           })
         })
-        
+
         return updated
       })
     }
@@ -226,7 +227,7 @@ function PeerTutorsExamDetailsContent() {
     setIsSaving(true)
     try {
       const marksToSave = []
-      
+
       for (const student of students) {
         for (const subject of examSubjects) {
           const studentMarks = marksData[student.id]?.[subject.id]
@@ -243,7 +244,7 @@ function PeerTutorsExamDetailsContent() {
       }
 
       const success = await ExamMarksService.saveExamMarksBatch(marksToSave)
-      
+
       if (success) {
         setIsEditing(false)
         // Invalidate queries for both faculty and peer tutor views
@@ -272,7 +273,7 @@ function PeerTutorsExamDetailsContent() {
     if (isEditing && students && examSubjects) {
       setMarksData(prev => {
         const updated = { ...prev }
-        
+
         students.forEach(student => {
           if (!updated[student.id]) {
             updated[student.id] = {}
@@ -285,7 +286,7 @@ function PeerTutorsExamDetailsContent() {
             }
           })
         })
-        
+
         return updated
       })
     }
@@ -318,10 +319,10 @@ function PeerTutorsExamDetailsContent() {
     try {
       // Get exam subjects
       const subjects = examSubjects
-      
+
       // Prepare data for export
       const exportData: (string | number)[][] = []
-      
+
       // Add header rows with exam information
       exportData.push(['Subjects Export Report'])
       exportData.push(['Department:', (department as { dept?: string; name?: string })?.dept || department?.name || ''])
@@ -334,14 +335,14 @@ function PeerTutorsExamDetailsContent() {
         day: 'numeric'
       })])
       exportData.push([]) // Empty row
-      
+
       // Create header row: Student Name, then all subjects
       const headerRow = ['Student Name', ...subjects.map(s => s.subject_name)]
       exportData.push(headerRow)
-      
+
       // Get marks for all students
       const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutorsId, examId)
-      
+
       // Organize marks by student and subject
       const marksByStudentSubject: Record<string, Record<string, string>> = {}
       marks.forEach(mark => {
@@ -355,7 +356,7 @@ function PeerTutorsExamDetailsContent() {
           marksByStudentSubject[mark.student_id][mark.exam_subject_id] = numericValue
         }
       })
-      
+
       // Add data rows using sortedStudents (respects current filter/sort)
       // Skip students with no marks (pending)
       sortedStudents.forEach(student => {
@@ -363,7 +364,7 @@ function PeerTutorsExamDetailsContent() {
         const hasMarks = subjects.some(subject => {
           return marksByStudentSubject[student.id]?.[subject.id] && marksByStudentSubject[student.id][subject.id] !== ''
         })
-        
+
         // Only include students who have at least one mark
         if (hasMarks) {
           const row = [student.name]
@@ -374,15 +375,15 @@ function PeerTutorsExamDetailsContent() {
           exportData.push(row)
         }
       })
-      
+
       // Create workbook and worksheet
       const worksheet = XLSX.utils.aoa_to_sheet(exportData)
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Exam Marks')
-      
+
       // Generate filename
       const filename = `Exam_${exam.name.replace(/[^a-zA-Z0-9]/g, '_')}_${peertutors.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
-      
+
       // Write file
       XLSX.writeFile(workbook, filename)
     } catch (error) {
@@ -396,10 +397,10 @@ function PeerTutorsExamDetailsContent() {
   // Calculate average marks for each student
   const calculateStudentAverage = useCallback((studentId: string): number => {
     if (!examSubjects || examSubjects.length === 0) return 0
-    
+
     let totalMarks = 0
     let count = 0
-    
+
     examSubjects.forEach(subject => {
       const markValue = marksData[studentId]?.[subject.id]?.[markField]
       if (markValue) {
@@ -412,14 +413,14 @@ function PeerTutorsExamDetailsContent() {
         }
       }
     })
-    
+
     return count > 0 ? totalMarks / count : 0
   }, [examSubjects, marksData])
 
   // Get sorted students
   const sortedStudents = useMemo(() => {
     if (!students) return []
-    
+
     const sorted = [...students]
     if (sortBy === 'avg') {
       sorted.sort((a, b) => {
@@ -488,10 +489,10 @@ function PeerTutorsExamDetailsContent() {
         const score = sp.subjectScores.find(s => s.subjectName === subject.subject_name)
         return score ? score.mark : 0
       })
-      
+
       // Calculate raw average for the chart (same scale as marks)
       const average = sp.subjectCount > 0 ? sp.totalMarks / sp.subjectCount : 0
-      
+
       return {
         studentName: sp.studentName,
         marks,
@@ -517,9 +518,9 @@ function PeerTutorsExamDetailsContent() {
             isSidebarCollapsed={isSidebarCollapsed}
           />
           <main className="flex-1 overflow-y-auto">
-            <LoadingOverlay className="h-96" size="xl">
-              Loading exam details...
-            </LoadingOverlay>
+            <div className={`max-w-full mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
+              <ExamTutorDetailSkeleton />
+            </div>
           </main>
         </div>
       </div>
@@ -588,10 +589,10 @@ function PeerTutorsExamDetailsContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              
+
               <h1 className="text-xl font-semibold text-gray-900">{peertutors.name} ALLOCATED STUDENT MARK</h1>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <button
                 onClick={handleRefresh}
@@ -695,16 +696,15 @@ function PeerTutorsExamDetailsContent() {
                       Student Marks Table
                     </h3>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <div className="relative" ref={filterRef}>
                       <button
                         onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                        className={`p-2 rounded-lg border transition-all ${
-                          sortBy !== 'name'
-                            ? 'bg-blue-50 border-blue-200 text-blue-600'
-                            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                        }`}
+                        className={`p-2 rounded-lg border transition-all ${sortBy !== 'name'
+                          ? 'bg-blue-50 border-blue-200 text-blue-600'
+                          : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
                         title="Sort Students"
                       >
                         <Filter className="w-5 h-5" />
@@ -714,17 +714,15 @@ function PeerTutorsExamDetailsContent() {
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 z-30 py-2">
                           <button
                             onClick={() => { setSortBy('name'); setShowFilterDropdown(false); }}
-                            className={`w-full text-left px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-                              sortBy === 'name' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-                            }`}
+                            className={`w-full text-left px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${sortBy === 'name' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
+                              }`}
                           >
                             Name (A-Z)
                           </button>
                           <button
                             onClick={() => { setSortBy('avg'); setShowFilterDropdown(false); }}
-                            className={`w-full text-left px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-                              sortBy === 'avg' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-                            }`}
+                            className={`w-full text-left px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${sortBy === 'avg' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
+                              }`}
                           >
                             Average Score
                           </button>
@@ -777,8 +775,8 @@ function PeerTutorsExamDetailsContent() {
                   </div>
                 </div>
               </div>
-                {students && examSubjects && students.length > 0 && examSubjects.length > 0 ? (
-                  <div className="overflow-x-auto">
+              {students && examSubjects && students.length > 0 && examSubjects.length > 0 ? (
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-white border-b border-gray-100">
@@ -819,9 +817,8 @@ function PeerTutorsExamDetailsContent() {
                                     placeholder="-"
                                   />
                                 ) : (
-                                  <span className={`text-sm font-bold ${
-                                    (marksData[student.id]?.[subject.id]?.[markField]) ? 'text-gray-700' : 'text-gray-300'
-                                  }`}>
+                                  <span className={`text-sm font-bold ${(marksData[student.id]?.[subject.id]?.[markField]) ? 'text-gray-700' : 'text-gray-300'
+                                    }`}>
                                     {marksData[student.id]?.[subject.id]?.[markField] || '-'}
                                   </span>
                                 )}
@@ -829,12 +826,11 @@ function PeerTutorsExamDetailsContent() {
                             ))}
                             <TableCell className="text-right pr-6 py-4">
                               <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50/50 border border-blue-100">
-                                <span className={`text-xs font-black ${
-                                  avg >= 80 ? 'text-green-600' : 
-                                  avg >= 60 ? 'text-blue-600' : 
-                                  avg > 0 ? 'text-orange-600' : 
-                                  'text-gray-400'
-                                }`}>
+                                <span className={`text-xs font-black ${avg >= 80 ? 'text-green-600' :
+                                  avg >= 60 ? 'text-blue-600' :
+                                    avg > 0 ? 'text-orange-600' :
+                                      'text-gray-400'
+                                  }`}>
                                   {avg.toFixed(1)}%
                                 </span>
                               </div>
@@ -844,17 +840,17 @@ function PeerTutorsExamDetailsContent() {
                       })}
                     </TableBody>
                   </Table>
-                  </div>
-                ) : (
-                  <div className="p-12 text-center border-t border-gray-100">
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
-                      {!students || students.length === 0
-                        ? 'No Students Assigned'
-                        : 'No Subjects Found. Please Add a Subject.'}
-                    </p>
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="p-12 text-center border-t border-gray-100">
+                  <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
+                    {!students || students.length === 0
+                      ? 'No Students Assigned'
+                      : 'No Subjects Found. Please Add a Subject.'}
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Performance Analytics Section - Clean White Design */}
             {students && examSubjects && students.length > 0 && examSubjects.length > 0 && (
@@ -872,10 +868,10 @@ function PeerTutorsExamDetailsContent() {
                       <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Student Performance Overview</h4>
                     </div>
                     <div className="p-6">
-                      <StudentPerformanceChart 
-                        students={chartData} 
+                      <StudentPerformanceChart
+                        students={chartData}
                         subjectNames={examSubjects?.map(s => s.subject_name) || []}
-                        maxMarks={exam.max_marks || 100} 
+                        maxMarks={exam.max_marks || 100}
                       />
                     </div>
                   </div>

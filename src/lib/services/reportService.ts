@@ -57,7 +57,7 @@ export interface FullClassReport {
     student_name: string
     student_email: string
     attendance: {
-      [class_id: string]: 'present' | 'absent' | 'on_duty' | 'late'
+      [class_id: string]: 'present' | 'absent' | 'on_duty' | 'late' | 'upcoming'
     }
     stats: {
       present: number
@@ -94,7 +94,7 @@ export class ReportService {
   static async getpeerTutorubjects(peertutorsId: string): Promise<peerTutorubject[]> {
     try {
       const supabase = createClient()
-      
+
       // Get peer tutor info first (including created_at)
       const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
@@ -205,7 +205,7 @@ export class ReportService {
         const classId = sc.class_id
         const classData = Array.isArray(sc.class) ? sc.class[0] : sc.class
         const subjectName = classData?.subject_name || ''
-        
+
         if (!classMap.has(classId)) {
           classMap.set(classId, {
             class_id: classId,
@@ -214,9 +214,9 @@ export class ReportService {
             scheduledClassesForStats: []
           })
         }
-        
+
         classMap.get(classId)!.allScheduledClasses.push(sc)
-        
+
         // Add to stats array if it's after the creation date
         const classDate = new Date(sc.scheduled_date)
         classDate.setHours(0, 0, 0, 0)
@@ -230,12 +230,12 @@ export class ReportService {
       const subjects: peerTutorubject[] = Array.from(classMap.values()).map(classData => {
         const classScheduledClasses = classData.scheduledClassesForStats
         const totalClasses = classScheduledClasses.length
-        const completedClasses = classScheduledClasses.filter(sc => 
-          sc.completion_status === 'completed' || 
+        const completedClasses = classScheduledClasses.filter(sc =>
+          sc.completion_status === 'completed' ||
           (sc.attendance_completed && sc.topics_completed)
         ).length
         const pendingClasses = totalClasses - completedClasses
-        
+
         // Count additional classes for this subject
         const additionalClassesForSubject = additionalClasses.filter(ac => ac.subject_name === classData.subject_name).length
 
@@ -262,7 +262,7 @@ export class ReportService {
   static async getSubjectScheduledClasses(peertutorsId: string, subjectName: string): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
-      
+
       // Get peer tutor info (including created_at)
       const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
@@ -323,7 +323,7 @@ export class ReportService {
   static async getClassAttendanceReport(scheduledClassId: string): Promise<ClassAttendanceReport | null> {
     try {
       const supabase = createClient()
-      
+
       // Get scheduled class details
       const { data: scheduledClass, error: classError } = await supabase
         .from('scheduled_classes')
@@ -379,7 +379,7 @@ export class ReportService {
   static async getpeertutorsReportData(peertutorsId: string): Promise<peertutorsReportData | null> {
     try {
       const supabase = createClient()
-      
+
       // Get peer tutor info
       const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
@@ -416,7 +416,7 @@ export class ReportService {
   static async getSubjectFullClassReport(peertutorsId: string, subjectName: string): Promise<FullClassReport | null> {
     try {
       const supabase = createClient()
-      
+
       // 1. Get peer tutor info
       const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
@@ -482,7 +482,7 @@ export class ReportService {
         })),
         ...(additionalClasses || []).map(c => ({
           id: c.id,
-          date: c.class_date, 
+          date: c.class_date,
           time: c.start_time && c.end_time ? `${formatTime(c.start_time)} - ${formatTime(c.end_time)}` : 'Additional',
           is_additional: true,
           topics: c.topic || ''
@@ -515,7 +515,7 @@ export class ReportService {
           .from('attendance')
           .select('student_id, scheduled_class_id, status')
           .in('scheduled_class_id', scheduledIds)
-        
+
         if (saError) logger.error('Error fetching scheduled attendance', saError)
         else scheduledAttendance = sa || []
       }
@@ -533,16 +533,21 @@ export class ReportService {
         else additionalAttendance = aa || []
       }
 
+
+      // Get current date for upcoming logic
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       // 7. Build Rows
       const rows = students.map(student => {
-        const attendanceMap: Record<string, 'present' | 'absent' | 'on_duty' | 'late'> = {}
+        const attendanceMap: Record<string, 'present' | 'absent' | 'on_duty' | 'late' | 'upcoming'> = {}
         let presentCount = 0
         let totalCount = 0
 
         // Process columns to populate map and stats
         columns.forEach(col => {
           let status: string | null = null
-          
+
           if (!col.is_additional) {
             const record = scheduledAttendance.find(r => r.student_id === student.id && r.scheduled_class_id === col.id)
             status = record?.status ?? null
@@ -551,25 +556,23 @@ export class ReportService {
             status = record?.status ?? null
           }
 
+          const classDate = new Date(col.date);
+          classDate.setHours(0, 0, 0, 0);
+
           if (status) {
             attendanceMap[col.id] = status as 'present' | 'absent' | 'on_duty' | 'late'
             totalCount++
             if (status === 'present') presentCount++
           } else {
-            // Absent by default if class exists but no record? Or just null?
-            // Usually if class is completed, attendance should exist.
-            // If missing, count as absent? Or ignore?
-            // Let's assume ignore if truly missing, but for report usually absent.
-            // But let's stick to what we have.
-            attendanceMap[col.id] = 'absent' // Defaulting to absent if not found but student is in class list? 
-            // Better to verify if student was enrolled then.
-            // For now, assume if no record found, it might mean they weren't in the class list OR absent.
-            // Safest to leave as null or 'absent' if we assume full enrolment.
-            // Let's count only if record exists for now to be safe, or check business logic.
-            // User requirement: "in the column only the completed allocated class"
-            // If we have a column, the student should have a status.
-             totalCount++ // Assume everyone should have attended
-             attendanceMap[col.id] = 'absent'
+            // Logic for upcoming classes
+            if (!col.is_additional && classDate.getTime() > today.getTime()) {
+              attendanceMap[col.id] = 'upcoming';
+              // Do NOT increment totalCount for upcoming classes
+            } else {
+              // Past or today with no record = Absent
+              totalCount++
+              attendanceMap[col.id] = 'absent'
+            }
           }
         })
 
@@ -604,7 +607,7 @@ export class ReportService {
   static async getExcelExportData(peertutorsId: string): Promise<ExcelExportData[]> {
     try {
       const supabase = createClient()
-      
+
       // Get peer tutor info (including created_at)
       const { data: peertutors, error: tutorError } = await supabase
         .from('peer_tutors')
@@ -671,7 +674,7 @@ export class ReportService {
       for (const student of students) {
         // Get attendance records for this student
         const studentAttendance = attendanceRecords.filter(record => record.student_id === student.id)
-        
+
         // Group by subject
         const subjectGroups = new Map<string, {
           presentCount: number
@@ -681,14 +684,14 @@ export class ReportService {
 
         for (const attendance of studentAttendance) {
           // Find the corresponding scheduled class
-          const scheduledClass = scheduledClasses.find(sc => 
+          const scheduledClass = scheduledClasses.find(sc =>
             sc.class_id === attendance.class_id || sc.id === attendance.scheduled_class_id
           )
-          
+
           if (scheduledClass) {
             const subjectName = scheduledClass.class.subject_name
             const key = subjectName
-            
+
             if (!subjectGroups.has(key)) {
               subjectGroups.set(key, {
                 presentCount: 0,
@@ -696,13 +699,13 @@ export class ReportService {
                 topics: []
               })
             }
-            
+
             const group = subjectGroups.get(key)!
             group.totalCount++
             if (attendance.status === 'present') {
               group.presentCount++
             }
-            
+
             // Add topic if available
             if (scheduledClass.topics && !group.topics.includes(scheduledClass.topics)) {
               group.topics.push(scheduledClass.topics)
@@ -713,7 +716,7 @@ export class ReportService {
         // Create export data for each subject
         for (const [subjectName, data] of subjectGroups) {
           const attendancePercentage = data.totalCount > 0 ? (data.presentCount / data.totalCount) * 100 : 0
-          
+
           exportData.push({
             subject_name: subjectName,
             student_name: student.name,
@@ -738,7 +741,7 @@ export class ReportService {
   static async getAllpeertutorsReports(facultyId?: string): Promise<peertutorsReportData[]> {
     try {
       const supabase = createClient()
-      
+
       // Get all peer tutors
       let query = supabase
         .from('peer_tutors')
@@ -784,16 +787,16 @@ export class ReportService {
   static async getTopicSheetData(peertutorsId: string): Promise<TopicSheetData[]> {
     try {
       const supabase = createClient()
-      
+
       // 1. Get all assigned subjects first
       const assignedSubjects = await this.getpeerTutorubjects(peertutorsId)
-      
+
       // Initialize map with all subjects
       const subjectMap = new Map<string, TopicSheetData>()
       assignedSubjects.forEach(sub => {
-        subjectMap.set(sub.subject_name, { 
-          subject_name: sub.subject_name, 
-          classes: [] 
+        subjectMap.set(sub.subject_name, {
+          subject_name: sub.subject_name,
+          classes: []
         })
       })
 
@@ -876,7 +879,7 @@ export class ReportService {
         if (!subjectName) return
 
         if (!subjectMap.has(subjectName)) {
-           // Should ideally be there, but safe to add
+          // Should ideally be there, but safe to add
           subjectMap.set(subjectName, { subject_name: subjectName, classes: [] })
         }
 
@@ -909,7 +912,7 @@ export class ReportService {
     try {
       // 1. Get all subjects for the peer tutor
       const subjects = await this.getpeerTutorubjects(peertutorsId)
-      
+
       if (!subjects || subjects.length === 0) return []
 
       // 2. Fetch full class report for each subject

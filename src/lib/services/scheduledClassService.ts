@@ -61,10 +61,10 @@ export class ScheduledClassService {
   static async createScheduledClass(data: CreateScheduledClassData): Promise<boolean> {
     try {
       const supabase = createClient()
-      
+
       // Validate required fields with detailed logging
       logger.info('createScheduledClass called with data:', data)
-      
+
       if (!data.class_id) {
         logger.error('class_id is required')
         return false
@@ -81,7 +81,7 @@ export class ScheduledClassService {
         logger.error('dept, year, and section are required', { dept: data.dept, year: data.year, section: data.section })
         return false
       }
-      
+
       // Get the class to verify it exists and get section information
       const { data: classData, error: classError } = await supabase
         .from('classes')
@@ -134,10 +134,10 @@ export class ScheduledClassService {
         logger.error('Error parsing scheduled_date:', data.scheduled_date, error)
         return false
       }
-      
+
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      
+
       // Allow scheduling for today and future dates (reject only past dates)
       if (scheduledDate < today) {
         logger.info('Scheduled date is in the past. Not creating scheduled classes.')
@@ -146,7 +146,7 @@ export class ScheduledClassService {
 
       // Always create scheduled classes for ALL peer tutors in this section
       logger.info('Fetching peer tutors for:', { dept: normalizedDept, year: normalizedYear, section: normalizedSection })
-      
+
       const { data: peerTutor, error: tutorsError } = await supabase
         .from('peer_tutors')
         .select('id')
@@ -163,7 +163,7 @@ export class ScheduledClassService {
 
       if (!peerTutor || peerTutor.length === 0) {
         logger.warn('No peer tutors found for this section. Creating a placeholder scheduled class.')
-        
+
         // Check if a placeholder already exists
         const { data: existingPlaceholder } = await supabase
           .from('scheduled_classes')
@@ -177,8 +177,8 @@ export class ScheduledClassService {
           .maybeSingle()
 
         if (existingPlaceholder) {
-            logger.info('Placeholder scheduled class already exists')
-            return true
+          logger.info('Placeholder scheduled class already exists')
+          return true
         }
 
         // Create placeholder
@@ -199,22 +199,22 @@ export class ScheduledClassService {
           })
 
         if (placeholderError) {
-            logger.error('Error creating placeholder scheduled class:', placeholderError)
-            return false
+          logger.error('Error creating placeholder scheduled class:', placeholderError)
+          return false
         }
-        
+
         return true
       }
 
       // Check which peer tutors already have this scheduled class
       const peertutorsIds = peerTutor.map(t => t.id).filter(id => id) // Remove any undefined/null IDs
       logger.info('Checking existing scheduled classes for peer tutor IDs:', peertutorsIds.length)
-      
+
       if (peertutorsIds.length === 0) {
         logger.error('No valid peer tutor IDs found')
         return false
       }
-      
+
       const { data: existing, error: existErr } = await supabase
         .from('scheduled_classes')
         .select('peer_tutor_id')
@@ -226,7 +226,7 @@ export class ScheduledClassService {
         .in('peer_tutor_id', peertutorsIds)
 
       let existingTutorIds = new Set<string>()
-      
+
       if (existErr) {
         logger.error('Error checking existing scheduled classes:', existErr)
         // Don't return false here - continue to create if the check fails
@@ -283,14 +283,14 @@ export class ScheduledClassService {
    * Get scheduled classes for a specific dept/year/section
    */
   static async getScheduledClassesByYearSection(
-    dept: string, 
-    year: string, 
-    section: string, 
+    dept: string,
+    year: string,
+    section: string,
     peertutorsId?: string
   ): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
-      
+
       // Normalize year, department, and section
       const normalizeYear = (year: string): string => {
         const yearMap: { [key: string]: string } = {
@@ -302,7 +302,7 @@ export class ScheduledClassService {
       const normalizedYear = normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
-      
+
       let query = supabase
         .from('scheduled_classes')
         .select(`
@@ -348,7 +348,7 @@ export class ScheduledClassService {
   static async getScheduledClassesByDate(dept: string, year: string, section: string, peertutorsId?: string): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
-      
+
       // Normalize year, department, and section
       const normalizeYear = (year: string): string => {
         const yearMap: { [key: string]: string } = {
@@ -360,7 +360,7 @@ export class ScheduledClassService {
       const normalizedYear = normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
-      
+
       let query = supabase
         .from('scheduled_classes')
         .select(`
@@ -400,7 +400,7 @@ export class ScheduledClassService {
   static async getOccupiedDates(dept: string, year: string, section: string): Promise<string[]> {
     try {
       const supabase = createClient()
-      
+
       // Normalize year, department, and section
       const normalizeYear = (year: string): string => {
         const yearMap: { [key: string]: string } = {
@@ -412,7 +412,7 @@ export class ScheduledClassService {
       const normalizedYear = normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
-      
+
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select('scheduled_date')
@@ -438,7 +438,7 @@ export class ScheduledClassService {
   static async isDateAvailable(scheduledDate: string, dept: string, year: string, section: string, excludeScheduledClassId?: string): Promise<boolean> {
     try {
       const supabase = createClient()
-      
+
       // Normalize year, department, and section
       const normalizeYear = (year: string): string => {
         const yearMap: { [key: string]: string } = {
@@ -450,7 +450,7 @@ export class ScheduledClassService {
       const normalizedYear = normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
-      
+
       let query = supabase
         .from('scheduled_classes')
         .select('id')
@@ -483,7 +483,7 @@ export class ScheduledClassService {
   static async getUniqueSubjectsWithSchedules(dept: string, year: string, section: string): Promise<string[]> {
     try {
       const supabase = createClient()
-      
+
       // Normalize year, department, and section
       const normalizeYear = (year: string): string => {
         const yearMap: { [key: string]: string } = {
@@ -495,7 +495,7 @@ export class ScheduledClassService {
       const normalizedYear = normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
-      
+
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select(`
@@ -530,7 +530,7 @@ export class ScheduledClassService {
   static async getAllSubjects(dept: string, year: string, section: string): Promise<string[]> {
     try {
       const supabase = createClient()
-      
+
       const { data, error } = await supabase
         .from('classes')
         .select('subject_name')
@@ -558,7 +558,7 @@ export class ScheduledClassService {
   static async deleteScheduledClass(scheduledClassId: string): Promise<boolean> {
     try {
       const supabase = createClient()
-      
+
       const { error } = await supabase
         .from('scheduled_classes')
         .delete()
@@ -582,7 +582,7 @@ export class ScheduledClassService {
   static async updateScheduledClassDate(scheduledClassId: string, newDate: string): Promise<boolean> {
     try {
       const supabase = createClient()
-      
+
       const { error } = await supabase
         .from('scheduled_classes')
         .update({ scheduled_date: newDate })
@@ -606,7 +606,7 @@ export class ScheduledClassService {
   static async getScheduledClassById(scheduledClassId: string): Promise<ScheduledClass | null> {
     try {
       const supabase = createClient()
-      
+
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select('*')
@@ -631,7 +631,7 @@ export class ScheduledClassService {
   static async getScheduledClassByClassId(classId: string): Promise<ScheduledClass | null> {
     try {
       const supabase = createClient()
-      
+
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select('*')
@@ -658,7 +658,7 @@ export class ScheduledClassService {
   static async getAllScheduledClassesByClassId(classId: string): Promise<ScheduledClass[]> {
     try {
       const supabase = createClient()
-      
+
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select('*')
@@ -681,39 +681,39 @@ export class ScheduledClassService {
    * Update details for a scheduled class (topics, timing, link)
    */
   static async updateScheduledClassDetails(
-    scheduledClassId: string, 
-    data: { 
-      topics?: string, 
-      start_time?: string, 
-      end_time?: string, 
+    scheduledClassId: string,
+    data: {
+      topics?: string,
+      start_time?: string,
+      end_time?: string,
       link?: string,
       class_id?: string
     }
   ): Promise<boolean> {
     try {
       const supabase = createClient()
-      
+
       logger.info('updateScheduledClassDetails called with:', { scheduledClassId, data })
-      
+
       // First, verify the scheduled class exists
       const { data: existingClass, error: checkError } = await supabase
         .from('scheduled_classes')
         .select('id, topics, start_time, end_time, link, peer_tutor_id')
         .eq('id', scheduledClassId)
         .maybeSingle()
-      
+
       if (checkError) {
         logger.error('Error checking existing scheduled class:', checkError)
         return false
       }
-      
+
       if (!existingClass) {
         logger.error('Scheduled class not found with ID:', scheduledClassId)
         return false
       }
-      
+
       logger.info('Found existing scheduled class:', existingClass)
-      
+
       const updateData: Record<string, unknown> = {
         updated_at: new Date().toISOString()
       }
@@ -761,10 +761,10 @@ export class ScheduledClassService {
   static async updateScheduledClassTopics(scheduledClassId: string, topics: string): Promise<boolean> {
     try {
       const supabase = createClient()
-      
+
       const { error } = await supabase
         .from('scheduled_classes')
-        .update({ 
+        .update({
           topics: topics,
           topics_completed: topics.trim().length > 0,
           updated_at: new Date().toISOString()
@@ -789,10 +789,10 @@ export class ScheduledClassService {
   static async updateScheduledClassImageLink(scheduledClassId: string, imageLink: string): Promise<boolean> {
     try {
       const supabase = createClient()
-      
+
       const { error } = await supabase
         .from('scheduled_classes')
-        .update({ 
+        .update({
           image_link: imageLink,
           updated_at: new Date().toISOString()
         })
@@ -814,21 +814,21 @@ export class ScheduledClassService {
    * Update completion status for a scheduled class
    */
   static async updateScheduledClassCompletion(
-    scheduledClassId: string, 
-    attendanceCompleted: boolean, 
+    scheduledClassId: string,
+    attendanceCompleted: boolean,
     topicsCompleted: boolean
   ): Promise<boolean> {
     try {
       const supabase = createClient()
-      
-      const completionStatus = attendanceCompleted && topicsCompleted ? 'completed' : 
-                              (attendanceCompleted || topicsCompleted) ? 'pending' : 'not_started'
-      
+
+      const completionStatus = attendanceCompleted && topicsCompleted ? 'completed' :
+        (attendanceCompleted || topicsCompleted) ? 'pending' : 'not_started'
+
       const completedAt = completionStatus === 'completed' ? new Date().toISOString() : null
 
       const { error } = await supabase
         .from('scheduled_classes')
-        .update({ 
+        .update({
           attendance_completed: attendanceCompleted,
           topics_completed: topicsCompleted,
           completion_status: completionStatus,
@@ -860,7 +860,7 @@ export class ScheduledClassService {
   } | null> {
     try {
       const supabase = createClient()
-      
+
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select('attendance_completed, topics_completed, completion_status, completed_at')
@@ -888,7 +888,7 @@ export class ScheduledClassService {
   }> {
     try {
       const supabase = createClient()
-      
+
       // Normalize year, department, and section
       const normalizeYear = (year: string): string => {
         const yearMap: { [key: string]: string } = {
@@ -900,7 +900,7 @@ export class ScheduledClassService {
       const normalizedYear = normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
-      
+
       // Get all scheduled classes for the specified filters
       let query = supabase
         .from('scheduled_classes')
@@ -933,7 +933,7 @@ export class ScheduledClassService {
       const { data, error } = await query
 
       logger.info('Query result for peer tutor class status:', { dept, year, section, subject }, 'Data count:', data?.length || 0)
-      
+
       if (error) {
         logger.error('Error getting peer tutor class status:', error)
         logger.error('Error details:', {
@@ -954,19 +954,19 @@ export class ScheduledClassService {
         // 1. completion_status is explicitly 'completed'
         // 2. Both attendance and topics are marked as completed
         // 3. completion_status is 'pending' but both attendance and topics are done
-        return cls.completion_status === 'completed' || 
-               (cls.attendance_completed && cls.topics_completed) ||
-               (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
+        return cls.completion_status === 'completed' ||
+          (cls.attendance_completed && cls.topics_completed) ||
+          (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
       })
-      
+
       const pending = relevantClasses.filter(cls => {
         // A class is considered pending if:
         // 1. completion_status is 'pending' and not both attendance and topics are done
         // 2. completion_status is 'not_started'
         // 3. completion_status is null/undefined but not both attendance and topics are done
         return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
-               cls.completion_status === 'not_started' ||
-               (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
       return { completed, pending }
@@ -985,11 +985,11 @@ export class ScheduledClassService {
   }> {
     try {
       const supabase = createClient()
-      
+
       // Determine the target date
       let targetDate: Date
       let dateString: string
-      
+
       if (dateFilter === 'today') {
         targetDate = new Date()
         targetDate.setHours(0, 0, 0, 0)
@@ -1000,13 +1000,13 @@ export class ScheduledClassService {
         targetDate.setHours(0, 0, 0, 0)
         dateString = targetDate.toISOString().split('T')[0]
       }
-      
+
       logger.info('Date filter processing:', {
         originalDateFilter: dateFilter,
         targetDate: targetDate.toISOString(),
         dateString: dateString
       })
-      
+
       // Normalize year, department, and section
       const normalizeYear = (year: string): string => {
         const yearMap: { [key: string]: string } = {
@@ -1018,7 +1018,7 @@ export class ScheduledClassService {
       const normalizedYear = normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
-      
+
       // Get all scheduled classes for the specified filters
       const query = supabase
         .from('scheduled_classes')
@@ -1047,7 +1047,7 @@ export class ScheduledClassService {
       const { data, error } = await query
 
       logger.info('Query result for peer tutor class status with date:', { dept, year, section, dateFilter }, 'Data count:', data?.length || 0)
-      
+
       if (error) {
         logger.error('Error getting peer tutor class status with date:', error)
         return { completed: [], pending: [] }
@@ -1061,19 +1061,19 @@ export class ScheduledClassService {
         // 1. completion_status is explicitly 'completed'
         // 2. Both attendance and topics are marked as completed
         // 3. completion_status is 'pending' but both attendance and topics are done
-        return cls.completion_status === 'completed' || 
-               (cls.attendance_completed && cls.topics_completed) ||
-               (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
+        return cls.completion_status === 'completed' ||
+          (cls.attendance_completed && cls.topics_completed) ||
+          (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
       })
-      
+
       const pending = relevantClasses.filter(cls => {
         // A class is considered pending if:
         // 1. completion_status is 'pending' and not both attendance and topics are done
         // 2. completion_status is 'not_started'
         // 3. completion_status is null/undefined but not both attendance and topics are done
         return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
-               cls.completion_status === 'not_started' ||
-               (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
       return { completed, pending }
@@ -1092,7 +1092,7 @@ export class ScheduledClassService {
   }> {
     try {
       const supabase = createClient()
-      
+
       // Get all scheduled classes for the specified year
       const query = supabase
         .from('scheduled_classes')
@@ -1119,7 +1119,7 @@ export class ScheduledClassService {
       const { data, error } = await query
 
       logger.info('Query result for peer tutor class status by year:', { dept, year }, 'Data count:', data?.length || 0)
-      
+
       if (error) {
         logger.error('Error getting peer tutor class status by year:', error)
         return { completed: [], pending: [] }
@@ -1129,15 +1129,15 @@ export class ScheduledClassService {
 
       // Separate completed and pending classes
       const completed = relevantClasses.filter(cls => {
-        return cls.completion_status === 'completed' || 
-               (cls.attendance_completed && cls.topics_completed) ||
-               (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
+        return cls.completion_status === 'completed' ||
+          (cls.attendance_completed && cls.topics_completed) ||
+          (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
       })
-      
+
       const pending = relevantClasses.filter(cls => {
         return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
-               cls.completion_status === 'not_started' ||
-               (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
       return { completed, pending }
@@ -1156,11 +1156,11 @@ export class ScheduledClassService {
   }> {
     try {
       const supabase = createClient()
-      
+
       // Determine the target date
       let targetDate: Date
       let dateString: string
-      
+
       if (dateFilter === 'today') {
         targetDate = new Date()
         targetDate.setHours(0, 0, 0, 0)
@@ -1171,13 +1171,13 @@ export class ScheduledClassService {
         targetDate.setHours(0, 0, 0, 0)
         dateString = targetDate.toISOString().split('T')[0]
       }
-      
+
       logger.info('Date filter processing (year+date):', {
         originalDateFilter: dateFilter,
         targetDate: targetDate.toISOString(),
         dateString: dateString
       })
-      
+
       // Get all scheduled classes for the specified year and date
       const query = supabase
         .from('scheduled_classes')
@@ -1205,7 +1205,7 @@ export class ScheduledClassService {
       const { data, error } = await query
 
       logger.info('Query result for peer tutor class status by year and date:', { dept, year, dateFilter }, 'Data count:', data?.length || 0)
-      
+
       if (error) {
         logger.error('Error getting peer tutor class status by year and date:', error)
         return { completed: [], pending: [] }
@@ -1215,15 +1215,15 @@ export class ScheduledClassService {
 
       // Separate completed and pending classes
       const completed = relevantClasses.filter(cls => {
-        return cls.completion_status === 'completed' || 
-               (cls.attendance_completed && cls.topics_completed) ||
-               (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
+        return cls.completion_status === 'completed' ||
+          (cls.attendance_completed && cls.topics_completed) ||
+          (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
       })
-      
+
       const pending = relevantClasses.filter(cls => {
         return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
-               cls.completion_status === 'not_started' ||
-               (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
       return { completed, pending }
@@ -1239,15 +1239,15 @@ export class ScheduledClassService {
   static async getAllClassesForDepartment(dept: string): Promise<{ completed: ScheduledClassWithDetails[], pending: ScheduledClassWithDetails[] }> {
     try {
       const supabase = createClient()
-      
+
       logger.info('Getting all classes for department:', dept)
-      
+
       // Validate department parameter
       if (!dept || typeof dept !== 'string' || dept.trim() === '') {
         logger.error('Invalid department parameter:', dept)
         return { completed: [], pending: [] }
       }
-      
+
       // First, get all scheduled classes for the department
       const { data: scheduledClasses, error: scheduledError } = await supabase
         .from('scheduled_classes')
@@ -1263,12 +1263,12 @@ export class ScheduledClassService {
           hint: scheduledError.hint || 'No hint available',
           code: scheduledError.code || 'No code available'
         })
-        
+
         // Check if it's a table not found error
         if (scheduledError.code === '42P01' || scheduledError.message?.includes('relation') || scheduledError.message?.includes('does not exist')) {
           logger.error('Table "scheduled_classes" may not exist or be accessible')
         }
-        
+
         return { completed: [], pending: [] }
       }
 
@@ -1335,19 +1335,19 @@ export class ScheduledClassService {
         // 1. completion_status is explicitly 'completed'
         // 2. Both attendance and topics are marked as completed
         // 3. completion_status is 'pending' but both attendance and topics are done
-        return cls.completion_status === 'completed' || 
-               (cls.attendance_completed && cls.topics_completed) ||
-               (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
+        return cls.completion_status === 'completed' ||
+          (cls.attendance_completed && cls.topics_completed) ||
+          (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
       })
-      
+
       const pending = relevantClasses.filter(cls => {
         // A class is considered pending if:
         // 1. completion_status is 'pending' and not both attendance and topics are done
         // 2. completion_status is 'not_started'
         // 3. completion_status is null/undefined but not both attendance and topics are done
         return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
-               cls.completion_status === 'not_started' ||
-               (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
       logger.info('Processed classes - Completed:', completed.length, 'Pending:', pending.length)
@@ -1374,7 +1374,7 @@ export class ScheduledClassService {
   }> {
     try {
       const supabase = createClient()
-      
+
       // Get all scheduled classes for this peer tutor
       const { data: scheduledClasses, error } = await supabase
         .from('scheduled_classes')
@@ -1396,21 +1396,21 @@ export class ScheduledClassService {
 
       // For completed/pending counts, we consider all classes assigned to the tutor (past, present, and future)
       const relevantClasses = scheduledClasses
-      
+
       // Count completed and pending classes
       const scheduledCompletedClasses = relevantClasses.filter(cls => {
-        return cls.completion_status === 'completed' || 
-               (cls.attendance_completed && cls.topics_completed) ||
-               (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
+        return cls.completion_status === 'completed' ||
+          (cls.attendance_completed && cls.topics_completed) ||
+          (cls.completion_status === 'pending' && cls.attendance_completed && cls.topics_completed)
       }).length
 
       // Total completed classes = scheduled completed only (excluding additional classes for dashboard cards)
       const completedClasses = scheduledCompletedClasses
-      
+
       const pendingClassesList = relevantClasses.filter(cls => {
         return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
-               cls.completion_status === 'not_started' ||
-               (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
       const pendingClasses = pendingClassesList.length
@@ -1424,21 +1424,21 @@ export class ScheduledClassService {
 
       pendingClassesList.forEach(cls => {
         if (!cls.scheduled_date) {
-            overdueClasses++ // Default to overdue if no date? or ignore? treating as overdue/pending seems safer
-            return
+          overdueClasses++ // Default to overdue if no date? or ignore? treating as overdue/pending seems safer
+          return
         }
-        
+
         const classDate = new Date(cls.scheduled_date)
         classDate.setHours(0, 0, 0, 0)
 
         // User rule: 
         // Upcoming = scheduled_date > today (Tomorrow onwards)
         // Pending (Overdue) = scheduled_date <= today (Today or Past)
-        
+
         if (classDate.getTime() >= today.getTime()) {
-            upcomingClasses++
+          upcomingClasses++
         } else {
-            overdueClasses++
+          overdueClasses++
         }
       })
 
@@ -1461,7 +1461,7 @@ export class ScheduledClassService {
   static async getScheduledClassCount(classId: string): Promise<number> {
     try {
       const supabase = createClient()
-      
+
       const { data, error } = await supabase
         .from('scheduled_classes')
         .select('id')
@@ -1480,6 +1480,38 @@ export class ScheduledClassService {
   }
 
   /**
+   * Get scheduled class counts for all classes in a single query
+   * Returns a map of class_id -> count
+   */
+  static async getAllScheduledClassCounts(): Promise<Record<string, number>> {
+    try {
+      const supabase = createClient()
+
+      const { data, error } = await supabase
+        .from('scheduled_classes')
+        .select('class_id')
+
+      if (error) {
+        logger.error('Error getting all scheduled class counts:', error)
+        return {}
+      }
+
+      if (!data) return {}
+
+      // Aggregate counts by class_id
+      const counts: Record<string, number> = {}
+      data.forEach(item => {
+        counts[item.class_id] = (counts[item.class_id] || 0) + 1
+      })
+
+      return counts
+    } catch (error) {
+      logger.error('Error in getAllScheduledClassCounts:', error)
+      return {}
+    }
+  }
+
+  /**
    * Get all peer tutors allocated to a specific scheduled class
    */
   static async getpeerTutorForScheduledClass(classId: string, dept: string, year: string, section: string): Promise<{
@@ -1489,7 +1521,7 @@ export class ScheduledClassService {
   }[]> {
     try {
       const supabase = createClient()
-      
+
       // Normalize year, department, and section
       const normalizeYear = (year: string): string => {
         const yearMap: { [key: string]: string } = {
@@ -1501,7 +1533,7 @@ export class ScheduledClassService {
       const normalizedYear = normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
-      
+
       // Get all scheduled classes for this class_id, dept, year, section
       const { data: scheduledClasses, error } = await supabase
         .from('scheduled_classes')
@@ -1528,9 +1560,9 @@ export class ScheduledClassService {
       const peerTutor = (scheduledClasses || []).map((sc: { peer_tutor: { id: string, name: string, email: string } | { id: string, name: string, email: string }[] }) => {
         return Array.isArray(sc.peer_tutor) ? sc.peer_tutor[0] : sc.peer_tutor
       }).filter(Boolean)
-      
+
       // Remove duplicates based on ID
-      const uniquepeerTutor = peerTutor.filter((tutor: { id: string }, index: number, self: { id: string }[]) => 
+      const uniquepeerTutor = peerTutor.filter((tutor: { id: string }, index: number, self: { id: string }[]) =>
         index === self.findIndex((t) => t.id === tutor.id)
       )
 
