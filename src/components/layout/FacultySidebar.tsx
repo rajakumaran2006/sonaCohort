@@ -27,7 +27,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
   const handleToggleCollapse = () => {
     const nextCollapsed = !isCollapsed
     setIsCollapsed(nextCollapsed)
-    
+
     // Dispatch event is handled by hook's setter/effect loop usually, 
     // but the hook in this codebase seems to LISTEN to events but maybe not dispatch them from setter?
     // Let's check the hook code again.
@@ -40,20 +40,20 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
     // The hook uses `useState`. So each component gets its own state.
     // They sync via `storage` event (cross-tab) and `sidebar-toggle` (same tab).
     // So YES, I MUST dispatch the event here for the other hook instance to pick it up.
-    
+
     if (typeof window !== 'undefined') {
-       window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: { isCollapsed: nextCollapsed } }))
+      window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: { isCollapsed: nextCollapsed } }))
     }
-    
+
     if (onToggleCollapse) {
       onToggleCollapse()
     }
   }
 
   const navigation = [
-    { 
-      name: 'DASHBOARD', 
-      href: '/faculty/dashboard', 
+    {
+      name: 'DASHBOARD',
+      href: '/faculty/dashboard',
       Icon: LayoutGrid,
       relatedPaths: ['/faculty/department', '/faculty/renumeration']
     },
@@ -61,9 +61,9 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
     { name: 'CLASSES', href: '/faculty/classes', Icon: GraduationCap },
     { name: 'ATTENDANCE', href: '/faculty/attendance', Icon: ClipboardList },
     { name: 'EXAMS', href: '/faculty/exams', Icon: FileText },
-    { 
-      name: 'ANALYTICS', 
-      href: '/faculty/analytics', 
+    {
+      name: 'ANALYTICS',
+      href: '/faculty/analytics',
       Icon: BarChart3,
       relatedPaths: ['/faculty/feedback-analytics']
     },
@@ -93,7 +93,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
       <FacultyCommandPalette />
       {/* Mobile backdrop */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={onClose}
         />
@@ -113,9 +113,9 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
         <div className={`flex items-center h-20 flex-shrink-0 ${showCollapsed ? 'lg:px-4 lg:justify-center px-6' : 'px-6'} pt-6 mb-6 transition-all duration-300`}>
           <div className={`flex items-center ${showCollapsed ? 'lg:justify-center gap-3' : 'gap-3'}`}>
             <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-2 ${showCollapsed ? 'lg:w-10 lg:h-10 w-12 h-12' : 'w-12 h-12'}`}>
-              <Image 
-                src="/peers.png" 
-                alt="Peers Logo" 
+              <Image
+                src="/peers.png"
+                alt="Peers Logo"
                 width={48}
                 height={48}
                 className="object-contain"
@@ -135,10 +135,10 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
           </div>
           <div className="space-y-2">
             {navigation.map((item) => {
-              const isActive = pathname === item.href || 
-                              pathname?.startsWith(`${item.href}/`) || 
-                              (item.relatedPaths && item.relatedPaths.some(path => pathname?.startsWith(path)))
-              
+              const isActive = pathname === item.href ||
+                pathname?.startsWith(`${item.href}/`) ||
+                (item.relatedPaths && item.relatedPaths.some(path => pathname?.startsWith(path)))
+
               const Icon = item.Icon
               return (
                 <Link
@@ -165,7 +165,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
               )
             })}
           </div>
-          
+
           {/* Toggle Button - Desktop Only */}
           <div className={`mt-8 hidden lg:flex ${isCollapsed ? 'justify-center' : 'justify-end px-4'}`}>
             <button
@@ -184,7 +184,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
         <div className="border-t border-gray-800 flex-shrink-0 p-4 mt-auto">
           <div className={`flex items-center w-full rounded-lg p-2 ${showCollapsed ? 'lg:justify-center justify-between' : 'justify-between'}`}>
             {/* Profile Info */}
-            <Link 
+            <Link
               href="/faculty/settings"
               onClick={onClose}
               className={`flex items-center ${showCollapsed ? 'lg:flex-col lg:gap-0 gap-3 flex-1 min-w-0' : 'gap-3 flex-1 min-w-0'} hover:bg-white/5 rounded-lg p-2 transition-colors`}
@@ -205,7 +205,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
                 </p>
               </div>
             </Link>
-            
+
             {/* Sign Out Icon - Always visible on mobile, conditional on desktop */}
             <button
               onClick={handleSignOut}
@@ -216,7 +216,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
               <LogOut className="w-5 h-5" />
             </button>
           </div>
-          
+
           {/* Sign Out for Collapsed State - Desktop Only */}
           {isCollapsed && (
             <div className="mt-2 hidden lg:block">

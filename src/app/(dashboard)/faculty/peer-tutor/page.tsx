@@ -27,14 +27,17 @@ import FeedbackResponsesModal from '@/components/forms/feedback/FeedbackResponse
 import FeedbackAnalyticsPage from '@/components/forms/feedback/FeedbackAnalyticsPage'
 import ExcelExportModal from '@/components/forms/import-export/ExcelExportModal'
 import PeerTutorImportModal from '@/components/forms/import-export/PeerTutorImportModal'
+import PeerTutorsPageSkeleton from '@/components/skeletons/PeerTutorPageSkeleton'
+import FeedbackFormsSkeleton from '@/components/skeletons/FeedbackFormsSkeleton'
+import RenumerationTemplatesSkeleton from '@/components/skeletons/RenumerationTemplatesSkeleton'
+import PeerTutorReportsSkeleton from '@/components/skeletons/PeerTutorReportsSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Eye, Search, X } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
-import AddStudentModal from '@/components/forms/modals/AddStudentModal'
-import AddPeerTutorModal from '@/components/forms/modals/AddPeerTutorModal'
+import UserSelectionModal from '@/components/forms/modals/UserSelectionModal'
 import { logger } from '@/lib/logger'
 import { motion } from 'framer-motion'
-import { Trophy } from 'lucide-react'
+import { Trophy, Crown, Medal } from 'lucide-react'
 
 
 
@@ -79,7 +82,7 @@ function FacultypeertutorsContent() {
     staleTime: 10 * 60 * 1000,
   })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  
+
   // Use custom hook for sidebar collapsed state (reads from localStorage synchronously)
   const [isSidebarCollapsed] = useSidebarCollapsed()
   const [peerTutor, setpeerTutor] = useState<peertutors[]>([])
@@ -93,8 +96,8 @@ function FacultypeertutorsContent() {
   const [assignedCount, setAssignedCount] = useState(0)
   const [assignedStudentCount, setAssignedStudentCount] = useState(0)
   const [unassignedStudentCount, setUnassignedStudentCount] = useState(0)
-  const [peerTutortudentCounts, setpeerTutortudentCounts] = useState<{[key: string]: number}>({})
-  
+  const [peerTutortudentCounts, setpeerTutortudentCounts] = useState<{ [key: string]: number }>({})
+
   // Filter states
   const [selectedYear, setSelectedYear] = useState<string>('all')
   const [selectedSection, setSelectedSection] = useState<string>('all')
@@ -105,7 +108,7 @@ function FacultypeertutorsContent() {
   const [showStudentFilterPopup, setShowStudentFilterPopup] = useState(false)
   const filterRef = useRef<HTMLDivElement>(null)
   const studentFilterRef = useRef<HTMLDivElement>(null)
-  
+
   // Search states
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [ispeerTutorearchExpanded, setIspeerTutorearchExpanded] = useState(false)
@@ -141,7 +144,7 @@ function FacultypeertutorsContent() {
   }, [activeTab])
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [selectedSubmission, setSelectedSubmission] = useState<peertutorsRenumeration | null>(null)
-  
+
   // Template management states
   const [renumerationTemplates, setRenumerationTemplates] = useState<RenumerationTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<RenumerationTemplate | null>(null)
@@ -160,7 +163,7 @@ function FacultypeertutorsContent() {
   const [filterStatus, setFilterStatus] = useState<string>('') // '' | 'pending' | 'completed'
   const [showSubmissionFilter, setShowSubmissionFilter] = useState<boolean>(false)
   const submissionFilterRef = useRef<HTMLDivElement>(null)
-  
+
   // Delete modes for Students and Peer Tutors
   const [isStudentDeleteMode, setIsStudentDeleteMode] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -188,10 +191,10 @@ function FacultypeertutorsContent() {
 
   // Delete confirmation modal states
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [itemsToDelete, setItemsToDelete] = useState<{name: string, email?: string, additionalInfo?: string, originalId?: string}[]>([])
+  const [itemsToDelete, setItemsToDelete] = useState<{ name: string, email?: string, additionalInfo?: string, originalId?: string }[]>([])
   const [deleteType, setDeleteType] = useState<'peer-tutors' | 'students' | 'renumeration-templates' | 'feedback-forms'>('peer-tutors')
   const [isDeleting, setIsDeleting] = useState(false)
-  
+
 
 
 
@@ -208,9 +211,9 @@ function FacultypeertutorsContent() {
   const [reportFilterSection, setReportFilterSection] = useState<string>('all')
   const [reportFilterSubject, setReportFilterSubject] = useState<string>('all')
 
-  
+
   // Inline report view states
-  const [selectedReport, setSelectedReport] = useState<{tutorId: string, subjectId: string, tutorName: string, subjectName: string} | null>(null)
+  const [selectedReport, setSelectedReport] = useState<{ tutorId: string, subjectId: string, tutorName: string, subjectName: string } | null>(null)
   const [reportScheduledClasses, setReportScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
   const [reportLoading, setReportLoading] = useState(false)
   const [selectedClass, setSelectedClass] = useState<ClassAttendanceReport | null>(null)
@@ -225,7 +228,7 @@ function FacultypeertutorsContent() {
       const tutors = await peertutorservice.getpeerTutorByDepartment(department.name)
       setpeerTutor(tutors)
       setFilteredpeerTutor(tutors)
-      
+
       // Calculate assigned/unassigned counts for peer tutors
       const assignedTutors = tutors.filter(() => {
         // Check if this peer tutor has any assigned students
@@ -239,14 +242,14 @@ function FacultypeertutorsContent() {
       const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department.name)
       setStudents(allStudents)
       setFilteredStudents(allStudents)
-      
+
       // Calculate assigned/unassigned counts for students
       const assignedStudents = allStudents.filter(student => student.assigned_peer_tutor)
       setAssignedStudentCount(assignedStudents.length)
       setUnassignedStudentCount(allStudents.length - assignedStudents.length)
 
       // Calculate student counts for each peer tutor
-      const studentCounts: {[key: string]: number} = {}
+      const studentCounts: { [key: string]: number } = {}
       tutors.forEach(tutor => {
         const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
         studentCounts[tutor.id] = count
@@ -276,31 +279,31 @@ function FacultypeertutorsContent() {
       const tutors = await peertutorservice.getpeerTutorByDepartment(department.name)
       setpeerTutor(tutors)
       setFilteredpeerTutor(tutors)
-      
+
       const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department.name)
       setStudents(allStudents)
       setFilteredStudents(allStudents)
-      
+
       // Recalculate counts
       const assignedTutors = tutors.filter(() => true)
       setAssignedCount(assignedTutors.length)
-      
+
       const assignedStudents = allStudents.filter(student => student.assigned_peer_tutor)
       setAssignedStudentCount(assignedStudents.length)
       setUnassignedStudentCount(allStudents.length - assignedStudents.length)
-      
-      const studentCounts: {[key: string]: number} = {}
+
+      const studentCounts: { [key: string]: number } = {}
       tutors.forEach(tutor => {
         const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
         studentCounts[tutor.id] = count
       })
       setpeerTutortudentCounts(studentCounts)
-      
+
       // Reload reports if on reports tab
       if (activeTab === 'reports') {
         await loadpeertutorsReports()
       }
-      
+
       setLastRefresh(new Date())
     } catch (error) {
       logger.error('Error refreshing data:', error)
@@ -325,8 +328,8 @@ function FacultypeertutorsContent() {
     // Apply search query filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(tutor => 
-        tutor.name.toLowerCase().includes(query) || 
+      filtered = filtered.filter(tutor =>
+        tutor.name.toLowerCase().includes(query) ||
         tutor.email.toLowerCase().includes(query) ||
         tutor.year.toLowerCase().includes(query) ||
         tutor.section.toLowerCase().includes(query)
@@ -337,10 +340,10 @@ function FacultypeertutorsContent() {
     filtered.sort((a, b) => {
       const yearOrder = { '1st Year': 0, '2nd Year': 1, '3rd Year': 2, '4th Year': 3 }
       const sectionOrder = { 'Section A': 1, 'Section B': 2, 'Section C': 3 }
-      
+
       const yearDiff = (yearOrder[a.year as keyof typeof yearOrder] || 0) - (yearOrder[b.year as keyof typeof yearOrder] || 0)
       if (yearDiff !== 0) return yearDiff
-      
+
       return (sectionOrder[a.section as keyof typeof sectionOrder] || 0) - (sectionOrder[b.section as keyof typeof sectionOrder] || 0)
     })
 
@@ -382,10 +385,10 @@ function FacultypeertutorsContent() {
     filtered.sort((a, b) => {
       const yearOrder = { '1st Year': 0, '2nd Year': 1, '3rd Year': 2, '4th Year': 3 }
       const sectionOrder = { 'Section A': 1, 'Section B': 2, 'Section C': 3 }
-      
+
       const yearDiff = (yearOrder[a.year as keyof typeof yearOrder] || 0) - (yearOrder[b.year as keyof typeof yearOrder] || 0)
       if (yearDiff !== 0) return yearDiff
-      
+
       return (sectionOrder[a.section as keyof typeof sectionOrder] || 0) - (sectionOrder[b.section as keyof typeof sectionOrder] || 0)
     })
 
@@ -406,7 +409,7 @@ function FacultypeertutorsContent() {
           filteredpeerTutor.map(async (tutor) => {
             const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id)
             const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
-            
+
             // Debug logging
             logger.info(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
               additionalClassesCount: additionalClasses.length,
@@ -416,7 +419,7 @@ function FacultypeertutorsContent() {
                 class_date: ac.class_date
               }))
             })
-            
+
             return {
               ...tutor,
               classStats,
@@ -501,7 +504,7 @@ function FacultypeertutorsContent() {
     const ws = XLSX.utils.json_to_sheet(exportData)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Peer Tutors')
-    
+
     const fileName = `peer_tutors_${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(wb, fileName)
   }
@@ -517,7 +520,7 @@ function FacultypeertutorsContent() {
     const ws = XLSX.utils.json_to_sheet(exportData)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Students')
-    
+
     const fileName = `students_${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(wb, fileName)
   }
@@ -534,38 +537,38 @@ function FacultypeertutorsContent() {
 
         // Use selectedpeertutorsIds which represents what we want to delete (single or bulk)
         for (const tutorId of selectedpeertutorsIds) {
-           try {
-             // FORCE DELETE is implied by the secure modal
-             const result = await peertutorservice.removepeertutors(tutorId, true)
-             if (result.success) {
-               successCount++
-             } else {
-               failCount++
-             }
-           } catch (error) {
-             logger.error(`Error deleting peer tutor ${tutorId}:`, error)
-             failCount++
-           }
+          try {
+            // FORCE DELETE is implied by the secure modal
+            const result = await peertutorservice.removepeertutors(tutorId, true)
+            if (result.success) {
+              successCount++
+            } else {
+              failCount++
+            }
+          } catch (error) {
+            logger.error(`Error deleting peer tutor ${tutorId}:`, error)
+            failCount++
+          }
         }
 
         // Refresh data
         queryClient.invalidateQueries({ queryKey: ['peer-tutor-stats'] })
         queryClient.invalidateQueries({ queryKey: ['all-students'] })
         queryClient.invalidateQueries({ queryKey: ['faculty-department'] })
-        
+
         const tutors = await peertutorservice.getpeerTutorByDepartment(department?.name || '')
         setpeerTutor(tutors)
         setFilteredpeerTutor(tutors)
-        
+
         // Recalculate counts
         // ... (can use a separate refresh function if cleaner, but inline is fine)
         const assignedTutors = tutors.filter(() => true)
         setAssignedCount(assignedTutors.length)
         setUnassignedStudentCount(tutors.length - assignedTutors.length)
-         
+
         // Update student counts map
         const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department?.name || '')
-        const studentCounts: {[key: string]: number} = {}
+        const studentCounts: { [key: string]: number } = {}
         tutors.forEach(tutor => {
           const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
           studentCounts[tutor.id] = count
@@ -573,27 +576,27 @@ function FacultypeertutorsContent() {
         setpeerTutortudentCounts(studentCounts)
 
         if (successCount > 0) {
-            toast.success(
-            selectedpeertutorsIds.size > 1 
-                ? `${successCount} PEER TUTORS DELETED SUCCESSFULLY` 
-                : 'PEER TUTOR DELETED SUCCESSFULLY',
+          toast.success(
+            selectedpeertutorsIds.size > 1
+              ? `${successCount} PEER TUTORS DELETED SUCCESSFULLY`
+              : 'PEER TUTOR DELETED SUCCESSFULLY',
             {
-                style: {
+              style: {
                 background: '#FEF08A',
                 color: '#854D0E',
                 border: '1px solid #FDE047',
                 textTransform: 'uppercase',
                 fontWeight: 'bold',
                 fontFamily: 'inherit'
-                },
-                className: 'uppercase font-bold'
+              },
+              className: 'uppercase font-bold'
             }
-            )
+          )
         }
         if (failCount > 0) {
-            toast.error(`FAILED TO DELETE ${failCount} PEER TUTOR(S)`, {
-                style: { textTransform: 'uppercase', fontWeight: 'bold' }
-            })
+          toast.error(`FAILED TO DELETE ${failCount} PEER TUTOR(S)`, {
+            style: { textTransform: 'uppercase', fontWeight: 'bold' }
+          })
         }
 
         setSelectedpeertutorsIds(new Set())
@@ -604,49 +607,49 @@ function FacultypeertutorsContent() {
         let failCount = 0
 
         for (const studentId of selectedStudentIds) {
-            try {
-                const result = await StudentService.removeStudent(studentId)
-                if(result) successCount++
-                else failCount++
-            } catch(e) {
-                logger.error(`Error deleting student ${studentId}`, e)
-                failCount++
-            }
+          try {
+            const result = await StudentService.removeStudent(studentId)
+            if (result) successCount++
+            else failCount++
+          } catch (e) {
+            logger.error(`Error deleting student ${studentId}`, e)
+            failCount++
+          }
         }
-        
-         // Refresh data
+
+        // Refresh data
         const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department?.name || '')
         setStudents(allStudents)
         setFilteredStudents(allStudents)
-        
+
         const assignedStudents = allStudents.filter(student => student.assigned_peer_tutor)
         setAssignedStudentCount(assignedStudents.length)
         setUnassignedStudentCount(allStudents.length - assignedStudents.length)
 
         if (successCount > 0) {
-            toast.success(
-            selectedStudentIds.size > 1 
-                ? `${successCount} STUDENTS DELETED SUCCESSFULLY` 
-                : 'STUDENT DELETED SUCCESSFULLY',
+          toast.success(
+            selectedStudentIds.size > 1
+              ? `${successCount} STUDENTS DELETED SUCCESSFULLY`
+              : 'STUDENT DELETED SUCCESSFULLY',
             {
-                 style: {
+              style: {
                 background: '#FEF08A',
                 color: '#854D0E',
                 border: '1px solid #FDE047',
                 textTransform: 'uppercase',
                 fontWeight: 'bold',
                 fontFamily: 'inherit'
-                },
-                className: 'uppercase font-bold'
+              },
+              className: 'uppercase font-bold'
             }
-            )
+          )
         }
         if (failCount > 0) {
-             toast.error(`FAILED TO DELETE ${failCount} STUDENT(S)`, {
-                style: { textTransform: 'uppercase', fontWeight: 'bold' }
-            })
+          toast.error(`FAILED TO DELETE ${failCount} STUDENT(S)`, {
+            style: { textTransform: 'uppercase', fontWeight: 'bold' }
+          })
         }
-        
+
         setSelectedStudentIds(new Set())
         setIsStudentDeleteMode(false)
       } else if (deleteType === 'renumeration-templates') {
@@ -709,7 +712,7 @@ function FacultypeertutorsContent() {
             return false
           }
         })
-        
+
         const results = await Promise.all(deletePromises)
         successCount = results.filter(Boolean).length
         failCount = results.length - successCount
@@ -745,8 +748,8 @@ function FacultypeertutorsContent() {
         setIsFeedbackDeleteMode(false)
       }
     } catch (error) {
-         logger.error("Deletion failed", error)
-         toast.error("AN ERROR OCCURRED DURING DELETION")
+      logger.error("Deletion failed", error)
+      toast.error("AN ERROR OCCURRED DURING DELETION")
     } finally {
       setIsDeleting(false)
       setDeleteModalOpen(false)
@@ -894,7 +897,7 @@ function FacultypeertutorsContent() {
   // Load renumeration templates
   const loadRenumerationTemplates = useCallback(async () => {
     if (!user?.id) return
-    
+
     setTemplatesLoading(true)
     try {
       const templates = await RenumerationService.getRenumerationTemplates(user.id)
@@ -910,7 +913,7 @@ function FacultypeertutorsContent() {
   // Load renumeration submissions
   const loadRenumerationSubmissions = useCallback(async () => {
     if (!user?.id) return
-    
+
     setRenumerationLoading(true)
     try {
       const submissions = await RenumerationService.getRenumerationSubmissions(user.id)
@@ -1098,7 +1101,7 @@ function FacultypeertutorsContent() {
         status,
         user?.email || 'Unknown'
       )
-      
+
       if (success) {
         loadRenumerationSubmissions() // Reload submissions
       }
@@ -1109,15 +1112,15 @@ function FacultypeertutorsContent() {
 
   // Load feedback forms
   const loadFeedbackForms = useCallback(async () => {
-    
+
     if (!user?.id) {
       return
     }
-    
+
     setFeedbackLoading(true)
     try {
       const forms = await FeedbackService.getFeedbackFormsByFaculty(user.id)
-      
+
       // Load response counts and delta scores for each form
       const formsWithCounts = await Promise.all(
         forms.map(async (form) => {
@@ -1130,16 +1133,16 @@ function FacultypeertutorsContent() {
             } catch (analyticsError) {
               logger.error(`Error loading analytics for form ${form.id}:`, analyticsError)
             }
-            return { 
-              ...form, 
+            return {
+              ...form,
               responseCount: stats.totalResponses,
               totalEligibleStudents: stats.totalStudents,
               deltaScore
             }
           } catch (error) {
             logger.error(`Error loading stats for form ${form.id}:`, error)
-            return { 
-              ...form, 
+            return {
+              ...form,
               responseCount: 0,
               totalEligibleStudents: 0,
               deltaScore: 0
@@ -1147,7 +1150,7 @@ function FacultypeertutorsContent() {
           }
         })
       )
-      
+
       setFeedbackForms(formsWithCounts)
     } catch (error) {
       logger.error('Error loading feedback forms:', error)
@@ -1157,7 +1160,7 @@ function FacultypeertutorsContent() {
       setFeedbackLoading(false)
     }
   }, [user])
-  
+
   // Handle feedback form checkbox selection
   const handleFeedbackFormCheckboxChange = (formId: string, checked: boolean) => {
     setSelectedFeedbackFormIds(prev => {
@@ -1170,7 +1173,7 @@ function FacultypeertutorsContent() {
       return newSet
     })
   }
-  
+
   // Select all feedback forms
   const handleSelectAllFeedbackForms = (checked: boolean) => {
     if (checked) {
@@ -1179,7 +1182,7 @@ function FacultypeertutorsContent() {
       setSelectedFeedbackFormIds(new Set())
     }
   }
-  
+
   // Toggle feedback delete mode
   const handleToggleFeedbackDeleteMode = () => {
     setIsFeedbackDeleteMode(prev => {
@@ -1189,17 +1192,17 @@ function FacultypeertutorsContent() {
       return !prev
     })
   }
-  
+
   // Cancel feedback delete mode
   const handleCancelFeedbackDeleteMode = () => {
     setIsFeedbackDeleteMode(false)
     setSelectedFeedbackFormIds(new Set())
   }
-  
+
   // Delete selected feedback forms
   const handleDeleteSelectedFeedbackForms = async () => {
     if (selectedFeedbackFormIds.size === 0) return
-    
+
     // Prepare items for the delete confirmation modal
     const formsToDelete = feedbackForms
       .filter(f => selectedFeedbackFormIds.has(f.id))
@@ -1220,13 +1223,13 @@ function FacultypeertutorsContent() {
   const handleToggleFormStatus = async (formId: string, newStatus: boolean) => {
     try {
       logger.info('Updating form status:', { formId, newStatus })
-      
+
       const result = await FeedbackService.updateFeedbackForm(formId, {
         is_active: newStatus
       })
-      
+
       logger.info('Update result:', result)
-      
+
       if (result.success) {
         // Refresh the feedback forms list
         loadFeedbackForms()
@@ -1343,12 +1346,12 @@ function FacultypeertutorsContent() {
 
     try {
       const workbook = XLSX.utils.book_new()
-      
+
       // Get unique years and sections from filtered reports
       const uniqueYears = [...new Set(filteredpeertutorsReports.map(r => r.year))].sort()
       const uniqueSections = [...new Set(filteredpeertutorsReports.map(r => r.section))].sort()
       const dept = filteredpeertutorsReports[0]?.dept || 'N/A'
-      
+
       // Group reports by year
       const reportsByYear: Record<string, peertutorsReportData[]> = {}
       filteredpeertutorsReports.forEach((report) => {
@@ -1367,7 +1370,7 @@ function FacultypeertutorsContent() {
         exportData.push(['Peer Tutor Reports Export'])
         exportData.push([`Department: ${dept}`])
         exportData.push([`Year: ${year}`])
-        
+
         // Get unique sections for this year
         const yearSections = [...new Set(yearReports.map(r => r.section))].sort()
         exportData.push([`Section: ${yearSections.length > 1 ? 'ALL' : yearSections[0] || 'N/A'}`])
@@ -1404,7 +1407,7 @@ function FacultypeertutorsContent() {
         // Add data rows grouped by section
         for (const section of yearSections) {
           const sectionReports = reportsBySection[section]
-          
+
           // Add section header row
           exportData.push([
             `Section - ${section}`,
@@ -1508,7 +1511,7 @@ function FacultypeertutorsContent() {
           const cellAddress = XLSX.utils.encode_cell({ r: row, c: 0 })
           const cellValue = worksheet[cellAddress]?.v
           const isSectionHeader = typeof cellValue === 'string' && cellValue.startsWith('Section -')
-          
+
           for (let col = 0; col <= range.e.c; col++) {
             const currentCellAddress = XLSX.utils.encode_cell({ r: row, c: col })
             if (worksheet[currentCellAddress]) {
@@ -1523,9 +1526,9 @@ function FacultypeertutorsContent() {
                 // Format regular data rows
                 worksheet[currentCellAddress].s = {
                   font: { name: 'Times New Roman', sz: 11 },
-                  alignment: { 
+                  alignment: {
                     horizontal: col >= 6 ? 'center' : 'left', // Center align numeric columns
-                    vertical: 'center' 
+                    vertical: 'center'
                   }
                 }
               }
@@ -1597,7 +1600,7 @@ function FacultypeertutorsContent() {
       />
 
       {/* Content Container */}
-      <div 
+      <div
         suppressHydrationWarning
         className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
         {/* Top Header */}
@@ -1625,11 +1628,10 @@ function FacultypeertutorsContent() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as 'tutors' | 'students' | 'feedback' | 'renumeration' | 'reports' | 'leaderboard')}
-                className={`px-6 py-2.5 rounded-2xl text-[10px] font-black tracking-widest transition-all duration-200 whitespace-nowrap uppercase ${
-                  activeTab === tab.id
-                    ? 'bg-[#1C2434] text-white shadow-lg shadow-gray-200 scale-105' 
-                    : 'text-gray-400 hover:text-gray-900 hover:bg-white hover:shadow-sm'
-                }`}
+                className={`px-6 py-2.5 rounded-2xl text-[10px] font-black tracking-widest transition-all duration-200 whitespace-nowrap uppercase ${activeTab === tab.id
+                  ? 'bg-[#1C2434] text-white shadow-lg shadow-gray-200 scale-105'
+                  : 'text-gray-400 hover:text-gray-900 hover:bg-white hover:shadow-sm'
+                  }`}
               >
                 {tab.label}
               </button>
@@ -1641,12 +1643,7 @@ function FacultypeertutorsContent() {
         <main className="flex-1 p-6 overflow-y-auto bg-gray-50/50">
           <div className={`max-w-[1600px] mx-auto w-full`}>
             {loading ? (
-              <div className="flex-1 flex items-center justify-center py-16">
-                <div className="text-center">
-                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Loading Data...</p>
-                </div>
-              </div>
+              <PeerTutorsPageSkeleton />
             ) : activeTab === 'tutors' ? (
               <>
                 {/* Stats Overview - Clean White Design with 4 Cards */}
@@ -1753,7 +1750,7 @@ function FacultypeertutorsContent() {
                           </span>
                         )}
                       </h3>
-                      
+
                       <div className="flex items-center gap-3 flex-wrap">
                         {/* Search Bar */}
                         {peerTutor.length > 0 && (
@@ -1770,7 +1767,7 @@ function FacultypeertutorsContent() {
                                   autoFocus
                                 />
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <button 
+                                <button
                                   onClick={() => {
                                     setIspeerTutorearchExpanded(false)
                                     setSearchQuery('')
@@ -1797,15 +1794,14 @@ function FacultypeertutorsContent() {
                           <div className="relative" ref={filterRef}>
                             <button
                               onClick={() => setShowFilterPopup(!showFilterPopup)}
-                              className={`p-2.5 rounded-lg transition-colors duration-200 ${
-                                hasActiveFilters
-                                  ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                              }`}
+                              className={`p-2.5 rounded-lg transition-colors duration-200 ${hasActiveFilters
+                                ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                                }`}
                               title="Filter peer tutors"
                             >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                              <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="20" height="20" viewBox="0 0 72 72" className="w-5 h-5 fill-current">
+                                <path d="M 18 12 C 15.791 12 14 13.791 14 16 L 14 22 C 14 22.821 14.251656 23.622922 14.722656 24.294922 L 28 43.261719 L 28 55 C 28 56.636 28.996625 58.106844 30.515625 58.714844 L 40.515625 62.714844 C 40.994625 62.906844 41.498 63 42 63 C 42.788 63 43.571188 62.7675 44.242188 62.3125 C 45.342187 61.5685 46 60.327 46 59 L 46 43.261719 L 59.277344 24.294922 C 59.748344 23.622922 60 22.821 60 22 L 60 16 C 60 13.791 58.209 12 56 12 L 18 12 z M 22 20 L 52 20 L 52 20.738281 L 48.316406 26 L 25.683594 26 L 22 20.738281 L 22 20 z"></path>
                               </svg>
                             </button>
 
@@ -1824,7 +1820,7 @@ function FacultypeertutorsContent() {
                                       </button>
                                     )}
                                   </div>
-                                  
+
                                   <div className="space-y-3">
                                     <div>
                                       <label className="block text-xs font-medium text-gray-700 mb-1">Year</label>
@@ -1839,16 +1835,15 @@ function FacultypeertutorsContent() {
                                         ))}
                                       </select>
                                     </div>
-                                    
+
                                     <div>
                                       <label className="block text-xs font-medium text-gray-700 mb-1">Section</label>
                                       <select
                                         value={selectedSection}
                                         onChange={(e) => setSelectedSection(e.target.value)}
                                         disabled={selectedYear === 'all'}
-                                        className={`block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
-                                          selectedYear === 'all' ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''
-                                        }`}
+                                        className={`block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${selectedYear === 'all' ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''
+                                          }`}
                                       >
                                         <option value="all">All Sections</option>
                                         {availableSections.map(section => (
@@ -1866,7 +1861,7 @@ function FacultypeertutorsContent() {
                         {/* Action Buttons */}
                         {!ispeertutorsDeleteMode ? (
                           <>
-                            <button 
+                            <button
                               onClick={() => setShowAddPeerTutorModal(true)}
                               className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
                             >
@@ -1883,12 +1878,12 @@ function FacultypeertutorsContent() {
                                 title="Delete"
                               >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                               </button>
                             )}
 
-                            <button 
+                            <button
                               onClick={() => setShowImportModal(true)}
                               className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
                             >
@@ -1961,14 +1956,42 @@ function FacultypeertutorsContent() {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {statsLoading ? (
-                          <tr>
-                            <td colSpan={ispeertutorsDeleteMode ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
-                              <div className="flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-                                Loading peer tutor statistics...
-                              </div>
-                            </td>
-                          </tr>
+                          [...Array(5)].map((_, index) => (
+                            <tr key={index} className="animate-pulse border-b border-gray-100">
+                              {ispeertutorsDeleteMode && (
+                                <td className="px-6 py-4">
+                                  <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                                </td>
+                              )}
+                              <td className="px-6 py-4">
+                                <div className="flex items-center">
+                                  <div className="h-10 w-10 rounded-full bg-gray-200 mr-4"></div>
+                                  <div className="space-y-2">
+                                    <div className="h-4 w-32 bg-gray-200 rounded"></div>
+                                    <div className="h-3 w-24 bg-gray-200 rounded"></div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="h-4 w-24 bg-gray-200 rounded mx-auto"></div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="h-4 w-12 bg-gray-200 rounded mx-auto"></div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="h-4 w-12 bg-gray-200 rounded mx-auto"></div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="h-4 w-12 bg-gray-200 rounded mx-auto"></div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="h-4 w-12 bg-gray-200 rounded mx-auto"></div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="h-4 w-12 bg-gray-200 rounded mx-auto"></div>
+                              </td>
+                            </tr>
+                          ))
                         ) : peerTutorWithStats.length === 0 ? (
                           <tr>
                             <td colSpan={ispeertutorsDeleteMode ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
@@ -1978,8 +2001,8 @@ function FacultypeertutorsContent() {
                                 </svg>
                                 <p className="text-lg font-medium text-gray-900 mb-2">No peer tutors found</p>
                                 <p className="text-sm text-gray-500">
-                                  {hasActiveFilters 
-                                    ? "No peer tutors match your current filters." 
+                                  {hasActiveFilters
+                                    ? "No peer tutors match your current filters."
                                     : "No peer tutors have been added yet."
                                   }
                                 </p>
@@ -2163,7 +2186,7 @@ function FacultypeertutorsContent() {
                           </span>
                         )}
                       </h3>
-                      
+
                       <div className="flex items-center gap-3 flex-wrap">
                         {/* Search Bar */}
                         {students.length > 0 && (
@@ -2180,7 +2203,7 @@ function FacultypeertutorsContent() {
                                   autoFocus
                                 />
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <button 
+                                <button
                                   onClick={() => {
                                     setIsStudentSearchExpanded(false)
                                     setStudentSearchQuery('')
@@ -2207,90 +2230,88 @@ function FacultypeertutorsContent() {
                           <div className="relative" ref={studentFilterRef}>
                             <button
                               onClick={() => setShowStudentFilterPopup(!showStudentFilterPopup)}
-                              className={`p-2.5 rounded-lg transition-colors duration-200 ${
-                                hasActiveStudentFilters
-                                  ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                              }`}
+                              className={`p-2.5 rounded-lg transition-colors duration-200 ${hasActiveStudentFilters
+                                ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                                }`}
                               title="Filter students"
                             >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                              <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="20" height="20" viewBox="0 0 72 72" className="w-5 h-5 fill-current">
+                                <path d="M 18 12 C 15.791 12 14 13.791 14 16 L 14 22 C 14 22.821 14.251656 23.622922 14.722656 24.294922 L 28 43.261719 L 28 55 C 28 56.636 28.996625 58.106844 30.515625 58.714844 L 40.515625 62.714844 C 40.994625 62.906844 41.498 63 42 63 C 42.788 63 43.571188 62.7675 44.242188 62.3125 C 45.342187 61.5685 46 60.327 46 59 L 46 43.261719 L 59.277344 24.294922 C 59.748344 23.622922 60 22.821 60 22 L 60 16 C 60 13.791 58.209 12 56 12 L 18 12 z M 22 20 L 52 20 L 52 20.738281 L 48.316406 26 L 25.683594 26 L 22 20.738281 L 22 20 z"></path>
                               </svg>
                             </button>
 
-                          {/* Filter Popup */}
-                          {showStudentFilterPopup && (
-                            <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                              <div className="p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                  <h4 className="text-sm font-medium text-gray-900">Filter Students</h4>
-                                  {hasActiveStudentFilters && (
-                                    <button
-                                      onClick={clearStudentFilters}
-                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
-                                    >
-                                      Clear
-                                    </button>
-                                  )}
-                                </div>
-                                
-                                <div className="space-y-3">
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Year</label>
-                                    <select
-                                      value={selectedStudentYear}
-                                      onChange={(e) => setSelectedStudentYear(e.target.value)}
-                                      className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                    >
-                                      <option value="all">All Years</option>
-                                      {availableStudentYears.map(year => (
-                                        <option key={year} value={year}>{year}</option>
-                                      ))}
-                                    </select>
+                            {/* Filter Popup */}
+                            {showStudentFilterPopup && (
+                              <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                                <div className="p-4">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-sm font-medium text-gray-900">Filter Students</h4>
+                                    {hasActiveStudentFilters && (
+                                      <button
+                                        onClick={clearStudentFilters}
+                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
+                                      >
+                                        Clear
+                                      </button>
+                                    )}
                                   </div>
-                                  
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Section</label>
-                                    <select
-                                      value={selectedStudentSection}
-                                      onChange={(e) => setSelectedStudentSection(e.target.value)}
-                                      disabled={selectedStudentYear === 'all'}
-                                      className={`block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
-                                        selectedStudentYear === 'all' ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''
-                                      }`}
-                                    >
-                                      <option value="all">All Sections</option>
-                                      {availableStudentSections.map(section => (
-                                        <option key={section} value={section}>{section}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Peer Tutor</label>
-                                    <select
-                                      value={selectedpeertutors}
-                                      onChange={(e) => setSelectedpeertutors(e.target.value)}
-                                      className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                    >
-                                      <option value="all">All Peer Tutors</option>
-                                      {peerTutor.map(tutor => (
-                                        <option key={tutor.id} value={tutor.id}>{tutor.name}</option>
-                                      ))}
-                                    </select>
+
+                                  <div className="space-y-3">
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Year</label>
+                                      <select
+                                        value={selectedStudentYear}
+                                        onChange={(e) => setSelectedStudentYear(e.target.value)}
+                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                      >
+                                        <option value="all">All Years</option>
+                                        {availableStudentYears.map(year => (
+                                          <option key={year} value={year}>{year}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Section</label>
+                                      <select
+                                        value={selectedStudentSection}
+                                        onChange={(e) => setSelectedStudentSection(e.target.value)}
+                                        disabled={selectedStudentYear === 'all'}
+                                        className={`block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${selectedStudentYear === 'all' ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''
+                                          }`}
+                                      >
+                                        <option value="all">All Sections</option>
+                                        {availableStudentSections.map(section => (
+                                          <option key={section} value={section}>{section}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Peer Tutor</label>
+                                      <select
+                                        value={selectedpeertutors}
+                                        onChange={(e) => setSelectedpeertutors(e.target.value)}
+                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                      >
+                                        <option value="all">All Peer Tutors</option>
+                                        {peerTutor.map(tutor => (
+                                          <option key={tutor.id} value={tutor.id}>{tutor.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
+                            )}
+                          </div>
                         )}
 
                         {/* Action Buttons */}
                         {!isStudentDeleteMode ? (
                           <>
-                            <button 
+                            <button
                               onClick={() => setShowAddStudentModal(true)}
                               className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors duration-200 flex items-center gap-2"
                             >
@@ -2307,7 +2328,7 @@ function FacultypeertutorsContent() {
                                 title="Delete"
                               >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                               </button>
                             )}
@@ -2388,8 +2409,8 @@ function FacultypeertutorsContent() {
                                 </svg>
                                 <p className="text-lg font-medium text-gray-900 mb-2">No students found</p>
                                 <p className="text-sm text-gray-500">
-                                  {hasActiveStudentFilters 
-                                    ? "No students match your current filters." 
+                                  {hasActiveStudentFilters
+                                    ? "No students match your current filters."
                                     : "No students have been added yet."
                                   }
                                 </p>
@@ -2412,8 +2433,8 @@ function FacultypeertutorsContent() {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
-                                    <div className="h-10 w-10 rounded-full bg-black border border-gray-800 flex items-center justify-center ring-1 ring-gray-900 shadow-inner">
-                                      <span className="text-white font-bold text-sm tracking-tighter">
+                                    <div className="h-10 w-10 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center shadow-sm">
+                                      <span className="text-gray-900 font-bold text-sm tracking-tighter">
                                         {student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                       </span>
                                     </div>
@@ -2538,15 +2559,15 @@ function FacultypeertutorsContent() {
                       </div>
                     </div>
 
-                {/* Feedback Forms Table */}
-                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between flex-wrap gap-4">
-                      <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
-                        Feedback Forms ({feedbackForms.length})
-                      </h3>
-                      <div className="flex items-center gap-3 flex-wrap">
-                      <button
+                    {/* Feedback Forms Table */}
+                    <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <div className="flex items-center justify-between flex-wrap gap-4">
+                          <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
+                            Feedback Forms ({feedbackForms.length})
+                          </h3>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <button
                               onClick={() => {
                                 setSelectedFeedbackForm(null)
                                 setShowFeedbackModal(true)
@@ -2558,205 +2579,197 @@ function FacultypeertutorsContent() {
                               </svg>
                               CREATE
                             </button>
-                        {isFeedbackDeleteMode && (
-                          <>
-                            <button
-                              onClick={handleCancelFeedbackDeleteMode}
-                              className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handleDeleteSelectedFeedbackForms}
-                              disabled={selectedFeedbackFormIds.size === 0}
-                              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
-                                selectedFeedbackFormIds.size > 0
-                                  ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
-                                  : 'bg-gray-400 text-white cursor-not-allowed'
-                              }`}
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                              Delete Selected {selectedFeedbackFormIds.size > 0 && `(${selectedFeedbackFormIds.size})`}
-                            </button>
-                          </>
-                        )}
-                        {!isFeedbackDeleteMode && (
-                          <>
-                            {feedbackForms.length > 0 && (
-                              <button
-                                onClick={handleToggleFeedbackDeleteMode}
-                                className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
-                                title="Delete"
-                              >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
+                            {isFeedbackDeleteMode && (
+                              <>
+                                <button
+                                  onClick={handleCancelFeedbackDeleteMode}
+                                  className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={handleDeleteSelectedFeedbackForms}
+                                  disabled={selectedFeedbackFormIds.size === 0}
+                                  className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${selectedFeedbackFormIds.size > 0
+                                    ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                                    : 'bg-gray-400 text-white cursor-not-allowed'
+                                    }`}
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  Delete Selected {selectedFeedbackFormIds.size > 0 && `(${selectedFeedbackFormIds.size})`}
+                                </button>
+                              </>
                             )}
-                          </>
-                        )}
+                            {!isFeedbackDeleteMode && (
+                              <>
+                                {feedbackForms.length > 0 && (
+                                  <button
+                                    onClick={handleToggleFeedbackDeleteMode}
+                                    className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                                    title="Delete"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-white">
+                            <tr>
+                              {isFeedbackDeleteMode && (
+                                <th className="px-6 py-3 text-left">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedFeedbackFormIds.size === feedbackForms.length && feedbackForms.length > 0}
+                                    onChange={(e) => handleSelectAllFeedbackForms(e.target.checked)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                                  />
+                                </th>
+                              )}
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                Form Name
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                No of Fields
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Total Response
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Created
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Delta Score
+                              </th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                              </th>
+                              {!isFeedbackDeleteMode && (
+                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Actions
+                                </th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {feedbackLoading ? (
+                              <FeedbackFormsSkeleton />
+                            ) : feedbackForms.length === 0 ? (
+                              <tr>
+                                <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
+                                  <div className="flex flex-col items-center">
+                                    <svg className="h-12 w-12 text-black mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <p className="text-lg font-medium text-black mb-2">NO FORM FOUND</p>
+                                    <p className="text-sm text-gray-500">Create your first feedback form to get started.</p>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : (
+                              feedbackForms.map((form) => {
+                                const responseCount = (form as FeedbackForm & { responseCount: number }).responseCount || 0
+                                const totalEligibleStudents = (form as FeedbackForm & { totalEligibleStudents: number }).totalEligibleStudents || 0
+                                const deltaScore = (form as FeedbackForm & { deltaScore: number }).deltaScore || 0
+                                const hasResponses = responseCount > 0
+                                const isSelected = selectedFeedbackFormIds.has(form.id)
+
+                                return (
+                                  <tr
+                                    key={form.id}
+                                    className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                                  >
+                                    {isFeedbackDeleteMode && (
+                                      <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={(e) => {
+                                            e.stopPropagation()
+                                            handleFeedbackFormCheckboxChange(form.id, e.target.checked)
+                                          }}
+                                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                                        />
+                                      </td>
+                                    )}
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                      <div className="text-sm font-medium text-gray-900">{form.name}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        {form.questions.length}
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        {responseCount}/{totalEligibleStudents}
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                                      {new Date(form.created_at).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-semibold">
+                                      {responseCount > 0 ? (
+                                        <span className={deltaScore >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                          {deltaScore > 0 ? '+' : ''}{deltaScore.toFixed(1)}%
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400">N/A</span>
+                                      )}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                                      <select
+                                        className="border border-gray-300 rounded-md px-2 py-1 text-sm mx-auto"
+                                        value={form.is_active ? 'open' : 'closed'}
+                                        onChange={(e) => handleToggleFormStatus(form.id, e.target.value === 'open' ? true : false)}
+                                      >
+                                        <option value="open">Open</option>
+                                        <option value="closed">Closed</option>
+                                      </select>
+                                    </td>
+                                    {!isFeedbackDeleteMode && (
+                                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                        <div className="flex items-center justify-center space-x-2">
+                                          <button
+                                            onClick={() => handleViewAnalytics(form)}
+                                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
+                                          >
+                                            VIEW
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              if (hasResponses) {
+                                                alert('This form cannot be edited as responses are already being received.')
+                                                return
+                                              }
+                                              setSelectedFeedbackForm(form)
+                                              setShowFeedbackModal(true)
+                                            }} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
+                                          >
+                                            Edit
+                                          </button>
+                                        </div>
+                                      </td>
+                                    )}
+                                  </tr>
+                                )
+                              })
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-white">
-                        <tr>
-                          {isFeedbackDeleteMode && (
-                            <th className="px-6 py-3 text-left">
-                              <input
-                                type="checkbox"
-                                checked={selectedFeedbackFormIds.size === feedbackForms.length && feedbackForms.length > 0}
-                                onChange={(e) => handleSelectAllFeedbackForms(e.target.checked)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
-                              />
-                            </th>
-                          )}
-                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                            Form Name
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
-                            No of Fields
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Total Response
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Created
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Delta Score
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          {!isFeedbackDeleteMode && (
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {feedbackLoading ? (
-                          <tr>
-                            <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
-                              <div className="flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-                                Loading feedback forms...
-                              </div>
-                            </td>
-                          </tr>
-                        ) : feedbackForms.length === 0 ? (
-                          <tr>
-                            <td colSpan={isFeedbackDeleteMode ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
-                              <div className="flex flex-col items-center">
-                                <svg className="h-12 w-12 text-black mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <p className="text-lg font-medium text-black mb-2">NO FORM FOUND</p>
-                                <p className="text-sm text-gray-500">Create your first feedback form to get started.</p>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : (
-                          feedbackForms.map((form) => {
-                            const responseCount = (form as FeedbackForm & { responseCount: number }).responseCount || 0
-                            const totalEligibleStudents = (form as FeedbackForm & { totalEligibleStudents: number }).totalEligibleStudents || 0
-                            const deltaScore = (form as FeedbackForm & { deltaScore: number }).deltaScore || 0
-                            const hasResponses = responseCount > 0
-                            const isSelected = selectedFeedbackFormIds.has(form.id)
-
-                            return (
-                              <tr 
-                                key={form.id} 
-                                className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
-                              >
-                                {isFeedbackDeleteMode && (
-                                  <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={(e) => {
-                                        e.stopPropagation()
-                                        handleFeedbackFormCheckboxChange(form.id, e.target.checked)
-                                      }}
-                                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
-                                    />
-                                  </td>
-                                )}
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm font-medium text-gray-900">{form.name}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center">
-                                  <div className="text-sm font-semibold text-gray-900">
-                                    {form.questions.length}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                  <div className="text-sm font-semibold text-gray-900">
-                                    {responseCount}/{totalEligibleStudents}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                                  {new Date(form.created_at).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-semibold">
-                                  {responseCount > 0 ? (
-                                    <span className={deltaScore >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                      {deltaScore > 0 ? '+' : ''}{deltaScore.toFixed(1)}%
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400">N/A</span>
-                                  )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                                  <select
-                                    className="border border-gray-300 rounded-md px-2 py-1 text-sm mx-auto"
-                                    value={form.is_active ? 'open' : 'closed'}
-                                    onChange={(e) => handleToggleFormStatus(form.id, e.target.value === 'open' ? true : false)}
-                                  >
-                                    <option value="open">Open</option>
-                                    <option value="closed">Closed</option>
-                                  </select>
-                                </td>
-                                {!isFeedbackDeleteMode && (
-                                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                    <div className="flex items-center justify-center space-x-2">
-                                      <button
-                                        onClick={() => handleViewAnalytics(form)}
-                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
-                                      >
-                                        VIEW
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          if (hasResponses) {
-                                            alert('This form cannot be edited as responses are already being received.')
-                                            return
-                                          }
-                                          setSelectedFeedbackForm(form)
-                                          setShowFeedbackModal(true)
-                                        }}className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
-                                      >
-                                        Edit
-                                      </button>
-                                    </div>
-                                  </td>
-                                )}
-                              </tr>
-                            )
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                </>
+                  </>
                 )}
               </>
             ) : activeTab === 'reports' ? (
@@ -2822,8 +2835,8 @@ function FacultypeertutorsContent() {
                             </svg>
                           </div>
                           <div className="text-3xl font-bold text-gray-900">
-                            {reportScheduledClasses.filter(cls => 
-                              cls.completion_status === 'completed' || 
+                            {reportScheduledClasses.filter(cls =>
+                              cls.completion_status === 'completed' ||
                               (cls.attendance_completed && cls.topics_completed)
                             ).length}
                           </div>
@@ -2846,35 +2859,35 @@ function FacultypeertutorsContent() {
                             </svg>
                           </div>
                           <div className="text-3xl font-bold text-gray-900">
-                            {reportScheduledClasses.filter(cls => 
-                              cls.completion_status !== 'completed' && 
+                            {reportScheduledClasses.filter(cls =>
+                              cls.completion_status !== 'completed' &&
                               !(cls.attendance_completed && cls.topics_completed)
                             ).length}
                           </div>
                           <div className="mt-2 flex items-center text-xs font-semibold">
                             {(() => {
-                                const today = new Date()
-                                today.setHours(0,0,0,0)
-                                const pendingClasses = reportScheduledClasses.filter(cls => 
-                                    cls.completion_status !== 'completed' && 
-                                    !(cls.attendance_completed && cls.topics_completed)
-                                )
-                                let upcoming = 0
-                                let overdue = 0
-                                pendingClasses.forEach(cls => {
-                                    if (!cls.scheduled_date) { overdue++; return }
-                                    const d = new Date(cls.scheduled_date)
-                                    d.setHours(0,0,0,0)
-                                    if (d.getTime() > today.getTime()) upcoming++
-                                    else overdue++
-                                })
-                                return (
-                                    <>
-                                        <span className="text-blue-600 mr-2">{upcoming} Upcoming</span>
-                                        <span className="text-gray-300 mr-2">/</span>
-                                        <span className="text-orange-600">{overdue} Pending</span>
-                                    </>
-                                )
+                              const today = new Date()
+                              today.setHours(0, 0, 0, 0)
+                              const pendingClasses = reportScheduledClasses.filter(cls =>
+                                cls.completion_status !== 'completed' &&
+                                !(cls.attendance_completed && cls.topics_completed)
+                              )
+                              let upcoming = 0
+                              let overdue = 0
+                              pendingClasses.forEach(cls => {
+                                if (!cls.scheduled_date) { overdue++; return }
+                                const d = new Date(cls.scheduled_date)
+                                d.setHours(0, 0, 0, 0)
+                                if (d.getTime() > today.getTime()) upcoming++
+                                else overdue++
+                              })
+                              return (
+                                <>
+                                  <span className="text-blue-600 mr-2">{upcoming} Upcoming</span>
+                                  <span className="text-gray-300 mr-2">/</span>
+                                  <span className="text-orange-600">{overdue} Pending</span>
+                                </>
+                              )
                             })()}
                           </div>
                         </div>
@@ -2891,8 +2904,27 @@ function FacultypeertutorsContent() {
 
                       <div className="overflow-hidden">
                         {reportLoading ? (
-                          <div className="flex items-center justify-center py-12">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-white">
+                                <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Subject</th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Assigned Date</th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Attendance</th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {[...Array(3)].map((_, i) => (
+                                  <tr key={i} className="animate-pulse border-b border-gray-100">
+                                    <td className="px-6 py-4"><div className="h-4 w-32 bg-gray-200 rounded"></div></td>
+                                    <td className="px-6 py-4"><div className="h-4 w-24 bg-gray-200 rounded"></div></td>
+                                    <td className="px-6 py-4 text-center"><div className="h-6 w-16 bg-gray-200 rounded-full mx-auto"></div></td>
+                                    <td className="px-6 py-4 text-center"><div className="h-8 w-16 bg-gray-200 rounded mx-auto"></div></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         ) : reportScheduledClasses.length === 0 ? (
                           <div className="text-center py-12">
@@ -2925,8 +2957,8 @@ function FacultypeertutorsContent() {
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
                                 {reportScheduledClasses.map((scheduledClass) => {
-                                  const isPresent = scheduledClass.completion_status === 'completed' || 
-                                                   (scheduledClass.attendance_completed && scheduledClass.topics_completed)
+                                  const isPresent = scheduledClass.completion_status === 'completed' ||
+                                    (scheduledClass.attendance_completed && scheduledClass.topics_completed)
                                   return (
                                     <tr key={scheduledClass.id} className="hover:bg-gray-50">
                                       <td className="px-6 py-4 whitespace-nowrap">
@@ -2958,11 +2990,10 @@ function FacultypeertutorsContent() {
                                             }
                                           }}
                                           disabled={!isPresent}
-                                          className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                                            isPresent
-                                              ? 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer'
-                                              : 'text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed opacity-50'
-                                          }`}
+                                          className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${isPresent
+                                            ? 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer'
+                                            : 'text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed opacity-50'
+                                            }`}
                                         >
                                           <Eye className={`h-4 w-4 ${isPresent ? 'text-gray-600' : 'text-gray-400'}`} />
                                         </button>
@@ -2987,236 +3018,268 @@ function FacultypeertutorsContent() {
                       </div>
                     </div>
 
-                {/* Peer Tutor Reports */}
-                <div className="bg-white shadow-sm rounded-lg border border-gray-200">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between flex-wrap gap-4">
-                      <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
-                        Peer Tutor Reports ({filteredpeertutorsReports.length})
-                      </h3>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        {/* Filter Bar Redesign */}
-                        <div className="flex items-center gap-2">
-                          {/* Year Dropdown */}
-                          <div className="relative">
-                            <select
-                              value={reportFilterYear}
-                              onChange={(e) => setReportFilterYear(e.target.value)}
-                              className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                                reportFilterYear !== 'all' 
-                                  ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm' 
-                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                              }`}
-                            >
-                              <option value="all">All Years</option>
-                              {availableReportYears.map(year => (
-                                <option key={year} value={year}>{year}</option>
-                              ))}
-                            </select>
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </div>
-                          </div>
-
-                          {/* Section Dropdown */}
-                          <div className="relative">
-                            <select
-                              value={reportFilterSection}
-                              onChange={(e) => setReportFilterSection(e.target.value)}
-                              disabled={reportFilterYear === 'all'}
-                              className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                                reportFilterYear === 'all'
-                                  ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed opacity-60'
-                                  : reportFilterSection !== 'all'
+                    {/* Peer Tutor Reports */}
+                    <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <div className="flex items-center justify-between flex-wrap gap-4">
+                          <h3 className="text-base font-bold text-gray-700 uppercase tracking-wide">
+                            Peer Tutor Reports ({filteredpeertutorsReports.length})
+                          </h3>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {/* Filter Bar Redesign */}
+                            <div className="flex items-center gap-2">
+                              {/* Year Dropdown */}
+                              <div className="relative">
+                                <select
+                                  value={reportFilterYear}
+                                  onChange={(e) => setReportFilterYear(e.target.value)}
+                                  className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${reportFilterYear !== 'all'
                                     ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm'
                                     : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                              }`}
-                            >
-                              <option value="all">All Sections</option>
-                              {availableReportSections.map(section => (
-                                <option key={section} value={section}>{section}</option>
-                              ))}
-                            </select>
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </div>
-                          </div>
+                                    }`}
+                                >
+                                  <option value="all">All Years</option>
+                                  {availableReportYears.map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                  ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                              </div>
 
-                          {/* Subject Dropdown */}
-                          <div className="relative">
-                            <select
-                              value={reportFilterSubject}
-                              onChange={(e) => setReportFilterSubject(e.target.value)}
-                              className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                                reportFilterSubject !== 'all'
-                                  ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm'
-                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                              }`}
-                            >
-                              <option value="all">All Subjects</option>
-                              {availableReportSubjects.map(subject => (
-                                <option key={subject} value={subject}>{subject}</option>
-                              ))}
-                            </select>
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
+                              {/* Section Dropdown */}
+                              <div className="relative">
+                                <select
+                                  value={reportFilterSection}
+                                  onChange={(e) => setReportFilterSection(e.target.value)}
+                                  disabled={reportFilterYear === 'all'}
+                                  className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${reportFilterYear === 'all'
+                                    ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                                    : reportFilterSection !== 'all'
+                                      ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm'
+                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                    }`}
+                                >
+                                  <option value="all">All Sections</option>
+                                  {availableReportSections.map(section => (
+                                    <option key={section} value={section}>{section}</option>
+                                  ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                              </div>
+
+                              {/* Subject Dropdown */}
+                              <div className="relative">
+                                <select
+                                  value={reportFilterSubject}
+                                  onChange={(e) => setReportFilterSubject(e.target.value)}
+                                  className={`h-11 px-4 pr-10 rounded-xl border appearance-none transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${reportFilterSubject !== 'all'
+                                    ? 'border-blue-500 bg-blue-50/30 text-blue-700 shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                    }`}
+                                >
+                                  <option value="all">All Subjects</option>
+                                  {availableReportSubjects.map(subject => (
+                                    <option key={subject} value={subject}>{subject}</option>
+                                  ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                              </div>
                             </div>
+
+                            {/* Reset Filters - shown as a clear text button if filters are active */}
+                            {hasActiveReportFilters && (
+                              <button
+                                onClick={clearReportFilters}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors px-2"
+                              >
+                                CLEAR FILTERS
+                              </button>
+                            )}
                           </div>
+                          {/* Export Button - Only show if there are records */}
+                          {filteredpeertutorsReports.length > 0 && (
+                            <ExportButton onClick={handleExportFilteredReports} />
+                          )}
                         </div>
+                      </div>
 
-                        {/* Reset Filters - shown as a clear text button if filters are active */}
-                        {hasActiveReportFilters && (
-                          <button
-                            onClick={clearReportFilters}
-                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors px-2"
-                          >
-                            CLEAR FILTERS
-                          </button>
+                      <div className="overflow-hidden">
+                        {reportsLoading ? (
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-white">
+                                <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
+                                    Peer Tutor Name
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
+                                    Email
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
+                                    Year/Section
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Subject
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Total Classes
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Completed Classes
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Classes
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Additional Classes
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Actions
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                <PeerTutorReportsSkeleton />
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : filteredpeertutorsReports.length === 0 ? (
+                          <div className="text-center py-12">
+                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">No peer tutors found</h3>
+                            <p className="text-gray-500">No peer tutors have been added yet.</p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-white">
+                                <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
+                                    Peer Tutor Name
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
+                                    Email
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
+                                    Year/Section
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Subject
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Total Classes
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Completed Classes
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Classes
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Additional Classes
+                                  </th>
+                                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Actions
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredpeertutorsReports.map((report) => {
+                                  // If no subjects, show one row with peer tutor info
+                                  if (report.subjects.length === 0) {
+                                    return (
+                                      <tr key={`${report.peer_tutor_id}-no-subjects`} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                                          <div className="text-sm font-medium text-gray-900">{report.peer_tutor_name}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                                          <div className="text-sm text-gray-500">{report.peer_tutor_email}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            {report.year} - {report.section}
+                                          </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                          No subjects assigned
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">-</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">-</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">-</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">-</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                          <span className="text-gray-400">-</span>
+                                        </td>
+                                      </tr>
+                                    )
+                                  }
+
+                                  // Otherwise, show one row per subject
+                                  return report.subjects.map((subject, subjectIndex) => (
+                                    <tr key={`${report.peer_tutor_id}-${subject.class_id}`} className="hover:bg-gray-50">
+                                      {subjectIndex === 0 && (
+                                        <>
+                                          <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200" rowSpan={report.subjects.length}>
+                                            <div className="text-sm font-medium text-gray-900">{report.peer_tutor_name}</div>
+                                          </td>
+                                          <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200" rowSpan={report.subjects.length}>
+                                            <div className="text-sm text-gray-500">{report.peer_tutor_email}</div>
+                                          </td>
+                                          <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200" rowSpan={report.subjects.length}>
+                                            <span className="inline-flex items-center px-2.5 py-0.5  text-xs font-medium bg-gray-100 text-black">
+                                              {report.year} - {report.section}
+                                            </span>
+                                          </td>
+                                        </>
+                                      )}
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-medium text-gray-900">{subject.subject_name}</div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <div className="text-sm font-semibold text-gray-900">{subject.total_classes}</div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <div className="text-sm font-semibold text-gray-900">{subject.completed_classes}</div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <div className="text-sm font-semibold text-gray-900">{subject.pending_classes}</div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <div className="text-sm font-semibold text-gray-900">{subject.additional_classes || 0}</div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                        <button
+                                          onClick={() => handleViewReport(report.peer_tutor_id, subject.class_id, report.peer_tutor_name, subject.subject_name)}
+                                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                        >
+                                          <Eye className="h-4 w-4 text-gray-600" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </div>
-                      {/* Export Button - Only show if there are records */}
-                      {filteredpeertutorsReports.length > 0 && (
-                        <ExportButton onClick={handleExportFilteredReports} />
-                      )}
                     </div>
-                  </div>
-
-                  <div className="overflow-hidden">
-                    {reportsLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                      </div>
-                    ) : filteredpeertutorsReports.length === 0 ? (
-                      <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No peer tutors found</h3>
-                        <p className="text-gray-500">No peer tutors have been added yet.</p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-white">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
-                                Peer Tutor Name
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
-                                Email
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-r border-gray-200">
-                                Year/Section
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                Subject
-                              </th>
-                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                Total Classes
-                              </th>
-                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                Completed Classes
-                              </th>
-                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                Classes
-                              </th>
-                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                Additional Classes
-                              </th>
-                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                Actions
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredpeertutorsReports.map((report) => {
-                              // If no subjects, show one row with peer tutor info
-                              if (report.subjects.length === 0) {
-                                return (
-                                  <tr key={`${report.peer_tutor_id}-no-subjects`} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
-                                      <div className="text-sm font-medium text-gray-900">{report.peer_tutor_name}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
-                                      <div className="text-sm text-gray-500">{report.peer_tutor_email}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                        {report.year} - {report.section}
-                                      </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                      No subjects assigned
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">-</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">-</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">-</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">-</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                      <span className="text-gray-400">-</span>
-                                    </td>
-                                  </tr>
-                                )
-                              }
-                              
-                              // Otherwise, show one row per subject
-                              return report.subjects.map((subject, subjectIndex) => (
-                                <tr key={`${report.peer_tutor_id}-${subject.class_id}`} className="hover:bg-gray-50">
-                                  {subjectIndex === 0 && (
-                                    <>
-                                      <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200" rowSpan={report.subjects.length}>
-                                        <div className="text-sm font-medium text-gray-900">{report.peer_tutor_name}</div>
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200" rowSpan={report.subjects.length}>
-                                        <div className="text-sm text-gray-500">{report.peer_tutor_email}</div>
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200" rowSpan={report.subjects.length}>
-                                        <span className="inline-flex items-center px-2.5 py-0.5  text-xs font-medium bg-gray-100 text-black">
-                                          {report.year} - {report.section}
-                                        </span>
-                                      </td>
-                                    </>
-                                  )}
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-gray-900">{subject.subject_name}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-semibold text-gray-900">{subject.total_classes}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-semibold text-gray-900">{subject.completed_classes}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-semibold text-gray-900">{subject.pending_classes}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <div className="text-sm font-semibold text-gray-900">{subject.additional_classes || 0}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                    <button
-                                      onClick={() => handleViewReport(report.peer_tutor_id, subject.class_id, report.peer_tutor_name, subject.subject_name)}
-                                      className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                                    >
-                                      <Eye className="h-4 w-4 text-gray-600" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
                   </>
                 )}
               </div>
@@ -3225,203 +3288,286 @@ function FacultypeertutorsContent() {
 
                 {/* Leaderboard Logic */}
                 {(() => {
-                   // 1. Filter by Year (if selected)
-                   let displayTutors = [...peerTutorWithStats]; // Use stats version
-                   if (leaderboardFilterYear !== 'all') {
-                       displayTutors = displayTutors.filter(t => t.year === leaderboardFilterYear)
-                   }
+                  // 1. Filter by Year (if selected)
+                  let displayTutors = [...peerTutorWithStats]; // Use stats version
+                  if (leaderboardFilterYear !== 'all') {
+                    displayTutors = displayTutors.filter(t => t.year === leaderboardFilterYear)
+                  }
 
-                   // 2. Score Calculation (Fallback to completedClasses if apexScore is 0)
-                   const rankedTutors = displayTutors.map(t => ({
-                       ...t,
-                       score: t.classStats?.completedClasses || 0 // Use completed classes as score
-                   }));
+                  // 2. Score Calculation (Fallback to completedClasses if apexScore is 0)
+                  const rankedTutors = displayTutors.map(t => ({
+                    ...t,
+                    score: t.classStats?.completedClasses || 0 // Use completed classes as score
+                  }));
 
-                   // 3. Sort by Score DESC
-                   rankedTutors.sort((a, b) => {
-                       if (b.score !== a.score) return b.score - a.score;
-                       return a.name.localeCompare(b.name);
-                   })
+                  // 3. Sort by Score DESC
+                  rankedTutors.sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return a.name.localeCompare(b.name);
+                  })
 
-                   const top1 = rankedTutors[0];
-                   const top2 = rankedTutors[1];
-                   const top3 = rankedTutors[2];
-                   const rest = rankedTutors.slice(3);
+                  const top1 = rankedTutors[0];
+                  const top2 = rankedTutors[1];
+                  const top3 = rankedTutors[2];
+                  const rest = rankedTutors.slice(3);
 
-                   return (
-                       <>
-                           {/* Podium Section */}
-                           {rankedTutors.length > 0 && (
-                               <div className="bg-white shadow-sm rounded-lg p-8 border border-gray-200 mb-6">
-                                    {/* Year Filter */}
-                                    <div className="flex items-center justify-between mb-6">
-                                        <h3 className="text-xl font-bold text-gray-800 uppercase tracking-widest">Top Performers</h3>
-                                        <select
-                                            value={leaderboardFilterYear}
-                                            onChange={(e) => setLeaderboardFilterYear(e.target.value)}
-                                            className="bg-white border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 outline-none transition-all"
-                                        >
-                                            <option value="all">All Years</option>
-                                            {availableYears.map(year => (
-                                                <option key={year} value={year}>{year}</option>
-                                            ))}
-                                        </select>
+                  // Helper to format year and section
+                  const formatLeaderboardDetails = (year: string, section: string) => {
+                    const yearNum = year.replace(/\D/g, '') // Extract number if present
+                    let formattedYear = year
+
+                    if (yearNum) {
+                      if (yearNum === '1') formattedYear = '1st Year'
+                      else if (yearNum === '2') formattedYear = '2nd Year'
+                      else if (yearNum === '3') formattedYear = '3rd Year'
+                      else if (yearNum === '4') formattedYear = '4th Year'
+                      else formattedYear = `${yearNum}th Year`
+                    } else if (year === 'I') formattedYear = '1st Year'
+                    else if (year === 'II') formattedYear = '2nd Year'
+                    else if (year === 'III') formattedYear = '3rd Year'
+                    else if (year === 'IV') formattedYear = '4th Year'
+
+                    // Handle section formatting if needed (assuming section is just 'A', 'B' etc or 'Section A')
+                    const formattedSection = section.toLowerCase().startsWith('section')
+                      ? section
+                      : `Section ${section}`
+
+                    return `${formattedYear} - ${formattedSection}`
+                  }
+
+                  return (
+                    <>
+                      {/* Podium Section */}
+                      {rankedTutors.length > 0 && (
+                        <div className="relative bg-white shadow-xl shadow-blue-900/5 rounded-3xl p-6 md:p-10 border border-gray-100 mb-8 overflow-hidden">
+                          {/* Background Decor */}
+                          <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+                            <div className="absolute top-[-10%] right-[-5%] w-64 h-64 bg-blue-100/50 rounded-full blur-3xl opacity-60"></div>
+                            <div className="absolute bottom-[-10%] left-[-5%] w-64 h-64 bg-yellow-100/40 rounded-full blur-3xl opacity-60"></div>
+                          </div>
+
+                          {/* Year Filter */}
+                          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between mb-8 md:mb-12 gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl shadow-lg shadow-orange-200">
+                                <Trophy className="w-6 h-6 text-white" />
+                              </div>
+                              <div>
+                                <h3 className="text-xl font-black text-gray-800 uppercase tracking-wide">Top Performers</h3>
+                                <p className="text-xs text-gray-500 font-medium tracking-wide uppercase">Recognizing Excellence</p>
+                              </div>
+                            </div>
+                            <select
+                              value={leaderboardFilterYear}
+                              onChange={(e) => setLeaderboardFilterYear(e.target.value)}
+                              className="w-full sm:w-auto bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 py-2.5 px-4 outline-none transition-all shadow-sm hover:border-gray-300"
+                            >
+                              <option value="all">All Years</option>
+                              {availableYears.map(year => (
+                                <option key={year} value={year}>{year}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="relative z-10 flex flex-col md:flex-row justify-end md:justify-center items-center md:items-end gap-6 md:gap-4 h-auto md:h-[400px] pt-4 md:pt-0">
+
+                            {/* Rank 1 - Mobile First (Top) */}
+                            <div className="flex flex-col items-center w-full max-w-[260px] md:order-2 z-20 -mb-2 md:-mb-0">
+                              {top1 && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                                  className="w-full flex flex-col items-center relative"
+                                >
+                                  {/* Glow Effect */}
+                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-yellow-400/20 blur-3xl rounded-full pointer-events-none"></div>
+
+                                  <div className="relative mb-[-35px] z-10">
+                                    <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 animate-bounce-slow">
+                                      <Crown className="w-10 h-10 text-yellow-500 drop-shadow-[0_4px_8px_rgba(234,179,8,0.4)] fill-yellow-200" />
                                     </div>
-                                    
-                                    <div className="flex justify-center items-end gap-4 md:gap-8 h-[350px]">
-                                        {/* Rank 2 */}
-                                        <div className="flex flex-col items-center w-1/3 max-w-[200px]">
-                                            {top2 && (
-                                                <motion.div 
-                                                    initial={{ opacity: 0, y: 50 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    transition={{ delay: 0.2 }}
-                                                    className="w-full flex flex-col items-center"
-                                                >
-                                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-4 border-gray-200 overflow-hidden shadow-md mb-[-20px] z-10 bg-white">
-                                                         <div className="w-full h-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-500">
-                                                            {top2.name.substring(0,2).toUpperCase()}
-                                                         </div>
-                                                    </div>
-                                                    <div className="w-full bg-gradient-to-t from-gray-200 to-gray-100 rounded-t-2xl pt-10 pb-4 px-4 flex flex-col items-center shadow-lg h-[200px] justify-between border-t border-gray-300 relative">
-                                                        <div className="text-center">
-                                                            <div className="text-4xl font-black text-gray-300 mb-1">2</div>
-                                                            <div className="text-sm font-bold text-gray-700 line-clamp-2 leading-tight">{top2.name}</div>
-                                                            <div className="text-xs text-gray-500 mt-1">{top2.year}</div>
-                                                        </div>
-                                                        <div className="bg-white rounded-full px-3 py-1 text-xs font-bold text-gray-600 shadow-sm">
-                                                            {top2.score} Pts
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </div>
-
-                                        {/* Rank 1 */}
-                                        <div className="flex flex-col items-center w-1/3 max-w-[220px] -mt-8 z-20">
-                                            {top1 && (
-                                                <motion.div 
-                                                    initial={{ opacity: 0, scale: 0.8, y: 50 }}
-                                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                                                    className="w-full flex flex-col items-center"
-                                                >
-                                                    <div className="relative mb-[-25px] z-10">
-                                                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-yellow-400 overflow-hidden shadow-xl bg-white">
-                                                             <div className="w-full h-full bg-yellow-50 flex items-center justify-center text-2xl font-bold text-yellow-600">
-                                                                {top1.name.substring(0,2).toUpperCase()}
-                                                             </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="w-full bg-gradient-to-t from-yellow-100 to-white border-t-4 border-yellow-400 rounded-t-2xl pt-12 pb-6 px-4 flex flex-col items-center shadow-2xl h-[260px] justify-between relative overflow-hidden">
-                                                        <div className="absolute inset-0 bg-yellow-200 opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-yellow-100 via-transparent to-transparent"></div>
-                                                        <div className="text-center relative z-10">
-                                                            <div className="text-5xl font-black text-yellow-500 mb-2 drop-shadow-sm">1</div>
-                                                            <div className="text-base md:text-lg font-bold text-gray-900 line-clamp-2 leading-tight">{top1.name}</div>
-                                                            <div className="text-xs text-gray-500 mt-1">{top1.year}</div>
-                                                        </div>
-                                                        <div className="bg-yellow-500 text-white rounded-full px-4 py-1.5 text-sm font-bold shadow-md relative z-10">
-                                                            {top1.score} PTS
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </div>
-
-                                        {/* Rank 3 */}
-                                        <div className="flex flex-col items-center w-1/3 max-w-[200px]">
-                                             {top3 && (
-                                                <motion.div 
-                                                    initial={{ opacity: 0, y: 50 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    transition={{ delay: 0.3 }}
-                                                    className="w-full flex flex-col items-center"
-                                                >
-                                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-4 border-orange-200 overflow-hidden shadow-md mb-[-20px] z-10 bg-white">
-                                                         <div className="w-full h-full bg-orange-50 flex items-center justify-center text-xl font-bold text-orange-600">
-                                                            {top3.name.substring(0,2).toUpperCase()}
-                                                         </div>
-                                                    </div>
-                                                    <div className="w-full bg-gradient-to-t from-orange-100 to-white border-t border-orange-200 rounded-t-2xl pt-10 pb-4 px-4 flex flex-col items-center shadow-lg h-[180px] justify-between">
-                                                        <div className="text-center">
-                                                            <div className="text-4xl font-black text-orange-300 mb-1">3</div>
-                                                            <div className="text-sm font-bold text-gray-700 line-clamp-2 leading-tight">{top3.name}</div>
-                                                            <div className="text-xs text-gray-500 mt-1">{top3.year}</div>
-                                                        </div>
-                                                        <div className="bg-white rounded-full px-3 py-1 text-xs font-bold text-gray-600 shadow-sm">
-                                                            {top3.score} Pts
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </div>
+                                    <div className="w-24 h-24 md:w-28 md:h-28 rounded-full border-[4px] border-yellow-400 ring-4 ring-yellow-100/80 overflow-hidden shadow-2xl shadow-yellow-500/20 bg-white relative group">
+                                      <div className="absolute inset-0 bg-yellow-400 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                                      <div className="w-full h-full bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center text-3xl font-black text-yellow-600/90 tracking-tighter">
+                                        {top1.name.substring(0, 2).toUpperCase()}
+                                      </div>
                                     </div>
-                               </div>
-                           )}
+                                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm border border-yellow-400">
+                                      #1
+                                    </div>
+                                  </div>
+                                  <div className="w-full bg-white bg-opacity-80 backdrop-blur-sm border-t-4 border-yellow-400 rounded-2xl pt-16 pb-6 px-4 flex flex-col items-center shadow-2xl shadow-yellow-900/5 h-auto md:h-[280px] justify-between relative overflow-hidden ring-1 ring-gray-100">
+                                    <div className="absolute inset-0 bg-gradient-to-b from-yellow-50/50 via-transparent to-transparent"></div>
 
-                           {rankedTutors.length === 0 && !loading && (
-                               <div className="text-center py-20 bg-white rounded-lg border border-gray-200 shadow-sm">
-                                   <Trophy className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-                                   <h3 className="text-lg font-medium text-gray-900">No Data Available</h3>
-                                   <p className="text-gray-500">No peer tutors found for the selected criteria.</p>
-                               </div>
-                           )}
+                                    <div className="text-center relative z-10 w-full mb-4">
+                                      <div className="text-lg md:text-xl font-black text-gray-800 line-clamp-2 leading-tight drop-shadow-sm mb-2">{top1.name}</div>
+                                      <div className="inline-flex items-center px-3 py-1 rounded-full bg-yellow-50 text-yellow-700 text-[10px] font-bold uppercase tracking-widest border border-yellow-100/50 shadow-sm">
+                                        {formatLeaderboardDetails(top1.year, top1.section)}
+                                      </div>
+                                    </div>
 
-                           {/* Rest of the List */}
-                           {rest.length > 0 && (
-                               <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-                                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                                       <h3 className="font-bold text-gray-700 uppercase tracking-wide text-sm">Honorable Mentions</h3>
-                                       <span className="text-xs font-medium text-gray-500">{rest.length} Instructors</span>
-                                   </div>
-                                   <div className="overflow-x-auto">
-                                       <table className="min-w-full divide-y divide-gray-100">
-                                           <thead className="bg-white">
-                                               <tr>
-                                                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-20">Rank</th>
-                                                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Peer Tutor</th>
-                                                   <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Score</th>
-                                                   <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Year</th>
-                                               </tr>
-                                           </thead>
-                                           <tbody className="divide-y divide-gray-100 bg-white">
-                                               {rest.map((tutor, idx) => (
-                                                   <tr key={tutor.id} className="hover:bg-gray-50 transition-colors">
-                                                       <td className="px-6 py-4 whitespace-nowrap">
-                                                           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold text-sm">
-                                                               {idx + 4}
-                                                           </span>
-                                                       </td>
-                                                       <td className="px-6 py-4 whitespace-nowrap">
-                                                           <div className="flex items-center">
-                                                               <div className="h-9 w-9 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-bold mr-3 shadow-sm">
-                                                                   {tutor.name.substring(0,2).toUpperCase()}
-                                                               </div>
-                                                               <div>
-                                                                    <div className="text-sm font-semibold text-gray-900">{tutor.name}</div>
-                                                                    <div className="text-xs text-gray-500">{tutor.email}</div>
-                                                               </div>
-                                                           </div>
-                                                       </td>
-                                                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700">
-                                                               {tutor.score}
-                                                           </span>
-                                                       </td>
-                                                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                                                           {tutor.year}
-                                                       </td>
-                                                   </tr>
-                                               ))}
-                                           </tbody>
-                                       </table>
-                                   </div>
-                               </div>
-                           )}
-                       </>
-                   )
-                })()} 
-              </div>
+                                    <div className="w-full relative z-10 text-center">
+                                      <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Total Score</div>
+                                      <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl px-4 py-3 shadow-lg shadow-orange-500/20 flex items-center justify-center gap-3 transform transition-transform duration-300 hover:scale-[1.02]">
+                                        <div className="text-2xl font-black">{top1.score}</div>
+                                        <Trophy className="w-5 h-5 text-yellow-100 opacity-80" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </div>
+
+                            <div className="flex w-full md:w-auto gap-4 md:gap-4 md:contents">
+                              {/* Rank 2 - Silver */}
+                              <div className="flex flex-col items-center w-1/2 md:w-1/3 max-w-[200px] md:order-1">
+                                {top2 && (
+                                  <motion.div
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.2 }}
+                                    className="w-full flex flex-col items-center"
+                                  >
+                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-[3px] border-slate-300 ring-2 ring-slate-100 overflow-hidden shadow-lg mb-[-20px] z-10 bg-white relative group">
+                                      <div className="absolute inset-0 bg-slate-400 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                                      <div className="w-full h-full bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center text-xl font-black text-slate-500">
+                                        {top2.name.substring(0, 2).toUpperCase()}
+                                      </div>
+                                    </div>
+                                    <div className="w-full bg-white bg-opacity-60 backdrop-blur-md rounded-2xl pt-12 pb-5 px-3 flex flex-col items-center shadow-lg shadow-slate-200/50 h-auto md:h-[220px] justify-between border border-white relative overflow-hidden ring-1 ring-slate-200/50">
+                                      <div className="absolute top-0 inset-x-0 h-1 bg-slate-300/50"></div>
+
+                                      <div className="text-center relative z-10 w-full mb-2">
+                                        <div className="text-4xl font-black text-slate-200/40 mb-1 absolute -top-8 left-1/2 -translate-x-1/2 select-none">2</div>
+                                        <div className="mt-2 h-10 md:h-auto flex items-end justify-center">
+                                          <div className="text-sm font-bold text-gray-700 line-clamp-2 leading-tight px-1">{top2.name}</div>
+                                        </div>
+                                        <div className="text-[10px] uppercase font-bold text-slate-400 mt-2 tracking-wider">{formatLeaderboardDetails(top2.year, top2.section)}</div>
+                                      </div>
+
+                                      <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 flex flex-col items-center mt-2 w-full">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Score</span>
+                                        <span className="text-lg font-black text-slate-600 leading-none">{top2.score}</span>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </div>
+
+                              {/* Rank 3 - Bronze */}
+                              <div className="flex flex-col items-center w-1/2 md:w-1/3 max-w-[200px] md:order-3">
+                                {top3 && (
+                                  <motion.div
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.3 }}
+                                    className="w-full flex flex-col items-center"
+                                  >
+                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-[3px] border-orange-300 ring-2 ring-orange-100 overflow-hidden shadow-lg mb-[-20px] z-10 bg-white relative group">
+                                      <div className="absolute inset-0 bg-orange-400 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                                      <div className="w-full h-full bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center text-xl font-black text-orange-600">
+                                        {top3.name.substring(0, 2).toUpperCase()}
+                                      </div>
+                                    </div>
+                                    <div className="w-full bg-white bg-opacity-60 backdrop-blur-md rounded-2xl pt-12 pb-5 px-3 flex flex-col items-center shadow-lg shadow-orange-200/40 h-auto md:h-[200px] justify-between border border-white relative overflow-hidden ring-1 ring-orange-200/50">
+                                      <div className="absolute top-0 inset-x-0 h-1 bg-orange-300/50"></div>
+
+                                      <div className="text-center relative z-10 w-full mb-2">
+                                        <div className="text-4xl font-black text-orange-200/40 mb-1 absolute -top-8 left-1/2 -translate-x-1/2 select-none">3</div>
+                                        <div className="mt-2 h-10 md:h-auto flex items-end justify-center">
+                                          <div className="text-sm font-bold text-gray-700 line-clamp-2 leading-tight px-1">{top3.name}</div>
+                                        </div>
+                                        <div className="text-[10px] uppercase font-bold text-orange-400 mt-2 tracking-wider">{formatLeaderboardDetails(top3.year, top3.section)}</div>
+                                      </div>
+
+                                      <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 flex flex-col items-center mt-2 w-full">
+                                        <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider mb-0.5">Score</span>
+                                        <span className="text-lg font-black text-orange-600 leading-none">{top3.score}</span>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+
+                      {
+                        rankedTutors.length === 0 && !loading && (
+                          <div className="text-center py-20 bg-white rounded-lg border border-gray-200 shadow-sm">
+                            <Trophy className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+                            <h3 className="text-lg font-medium text-gray-900">No Data Available</h3>
+                            <p className="text-gray-500">No peer tutors found for the selected criteria.</p>
+                          </div>
+                        )
+                      }
+
+                      {/* Rest of the List */}
+                      {
+                        rest.length > 0 && (
+                          <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                              <h3 className="font-bold text-gray-700 uppercase tracking-wide text-sm flex items-center gap-2">
+                                <Medal className="w-4 h-4 text-gray-400" />
+                                Honorable Mentions
+                              </h3>
+                              <span className="text-xs font-medium text-gray-500 bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm">{rest.length} Instructors</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-100">
+                                <thead className="bg-white">
+                                  <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-20">Rank</th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Peer Tutor</th>
+                                    <th className="px-6 py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">Score</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Year & Section</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 bg-white">
+                                  {rest.map((tutor, idx) => (
+                                    <tr key={tutor.id} className="hover:bg-blue-50/30 transition-colors group">
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-500 font-bold text-xs group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                                          {idx + 4}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center">
+                                          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center text-xs font-bold mr-3 shadow-md ring-2 ring-white group-hover:ring-blue-100 transition-all">
+                                            {tutor.name.substring(0, 2).toUpperCase()}
+                                          </div>
+                                          <div>
+                                            <div className="text-sm font-bold text-gray-800 group-hover:text-blue-700 transition-colors">{tutor.name}</div>
+                                            <div className="text-xs text-gray-500">{tutor.email}</div>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <div className="inline-flex flex-col items-center justify-center">
+                                          <span className="text-sm font-black text-gray-700">{tutor.score}</span>
+                                          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">pts</span>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-600 border border-gray-100">
+                                          {formatLeaderboardDetails(tutor.year, tutor.section)}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )
+                      }
+                    </>
+                  )
+                })()}
+              </div >
             ) : (
               /* Renumeration Management Tab */
               <div className="space-y-6">
@@ -3486,7 +3632,7 @@ function FacultypeertutorsContent() {
                         </svg>
                       </div>
                       <div className="text-3xl font-bold text-gray-900">
-                        {renumerationView === 'submissions' 
+                        {renumerationView === 'submissions'
                           ? filteredAndSortedSubmissions.filter(s => !s.submitted_at).length
                           : renumerationSubmissions.filter(s => !s.submitted_at).length
                         }
@@ -3509,17 +3655,17 @@ function FacultypeertutorsContent() {
                         </svg>
                       </div>
                       <div className="text-3xl font-bold text-gray-900">
-                        {renumerationView === 'submissions' 
+                        {renumerationView === 'submissions'
                           ? filteredAndSortedSubmissions.filter(s => !!s.submitted_at).length
                           : renumerationTemplates.reduce((total, template) => {
-                              const submissionCount = renumerationSubmissions.filter(
-                                (submission: peertutorsRenumeration) => 
-                                  submission.template_id === template.id &&
-                                  peerTutor.some(pt => pt.id === submission.peer_tutor_id) &&
-                                  submission.status !== 'pending'
-                              ).length
-                              return total + submissionCount
-                            }, 0)
+                            const submissionCount = renumerationSubmissions.filter(
+                              (submission: peertutorsRenumeration) =>
+                                submission.template_id === template.id &&
+                                peerTutor.some(pt => pt.id === submission.peer_tutor_id) &&
+                                submission.status !== 'pending'
+                            ).length
+                            return total + submissionCount
+                          }, 0)
                         }
                       </div>
                       <div className="mt-2 flex items-center text-xs text-green-600">
@@ -3558,11 +3704,10 @@ function FacultypeertutorsContent() {
                               <button
                                 onClick={handleBulkDeleteRenumerationTemplates}
                                 disabled={selectedRenumerationTemplateIds.size === 0}
-                                className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
-                                  selectedRenumerationTemplateIds.size > 0
-                                    ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
-                                    : 'bg-gray-400 text-white cursor-not-allowed'
-                                }`}
+                                className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${selectedRenumerationTemplateIds.size > 0
+                                  ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                                  : 'bg-gray-400 text-white cursor-not-allowed'
+                                  }`}
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -3585,17 +3730,48 @@ function FacultypeertutorsContent() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="p-0">
                       {templatesLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <div className="overflow-hidden">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-white">
+                              <tr>
+                                {isRenumerationDeleteMode && (
+                                  <th className="px-6 py-3 text-left">
+                                    <div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div>
+                                  </th>
+                                )}
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                  Template Name
+                                </th>
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                  No of Fields
+                                </th>
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                  Total Responses
+                                </th>
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                  Status
+                                </th>
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                  Created Date
+                                </th>
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              <RenumerationTemplatesSkeleton />
+                            </tbody>
+                          </table>
                         </div>
                       ) : renumerationTemplates.length === 0 ? (
                         <div className="text-center py-12">
-                                <svg className="h-12 w-12 text-black mb-4 flex items-center justify-center mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
+                          <svg className="h-12 w-12 text-black mb-4 flex items-center justify-center mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
                           <h3 className="text-lg font-medium uppercase text-black mb-2">No templates found</h3>
                           <p className="text-sm text-gray-500">Create your first renumeration template to get started.</p>
                         </div>
@@ -3637,7 +3813,7 @@ function FacultypeertutorsContent() {
                             <tbody className="bg-white divide-y divide-gray-200">
                               {renumerationTemplates.map((template) => {
                                 const submissionCount = renumerationSubmissions.filter(
-                                  (submission: peertutorsRenumeration) => 
+                                  (submission: peertutorsRenumeration) =>
                                     submission.template_id === template.id &&
                                     peerTutor.some(pt => pt.id === submission.peer_tutor_id) &&
                                     submission.status !== 'pending'
@@ -3723,13 +3899,12 @@ function FacultypeertutorsContent() {
                           <div className="relative">
                             <button
                               onClick={() => setShowSubmissionFilter(s => !s)}
-                              className={`p-2.5 rounded-lg border transition-colors duration-200 ${
-                                showSubmissionFilter ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                              }`}
+                              className={`p-2.5 rounded-lg border transition-colors duration-200 ${showSubmissionFilter ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                                }`}
                               title="Filter submissions"
                             >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6l-5.2 7.28a2 2 0 00-.4 1.2V19l-4 2v-6.92a2 2 0 00-.4-1.2L3.2 4.6A1 1 0 013 4z" />
+                              <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="20" height="20" viewBox="0 0 72 72" className="w-5 h-5 fill-current">
+                                <path d="M 18 12 C 15.791 12 14 13.791 14 16 L 14 22 C 14 22.821 14.251656 23.622922 14.722656 24.294922 L 28 43.261719 L 28 55 C 28 56.636 28.996625 58.106844 30.515625 58.714844 L 40.515625 62.714844 C 40.994625 62.906844 41.498 63 42 63 C 42.788 63 43.571188 62.7675 44.242188 62.3125 C 45.342187 61.5685 46 60.327 46 59 L 46 43.261719 L 59.277344 24.294922 C 59.748344 23.622922 60 22.821 60 22 L 60 16 C 60 13.791 58.209 12 56 12 L 18 12 z M 22 20 L 52 20 L 52 20.738281 L 48.316406 26 L 25.683594 26 L 22 20.738281 L 22 20 z"></path>
                               </svg>
                             </button>
 
@@ -3743,7 +3918,7 @@ function FacultypeertutorsContent() {
                                   <div className="space-y-3">
                                     <div>
                                       <label className="block text-sm text-gray-700 mb-1">Year</label>
-                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterYear} onChange={(e)=>setFilterYear(e.target.value)}>
+                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
                                         <option value="">All Years</option>
                                         <option value="I">I</option>
                                         <option value="II">II</option>
@@ -3753,7 +3928,7 @@ function FacultypeertutorsContent() {
                                     </div>
                                     <div>
                                       <label className="block text-sm text-gray-700 mb-1">Section</label>
-                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterSection} onChange={(e)=>setFilterSection(e.target.value)}>
+                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterSection} onChange={(e) => setFilterSection(e.target.value)}>
                                         <option value="">All Sections</option>
                                         <option value="A">A</option>
                                         <option value="B">B</option>
@@ -3763,7 +3938,7 @@ function FacultypeertutorsContent() {
                                     </div>
                                     <div>
                                       <label className="block text-sm text-gray-700 mb-1">Status</label>
-                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterStatus} onChange={(e)=>setFilterStatus(e.target.value)}>
+                                      <select className="w-full border rounded-md px-2 py-2 text-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                                         <option value="">All</option>
                                         <option value="pending">Pending</option>
                                         <option value="completed">Completed</option>
@@ -3771,7 +3946,7 @@ function FacultypeertutorsContent() {
                                     </div>
                                     <div className="flex items-center justify-between pt-2">
                                       <button
-                                        onClick={()=>setSortDescByName(s=>!s)}
+                                        onClick={() => setSortDescByName(s => !s)}
                                         className="px-3 py-2 border rounded-md text-sm hover:bg-gray-50 bg-white"
                                         title="Toggle name sort (desc)"
                                       >
@@ -3799,13 +3974,13 @@ function FacultypeertutorsContent() {
                                   toast.info('No pending submissions to export')
                                   return
                                 }
-                                
+
                                 const exportData = pendingRows.map(s => ({
                                   'Name': s.peer_tutor?.name || 'Unknown',
                                   'Email': s.peer_tutor?.email || 'No email',
                                   'Year & Section': `${s.peer_tutor?.year || ''} - ${s.peer_tutor?.section || ''}`
                                 }))
-                                
+
                                 const ws = XLSX.utils.json_to_sheet(exportData)
                                 const wb = XLSX.utils.book_new()
                                 XLSX.utils.book_append_sheet(wb, ws, 'Pending Tutors')
@@ -3835,9 +4010,34 @@ function FacultypeertutorsContent() {
 
                     <div className="overflow-x-auto">
                       {renumerationLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                        </div>
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-white">
+                            <tr>
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Peer Tutor</th>
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Submitted</th>
+                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {[...Array(5)].map((_, i) => (
+                              <tr key={i} className="animate-pulse border-b border-gray-100">
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center justify-center">
+                                    <div className="h-10 w-10 bg-gray-200 rounded-full mr-4"></div>
+                                    <div className="space-y-2 text-left">
+                                      <div className="h-4 w-32 bg-gray-200 rounded"></div>
+                                      <div className="h-3 w-24 bg-gray-200 rounded"></div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-center"><div className="h-6 w-20 bg-gray-200 rounded mx-auto"></div></td>
+                                <td className="px-6 py-4 text-center"><div className="h-4 w-24 bg-gray-200 rounded mx-auto"></div></td>
+                                <td className="px-6 py-4 text-center"><div className="h-8 w-16 bg-gray-200 rounded mx-auto"></div></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       ) : filteredAndSortedSubmissions.length > 0 ? (
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-white">
@@ -3882,13 +4082,13 @@ function FacultypeertutorsContent() {
                                   {submission.submitted_at ? (
                                     <span className="text-sm text-gray-900">Completed</span>
                                   ) : (
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded uppercase text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded uppercase text-xs font-medium bg-red-600 text-white">
                                       Pending
                                     </span>
                                   )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                                  {submission.submitted_at 
+                                  {submission.submitted_at
                                     ? new Date(submission.submitted_at).toLocaleDateString()
                                     : 'Not submitted'
                                   }
@@ -3926,60 +4126,68 @@ function FacultypeertutorsContent() {
                 )}
               </div>
             )}
-          </div>
-        </main>
-      </div>
+          </div >
+        </main >
+      </div >
 
       {/* Renumeration Modal */}
-      {user && (
-        <RenumerationModal
-          isOpen={showRenumerationModal}
-          onClose={() => setShowRenumerationModal(false)}
-          onSuccess={handleRenumerationSuccess}
-          facultyId={user.id}
-        />
-      )}
+      {
+        user && (
+          <RenumerationModal
+            isOpen={showRenumerationModal}
+            onClose={() => setShowRenumerationModal(false)}
+            onSuccess={handleRenumerationSuccess}
+            facultyId={user.id}
+          />
+        )
+      }
 
       {/* Renumeration Details Modal */}
-      {selectedSubmission && (
-        <RenumerationDetailsModal
-          submission={selectedSubmission}
-          isOpen={showDetailsModal}
-          onClose={() => {
-            setShowDetailsModal(false)
-            setSelectedSubmission(null)
-          }}
-          onStatusUpdate={handleRenumerationStatusUpdate}
-        />
-      )}
+      {
+        selectedSubmission && (
+          <RenumerationDetailsModal
+            submission={selectedSubmission}
+            isOpen={showDetailsModal}
+            onClose={() => {
+              setShowDetailsModal(false)
+              setSelectedSubmission(null)
+            }}
+            onStatusUpdate={handleRenumerationStatusUpdate}
+          />
+        )
+      }
 
       {/* Feedback Form Modal */}
-      {user && (
-        <FeedbackFormModal
-          isOpen={showFeedbackModal}
-          onClose={() => {
-            setShowFeedbackModal(false)
-            setSelectedFeedbackForm(null)
-          }}
-          onSuccess={handleFeedbackFormSuccess}
-          facultyId={user.id}
-          editingForm={selectedFeedbackForm}
-        />
-      )}
+      {
+        user && (
+          <FeedbackFormModal
+            isOpen={showFeedbackModal}
+            onClose={() => {
+              setShowFeedbackModal(false)
+              setSelectedFeedbackForm(null)
+            }}
+            onSuccess={handleFeedbackFormSuccess}
+            facultyId={user.id}
+            editingForm={selectedFeedbackForm}
+          />
+        )
+      }
 
       {/* Feedback Responses Modal */}
-      {selectedFeedbackForm && (
-        <FeedbackResponsesModal
-          isOpen={showFeedbackResponsesModal}
-          onClose={() => {
-            setShowFeedbackResponsesModal(false)
-            setSelectedFeedbackForm(null)
-          }}
-          feedbackForm={selectedFeedbackForm}
-          responses={[]}
-          loading={feedbackLoading}
-        />
-      )}
+      {
+        selectedFeedbackForm && (
+          <FeedbackResponsesModal
+            isOpen={showFeedbackResponsesModal}
+            onClose={() => {
+              setShowFeedbackResponsesModal(false)
+              setSelectedFeedbackForm(null)
+            }}
+            feedbackForm={selectedFeedbackForm}
+            responses={[]}
+            loading={feedbackLoading}
+          />
+        )
+      }
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
@@ -3990,13 +4198,13 @@ function FacultypeertutorsContent() {
         }}
         onConfirm={handleDeleteConfirm}
         title={
-          deleteType === 'peer-tutors' 
+          deleteType === 'peer-tutors'
             ? (itemsToDelete.length > 1 ? 'Confirm Bulk Peer Tutor Deletion' : 'Confirm Peer Tutor Deletion')
             : deleteType === 'students'
               ? (itemsToDelete.length > 1 ? 'Confirm Bulk Student Deletion' : 'Confirm Student Deletion')
-            : deleteType === 'renumeration-templates'
-              ? (itemsToDelete.length > 1 ? 'Confirm Bulk Template Deletion' : 'Confirm Template Deletion')
-            : (itemsToDelete.length > 1 ? 'Confirm Bulk Form Deletion' : 'Confirm Form Deletion')
+              : deleteType === 'renumeration-templates'
+                ? (itemsToDelete.length > 1 ? 'Confirm Bulk Template Deletion' : 'Confirm Template Deletion')
+                : (itemsToDelete.length > 1 ? 'Confirm Bulk Form Deletion' : 'Confirm Form Deletion')
         }
         itemsToDelete={itemsToDelete}
         type={deleteType}
@@ -4004,96 +4212,97 @@ function FacultypeertutorsContent() {
       />
 
       {/* Class Details Modal */}
-      {showClassModal && selectedClass && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Class Details - {selectedClass.subject_name}
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowClassModal(false)
-                    setSelectedClass(null)
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">Date</p>
-                    <p className="font-medium">{new Date(selectedClass.scheduled_date).toLocaleDateString()}</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">Present</p>
-                    <p className="font-medium text-green-600">{selectedClass.present_count}</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">Absent</p>
-                    <p className="font-medium text-red-600">{selectedClass.absent_count}</p>
-                  </div>
+      {
+        showClassModal && selectedClass && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Class Details - {selectedClass.subject_name}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowClassModal(false)
+                      setSelectedClass(null)
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
 
-                {selectedClass.topics && (
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500 mb-1">Topics Taught</p>
-                    <p className="font-medium">{selectedClass.topics}</p>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-sm text-gray-500">Date</p>
+                      <p className="font-medium">{new Date(selectedClass.scheduled_date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-sm text-gray-500">Present</p>
+                      <p className="font-medium text-green-600">{selectedClass.present_count}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-sm text-gray-500">Absent</p>
+                      <p className="font-medium text-red-600">{selectedClass.absent_count}</p>
+                    </div>
                   </div>
-                )}
 
-                <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-3">Attendance Records</h4>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Student Name
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Email
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {selectedClass.attendance_records.map((record) => (
-                          <tr key={record.student_id}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {record.student_name}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {record.student_email}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                record.status === 'present' 
-                                  ? 'bg-green-400 text-black' 
-                                  : 'bg-red-400 text-black'
-                              }`}>
-                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                              </span>
-                            </td>
+                  {selectedClass.topics && (
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-sm text-gray-500 mb-1">Topics Taught</p>
+                      <p className="font-medium">{selectedClass.topics}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="text-md font-medium text-gray-900 mb-3">Attendance Records</h4>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Student Name
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Email
+                            </th>
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Status
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {selectedClass.attendance_records.map((record) => (
+                            <tr key={record.student_id}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {record.student_name}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {record.student_email}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.status === 'present'
+                                  ? 'bg-green-400 text-black'
+                                  : 'bg-red-400 text-black'
+                                  }`}>
+                                  {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Excel Export Modal */}
       <ExcelExportModal
@@ -4105,50 +4314,62 @@ function FacultypeertutorsContent() {
 
 
       {/* Peer Tutor Import Modal */}
-      {showImportModal && (
-        <PeerTutorImportModal
-          dept={user?.user_metadata?.dept || 'AIDS'}
-          year={selectedYear !== 'all' ? selectedYear : ''}
-          section={selectedSection !== 'all' ? selectedSection : ''}
-          onClose={() => setShowImportModal(false)}
-          onSuccess={() => {
-            handleRefresh()
-            setShowImportModal(false)
-          }}
-        />
-      )}
+      {
+        showImportModal && (
+          <PeerTutorImportModal
+            dept={user?.user_metadata?.dept || 'AIDS'}
+            year={selectedYear !== 'all' ? selectedYear : ''}
+            section={selectedSection !== 'all' ? selectedSection : ''}
+            onClose={() => setShowImportModal(false)}
+            onSuccess={() => {
+              handleRefresh()
+              setShowImportModal(false)
+            }}
+          />
+        )
+      }
 
       {/* Add Student Modal */}
-      {showAddStudentModal && (
-        <AddStudentModal
-          isOpen={showAddStudentModal}
-          onClose={() => setShowAddStudentModal(false)}
-          onSuccess={() => {
-            handleRefresh()
-            setShowAddStudentModal(false)
-          }}
-          dept={user?.user_metadata?.dept || 'AIDS'}
-          year={selectedStudentYear !== 'all' ? selectedStudentYear : ''}
-          section={selectedStudentSection !== 'all' ? selectedStudentSection : ''}
-        />
-      )}
+      {
+        showAddStudentModal && (
+          <UserSelectionModal
+            isOpen={showAddStudentModal}
+            onClose={() => setShowAddStudentModal(false)}
+            onSuccess={() => {
+              handleRefresh()
+              setShowAddStudentModal(false)
+            }}
+            mode="student"
+            dept={user?.user_metadata?.dept || 'AIDS'}
+            year={selectedStudentYear !== 'all' ? selectedStudentYear : ''}
+            section={selectedStudentSection !== 'all' ? selectedStudentSection : ''}
+            availableYears={availableStudentYears}
+            availableSections={availableStudentSections}
+          />
+        )
+      }
 
       {/* Add Peer Tutor Modal */}
-      {showAddPeerTutorModal && (
-        <AddPeerTutorModal
-          isOpen={showAddPeerTutorModal}
-          onClose={() => setShowAddPeerTutorModal(false)}
-          onSuccess={() => {
-            handleRefresh()
-            setShowAddPeerTutorModal(false)
-          }}
-          dept={user?.user_metadata?.dept || 'AIDS'}
-          year={selectedYear !== 'all' ? selectedYear : ''}
-          section={selectedSection !== 'all' ? selectedSection : ''}
-        />
-      )}
+      {
+        showAddPeerTutorModal && (
+          <UserSelectionModal
+            isOpen={showAddPeerTutorModal}
+            onClose={() => setShowAddPeerTutorModal(false)}
+            onSuccess={() => {
+              handleRefresh()
+              setShowAddPeerTutorModal(false)
+            }}
+            mode="peer-tutor"
+            dept={user?.user_metadata?.dept || 'AIDS'}
+            year={selectedYear !== 'all' ? selectedYear : ''}
+            section={selectedSection !== 'all' ? selectedSection : ''}
+            availableYears={availableYears}
+            availableSections={availableSections}
+          />
+        )
+      }
 
 
-    </div>
+    </div >
   )
 }

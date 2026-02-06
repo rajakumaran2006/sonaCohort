@@ -126,9 +126,9 @@ export default function AssignmentImportModal({
         // Update last seen (only if current row has info)
         if (peertutorsName || peertutorsEmail) {
           // If we have same name but no email, inherit from last
-          if (peertutorsName && lastpeertutorsName && 
-              peertutorsName.toLowerCase() === lastpeertutorsName.toLowerCase() && 
-              !peertutorsEmail && lastpeertutorsEmail) {
+          if (peertutorsName && lastpeertutorsName &&
+            peertutorsName.toLowerCase() === lastpeertutorsName.toLowerCase() &&
+            !peertutorsEmail && lastpeertutorsEmail) {
             peertutorsEmail = lastpeertutorsEmail
           }
 
@@ -137,14 +137,14 @@ export default function AssignmentImportModal({
         }
 
         if ((peertutorsName || peertutorsEmail) && (studentName || studentEmail)) {
-           rows.push({
-             peertutorsName,
-             peertutorsEmail,
-             studentName,
-             studentEmail,
-             year: rowYear,
-             section: rowSection
-           })
+          rows.push({
+            peertutorsName,
+            peertutorsEmail,
+            studentName,
+            studentEmail,
+            year: rowYear,
+            section: rowSection
+          })
         }
       }
 
@@ -164,7 +164,7 @@ export default function AssignmentImportModal({
       const uniquepeerTutor = new Set(rows.map(r => (r.peertutorsEmail || r.peertutorsName || '').toLowerCase())).size
       const uniqueStudents = new Set(rows.map(r => (r.studentEmail || r.studentName || '').toLowerCase())).size
       setTotalFromExcel({ peerTutor: uniquepeerTutor, students: uniqueStudents })
-      
+
       await processImportData(rows, tutors, students.filter(s => !s.peer_tutor))
 
     } catch (error) {
@@ -196,39 +196,39 @@ export default function AssignmentImportModal({
     // Priority 1: Try exact name match first (case-insensitive) if name is provided
     if (name) {
       const normalizedName = name.toLowerCase().trim()
-      const match = tutors.find(pt => 
+      const match = tutors.find(pt =>
         pt.name.toLowerCase().trim() === normalizedName &&
         (!targetYear || pt.year === targetYear) &&
         (!targetSection || pt.section === targetSection) &&
         checkSuffix(pt.email)
       )
-      
+
       if (match) {
         logger.info(`✅ Peer Tutor found LOCALLY by NAME: "${name}" → ${match.name} (${match.email})`)
         return { tutor: match, foundIn: 'local' }
       }
     }
-    
+
     // Priority 2: Try email match (either as fallback or primary if no name)
     if (email) {
       // If the provided email itself doesn't match the suffix, we shouldn't even search if we are strictly enforcing?
       // But maybe the provided email is "incomplete" or finding by name resulted in a valid email.
       // However, if searching by email, the email MUST match.
-      
+
       const normalizedEmail = email.toLowerCase().trim()
-      const match = tutors.find(pt => 
+      const match = tutors.find(pt =>
         pt.email.toLowerCase().trim() === normalizedEmail &&
         (!targetYear || pt.year === targetYear) &&
         (!targetSection || pt.section === targetSection) &&
         checkSuffix(pt.email)
       )
-      
+
       if (match) {
         logger.info(`✅ Peer Tutor found LOCALLY by EMAIL: "${email}" → ${match.name} (${match.email})`)
         return { tutor: match, foundIn: 'local' }
       }
     }
-    
+
     // Priority 3: Search Microsoft Graph by Email
     if (email && user?.id) {
       // If we are validating, the input email must match the suffix to even be valid for search, 
@@ -236,7 +236,7 @@ export default function AssignmentImportModal({
       if (checkSuffix(email)) {
         logger.info(`🔍 Searching Microsoft Graph for peer tutor by EMAIL: "${email}"`)
         const microsoftUser = await MicrosoftGraphService.getUserByEmail(email)
-        
+
         if (microsoftUser && checkSuffix(microsoftUser.mail)) {
           logger.info(`✨ Peer Tutor found in MICROSOFT: "${email}"`)
           // Defer creation - return the microsoft user object
@@ -249,19 +249,19 @@ export default function AssignmentImportModal({
     if (name && user?.id) {
       logger.info(`🔍 Searching Microsoft Graph for peer tutor by NAME: "${name}"`)
       const microsoftUsers = await MicrosoftGraphService.searchUsers(name)
-      
-      const exactMatch = microsoftUsers.find(u => 
+
+      const exactMatch = microsoftUsers.find(u =>
         u.displayName.toLowerCase().trim() === name.toLowerCase().trim() &&
         checkSuffix(u.mail)
       )
-      
+
       if (exactMatch) {
-         logger.info(`✨ Peer Tutor found in MICROSOFT by NAME: "${name}" → ${exactMatch.mail}`)
-         // Defer creation
-         return { tutor: null, microsoftUser: exactMatch, foundIn: 'microsoft' }
+        logger.info(`✨ Peer Tutor found in MICROSOFT by NAME: "${name}" → ${exactMatch.mail}`)
+        // Defer creation
+        return { tutor: null, microsoftUser: exactMatch, foundIn: 'microsoft' }
       }
     }
-    
+
     // Not found anywhere
     logger.info(`❌ Peer Tutor NOT FOUND: ${name ? `Name="${name}"` : ''}${name && email ? ', ' : ''}${email ? `Email="${email}"` : ''}`)
     return { tutor: null, foundIn: 'not_found' }
@@ -269,7 +269,7 @@ export default function AssignmentImportModal({
 
   const findStudent = async (
     students: Student[],
-    name?: string, 
+    name?: string,
     email?: string,
     targetYear?: string,
     targetSection?: string
@@ -288,41 +288,41 @@ export default function AssignmentImportModal({
     // Priority 1: Try exact name match first (case-insensitive) if name is provided
     if (name) {
       const normalizedName = name.toLowerCase().trim()
-      const match = students.find(s => 
+      const match = students.find(s =>
         s.name.toLowerCase().trim() === normalizedName &&
         (!targetYear || s.year === targetYear) &&
         (!targetSection || s.section === targetSection) &&
         checkSuffix(s.email)
       )
-      
+
       if (match) {
         logger.info(`✅ Student found LOCALLY by NAME: "${name}" → ${match.name} (${match.email})`)
         return { student: match, foundIn: 'local' }
       }
     }
-    
+
     // Priority 2: Try email match (either as fallback or primary if no name)
     if (email) {
       const normalizedEmail = email.toLowerCase().trim()
-      const match = students.find(s => 
+      const match = students.find(s =>
         s.email.toLowerCase().trim() === normalizedEmail &&
         (!targetYear || s.year === targetYear) &&
         (!targetSection || s.section === targetSection) &&
         checkSuffix(s.email)
       )
-      
+
       if (match) {
         logger.info(`✅ Student found LOCALLY by EMAIL: "${email}" → ${match.name} (${match.email})`)
         return { student: match, foundIn: 'local' }
       }
     }
-    
+
     // Priority 3: Search Microsoft Graph by Email
     if (email && user?.id) {
       if (checkSuffix(email)) {
         logger.info(`🔍 Searching Microsoft Graph for student by EMAIL: "${email}"`)
         const microsoftUser = await MicrosoftGraphService.getUserByEmail(email)
-        
+
         if (microsoftUser && checkSuffix(microsoftUser.mail)) {
           logger.info(`✨ Student found in MICROSOFT: "${email}"`)
           // Defer creation
@@ -335,19 +335,19 @@ export default function AssignmentImportModal({
     if (name && user?.id) {
       logger.info(`🔍 Searching Microsoft Graph for student by NAME: "${name}"`)
       const microsoftUsers = await MicrosoftGraphService.searchUsers(name)
-      
-      const exactMatch = microsoftUsers.find(u => 
+
+      const exactMatch = microsoftUsers.find(u =>
         u.displayName.toLowerCase().trim() === name.toLowerCase().trim() &&
         checkSuffix(u.mail)
       )
-      
+
       if (exactMatch) {
         logger.info(`✨ Student found in MICROSOFT by NAME: "${name}" → ${exactMatch.mail}`)
         // Defer creation
         return { student: null, microsoftUser: exactMatch, foundIn: 'microsoft' }
       }
     }
-    
+
     // Not found anywhere
     logger.info(`❌ Student NOT FOUND: ${name ? `Name="${name}"` : ''}${name && email ? ', ' : ''}${email ? `Email="${email}"` : ''}`)
     return { student: null, foundIn: 'not_found' }
@@ -364,7 +364,7 @@ export default function AssignmentImportModal({
       const peertutorsDisplayName = peertutorsResult.tutor?.name || row.peertutorsName || row.peertutorsEmail || 'Unknown'
       const studentDisplayName = studentResult.student?.name || row.studentName || row.studentEmail || 'Unknown'
 
-      const isAlreadyAssigned = studentResult.student && peertutorsResult.tutor 
+      const isAlreadyAssigned = studentResult.student && peertutorsResult.tutor
         ? studentResult.student.assigned_peer_tutor_id === peertutorsResult.tutor.id
         : false
 
@@ -402,11 +402,11 @@ export default function AssignmentImportModal({
       // 1. Peer Tutor ID (if resolved)
       // 2. Email (if available)
       // 3. Name (fallback)
-      const key = item.peertutors?.id 
-        ? item.peertutors.id 
+      const key = item.peertutors?.id
+        ? item.peertutors.id
         : (item.peertutorsEmail || item.peertutorsName).toLowerCase()
-      
-      
+
+
       if (!grouped.has(key)) {
         grouped.set(key, {
           peertutors: item.peertutors,
@@ -423,12 +423,12 @@ export default function AssignmentImportModal({
       }
 
       const group = grouped.get(key)!
-      
+
       // Determine student status
-      const studentStatus: 'existing' | 'new' | 'missing' = 
-        (!item.student && !item.microsoftStudent) ? 'missing' : 
-        item.isAlreadyAssigned ? 'existing' : 
-        'new'
+      const studentStatus: 'existing' | 'new' | 'missing' =
+        (!item.student && !item.microsoftStudent) ? 'missing' :
+          item.isAlreadyAssigned ? 'existing' :
+            'new'
 
       group.students.push({
         student: item.student,
@@ -450,7 +450,7 @@ export default function AssignmentImportModal({
   const handleExportNotFound = () => {
     try {
       const exportData: Array<Record<string, string>> = []
-      
+
       processedData.forEach(group => {
         group.students.forEach(studentData => {
           // Only export if peer tutor OR student is not found
@@ -541,7 +541,7 @@ export default function AssignmentImportModal({
             skipCount++
             continue
           }
-          
+
           if (studentData.status === 'missing') continue
 
           let currentStudent = studentData.student
@@ -581,7 +581,7 @@ export default function AssignmentImportModal({
     }
   }
 
-  const hasNewAssignments = processedData.some(g => 
+  const hasNewAssignments = processedData.some(g =>
     g.status === 'valid' && g.students.some(s => s.status === 'new')
   )
 
@@ -639,10 +639,10 @@ export default function AssignmentImportModal({
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-lg font-bold text-green-900">EXCEL FORMAT PREVIEW</h4>
                 </div>
-              
-  
-                   <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-md">
-                  <div className="grid grid-cols-6 bg-gray-600 text-white">
+
+
+                <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-md">
+                  <div className="grid grid-cols-[1.5fr_2fr_1.5fr_2fr_0.6fr_0.6fr] bg-gray-600 text-white">
                     <div className="px-4 py-3 border-r uppercase border-gray-300 font-bold text-xs text-white">
                       Peer Tutor Name
                     </div>
@@ -654,9 +654,9 @@ export default function AssignmentImportModal({
                     <div className="px-4 py-3 border-r uppercase border-gray-300 font-bold text-xs text-white">Year</div>
                     <div className="px-4 py-3 uppercase font-bold text-xs text-white">Section</div>
                   </div>
-                  
+
                   {/* Sample Data Rows */}
-                  <div className="grid grid-cols-6 border-b border-gray-200 bg-white hover:bg-gray-50 transition-colors">
+                  <div className="grid grid-cols-[1.5fr_2fr_1.5fr_2fr_0.6fr_0.6fr] border-b border-gray-200 bg-white hover:bg-gray-50 transition-colors">
                     <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">RAM A</div>
                     <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-600">ram.23ads@sonatech.ac.in</div>
                     <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">RAGUL K</div>
@@ -664,9 +664,9 @@ export default function AssignmentImportModal({
                     <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">2</div>
                     <div className="px-4 py-2.5 text-sm text-gray-700">A</div>
                   </div>
-                  
-                  
-                  <div className="grid grid-cols-6 bg-white hover:bg-gray-50 transition-colors">
+
+
+                  <div className="grid grid-cols-[1.5fr_2fr_1.5fr_2fr_0.6fr_0.6fr] bg-white hover:bg-gray-50 transition-colors">
                     <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">PRIYA M</div>
                     <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-600">priya.23ads@sonatech.ac.in</div>
                     <div className="px-4 py-2.5 border-r border-gray-200 text-sm text-gray-700">KISHORE R</div>
@@ -688,25 +688,25 @@ export default function AssignmentImportModal({
                 <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <h4 className="text-lg font-semibold text-gray-900 mb-2">UPLOAD EXCEL FILE</h4>
                 <p className="text-sm text-gray-600 mb-6">Click to select or drag and drop</p>
-                
+
                 <div className="max-w-md mx-auto mb-8">
                   <div className="relative">
-                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                       <span className="text-gray-500 text-sm font-medium">@</span>
-                     </div>
-                     <input
-                       type="text"
-                       placeholder="Validation Mail (e.g. .24ads@sonatech.ac.in)"
-                       value={emailValidationSuffix}
-                       onChange={(e) => setEmailValidationSuffix(e.target.value)}
-                       className="block w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                     />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span className="text-gray-500 text-sm font-medium">@</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Validation Mail (e.g. .24ads@sonatech.ac.in)"
+                      value={emailValidationSuffix}
+                      onChange={(e) => setEmailValidationSuffix(e.target.value)}
+                      className="block w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
                   </div>
                   <p className="text-xs text-gray-500 mt-2 text-left px-1">
                     * If specified, only emails ending with this domain will be processed.
                   </p>
                 </div>
-                
+
                 <div className="flex items-center justify-center gap-4">
                   <button
                     onClick={handleDownloadTemplate}
@@ -735,8 +735,8 @@ export default function AssignmentImportModal({
                   <div className="bg-white rounded-lg p-4 border border-gray-200">
                     <div className="text-sm text-gray-500 font-medium mb-2 uppercase tracking-wide">Total</div>
                     <div className="text-3xl font-bold text-gray-900 mb-1">
-                      {processedData.filter(g => g.peertutorsFoundIn === 'microsoft').length + 
-                       processedData.reduce((sum, g) => sum + g.students.filter(s => s.studentFoundIn === 'microsoft').length, 0)}
+                      {processedData.filter(g => g.peertutorsFoundIn === 'microsoft').length +
+                        processedData.reduce((sum, g) => sum + g.students.filter(s => s.studentFoundIn === 'microsoft').length, 0)}
                     </div>
                     <div className="text-xs text-orange-500 uppercase">To Be Added</div>
                   </div>
@@ -767,8 +767,8 @@ export default function AssignmentImportModal({
                     <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 text-xs text-red-800">
                       <strong>
-                        {processedData.filter(g => g.status === 'missing').length + 
-                         processedData.reduce((sum, g) => sum + g.students.filter(s => s.status === 'missing').length, 0)} student(s) or peer tutor(s) not found
+                        {processedData.filter(g => g.status === 'missing').length +
+                          processedData.reduce((sum, g) => sum + g.students.filter(s => s.status === 'missing').length, 0)} student(s) or peer tutor(s) not found
                       </strong>
                       {' '}in the system. Add them first before importing assignments.
                     </div>
@@ -790,10 +790,9 @@ export default function AssignmentImportModal({
                 {processedData.map((group, idx) => (
                   <div key={idx} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                     {/* Peer Tutor Header */}
-                    <div className={`px-6 py-4 ${
-                      group.status === 'missing' ? 'bg-red-50' : 
-                      group.tutorAlreadyExists ? 'bg-gray-50' : 'bg-blue-50'
-                    }`}>
+                    <div className={`px-6 py-4 ${group.status === 'missing' ? 'bg-red-50' :
+                        group.tutorAlreadyExists ? 'bg-gray-50' : 'bg-blue-50'
+                      }`}>
                       <div className="flex items-center gap-3">
                         {/* Peer Tutor PFP - Gray bg, Black text */}
                         <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-900 font-semibold text-sm">

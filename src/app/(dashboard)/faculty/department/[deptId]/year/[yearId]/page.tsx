@@ -12,8 +12,8 @@ import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
-import { 
-  ArrowUpRight, 
+import {
+  ArrowUpRight,
   LayoutGrid
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
@@ -60,7 +60,7 @@ function YearContent() {
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Check if sidebar is collapsed
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarCollapsed()
+  const [isSidebarCollapsed] = useSidebarCollapsed()
 
   const loadData = useCallback(async () => {
     try {
@@ -72,9 +72,9 @@ function YearContent() {
         }
       }
 
-      
+
       logger.info('Year Page - Loading data for:', { deptId, yearId, facultyDeptName })
-      
+
       setDepartment({
         id: deptId as string,
         name: facultyDeptName,
@@ -90,11 +90,11 @@ function YearContent() {
       const sections = await ClassService.getSectionsForYear(facultyDeptName, yearId as string)
       const allAdditionalClasses = await AdditionalClassService.getAllAdditionalClassesForDepartment(facultyDeptName)
       logger.info('Year Page - Data found:', { sections, additionalCount: allAdditionalClasses.length })
-      
+
       // Ensure all standard sections (A, B, C) are included
       const allSections = ['A', 'B', 'C']
       const uniqueSections = Array.from(new Set([...allSections, ...sections]))
-      
+
       const sectionData = await Promise.all(
         uniqueSections.map(async (section) => {
           const tutors = await peertutorservice.getpeerTutorBySection(facultyDeptName, yearId as string, section)
@@ -106,25 +106,25 @@ function YearContent() {
           const currentMonth = String(now.getMonth() + 1).padStart(2, '0')
           const currentDay = String(now.getDate()).padStart(2, '0')
           const todayStr = `${currentYear}-${currentMonth}-${currentDay}`
-          
+
           const overduePending = pending.filter(cls => cls.scheduled_date < todayStr)
-          
+
           const sectionAdditional = allAdditionalClasses.filter(c => {
-          const tutor = (c as { peer_tutors?: { year?: string; section?: string } | { year?: string; section?: string }[] }).peer_tutors
+            const tutor = (c as { peer_tutors?: { year?: string; section?: string } | { year?: string; section?: string }[] }).peer_tutors
             const tutorData = Array.isArray(tutor) ? tutor[0] : tutor
             const y = c.year || tutorData?.year || ''
             return y.toString() === yearId && tutorData?.section === section
           })
 
           const totalCompleted = completed.length + sectionAdditional.length
-          
+
           logger.info(`Year Page - Section ${section} data:`, {
             tutorsCount: tutors.length,
             completedCount: totalCompleted,
             pendingCount: overduePending.length,
             additionalCount: sectionAdditional.length
           })
-          
+
           return {
             section,
             tutors: tutors.length,
@@ -134,10 +134,10 @@ function YearContent() {
           }
         })
       )
-      
+
       // Sort sections alphabetically
       sectionData.sort((a, b) => a.section.localeCompare(b.section))
-      
+
       logger.info('Year Page - Final section data:', sectionData)
       setSectionStats(sectionData)
     } catch (error) {
@@ -170,7 +170,7 @@ function YearContent() {
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
         <FacultySidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        
+
         <div className={`${isSidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} min-h-screen flex flex-col transition-all duration-300`}>
           {/* Header Skeleton */}
           <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 h-20 flex items-center px-8">
@@ -291,7 +291,7 @@ function YearContent() {
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Available Sections</h3>
                 <span className="px-3 py-1 bg-gray-100 rounded-full text-[10px] font-black text-gray-500 uppercase">{sectionStats.length} TOTAL</span>
               </div>
-              
+
               <div className="space-y-4">
                 {sectionStats.length === 0 ? (
                   <div className="bg-white p-8 rounded-[28px] border border-gray-100 shadow-sm text-center">
@@ -317,7 +317,7 @@ function YearContent() {
                             <h4 className="text-lg font-black text-gray-900 uppercase tracking-tight">SECTION {section.section}</h4>
                             <ArrowUpRight className="w-5 h-5 text-gray-300 group-hover:text-gray-900 transition-all" />
                           </div>
-                          
+
                           <div className="grid grid-cols-3 gap-3">
                             <div className="bg-gray-50/50 rounded-xl p-2 group-hover:bg-blue-50/30 transition-colors">
                               <p className="text-[8px] font-black text-gray-400 uppercase mb-0.5">Tutors</p>

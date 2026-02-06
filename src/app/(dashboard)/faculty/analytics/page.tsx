@@ -8,6 +8,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService } from '@/lib/services/facultyService'
 import { AnalyticsService, PendingClassStudent } from '@/lib/services/analyticsService'
+import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import { Card } from '@/components/ui'
 import { Users, Search, Download } from 'lucide-react'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
@@ -23,7 +24,7 @@ export default function AnalyticsPage() {
 function AnalyticsContent() {
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarCollapsed()
+  const [isSidebarCollapsed] = useSidebarCollapsed()
 
   const [threshold, setThreshold] = useState<number>(1) // 1-10
   const [excludeAdditionalClasses, setExcludeAdditionalClasses] = useState(false)
@@ -83,7 +84,7 @@ function AnalyticsContent() {
         s.continuous_pending_count.toString()
       ])
     ].map(row => row.join(',')).join('\n')
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -115,13 +116,13 @@ function AnalyticsContent() {
 
         <main className="flex-1 p-6 overflow-y-auto bg-gray-50/50">
           <div className="max-w-[1600px] mx-auto w-full space-y-6">
-            
+
             {/* Filters Section */}
             <Card className="rounded-[20px] shadow-sm border border-gray-100 bg-white p-7">
               <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">
                 PENDING CLASS FILTERS
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Threshold Selector */}
                 <div>
@@ -154,13 +155,12 @@ function AnalyticsContent() {
                   <button
                     onClick={() => setContinuousPendingOnly(!continuousPendingOnly)}
                     disabled={threshold < 3}
-                    className={`w-full px-4 py-3 rounded-xl text-sm font-bold transition-all ${
-                      threshold < 3
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : continuousPendingOnly
+                    className={`w-full px-4 py-3 rounded-xl text-sm font-bold transition-all ${threshold < 3
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : continuousPendingOnly
                         ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
                         : 'bg-white border-2 border-gray-200 text-gray-900 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     {continuousPendingOnly ? 'Enabled' : 'Disabled'}
                   </button>
@@ -173,11 +173,10 @@ function AnalyticsContent() {
                   </label>
                   <button
                     onClick={() => setExcludeAdditionalClasses(!excludeAdditionalClasses)}
-                    className={`w-full px-4 py-3 rounded-xl text-sm font-bold transition-all ${
-                      excludeAdditionalClasses
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
-                        : 'bg-white border-2 border-gray-200 text-gray-900 hover:border-gray-300'
-                    }`}
+                    className={`w-full px-4 py-3 rounded-xl text-sm font-bold transition-all ${excludeAdditionalClasses
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                      : 'bg-white border-2 border-gray-200 text-gray-900 hover:border-gray-300'
+                      }`}
                   >
                     {excludeAdditionalClasses ? 'Enabled' : 'Disabled'}
                   </button>
@@ -235,12 +234,11 @@ function AnalyticsContent() {
                 <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">
                   STUDENTS WITH PENDING CLASSES
                 </h3>
-                
+
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                   {/* Search Bar */}
-                  <div className={`flex items-center gap-2 transition-all duration-300 ${
-                    isSearchExpanded ? 'w-full sm:w-64' : 'w-auto'
-                  }`}>
+                  <div className={`flex items-center gap-2 transition-all duration-300 ${isSearchExpanded ? 'w-full sm:w-64' : 'w-auto'
+                    }`}>
                     {isSearchExpanded ? (
                       <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -286,11 +284,10 @@ function AnalyticsContent() {
                   <button
                     onClick={handleExport}
                     disabled={!analytics || filteredStudents.length === 0}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                      !analytics || filteredStudents.length === 0
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-gray-900 text-white hover:bg-black shadow-sm'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${!analytics || filteredStudents.length === 0
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-900 text-white hover:bg-black shadow-sm'
+                      }`}
                     title="Export to CSV"
                   >
                     <Download className="w-4 h-4" />
@@ -300,8 +297,8 @@ function AnalyticsContent() {
               </div>
 
               {isLoading ? (
-                <div className="py-12 flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <div className="overflow-x-auto">
+                  <TableSkeleton />
                 </div>
               ) : filteredStudents.length > 0 ? (
                 <>
@@ -325,8 +322,8 @@ function AnalyticsContent() {
                       </thead>
                       <tbody>
                         {filteredStudents.map((student) => (
-                          <tr 
-                            key={student.id} 
+                          <tr
+                            key={student.id}
                             className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors group"
                           >
                             <td className="py-4 px-4">
@@ -346,13 +343,12 @@ function AnalyticsContent() {
                               </span>
                             </td>
                             <td className="py-4 px-4 text-center">
-                              <span className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${
-                                student.pending_count >= 5
-                                  ? 'bg-red-50 text-red-600'
-                                  : student.pending_count >= 3
-                                  ? 'bg-amber-50 text-amber-600'
+                              <span className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${student.pending_count >= 5
+                                ? 'bg-red-600 text-white shadow-sm'
+                                : student.pending_count >= 3
+                                  ? 'bg-amber-500 text-white shadow-sm'
                                   : 'bg-gray-50 text-gray-600'
-                              }`}>
+                                }`}>
                                 {student.pending_count} Classes
                               </span>
                             </td>
@@ -444,16 +440,16 @@ function AnalyticsContent() {
                       <div>
                         <p className="text-sm font-bold text-gray-900">{cls.subject_name}</p>
                         <p className="text-xs text-gray-500 font-medium mt-1">
-                          {new Date(cls.scheduled_date).toLocaleDateString('en-US', { 
-                            weekday: 'short', 
-                            year: 'numeric', 
-                            month: 'short', 
-                            day: 'numeric' 
+                          {new Date(cls.scheduled_date).toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
                           })}
                         </p>
                       </div>
-                      <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold">
-                        {cls.completion_status}
+                      <span className="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold">
+                        {cls.completion_status.replace(/_/g, ' ').toUpperCase()}
                       </span>
                     </div>
                   ))}
@@ -469,11 +465,11 @@ function AnalyticsContent() {
                         <div>
                           <p className="text-sm font-bold text-gray-900">{cls.subject_name}</p>
                           <p className="text-xs text-gray-500 font-medium mt-1">
-                            {new Date(cls.class_date).toLocaleDateString('en-US', { 
-                              weekday: 'short', 
-                              year: 'numeric', 
-                              month: 'short', 
-                              day: 'numeric' 
+                            {new Date(cls.class_date).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
                             })}
                           </p>
                         </div>

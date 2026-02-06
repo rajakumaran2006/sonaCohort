@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Image from 'next/image'
-import { Search, X, Loader2, User, Mail, AlertCircle, Check, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, X, Loader2, User, Mail, AlertCircle, Plus, Trash2, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MicrosoftUser } from '@/lib/types'
 import { FacultyService } from '@/lib/services/facultyService'
@@ -34,7 +33,7 @@ export default function AddFacultyModal({
   const [searchResults, setSearchResults] = useState<MicrosoftUser[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [selectedUser, setSelectedUser] = useState<MicrosoftUser | null>(null)
-  
+
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +41,7 @@ export default function AddFacultyModal({
   // Options
   const years = ['2', '3', '4']
   const sections = ['A', 'B', 'C']
-  
+
   // Available subjects cache: Key = "year-section", Value = string[]
   const [availableSubjectsCache, setAvailableSubjectsCache] = useState<Record<string, string[]>>({})
   const [loadingSubjects, setLoadingSubjects] = useState<Set<string>>(new Set())
@@ -65,7 +64,7 @@ export default function AddFacultyModal({
 
     setIsSearching(true)
     setError(null)
-    
+
     try {
       const results = await FacultyService.searchAvailableUsers(searchQuery)
       setSearchResults(results)
@@ -112,7 +111,7 @@ export default function AddFacultyModal({
     setAssignments(prev => prev.filter(a => a.id !== id))
   }
 
-  const updateAssignment = (id: string, field: keyof Assignment, value: any) => {
+  const updateAssignment = (id: string, field: keyof Assignment, value: string) => {
     setAssignments(prev => prev.map(a => {
       if (a.id === id) {
         // If year or section changes, we need to clear subjects and re-fetch available subjects
@@ -163,7 +162,7 @@ export default function AddFacultyModal({
 
   const handleSubmit = async () => {
     if (!selectedUser) return
-    
+
     // Validate
     const invalid = assignments.some(a => !a.year || !a.section || a.subjects.length === 0)
     if (invalid) {
@@ -199,7 +198,7 @@ export default function AddFacultyModal({
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh] overflow-hidden border border-gray-100">
-        
+
         {/* Header */}
         <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
           <div>
@@ -207,7 +206,7 @@ export default function AddFacultyModal({
               {step === 'search' ? 'Add Faculty' : 'Assign Classes'}
             </h3>
             <p className="text-sm text-gray-500 mt-1 font-medium">
-               {step === 'search' ? 'Search for a user to add as faculty' : `Assigning to: ${selectedUser?.displayName}`}
+              {step === 'search' ? 'Search for a user to add as faculty' : `Assigning to: ${selectedUser?.displayName}`}
             </p>
           </div>
           <button
@@ -268,21 +267,21 @@ export default function AddFacultyModal({
                         onClick={() => handleSelectUser(user)}
                         className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left group"
                       >
-                         <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
-                             <User className="w-5 h-5" />
-                           </div>
-                           <div>
-                             <h4 className="font-semibold text-gray-900">{user.displayName}</h4>
-                             <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                               <Mail className="w-3.5 h-3.5" />
-                               {user.mail || user.userPrincipalName}
-                             </div>
-                           </div>
-                         </div>
-                         <div className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-300 group-hover:border-blue-500 group-hover:text-blue-500">
-                           <Plus className="w-5 h-5" />
-                         </div>
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                            <User className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">{user.displayName}</h4>
+                            <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                              <Mail className="w-3.5 h-3.5" />
+                              {user.mail || user.userPrincipalName}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-300 group-hover:border-blue-500 group-hover:text-blue-500">
+                          <Plus className="w-5 h-5" />
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -309,14 +308,14 @@ export default function AddFacultyModal({
               {assignments.map((assignment, index) => (
                 <div key={assignment.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm relative animate-in slide-in-from-bottom-2 fade-in duration-300">
                   <div className="flex justify-between items-start mb-4">
-                     <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wide">Assignment #{index + 1}</h4>
-                     {assignments.length > 1 && (
-                       <button onClick={() => removeAssignment(assignment.id)} className="text-gray-400 hover:text-red-500 transition-colors">
-                         <Trash2 className="w-4 h-4" />
-                       </button>
-                     )}
+                    <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wide">Assignment #{index + 1}</h4>
+                    {assignments.length > 1 && (
+                      <button onClick={() => removeAssignment(assignment.id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Year</label>
@@ -329,7 +328,7 @@ export default function AddFacultyModal({
                           <option value="">Select Year</option>
                           {years.map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
-                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                       </div>
                     </div>
                     <div>
@@ -343,44 +342,44 @@ export default function AddFacultyModal({
                           <option value="">Select Section</option>
                           {sections.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
-                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                       </div>
                     </div>
                   </div>
 
                   <div>
-                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Subjects</label>
-                     {assignment.year && assignment.section ? (
-                       loadingSubjects.has(`${assignment.year}-${assignment.section}`) ? (
-                         <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
-                           <Loader2 className="w-4 h-4 animate-spin" /> Loading subjects...
-                         </div>
-                       ) : (availableSubjectsCache[`${assignment.year}-${assignment.section}`] || []).length > 0 ? (
-                         <div className="flex flex-wrap gap-2">
-                           {(availableSubjectsCache[`${assignment.year}-${assignment.section}`] || []).map(subject => {
-                             const isSelected = assignment.subjects.includes(subject)
-                             return (
-                               <button
-                                 key={subject}
-                                 onClick={() => toggleSubject(assignment.id, subject)}
-                                 className={cn(
-                                   "px-3 py-1.5 text-sm font-medium rounded-lg border transition-all duration-200",
-                                   isSelected 
-                                     ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm" 
-                                     : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                                 )}
-                               >
-                                 {subject}
-                               </button>
-                             )
-                           })}
-                         </div>
-                       ) : (
-                         <p className="text-sm text-gray-400 italic">No subjects found for this class.</p>
-                       )
-                     ) : (
-                       <p className="text-sm text-gray-400 italic">Select Year and Section to view subjects</p>
-                     )}
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Subjects</label>
+                    {assignment.year && assignment.section ? (
+                      loadingSubjects.has(`${assignment.year}-${assignment.section}`) ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Loading subjects...
+                        </div>
+                      ) : (availableSubjectsCache[`${assignment.year}-${assignment.section}`] || []).length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {(availableSubjectsCache[`${assignment.year}-${assignment.section}`] || []).map(subject => {
+                            const isSelected = assignment.subjects.includes(subject)
+                            return (
+                              <button
+                                key={subject}
+                                onClick={() => toggleSubject(assignment.id, subject)}
+                                className={cn(
+                                  "px-3 py-1.5 text-sm font-medium rounded-lg border transition-all duration-200",
+                                  isSelected
+                                    ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm"
+                                    : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                                )}
+                              >
+                                {subject}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400 italic">No subjects found for this class.</p>
+                      )
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">Select Year and Section to view subjects</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -398,32 +397,32 @@ export default function AddFacultyModal({
 
         {/* Footer */}
         <div className="px-8 py-5 border-t border-gray-100 bg-white shrink-0 flex justify-between items-center">
-           {step === 'assign' && (
-             <button 
-               onClick={() => setStep('search')}
-               className="text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors"
-             >
-               Back to Search
-             </button>
-           )}
-           <div className={cn("flex gap-3", step === 'search' && "ml-auto")}>
-             <button
-                onClick={onClose}
-                className="px-6 py-2.5 text-sm font-medium text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-all"
-             >
-               Cancel
-             </button>
-             {step === 'assign' && (
-               <button
-                 onClick={handleSubmit}
-                 disabled={isSubmitting}
-                 className="px-6 py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-gray-200 transition-all flex items-center gap-2"
-               >
-                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                 Confirm & Add
-               </button>
-             )}
-           </div>
+          {step === 'assign' && (
+            <button
+              onClick={() => setStep('search')}
+              className="text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors"
+            >
+              Back to Search
+            </button>
+          )}
+          <div className={cn("flex gap-3", step === 'search' && "ml-auto")}>
+            <button
+              onClick={onClose}
+              className="px-6 py-2.5 text-sm font-medium text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-all"
+            >
+              Cancel
+            </button>
+            {step === 'assign' && (
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="px-6 py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-gray-200 transition-all flex items-center gap-2"
+              >
+                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Confirm & Add
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

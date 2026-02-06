@@ -20,7 +20,7 @@ export class FacultyService {
   static async updateFacultySettings(facultyId: string, settings: Partial<FacultyDepartment>): Promise<boolean> {
     try {
       const supabase = createClient()
-      
+
       const { error } = await supabase
         .from('departments')
         .update(settings)
@@ -52,7 +52,7 @@ export class FacultyService {
 
       const supabase = supabaseClient || createClient()
       const normalizedEmail = email.trim().toLowerCase()
-      
+
       // First, check if the departments table exists and is accessible
       try {
         const { error } = await supabase
@@ -65,13 +65,13 @@ export class FacultyService {
           logger.info('Full error object:', error)
           return null
         }
-        
+
         logger.info('Departments table is accessible, proceeding with faculty verification')
       } catch (tableError) {
         logger.info('Departments table check failed:', tableError)
         return null
       }
-      
+
       // Query the departments table to find a match (case-insensitive, trimmed)
       const { data, error } = await supabase
         .from('departments')
@@ -139,7 +139,7 @@ export class FacultyService {
   static async getFacultyDepartment(facultyId: string): Promise<FacultyDepartment | null> {
     try {
       const supabase = createClient()
-      
+
       const { data, error } = await supabase
         .from('departments')
         .select('*')
@@ -165,7 +165,7 @@ export class FacultyService {
   static async getAllDepartments(): Promise<FacultyDepartment[]> {
     try {
       const supabase = createClient()
-      
+
       const { data, error } = await supabase
         .from('departments')
         .select('*')
@@ -322,7 +322,7 @@ export class FacultyService {
       return []
     }
   }
-  
+
   /**
    * Get all faculty members (Incharge view)
    */ 
@@ -426,52 +426,52 @@ export class FacultyService {
     user: import('@/lib/types').MicrosoftUser
     dept: string
     assignments: {
-        year: string
-        section: string
-        subjects: string[]
+      year: string
+      section: string
+      subjects: string[]
     }[]
   }): Promise<boolean> {
-      try {
-          const supabase = createClient()
-          logger.info('Assigning faculty:', data)
+    try {
+      const supabase = createClient()
+      logger.info('Assigning faculty:', data)
 
-          const recordsToInsert = []
+      const recordsToInsert = []
 
-          for (const assignment of data.assignments) {
-              for (const subject of assignment.subjects) {
-                  recordsToInsert.push({
-                      faculty_name: data.user.displayName || data.user.givenName || 'Unknown Faculty',
-                      faculty_email: data.user.mail || data.user.userPrincipalName,
-                      faculty_id: data.user.id,
-                      dept: data.dept, // Use actual department from input
-                      year: assignment.year,
-                      section: assignment.section,
-                      subject_name: subject,
-                      created_at: new Date().toISOString()
-                  })
-              }
-          }
-
-          if (recordsToInsert.length === 0) {
-              logger.warn('No assignments to insert')
-              return true
-          }
-
-          const { error } = await supabase
-              .from('faculty_allocations')
-              .insert(recordsToInsert)
-
-          if (error) {
-              logger.error('Error inserting faculty allocations:', error)
-              return false
-          }
-
-          logger.info(`Successfully assigned ${recordsToInsert.length} allocations for ${data.user.displayName}`)
-          return true
-      } catch (e) {
-          logger.error('Error assigning faculty:', e)
-          return false
+      for (const assignment of data.assignments) {
+        for (const subject of assignment.subjects) {
+          recordsToInsert.push({
+            faculty_name: data.user.displayName || data.user.givenName || 'Unknown Faculty',
+            faculty_email: data.user.mail || data.user.userPrincipalName,
+            faculty_id: data.user.id,
+            dept: data.dept, // Use actual department from input
+            year: assignment.year,
+            section: assignment.section,
+            subject_name: subject,
+            created_at: new Date().toISOString()
+          })
+        }
       }
+
+      if (recordsToInsert.length === 0) {
+        logger.warn('No assignments to insert')
+        return true
+      }
+
+      const { error } = await supabase
+        .from('faculty_allocations')
+        .insert(recordsToInsert)
+
+      if (error) {
+        logger.error('Error inserting faculty allocations:', error)
+        return false
+      }
+
+      logger.info(`Successfully assigned ${recordsToInsert.length} allocations for ${data.user.displayName}`)
+      return true
+    } catch (e) {
+      logger.error('Error assigning faculty:', e)
+      return false
+    }
   }
 
   /**

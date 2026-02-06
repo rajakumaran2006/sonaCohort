@@ -64,7 +64,7 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
 
           subject.columns.forEach(col => {
             const status = student.attendance[col.id];
-            row.push(status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : '-')
+            row.push(status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : status === 'upcoming' ? 'U' : '-')
           })
 
           row.push(student.stats.present, `${student.stats.percentage}%`)
@@ -200,7 +200,7 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
                         const status = student.attendance[col.id];
                         return (
                           <td key={`${student.student_id}-${col.id}`} className="border border-gray-800 p-2 text-center text-xs">
-                            {status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : ''}
+                            {status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : status === 'upcoming' ? 'U' : ''}
                           </td>
                         )
                       })}
@@ -257,7 +257,7 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
                               {formattedDate} <span className="text-gray-400 font-medium">({col.is_additional ? 'A' : 'R'})</span>
                             </span>
                             <span className="text-xs font-black text-gray-900">
-                              {status === 'present' ? 'P' : status === 'absent' ? 'Ab' : status === 'on_duty' ? 'OD' : '-'}
+                              {status === 'present' ? 'P' : status === 'absent' ? 'Ab' : status === 'on_duty' ? 'OD' : status === 'upcoming' ? 'U' : '-'}
                             </span>
                           </div>
                         )
