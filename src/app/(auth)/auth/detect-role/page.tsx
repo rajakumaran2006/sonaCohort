@@ -72,7 +72,8 @@ function DetectRoleContent() {
 
         // If user has multiple roles, redirect to role selection page
         setStatus('Multiple roles detected, showing selection...')
-        router.push(`/auth/select-role?roles=${roles.join(',')}`)
+        const pathsParam = encodeURIComponent(JSON.stringify(dashboardPaths))
+        router.push(`/auth/select-role?roles=${roles.join(',')}&paths=${pathsParam}`)
 
       } catch (error) {
         logger.error('Error detecting roles:', error)

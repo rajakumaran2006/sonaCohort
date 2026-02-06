@@ -110,7 +110,7 @@ export class MicrosoftGraphService {
       const filterQuery = `startsWith(displayName,'${sanitizedQuery}') or startsWith(mail,'${sanitizedQuery}') or startsWith(userPrincipalName,'${sanitizedQuery}')`
       
       params.append('$filter', filterQuery)
-      params.append('$select', 'id,displayName,mail,userPrincipalName')
+      params.append('$select', 'id,displayName,mail,userPrincipalName,givenName,surname')
       params.append('$top', '10')
       params.append('$count', 'true')
       
@@ -154,7 +154,7 @@ export class MicrosoftGraphService {
       }
 
       const response = await fetch(
-        `https://graph.microsoft.com/v1.0/users/${userId}?$select=id,displayName,mail,userPrincipalName`,
+        `https://graph.microsoft.com/v1.0/users/${userId}?$select=id,displayName,mail,userPrincipalName,givenName,surname`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -184,7 +184,7 @@ export class MicrosoftGraphService {
 
       // Search for user by email
       const response = await fetch(
-        `https://graph.microsoft.com/v1.0/users?$filter=mail eq '${email}' or userPrincipalName eq '${email}'&$select=id,displayName,mail,userPrincipalName`,
+        `https://graph.microsoft.com/v1.0/users?$filter=mail eq '${email}' or userPrincipalName eq '${email}'&$select=id,displayName,mail,userPrincipalName,givenName,surname`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,

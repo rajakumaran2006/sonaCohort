@@ -44,6 +44,19 @@ export class RoleDetectionService {
       } catch {
         // console.log('Faculty check failed:', error)
       }
+      
+      // If not added as department faculty, check individual faculty
+      if (!roles.includes('faculty')) {
+        try {
+           const isIndividual = await FacultyService.isFacultyMember(email, supabaseClient)
+           if (isIndividual) {
+             roles.push('faculty')
+             dashboardPaths.faculty = '/faculty-portal/dashboard'
+           }
+        } catch {
+           // Ignore error
+        }
+      }
 
       // Check Admin (second priority)
       try {

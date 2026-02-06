@@ -12,6 +12,8 @@ export interface MicrosoftUser {
   displayName: string
   mail: string
   userPrincipalName: string
+  givenName?: string
+  surname?: string
 }
 
 export interface CreateDepartmentData {
