@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger'
 
 type UserRole = 'admin' | 'faculty' | 'peer' | 'student'
 
-const dashboardPaths: Record<UserRole, string> = {
+const DEFAULT_DASHBOARD_PATHS: Record<UserRole, string> = {
   admin: '/admin/dashboard',
   faculty: '/faculty/dashboard',
   peer: '/peer/dashboard',
@@ -23,10 +23,22 @@ function SelectRoleContent() {
   const [isTransitioning, setIsTransitioning] = useState(false)
 
   const rolesParam = searchParams.get('roles')
+  const pathsParam = searchParams.get('paths')
+
   const roles = useMemo(() => 
     rolesParam ? rolesParam.split(',') as UserRole[] : [], 
     [rolesParam]
   )
+
+  const dynamicPaths = useMemo(() => {
+    if (!pathsParam) return {}
+    try {
+      return JSON.parse(decodeURIComponent(pathsParam))
+    } catch (e) {
+      logger.error('Error parsing dashboard paths:', e)
+      return {}
+    }
+  }, [pathsParam])
 
   useEffect(() => {
     // If no roles or not authenticated, redirect to login
@@ -50,8 +62,8 @@ function SelectRoleContent() {
       })
 
       // Redirect to the appropriate dashboard
-      const dashboardPath = dashboardPaths[role]
-      router.push(dashboardPath)
+      // Use dynamic path if available, otherwise fall back to default
+      const dashboardPath = dynamicPaths[role] || DEFAULT_DASHBOARD_PATHS[role]
       router.push(dashboardPath)
     } catch (error) {
       logger.error('Error setting role:', error)

@@ -7,10 +7,11 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService } from '@/lib/services/facultyService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Search, Plus, User, Mail, School } from 'lucide-react'
+import { Search, Plus, User, Mail, School, BookOpen, Loader2, Trash } from 'lucide-react'
 import Image from 'next/image'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import AddFacultyModal from '@/components/forms/modals/AddFacultyModal'
+import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
@@ -35,7 +36,11 @@ function FacultyManageContent() {
 
   // Modal State
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [departmentName, setDepartmentName] = useState('')
+  
+  // Selection State
+  const [selectedFaculty, setSelectedFaculty] = useState<string[]>([])
 
   // Load Data
   useEffect(() => {
@@ -67,6 +72,50 @@ function FacultyManageContent() {
       f.email?.toLowerCase().includes(q)
     )
   })
+
+  // Selection Handlers
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedFaculty(filteredFaculty.map(f => f.email))
+    } else {
+      setSelectedFaculty([])
+    }
+  }
+
+  const handleSelectOne = (email: string) => {
+    if (selectedFaculty.includes(email)) {
+      setSelectedFaculty(selectedFaculty.filter(e => e !== email))
+    } else {
+      setSelectedFaculty([...selectedFaculty, email])
+    }
+  }
+
+  const handleDelete = async () => {
+    setLoading(true)
+    try {
+      const success = await FacultyService.deleteFaculty(selectedFaculty)
+      if (success) {
+        // Remove deleted faculty from local state
+        setFaculty(prev => prev.filter(f => !selectedFaculty.includes(f.email)))
+        setSelectedFaculty([])
+        setShowDeleteModal(false)
+      }
+    } catch (error) {
+      logger.error('Error deleting faculty', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getItemsToDelete = () => {
+    return selectedFaculty.map(email => {
+      const f = faculty.find(item => item.email === email)
+      return {
+        name: f?.name || 'Unknown Faculty',
+        email: email
+      }
+    })
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -120,7 +169,7 @@ function FacultyManageContent() {
             </div>
           </div>
 
-          {/* Table */}
+             {/* Table Content */}
           {loading ? (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <TableSkeleton />
@@ -202,6 +251,7 @@ function FacultyManageContent() {
               )}
             </div>
           )}
+          </div>
         </main>
       </div>
 
@@ -214,6 +264,16 @@ function FacultyManageContent() {
           window.location.reload() // Simple reload for now
         }}
         dept={departmentName}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        title="Delete Faculty"
+        itemsToDelete={getItemsToDelete()}
+        type="faculty"
+        isLoading={loading}
       />
     </div>
   )

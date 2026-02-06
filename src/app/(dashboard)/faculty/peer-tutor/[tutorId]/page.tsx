@@ -9,12 +9,13 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { StudentService, Student } from '@/lib/services/studentService'
 import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
+import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
 import { RenumerationService, peertutorsRenumeration } from '@/lib/services/renumerationService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Card } from '@/components/ui'
-import {
-  Calendar,
-  CheckCircle,
+import PeerTutorClassLogs from '@/components/features/classes/PeerTutorClassLogs'
+import { 
+  CheckCircle, 
   ChevronLeft,
   Mail,
   GraduationCap,
@@ -57,7 +58,8 @@ function PeerTutorsProfileContent() {
 
   const [peertutors, setpeertutors] = useState<peertutors | null>(null)
   const [assignedStudents, setAssignedStudents] = useState<Student[]>([])
-  const [, setScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
+  const [scheduledClasses, setScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
+  const [additionalClasses, setAdditionalClasses] = useState<AdditionalClassWithAttendance[]>([])
   const [renumerations, setRenumerations] = useState<peertutorsRenumeration[]>([])
   const [stats, setStats] = useState<peerTutortats>({
     totalClasses: 0,
@@ -97,6 +99,10 @@ function PeerTutorsProfileContent() {
           tutorData.section
         )
         setScheduledClasses(classes)
+
+        // Get additional classes for this peer tutor
+        const addClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutorData.id)
+        setAdditionalClasses(addClasses)
 
         // Get renumeration data for this peer tutor
         const renumerationData = await RenumerationService.getpeertutorsRenumeration(tutorId)
@@ -292,6 +298,15 @@ function PeerTutorsProfileContent() {
                   </div>
                 </Card>
               </div>
+            </div>
+
+            {/* Class Logs Section */}
+            <div className="w-full">
+               <PeerTutorClassLogs 
+                  scheduledClasses={scheduledClasses}
+                  additionalClasses={additionalClasses}
+                  loading={loading}
+               />
             </div>
 
             {/* Content Row: Renumeration & Students */}

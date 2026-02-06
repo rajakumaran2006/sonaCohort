@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
-
 export interface FacultyDepartment {
   id: string
   name: string
@@ -12,7 +11,6 @@ export interface FacultyDepartment {
   admin_email?: string
   is_class_link_mandatory?: boolean
 }
-
 export class FacultyService {
   /**
    * Update faculty department settings
@@ -193,10 +191,123 @@ export class FacultyService {
   static async hasFacultyAccess(email: string): Promise<boolean> {
     try {
       const department = await this.verifyFacultyAccess(email)
-      return department !== null
+      if (department) return true
+      
+      // Also check individual faculty allocations
+      return await this.isFacultyMember(email)
     } catch (error) {
       logger.error('Error checking faculty access:', error)
       return false
+    }
+  }
+
+  /**
+   * Check if user is an individual faculty member (in faculty_allocations)
+   * @param email User's email
+   */
+  static async isFacultyMember(email: string, supabaseClient?: SupabaseClient): Promise<boolean> {
+    try {
+      const supabase = supabaseClient || createClient()
+      
+      const { data, error } = await supabase
+        .from('faculty_allocations')
+        .select('id')
+        .ilike('faculty_email', email.trim())
+        .limit(1)
+        .single()
+      
+      if (error && error.code !== 'PGRST116') {
+         logger.error('Error checking individual faculty status:', error)
+         return false
+      }
+
+      return !!data
+    } catch (error) {
+      logger.error('Error in isFacultyMember:', error)
+      return false
+    }
+  }
+
+  /**
+   * Get assignments for an individual faculty member
+   * @param email User's email
+   */
+  static async getIndividualAssignments(email: string): Promise<any[]> {
+      try {
+          const supabase = createClient()
+          
+          // Use ilike for case-insensitive email matching
+          const { data, error } = await supabase
+              .from('faculty_allocations')
+              .select('*')
+              .ilike('faculty_email', email.trim())
+              
+          if (error) {
+              logger.error('Error fetching faculty assignments:', error)
+              return []
+          }
+          
+          return data || []
+      } catch (error) {
+          logger.error('Error in getIndividualAssignments:', error)
+          return []
+      }
+  }
+
+  /**
+   * Get dashboard statistics for a faculty member
+   * Returns assignments with peer tutor count and completion percentage
+   */
+  static async getDashboardStats(email: string): Promise<any[]> {
+    try {
+      const supabase = createClient()
+      const assignments = await this.getIndividualAssignments(email)
+
+      if (!assignments.length) return []
+
+      // For each assignment, fetch stats from scheduled_classes
+      const statsPromises = assignments.map(async (assignment) => {
+        // Query scheduled_classes for this specific assignment (subject, dept, year, section)
+        // We use the faculty_id if available, but filtering by subject/section is safer given the data model
+        const { data: classes, error } = await supabase
+          .from('scheduled_classes')
+          .select('peer_tutor_id, completion_status, attendance_completed, topics_completed')
+          .eq('dept', assignment.dept)
+          .eq('year', assignment.year)
+          .eq('section', assignment.section)
+          .eq('subject_name', assignment.subject_name) // Assuming subject_name matches
+        
+        if (error) {
+          logger.error(`Error fetching stats for ${assignment.subject_name}:`, error)
+          return {
+            ...assignment,
+            peerTutorsCount: 0,
+            completionPercentage: 0
+          }
+        }
+
+        const uniqueTutors = new Set(classes.map(c => c.peer_tutor_id).filter(Boolean))
+        const totalClasses = classes.length
+        const completedClasses = classes.filter(c => 
+          c.completion_status === 'completed' || 
+          (c.attendance_completed && c.topics_completed)
+        ).length
+
+        const completionPercentage = totalClasses > 0 
+          ? Math.round((completedClasses / totalClasses) * 100) 
+          : 0
+
+        return {
+          ...assignment,
+          peerTutorsCount: uniqueTutors.size,
+          completionPercentage
+        }
+      })
+
+      return await Promise.all(statsPromises)
+    } catch (error) {
+      logger.error('Error in getDashboardStats:', error)
+      return []
     }
   }
 
@@ -214,79 +325,103 @@ export class FacultyService {
 
   /**
    * Get all faculty members (Incharge view)
+   */ 
+   /**
+   * Get all faculty members (Incharge view)
+   */ 
+  /**
+   * Get a specific faculty allocation by ID
+   * @param allocationId Allocation ID
    */
-  static async getAllFaculty(deptName?: string): Promise<{
-    name: string
-    email: string
-    subjects: string[]
-    totalClasses: number
-    assignments: any[]
-  }[]> {
-    try {
-      const supabase = createClient()
-
-      let query = supabase
-        .from('faculty_allocations')
-        .select('*')
-
-      // Filter by department if provided
-      if (deptName) {
-        query = query.eq('dept', deptName)
+  static async getFacultyAllocationById(allocationId: string): Promise<any | null> {
+      try {
+          const supabase = createClient()
+          
+          const { data, error } = await supabase
+              .from('faculty_allocations')
+              .select('*')
+              .eq('id', allocationId)
+              .single()
+              
+          if (error) {
+              logger.error('Error fetching faculty allocation:', error)
+              return null
+          }
+          
+          return data
+      } catch (error) {
+          logger.error('Error in getFacultyAllocationById:', error)
+          return null
       }
+  }
 
-      const { data, error } = await query
+  static async getAllFaculty(deptName?: string): Promise<any[]> {
+     try {
+       const supabase = createClient()
+       
+       let query = supabase
+         .from('faculty_allocations')
+         .select('*')
+       
+       // Filter by department if provided
+       if (deptName) {
+         query = query.eq('dept', deptName)
+       }
 
-      if (error) {
-        logger.error('Error getting all faculty:', error)
-        return []
-      }
+       const { data, error } = await query
 
-      if (!data) return []
+       if (error) {
+         logger.error('Error getting all faculty:', error)
+         return []
+       }
 
-      // Aggregate data by faculty_email
-      const facultyMap = new Map<string, {
-        name: string
-        email: string
-        subjects: Set<string>
-        totalClasses: number
-        assignments: any[]
-      }>()
+       if (!data) return []
 
-      data.forEach(allocation => {
-        const email = allocation.faculty_email
-        if (!facultyMap.has(email)) {
-          facultyMap.set(email, {
-            name: allocation.faculty_name,
-            email: allocation.faculty_email,
-            subjects: new Set(),
-            totalClasses: 0,
-            assignments: []
-          })
-        }
+       // Aggregate data by faculty_email
+       const facultyMap = new Map<string, {
+         name: string
+         email: string
+         subjects: Set<string>
+         totalClasses: number
+         assignments: any[]
+       }>()
 
-        const faculty = facultyMap.get(email)!
-        faculty.subjects.add(allocation.subject_name)
-        faculty.totalClasses++
-        faculty.assignments.push(allocation)
-      })
+       data.forEach(allocation => {
+         const email = allocation.faculty_email
+         if (!facultyMap.has(email)) {
+           facultyMap.set(email, {
+             name: allocation.faculty_name,
+             email: allocation.faculty_email,
+             subjects: new Set(),
+             totalClasses: 0,
+             assignments: []
+           })
+         }
 
-      // Convert map to array and format for UI
-      return Array.from(facultyMap.values()).map(f => ({
-        name: f.name,
-        email: f.email,
-        subjects: Array.from(f.subjects),
-        totalClasses: f.totalClasses,
-        assignments: f.assignments
-      }))
-    } catch (error) {
-      logger.error('Error in getAllFaculty:', error)
-      return []
-    }
+         const faculty = facultyMap.get(email)!
+         faculty.subjects.add(allocation.subject_name)
+         faculty.totalClasses++
+         faculty.assignments.push(allocation)
+       })
+
+       // Convert map to array and format for UI
+       return Array.from(facultyMap.values()).map(f => ({
+         name: f.name,
+         email: f.email,
+         subjects: Array.from(f.subjects),
+         totalClasses: f.totalClasses,
+         assignments: f.assignments
+       }))
+     } catch (error) {
+       logger.error('Error in getAllFaculty:', error)
+       return []
+     }
   }
 
   /**
     * Assign faculty to classes/sections
     */
+
   static async assignFaculty(data: {
     user: import('@/lib/types').MicrosoftUser
     dept: string
@@ -335,6 +470,36 @@ export class FacultyService {
       return true
     } catch (e) {
       logger.error('Error assigning faculty:', e)
+      return false
+    }
+  }
+
+  /**
+   * Delete faculty members (remove all their allocations)
+   * @param emails List of faculty emails to delete
+   */
+  static async deleteFaculty(emails: string[]): Promise<boolean> {
+    try {
+      if (!emails || emails.length === 0) return true
+
+      const supabase = createClient()
+      
+      logger.info('Attempting to delete faculty allocations for emails:', emails)
+
+      const { error, count } = await supabase
+        .from('faculty_allocations')
+        .delete({ count: 'exact' })
+        .in('faculty_email', emails)
+
+      if (error) {
+        logger.error('Error deleting faculty:', error)
+        return false
+      }
+
+      logger.info(`Successfully deleted ${count} faculty allocation records`)
+      return true
+    } catch (error) {
+      logger.error('Error in deleteFaculty:', error)
       return false
     }
   }
