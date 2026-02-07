@@ -5,7 +5,6 @@ import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
 import { 
   Calendar, 
-  CheckCircle, 
   Clock, 
   Users, 
   ExternalLink,

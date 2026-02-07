@@ -3,7 +3,7 @@
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter } from 'next/navigation'
 import { logger } from '@/lib/logger'
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 
@@ -16,7 +16,7 @@ export default function IndividualFacultyProtectedRoute({ children }: Individual
   const router = useRouter()
   
   // Use React Query to check if user is an individual faculty member
-  const { data: isFaculty, isLoading: isVerifying, error } = useQuery({
+  const { data: isFaculty, isLoading: isVerifying } = useQuery({
     queryKey: ['individual-faculty-auth', user?.email],
     queryFn: async () => {
       if (!user?.email) return false

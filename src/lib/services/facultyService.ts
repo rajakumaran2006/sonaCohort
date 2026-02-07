@@ -11,6 +11,31 @@ export interface FacultyDepartment {
   admin_email?: string
   is_class_link_mandatory?: boolean
 }
+export interface FacultyAllocation {
+  id: string
+  faculty_name: string
+  faculty_email: string
+  faculty_id: string
+  dept: string
+  year: string
+  section: string
+  subject_name: string
+  created_at: string
+}
+
+export interface FacultyDashboardStat extends FacultyAllocation {
+  peerTutorsCount: number
+  completionPercentage: number
+}
+
+export interface FacultySummary {
+  name: string
+  email: string
+  subjects: string[]
+  totalClasses: number
+  assignments: FacultyAllocation[]
+}
+
 export class FacultyService {
   /**
    * Update faculty department settings
@@ -232,7 +257,7 @@ export class FacultyService {
    * Get assignments for an individual faculty member
    * @param email User's email
    */
-  static async getIndividualAssignments(email: string): Promise<any[]> {
+  static async getIndividualAssignments(email: string): Promise<FacultyAllocation[]> {
       try {
           const supabase = createClient()
           
@@ -247,7 +272,7 @@ export class FacultyService {
               return []
           }
           
-          return data || []
+          return (data as FacultyAllocation[]) || []
       } catch (error) {
           logger.error('Error in getIndividualAssignments:', error)
           return []
@@ -258,7 +283,7 @@ export class FacultyService {
    * Get dashboard statistics for a faculty member
    * Returns assignments with peer tutor count and completion percentage
    */
-  static async getDashboardStats(email: string): Promise<any[]> {
+  static async getDashboardStats(email: string): Promise<FacultyDashboardStat[]> {
     try {
       const supabase = createClient()
       const assignments = await this.getIndividualAssignments(email)
@@ -333,7 +358,7 @@ export class FacultyService {
    * Get a specific faculty allocation by ID
    * @param allocationId Allocation ID
    */
-  static async getFacultyAllocationById(allocationId: string): Promise<any | null> {
+  static async getFacultyAllocationById(allocationId: string): Promise<FacultyAllocation | null> {
       try {
           const supabase = createClient()
           
@@ -348,14 +373,16 @@ export class FacultyService {
               return null
           }
           
-          return data
+          return data as FacultyAllocation
       } catch (error) {
           logger.error('Error in getFacultyAllocationById:', error)
           return null
       }
   }
 
-  static async getAllFaculty(deptName?: string): Promise<any[]> {
+
+
+  static async getAllFaculty(deptName?: string): Promise<FacultySummary[]> {
      try {
        const supabase = createClient()
        
@@ -383,10 +410,10 @@ export class FacultyService {
          email: string
          subjects: Set<string>
          totalClasses: number
-         assignments: any[]
+         assignments: FacultyAllocation[]
        }>()
 
-       data.forEach(allocation => {
+       data.forEach((allocation: FacultyAllocation) => {
          const email = allocation.faculty_email
          if (!facultyMap.has(email)) {
            facultyMap.set(email, {

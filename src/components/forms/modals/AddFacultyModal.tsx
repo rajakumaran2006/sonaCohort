@@ -186,7 +186,7 @@ export default function AddFacultyModal({
       } else {
         setError('Failed to assign faculty. Please try again.')
       }
-    } catch (e) {
+    } catch {
       setError('An error occurred during submission.')
     } finally {
       setIsSubmitting(false)

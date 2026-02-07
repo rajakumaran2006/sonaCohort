@@ -3,11 +3,11 @@
 import React, { useState, useEffect } from 'react'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
-import { useRouter } from 'next/navigation'
+
 import { useAuth } from '@/lib/auth/AuthContext'
-import { FacultyService } from '@/lib/services/facultyService'
+import { FacultyService, FacultySummary } from '@/lib/services/facultyService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Search, Plus, User, Mail, School, BookOpen, Loader2, Trash } from 'lucide-react'
+import { Search, Plus, User, Mail, School } from 'lucide-react'
 import Image from 'next/image'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import AddFacultyModal from '@/components/forms/modals/AddFacultyModal'
@@ -24,13 +24,12 @@ export default function FacultyManagePage() {
 }
 
 function FacultyManageContent() {
-  const router = useRouter()
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
   // Data State
-  const [faculty, setFaculty] = useState<any[]>([])
+  const [faculty, setFaculty] = useState<FacultySummary[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -74,21 +73,7 @@ function FacultyManageContent() {
   })
 
   // Selection Handlers
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedFaculty(filteredFaculty.map(f => f.email))
-    } else {
-      setSelectedFaculty([])
-    }
-  }
 
-  const handleSelectOne = (email: string) => {
-    if (selectedFaculty.includes(email)) {
-      setSelectedFaculty(selectedFaculty.filter(e => e !== email))
-    } else {
-      setSelectedFaculty([...selectedFaculty, email])
-    }
-  }
 
   const handleDelete = async () => {
     setLoading(true)
@@ -251,7 +236,7 @@ function FacultyManageContent() {
               )}
             </div>
           )}
-          </div>
+
         </main>
       </div>
 

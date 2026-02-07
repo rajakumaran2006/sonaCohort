@@ -6,9 +6,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import PageHeader from '@/components/layout/PageHeader'
-import { Card } from '@/components/ui'
-import { BookOpen, Users, ArrowRight, Calendar, Clock } from 'lucide-react'
-import { FacultyDashboardSkeleton } from '@/components/skeletons/FacultyDashboardSkeleton'
+import { BookOpen, Users, ArrowRight, Calendar } from 'lucide-react'
 
 export default function FacultyPortalDashboard() {
   const { user } = useAuth()
@@ -134,7 +132,7 @@ export default function FacultyPortalDashboard() {
                     </div>
                     <h3 className="text-lg font-bold text-gray-900 mb-1">No Assigned Subjects</h3>
                     <p className="text-gray-500 text-sm max-w-sm text-center">
-                        You don't have any subjects assigned to you yet. Please contact your department head.
+                        You don&apos;t have any subjects assigned to you yet. Please contact your department head.
                     </p>
                 </div>
             )}

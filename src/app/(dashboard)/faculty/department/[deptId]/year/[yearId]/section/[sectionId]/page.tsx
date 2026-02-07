@@ -1658,7 +1658,7 @@ interface SubjectAttendanceData {
     studentName: string
     studentId: string
     hour: number
-    dateAttendance: { [date: string]: 'P' | 'A' | '' }
+    dateAttendance: { [date: string]: 'P' | 'A' | 'U' | '' }
     totalHoursPresent: number
     attendancePercentage: number
   }[]
@@ -1752,7 +1752,7 @@ function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack }: Peertuto
 
         // Process each student
         const studentRows = students.map((student, studentIdx) => {
-          const dateAttendance: { [date: string]: 'P' | 'A' | '' } = {}
+          const dateAttendance: { [date: string]: 'P' | 'A' | 'U' | '' } = {}
           let totalHoursPresent = 0
           let totalHours = 0
 
@@ -2260,7 +2260,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
           })
         } else {
           subjectMap.forEach((classes, subjectName) => {
-            const dateAttendance: { [date: string]: 'P' | 'A' | '' } = {}
+            const dateAttendance: { [date: string]: 'P' | 'A' | 'U' | '' } = {}
             let totalHoursPresent = 0
             let totalHours = 0
 
@@ -5234,7 +5234,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
 
               if (scheduledDateStr > todayStr) {
                 attendanceStatus = 'upcoming'
-              } else if (completionStatus === 'completed') {
+              } else if (sc.completion_status === 'completed') {
                 attendanceStatus = hasAttendanceRecord ? 'present' : 'absent'
               }
 
@@ -5244,7 +5244,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                 'Peer Tutor Name': peertutors.name,
                 'Peer Tutor Email': peertutors.email,
                 'Attendance Status': attendanceStatus === 'upcoming' ? 'U' : attendanceStatus.charAt(0).toUpperCase() + attendanceStatus.slice(1),
-                'Completion Status': completionStatus,
+                'Completion Status': sc.completion_status,
                 'Department': dept,
                 'Year': year,
                 'Section': section

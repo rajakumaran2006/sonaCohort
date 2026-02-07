@@ -39,12 +39,10 @@ interface PeerTutorClassStatus {
 
 export default function ClassDetailsPage() {
   const params = useParams()
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  const [loading] = useState(true)
-  const [classDetails] = useState<ClassDetails | null>(null)
-  const [peerTutors] = useState<PeerTutorClassStatus[]>([])
-  const [expandedRows] = useState<Set<string>>(new Set())
-  /* eslint-enable @typescript-eslint/no-unused-vars */
+  const [loading, setLoading] = useState(true)
+  const [classDetails, setClassDetails] = useState<ClassDetails | null>(null)
+  const [peerTutors, setPeerTutors] = useState<PeerTutorClassStatus[]>([])
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const deptId = decodeURIComponent(params.deptId as string)
   const yearId = decodeURIComponent(params.yearId as string)
@@ -65,13 +63,30 @@ export default function ClassDetailsPage() {
 
     // ... existing loadData code ...
     const loadData = async () => {
-      // ...
+      try {
+        setLoading(true)
+        // Mock data loading
+        setClassDetails({
+          id: classId,
+          subject_name: 'Mock Subject',
+          scheduled_date: dateStr
+        })
+        setPeerTutors([]) // Empty for now
+      } finally {
+        setLoading(false)
+      }
     }
     loadData()
   }, [classId, dateStr, sectionId, yearId]) // Not changing dependencies as deptId isn't used in fetch
 
   const toggleRow = (id: string) => {
-    // ...
+    const newExpanded = new Set(expandedRows)
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id)
+    } else {
+      newExpanded.add(id)
+    }
+    setExpandedRows(newExpanded)
   }
 
   return (

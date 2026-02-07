@@ -1,19 +1,25 @@
 'use client'
 
-import { useAuth } from '@/lib/auth/AuthContext'
+
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
-import { ScheduledClassService } from '@/lib/services/scheduledClassService'
-import { AdditionalClassService } from '@/lib/services/additionalClassService'
+import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
+import { AdditionalClassService, AdditionalClass } from '@/lib/services/additionalClassService'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui'
-import { Users, Calendar, CheckCircle, Clock, BookOpen, User, ArrowLeft, BarChart3 } from 'lucide-react'
-import Link from 'next/link'
+import { Users, Calendar, Clock, BookOpen, User, ArrowLeft } from 'lucide-react'
 
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui'
+
+interface AdditionalClassWithTutorInfo extends AdditionalClass {
+  peer_tutors: {
+    year: string
+    section: string
+  }
+}
 
 export default function SubjectDetailView() {
   const params = useParams()
@@ -68,7 +74,7 @@ export default function SubjectDetailView() {
           // Filter by year, section, and subject
           // Filter by year, section, and subject
           return allDeptClasses.filter(ac => {
-            const pt = (ac as any).peer_tutors
+            const pt = (ac as unknown as AdditionalClassWithTutorInfo).peer_tutors
             return (
               pt?.year === allocation.year &&
               pt?.section === allocation.section &&
@@ -94,11 +100,11 @@ export default function SubjectDetailView() {
     ...(additionalClasses || []).map(c => ({ ...c, type: 'additional' as const, date: new Date(c.class_date) }))
   ].sort((a, b) => b.date.getTime() - a.date.getTime())
 
-  const filteredLogs = selectedTutorId 
+    const filteredLogs = selectedTutorId 
     ? allLogs.filter(c => 
         c.type === 'scheduled' 
-          ? (c as any).peer_tutor?.id === selectedTutorId
-          : (c as any).peer_tutor_id === selectedTutorId
+          ? (c as ScheduledClassWithDetails).peer_tutor?.id === selectedTutorId
+          : c.peer_tutor_id === selectedTutorId
       )
     : allLogs
 
@@ -287,12 +293,12 @@ export default function SubjectDetailView() {
                         {filteredLogs.map((cls) => {
                            const isScheduled = cls.type === 'scheduled'
                            const isCompleted = isScheduled 
-                              ? (cls as any).completion_status === 'completed' || ((cls as any).attendance_completed && (cls as any).topics_completed)
+                              ? (cls as ScheduledClassWithDetails).completion_status === 'completed' || ((cls as ScheduledClassWithDetails).attendance_completed && (cls as ScheduledClassWithDetails).topics_completed)
                               : true // Additional classes always completed
                            
-                           const dateObj = isScheduled ? new Date((cls as any).scheduled_date) : new Date((cls as any).class_date)
-                           const topics = isScheduled ? (cls as any).topics : (cls as any).topic
-                           const peerTutorName = isScheduled ? (cls as any).peer_tutor?.name : (peerTutors?.find(p => p.id === (cls as any).peer_tutor_id)?.name || 'Unknown')
+                           const dateObj = isScheduled ? new Date((cls as ScheduledClassWithDetails).scheduled_date) : new Date((cls as AdditionalClass).class_date)
+                           const topics = isScheduled ? (cls as ScheduledClassWithDetails).topics : (cls as AdditionalClass).topic
+                           const peerTutorName = isScheduled ? (cls as ScheduledClassWithDetails).peer_tutor?.name : (peerTutors?.find(p => p.id === (cls as AdditionalClass).peer_tutor_id)?.name || 'Unknown')
 
                            return (
                            <div 

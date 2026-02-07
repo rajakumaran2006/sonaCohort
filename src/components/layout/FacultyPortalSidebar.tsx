@@ -5,7 +5,7 @@ import   { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { LayoutGrid, Users, GraduationCap, ClipboardList, FileText, User, LogOut, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react'
+import { User, LogOut, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react'
 import Image from 'next/image'
 import { logger } from '@/lib/logger'
 
