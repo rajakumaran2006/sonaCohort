@@ -215,7 +215,7 @@ function YearContent() {
             </div>
             <div className="flex items-center gap-4">
               <AnimatedRefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
-              <BackButton href="/faculty/dashboard" />
+              <BackButton />
             </div>
           </div>
         </header>

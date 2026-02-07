@@ -7,7 +7,8 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService, FacultySummary } from '@/lib/services/facultyService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Search, Plus, User, Mail, School } from 'lucide-react'
+import { Plus, User, Mail, School } from 'lucide-react'
+import { SearchIcon } from '@/components/icons/SearchIcon'
 import Image from 'next/image'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import AddFacultyModal from '@/components/forms/modals/AddFacultyModal'
@@ -37,7 +38,7 @@ function FacultyManageContent() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [departmentName, setDepartmentName] = useState('')
-  
+
   // Selection State
   const [selectedFaculty, setSelectedFaculty] = useState<string[]>([])
 
@@ -142,7 +143,7 @@ function FacultyManageContent() {
           <div className="mb-8 max-w-2xl">
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                <SearchIcon className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
               </div>
               <input
                 type="text"
@@ -154,7 +155,7 @@ function FacultyManageContent() {
             </div>
           </div>
 
-             {/* Table Content */}
+          {/* Table Content */}
           {loading ? (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <TableSkeleton />

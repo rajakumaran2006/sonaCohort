@@ -15,8 +15,8 @@ import { RenumerationService, peertutorsRenumeration } from '@/lib/services/renu
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Card } from '@/components/ui'
 import PeerTutorClassLogs from '@/components/features/classes/PeerTutorClassLogs'
-import { 
-  CheckCircle, 
+import {
+  CheckCircle,
   ChevronLeft,
   Mail,
   GraduationCap,
@@ -27,6 +27,7 @@ import {
   ClipboardList
 } from '@/components/icons/CustomFacultyIcons'
 import PeerTutorProfileSkeleton from '@/components/skeletons/PeerTutorProfileSkeleton'
+import { BackButton } from '@/components/ui/BackButton'
 import { logger } from '@/lib/logger'
 
 export default function PeerTutorsProfilePage() {
@@ -216,13 +217,7 @@ function PeerTutorsProfileContent() {
           onToggleSidebar={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
         >
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-xs font-bold uppercase tracking-wider border border-gray-200 shadow-sm"
-          >
-            <ChevronLeft width={14} height={14} />
-            Back
-          </button>
+          <BackButton />
         </PageHeader>
 
         {/* Main Content */}
@@ -303,11 +298,11 @@ function PeerTutorsProfileContent() {
 
             {/* Class Logs Section */}
             <div className="w-full">
-               <PeerTutorClassLogs 
-                  scheduledClasses={scheduledClasses}
-                  additionalClasses={additionalClasses}
-                  loading={loading}
-               />
+              <PeerTutorClassLogs
+                scheduledClasses={scheduledClasses}
+                additionalClasses={additionalClasses}
+                loading={loading}
+              />
             </div>
 
             {/* Content Row: Renumeration & Students */}

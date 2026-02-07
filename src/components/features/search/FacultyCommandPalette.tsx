@@ -3,19 +3,19 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { 
-  Search, 
-  Users, 
-  GraduationCap, 
-  FileText, 
-  BarChart3, 
-  User, 
-  LayoutGrid, 
+import {
+  Users,
+  GraduationCap,
+  FileText,
+  BarChart3,
+  User,
+  LayoutGrid,
   ArrowRight,
   ClipboardList,
   CreditCard,
   MessageSquare
 } from 'lucide-react'
+import { SearchIcon } from '@/components/icons/SearchIcon'
 import Modal from '@/components/ui/Modal'
 import { StudentService } from '@/lib/services/studentService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
@@ -42,7 +42,7 @@ export default function FacultyCommandPalette() {
   const router = useRouter()
   const { user } = useAuth()
   const inputRef = useRef<HTMLInputElement>(null)
-  
+
   // Toggle with Cmd+K / Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -129,8 +129,8 @@ export default function FacultyCommandPalette() {
     const results: SearchResult[] = []
 
     // 1. Pages
-    const matchedPages = staticPages.filter(p => 
-      p.title.toLowerCase().includes(lowerQuery) || 
+    const matchedPages = staticPages.filter(p =>
+      p.title.toLowerCase().includes(lowerQuery) ||
       p.subtitle?.toLowerCase().includes(lowerQuery)
     )
     results.push(...matchedPages)
@@ -146,7 +146,7 @@ export default function FacultyCommandPalette() {
           const sectionMap: Record<string, string> = { 'Section A': 'A', 'Section B': 'B', 'Section C': 'C' }
           const yearId = yearMap[cls.year] || cls.year
           const sectionId = sectionMap[cls.section] || cls.section
-          
+
           results.push({
             id: `cls-${cls.id}`,
             title: cls.subject_name,
@@ -181,18 +181,18 @@ export default function FacultyCommandPalette() {
     if (students) {
       students.forEach(s => {
         if (s.name.toLowerCase().includes(lowerQuery) || s.email.toLowerCase().includes(lowerQuery)) {
-           // Direct to main page since we don't have separate student details page yet
-           // But user asked for "studentts page it should have peer tutor...".
-           // Assuming filtering on main page is best we can do for now
-           results.push({
-             id: `st-${s.id}`,
-             title: s.name,
-             subtitle: `Student • ${s.year} - ${s.section}`,
-             type: 'student',
-             href: `/faculty/peer-tutor?tab=students`, // In future: &search=${s.email}
-             icon: User,
-             category: 'Students'
-           })
+          // Direct to main page since we don't have separate student details page yet
+          // But user asked for "studentts page it should have peer tutor...".
+          // Assuming filtering on main page is best we can do for now
+          results.push({
+            id: `st-${s.id}`,
+            title: s.name,
+            subtitle: `Student • ${s.year} - ${s.section}`,
+            type: 'student',
+            href: `/faculty/peer-tutor?tab=students`, // In future: &search=${s.email}
+            icon: User,
+            category: 'Students'
+          })
         }
       })
     }
@@ -252,7 +252,7 @@ export default function FacultyCommandPalette() {
     <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} size="lg" className="p-0 overflow-hidden">
       <div className="flex flex-col h-[500px]">
         <div className="flex items-center border-b px-4 py-3">
-          <Search className="mr-2 h-5 w-5 shrink-0 opacity-50" />
+          <SearchIcon className="mr-2 h-5 w-5 shrink-0 opacity-50" />
           <input
             ref={inputRef}
             value={query}
@@ -263,7 +263,7 @@ export default function FacultyCommandPalette() {
           />
           <div className="text-xs text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">ESC</div>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-2">
           {filteredResults.length === 0 ? (
             <div className="py-14 text-center text-sm text-gray-500">No results found.</div>
@@ -296,7 +296,7 @@ export default function FacultyCommandPalette() {
                         )}
                       </div>
                       {isSelected && (
-                         <ArrowRight className="ml-auto h-4 w-4 text-gray-400" />
+                        <ArrowRight className="ml-auto h-4 w-4 text-gray-400" />
                       )}
                     </div>
                   )
@@ -305,10 +305,10 @@ export default function FacultyCommandPalette() {
             ))
           )}
         </div>
-        
+
         <div className="border-t bg-gray-50 px-4 py-2 text-xs text-gray-500 flex justify-between">
-           <span>Use arrows to navigate, Enter to select</span>
-           <span><span className="font-bold">ProTip:</span> Search for students, exams or pages</span>
+          <span>Use arrows to navigate, Enter to select</span>
+          <span><span className="font-bold">ProTip:</span> Search for students, exams or pages</span>
         </div>
       </div>
     </Modal>

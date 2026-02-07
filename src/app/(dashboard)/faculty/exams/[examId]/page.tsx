@@ -489,7 +489,7 @@ function ExamDetailsContent() {
             onToggleSidebar={() => setIsSidebarOpen(true)}
             isSidebarCollapsed={isSidebarCollapsed}
           >
-            <BackButton href="/faculty/exams" />
+            <BackButton />
           </PageHeader>
           <main className="flex-1 overflow-y-auto">
             <div className={`max-w-full mx-auto py-8 ${isSidebarCollapsed ? 'px-4 sm:px-6 lg:pr-8 lg:pl-6' : 'px-4 sm:px-6 lg:px-8'}`}>
@@ -560,7 +560,7 @@ function ExamDetailsContent() {
           onToggleSidebar={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
         >
-          <BackButton href="/faculty/exams" />
+          <BackButton />
         </PageHeader>
 
         {/* Main Content */}
