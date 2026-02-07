@@ -120,7 +120,7 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
       })
 
       // Add Borders
-      const pageCount = doc.getNumberOfPages()
+      const pageCount = (doc.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages()
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i)
         doc.setDrawColor(0)
