@@ -217,7 +217,7 @@ function PeerTutorsProfileContent() {
           onToggleSidebar={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
         >
-          <BackButton />
+          <BackButton href="/faculty/peer-tutor" />
         </PageHeader>
 
         {/* Main Content */}

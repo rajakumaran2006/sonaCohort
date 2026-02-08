@@ -6425,7 +6425,7 @@ function SectionContent() {
                 </div>
                 <div className="flex items-center gap-4">
                   <AnimatedRefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
-                  <BackButton />
+                  <BackButton href={`/faculty/department/${deptId}/year/${yearId}`} />
                 </div>
               </div>
             </header>
