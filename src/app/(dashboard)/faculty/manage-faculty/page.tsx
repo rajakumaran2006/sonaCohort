@@ -7,11 +7,14 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService, FacultySummary } from '@/lib/services/facultyService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Search, Plus, User, Mail, School } from 'lucide-react'
+import { Plus, User, Mail, School, Trash2 } from 'lucide-react'
+import { SearchIcon } from '@/components/icons/SearchIcon'
 import Image from 'next/image'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import AddFacultyModal from '@/components/forms/modals/AddFacultyModal'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
+import EditFacultyAssignmentsModal from '@/components/forms/modals/EditFacultyAssignmentsModal'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
@@ -36,8 +39,11 @@ function FacultyManageContent() {
   // Modal State
   const [showAddModal, setShowAddModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [facultyToEdit, setFacultyToEdit] = useState<FacultySummary | null>(null)
   const [departmentName, setDepartmentName] = useState('')
-  
+  const [facultyToDelete, setFacultyToDelete] = useState<FacultySummary | null>(null)
+
   // Selection State
   const [selectedFaculty, setSelectedFaculty] = useState<string[]>([])
 
@@ -78,12 +84,19 @@ function FacultyManageContent() {
   const handleDelete = async () => {
     setLoading(true)
     try {
-      const success = await FacultyService.deleteFaculty(selectedFaculty)
+      // If single faculty deletion
+      const emailsToDelete = facultyToDelete
+        ? [facultyToDelete.email]
+        : selectedFaculty
+
+      const success = await FacultyService.deleteFaculty(emailsToDelete)
+
       if (success) {
         // Remove deleted faculty from local state
-        setFaculty(prev => prev.filter(f => !selectedFaculty.includes(f.email)))
+        setFaculty(prev => prev.filter(f => !emailsToDelete.includes(f.email)))
         setSelectedFaculty([])
         setShowDeleteModal(false)
+        setFacultyToDelete(null)
       }
     } catch (error) {
       logger.error('Error deleting faculty', error)
@@ -92,7 +105,24 @@ function FacultyManageContent() {
     }
   }
 
+  const handleEditClick = (f: FacultySummary) => {
+    setFacultyToEdit(f)
+    setShowEditModal(true)
+  }
+
+  const handleDeleteClick = (f: FacultySummary) => {
+    setFacultyToDelete(f)
+    setShowDeleteModal(true)
+  }
+
   const getItemsToDelete = () => {
+    if (facultyToDelete) {
+      return [{
+        name: facultyToDelete.name || 'Unknown Faculty',
+        email: facultyToDelete.email
+      }]
+    }
+
     return selectedFaculty.map(email => {
       const f = faculty.find(item => item.email === email)
       return {
@@ -142,7 +172,7 @@ function FacultyManageContent() {
           <div className="mb-8 max-w-2xl">
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                <SearchIcon className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
               </div>
               <input
                 type="text"
@@ -154,7 +184,7 @@ function FacultyManageContent() {
             </div>
           </div>
 
-             {/* Table Content */}
+          {/* Table Content */}
           {loading ? (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <TableSkeleton />
@@ -209,9 +239,23 @@ function FacultyManageContent() {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline">
-                            Edit Assignments
-                          </button>
+                          <div className="flex items-center justify-end gap-3">
+                            <button
+                              onClick={() => handleEditClick(f)}
+                              className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              Edit
+                            </button>
+                            <span className="text-gray-300">|</span>
+                            <Tooltip content="Delete Faculty">
+                              <button
+                                onClick={() => handleDeleteClick(f)}
+                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </Tooltip>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -253,13 +297,35 @@ function FacultyManageContent() {
 
       <DeleteConfirmationModal
         isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setFacultyToDelete(null)
+        }}
         onConfirm={handleDelete}
         title="Delete Faculty"
         itemsToDelete={getItemsToDelete()}
         type="faculty"
         isLoading={loading}
       />
+
+      {/* Edit Assignments Modal */}
+      {facultyToEdit && (
+        <EditFacultyAssignmentsModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false)
+            setFacultyToEdit(null)
+          }}
+          onSuccess={() => {
+            // Reload data to reflect changes
+            window.location.reload()
+          }}
+          facultyEmail={facultyToEdit.email}
+          facultyName={facultyToEdit.name}
+          facultyId={facultyToEdit.assignments[0]?.faculty_id || ''} // Fallback if needed, though usually present
+          dept={departmentName}
+        />
+      )}
     </div>
   )
 }

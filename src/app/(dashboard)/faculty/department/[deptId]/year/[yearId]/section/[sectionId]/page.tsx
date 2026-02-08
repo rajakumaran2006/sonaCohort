@@ -32,7 +32,8 @@ import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmatio
 
 
 import { createClient } from '@/lib/supabase/client'
-import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, Search, X, Eye, ChevronDown, ChevronUp } from 'lucide-react'
+import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, X, Eye, ChevronDown, ChevronUp } from 'lucide-react'
+import { SearchIcon } from '@/components/icons/SearchIcon'
 import { toast } from 'sonner'
 import { logger } from '@/lib/logger'
 
@@ -532,7 +533,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
                         className="w-full pl-10 pr-8 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                         autoFocus
                       />
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <button
                         onClick={() => {
                           setIsSearchExpanded(false)
@@ -548,7 +549,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
                       onClick={() => setIsSearchExpanded(true)}
                       className="p-2 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 transition-all shadow-sm w-full flex justify-center"
                     >
-                      <Search className="w-5 h-5" />
+                      <SearchIcon className="w-5 h-5" />
                     </button>
                   )}
                 </div>
@@ -1311,7 +1312,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
                         className="w-full pl-10 pr-8 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                         autoFocus
                       />
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <button
                         onClick={() => {
                           setIsSearchExpanded(false)
@@ -1327,7 +1328,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
                       onClick={() => setIsSearchExpanded(true)}
                       className="p-2 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 transition-all shadow-sm w-full flex justify-center"
                     >
-                      <Search className="w-5 h-5" />
+                      <SearchIcon className="w-5 h-5" />
                     </button>
                   )}
                 </div>
@@ -4416,7 +4417,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                   </div>
                   <input
                     type="text"
@@ -5643,9 +5644,9 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Status</span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${peertutors.attendance_status === 'present'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                        ? 'bg-green-600 text-white border-green-600'
                         : peertutors.attendance_status === 'upcoming'
-                          ? 'bg-blue-50 text-blue-700 border-blue-100'
+                          ? 'bg-blue-600 text-white border-blue-600'
                           : peertutors.attendance_status === 'pending'
                             ? 'bg-red-600 text-white border-red-600'
                             : 'bg-rose-50 text-rose-700 border-rose-100'
@@ -5725,9 +5726,9 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${peertutors.attendance_status === 'present'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                              ? 'bg-green-600 text-white border-green-600'
                               : peertutors.attendance_status === 'upcoming'
-                                ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                ? 'bg-blue-600 text-white border-blue-600'
                                 : peertutors.attendance_status === 'pending'
                                   ? 'bg-red-600 text-white border-red-600'
                                   : 'bg-rose-50 text-rose-700 border-rose-100'
@@ -5815,7 +5816,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                                           </td>
                                           <td className="px-6 py-3 whitespace-nowrap">
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${student.status === 'present'
-                                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                              ? 'bg-green-600 text-white border-green-600'
                                               : 'bg-rose-50 text-rose-700 border-rose-100'
                                               }`}>
                                               {student.status === 'present' ? 'Present' : 'Absent'}
@@ -5896,7 +5897,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                   </p>
                   <div className="mt-2">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedpeertutors?.attendance_status === 'present'
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-green-600 text-white'
                       : selectedpeertutors?.attendance_status === 'pending'
                         ? 'bg-red-600 text-white border-red-600'
                         : 'bg-red-100 text-red-800'
@@ -5960,7 +5961,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                           <div className="flex justify-between items-center">
                             <span className="text-xs font-medium text-gray-500">Status</span>
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${student.status === 'present'
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-green-600 text-white'
                               : 'bg-red-100 text-red-800'
                               }`}>
                               {student.status === 'present' ? 'Present' : 'Absent'}
@@ -6040,7 +6041,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${student.status === 'present'
-                                  ? 'bg-green-100 text-green-800'
+                                  ? 'bg-green-600 text-white'
                                   : 'bg-red-100 text-red-800'
                                   }`}>
                                   {student.status === 'present' ? 'Present' : 'Absent'}
@@ -6424,7 +6425,7 @@ function SectionContent() {
                 </div>
                 <div className="flex items-center gap-4">
                   <AnimatedRefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
-                  <BackButton href={`/faculty/department/${deptIdStr}/year/${yearIdStr}`} />
+                  <BackButton href={`/faculty/department/${deptId}/year/${yearId}`} />
                 </div>
               </div>
             </header>

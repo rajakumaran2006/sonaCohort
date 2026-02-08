@@ -1573,4 +1573,123 @@ export class ScheduledClassService {
     }
   }
 
+  /**
+   * Get all scheduled classes for a specific session (class_id + date)
+   * Includes peer tutor details, attendance counts, and subject info
+   */
+  static async getScheduledClassesForSession(classId: string, date: string): Promise<{
+    scheduledClasses: any[],
+    subjectName: string
+  }> {
+    try {
+      const supabase = createClient()
+
+      // 1. Get scheduled classes with peer tutor and class details
+      const { data: scheduledClasses, error } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          *,
+          peer_tutor:peer_tutors(
+            id,
+            name,
+            email
+          ),
+          class:classes(
+            subject_name
+          )
+        `)
+        .eq('class_id', classId)
+        .eq('scheduled_date', date)
+
+      if (error) {
+        logger.error('Error getting scheduled classes for session:', error)
+        return { scheduledClasses: [], subjectName: '' }
+      }
+
+      if (!scheduledClasses || scheduledClasses.length === 0) {
+        return { scheduledClasses: [], subjectName: '' }
+      }
+
+      const subjectName = scheduledClasses[0]?.class?.subject_name || ''
+
+      // 2. Get attendance data for all these scheduled classes
+      const scheduledClassIds = scheduledClasses.map(sc => sc.id)
+
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .select(`
+          scheduled_class_id, 
+          status,
+          student_id,
+          peer_students(name, email)
+        `)
+        .in('scheduled_class_id', scheduledClassIds)
+
+      if (attendanceError) {
+        logger.error('Error getting attendance for session:', attendanceError)
+      }
+
+      // 3. Get total assigned students for each peer tutor (for denominator)
+      const peertutorsIds = scheduledClasses.map(sc => sc.peer_tutor_id).filter(id => id)
+
+      // We need to know the total count of students assigned to each peer tutor
+      // Grouped by peer tutor
+      const { data: peerStudents, error: studentsError } = await supabase
+        .from('peer_students')
+        .select('assigned_peer_tutor_id')
+        .in('assigned_peer_tutor_id', peertutorsIds)
+        .eq('peer_tutor', false)
+
+      // Process and merge data
+      const processedClasses = scheduledClasses.map(sc => {
+        // Filter attendance for this specific scheduled class
+        const classAttendance = attendanceData?.filter(a => a.scheduled_class_id === sc.id) || []
+
+        // Calculate counts
+        const presentCount = classAttendance.filter(a => a.status === 'present').length
+
+        // Calculate total students assigned to this tutor
+        const totalStudents = peerStudents?.filter(s => s.assigned_peer_tutor_id === sc.peer_tutor_id).length || 0
+
+        // Map attendance records to the format expected by UI
+        const studentRecords = classAttendance.map(a => ({
+          student_id: a.student_id,
+          student_name: Array.isArray(a.peer_students) ? (a.peer_students[0] as any)?.name : (a.peer_students as any)?.name || 'Unknown',
+          student_email: Array.isArray(a.peer_students) ? (a.peer_students[0] as any)?.email : (a.peer_students as any)?.email || 'Unknown',
+          status: a.status
+        }))
+
+        // Determine status
+        let status = 'upcoming'
+        if (sc.completion_status) {
+          // Mapping DB status to UI status if needed, or use directly if they match
+          status = sc.completion_status
+        } else {
+          // Fallback logic
+          if (sc.attendance_completed && sc.topics_completed) status = 'completed'
+          else if (sc.attendance_completed || sc.topics_completed) status = 'pending'
+          else status = 'upcoming'
+        }
+
+        return {
+          id: sc.id,
+          peer_tutor: sc.peer_tutor,
+          status: status,
+          topics: sc.topics,
+          link: sc.link,
+          student_attendance_count: presentCount,
+          total_students: totalStudents,
+          student_records: studentRecords,
+          attendance_completed: sc.attendance_completed,
+          topics_completed: sc.topics_completed
+        }
+      })
+
+      return { scheduledClasses: processedClasses, subjectName }
+
+    } catch (error) {
+      logger.error('Error in getScheduledClassesForSession:', error)
+      return { scheduledClasses: [], subjectName: '' }
+    }
+  }
 }

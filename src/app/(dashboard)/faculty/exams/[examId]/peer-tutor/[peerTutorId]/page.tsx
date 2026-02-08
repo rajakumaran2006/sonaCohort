@@ -28,6 +28,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { Input } from '@/components/ui'
 import { ArrowLeft, Edit, Save, Plus, Filter, RotateCw } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
 import { logger } from '@/lib/logger'
@@ -549,14 +550,10 @@ function PeerTutorsExamDetailsContent() {
                 <CardContent className="py-12">
                   <div className="text-center">
                     <p className="text-gray-500">Exam or peer tutor not found</p>
-                    <Button
-                      variant="secondary"
-                      onClick={() => router.push(`/faculty/exams/${examId}`)}
+                    <BackButton
+                      href={`/faculty/exams/${examId}`}
                       className="mt-4"
-                    >
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      Back
-                    </Button>
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -602,13 +599,7 @@ function PeerTutorsExamDetailsContent() {
               >
                 <RotateCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
-              <Button
-                variant="secondary"
-                onClick={() => router.push(`/faculty/exams/${examId}`)}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
+              <BackButton href={`/faculty/exams/${examId}`} />
             </div>
           </div>
         </header>

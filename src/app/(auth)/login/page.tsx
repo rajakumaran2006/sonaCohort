@@ -46,7 +46,7 @@ function LoginPageContent() {
     }
   }
 
-  if (authLoading) {
+  if (authLoading || isSigningIn || isSwitching) {
     return <FacultyLoginSkeleton />
   }
 

@@ -10,6 +10,7 @@ import { ChevronDown } from 'lucide-react'
 import { AttendanceRecord } from '@/lib/services/attendanceService'
 import { BackButton } from '@/components/ui/BackButton'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
+import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 
 interface ClassDetails {
   id: string
@@ -56,28 +57,27 @@ export default function ClassDetailsPage() {
   // ... (keeping useEffect as is, but ensuring it depends on the new deptId if needed, though likely not for the query itself unless the query uses it)
 
   useEffect(() => {
-    // ... loadData implementation ...
-    // Note: The original loadData didn't use deptId in the Supabase query shown in Step 386, 
-    // it used classId, dateStr, sectionId, yearId.
-    // So I just need to add deptId to the destructuring.
-
-    // ... existing loadData code ...
     const loadData = async () => {
       try {
         setLoading(true)
-        // Mock data loading
+
+        const { scheduledClasses, subjectName } = await ScheduledClassService.getScheduledClassesForSession(classId, dateStr)
+
         setClassDetails({
           id: classId,
-          subject_name: 'Mock Subject',
+          subject_name: subjectName || 'Loading...',
           scheduled_date: dateStr
         })
-        setPeerTutors([]) // Empty for now
+
+        setPeerTutors(scheduledClasses)
+      } catch (error) {
+        console.error('Error loading class details:', error)
       } finally {
         setLoading(false)
       }
     }
     loadData()
-  }, [classId, dateStr, sectionId, yearId]) // Not changing dependencies as deptId isn't used in fetch
+  }, [classId, dateStr])
 
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows)
@@ -152,7 +152,9 @@ export default function ClassDetailsPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${tutor.status === 'completed' ? 'bg-green-600 text-white' :
                               tutor.status === 'pending' ? 'bg-red-600 text-white' :
-                                'bg-blue-50 text-blue-600 border border-blue-100'
+                                (tutor.status === 'upcoming' || tutor.status === 'not_started') ? 'bg-blue-600 text-white' :
+                                  'bg-blue-50 text-blue-600 border border-blue-100'
+
                               }`}>
                               {tutor.status}
                             </span>
@@ -177,7 +179,7 @@ export default function ClassDetailsPage() {
                                 href={tutor.link}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />

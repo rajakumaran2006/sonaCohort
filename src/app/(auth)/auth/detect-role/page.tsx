@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { logger } from '@/lib/logger'
+import FacultyLoginSkeleton from '@/components/skeletons/FacultyLoginSkeleton'
 
 function DetectRoleContent() {
   const router = useRouter()
@@ -55,10 +56,10 @@ function DetectRoleContent() {
           const role = roles[0]
           const dashboardPath = dashboardPaths[role]
           setStatus(`Redirecting to ${role} dashboard...`)
-          
+
           // Store the selected role
           localStorage.setItem('user_mode', role)
-          
+
           // Set cookie for server-side access
           await fetch('/api/set-role', {
             method: 'POST',
@@ -86,27 +87,13 @@ function DetectRoleContent() {
   }, [user, loading, router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="flex flex-col items-center gap-4">
-        <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">{status}</span>
-        </div>
-      </div>
-    </div>
+    <FacultyLoginSkeleton />
   )
 }
 
 export default function DetectRolePage() {
   return (
-    <Suspense fallback={
-              <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Loading</span>
-                </div>
-              </div>
-    }>
+    <Suspense fallback={<FacultyLoginSkeleton />}>
       <DetectRoleContent />
     </Suspense>
   )
