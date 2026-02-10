@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { X, Loader2, Plus, Trash2, ChevronDown, AlertCircle, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FacultyService, FacultyAllocation } from '@/lib/services/facultyService'
@@ -50,16 +50,26 @@ export default function EditFacultyAssignmentsModal({
     const [availableSubjectsCache, setAvailableSubjectsCache] = useState<Record<string, string[]>>({})
     const [loadingSubjects, setLoadingSubjects] = useState<Set<string>>(new Set())
 
-    useEffect(() => {
-        if (isOpen && facultyEmail) {
-            loadAssignments()
-        } else {
-            setAssignments([])
-            setError(null)
-        }
-    }, [isOpen, facultyEmail])
+    const fetchSubjects = useCallback(async (year: string, section: string) => {
+        const key = `${year}-${section}`
+        if (availableSubjectsCache[key] || loadingSubjects.has(key)) return
 
-    const loadAssignments = async () => {
+        setLoadingSubjects(prev => new Set(prev).add(key))
+        try {
+            const subjects = await ScheduledClassService.getAllSubjects(dept, year, section)
+            setAvailableSubjectsCache(prev => ({ ...prev, [key]: subjects }))
+        } catch (e) {
+            logger.error('Error fetching subjects', e)
+        } finally {
+            setLoadingSubjects(prev => {
+                const next = new Set(prev)
+                next.delete(key)
+                return next
+            })
+        }
+    }, [availableSubjectsCache, loadingSubjects, dept])
+
+    const loadAssignments = useCallback(async () => {
         setLoading(true)
         setError(null)
         try {
@@ -91,26 +101,16 @@ export default function EditFacultyAssignmentsModal({
         } finally {
             setLoading(false)
         }
-    }
+    }, [facultyEmail, fetchSubjects])
 
-    const fetchSubjects = async (year: string, section: string) => {
-        const key = `${year}-${section}`
-        if (availableSubjectsCache[key] || loadingSubjects.has(key)) return
-
-        setLoadingSubjects(prev => new Set(prev).add(key))
-        try {
-            const subjects = await ScheduledClassService.getAllSubjects(dept, year, section)
-            setAvailableSubjectsCache(prev => ({ ...prev, [key]: subjects }))
-        } catch (e) {
-            logger.error('Error fetching subjects', e)
-        } finally {
-            setLoadingSubjects(prev => {
-                const next = new Set(prev)
-                next.delete(key)
-                return next
-            })
+    useEffect(() => {
+        if (isOpen && facultyEmail) {
+            loadAssignments()
+        } else {
+            setAssignments([])
+            setError(null)
         }
-    }
+    }, [isOpen, facultyEmail, loadAssignments])
 
     const handleAddAssignment = () => {
         setAssignments(prev => [
@@ -276,7 +276,7 @@ export default function EditFacultyAssignmentsModal({
                                 </div>
                             )}
 
-                            {assignments.map((assignment, index) => {
+                            {assignments.map((assignment) => {
                                 if (assignment.isDeleted && assignment.isNew) return null // Should be handled by visibleAssignments but double check
 
                                 if (assignment.isDeleted) {

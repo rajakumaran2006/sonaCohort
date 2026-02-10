@@ -47,9 +47,6 @@ export default function SubjectDetailView() {
   })
 
 
-  console.log('ALLOCATION:', allocation)
-  console.log('PEER TUTORS:', peerTutors)
-
   // 3. Fetch Scheduled Classes (filtered by subject)
   const { data: classes, isLoading: isClassesLoading } = useQuery({
     queryKey: ['scheduled-classes-subject', allocation?.dept, allocation?.year, allocation?.section, allocation?.subject_name],

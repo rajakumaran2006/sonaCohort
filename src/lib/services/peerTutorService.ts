@@ -97,8 +97,7 @@ export class peertutorservice {
       const cleanYear = year?.toString().replace(/year/gi, '').trim() || ''
       const cleanSection = section?.toString().replace(/sec(tion)?\.?/gi, '').trim() || ''
 
-      console.log(`[getpeerTutorBySection] Original: dept=${dept}, year=${year}, section=${section}`)
-      console.log(`[getpeerTutorBySection] Cleaned: dept=${dept}, year=${cleanYear}, section=${cleanSection}`)
+
 
       const { data, error } = await supabase
         .from('peer_tutors')

@@ -1578,7 +1578,7 @@ export class ScheduledClassService {
    * Includes peer tutor details, attendance counts, and subject info
    */
   static async getScheduledClassesForSession(classId: string, date: string): Promise<{
-    scheduledClasses: any[],
+    scheduledClasses: ScheduledClassWithDetails[],
     subjectName: string
   }> {
     try {
@@ -1634,7 +1634,7 @@ export class ScheduledClassService {
 
       // We need to know the total count of students assigned to each peer tutor
       // Grouped by peer tutor
-      const { data: peerStudents, error: studentsError } = await supabase
+      const { data: peerStudents } = await supabase
         .from('peer_students')
         .select('assigned_peer_tutor_id')
         .in('assigned_peer_tutor_id', peertutorsIds)
@@ -1654,8 +1654,8 @@ export class ScheduledClassService {
         // Map attendance records to the format expected by UI
         const studentRecords = classAttendance.map(a => ({
           student_id: a.student_id,
-          student_name: Array.isArray(a.peer_students) ? (a.peer_students[0] as any)?.name : (a.peer_students as any)?.name || 'Unknown',
-          student_email: Array.isArray(a.peer_students) ? (a.peer_students[0] as any)?.email : (a.peer_students as any)?.email || 'Unknown',
+          student_name: Array.isArray(a.peer_students) ? (a.peer_students[0] as { name: string })?.name : (a.peer_students as { name: string })?.name || 'Unknown',
+          student_email: Array.isArray(a.peer_students) ? (a.peer_students[0] as { email: string })?.email : (a.peer_students as { email: string })?.email || 'Unknown',
           status: a.status
         }))
 
@@ -1672,6 +1672,7 @@ export class ScheduledClassService {
         }
 
         return {
+          ...sc,
           id: sc.id,
           peer_tutor: sc.peer_tutor,
           status: status,

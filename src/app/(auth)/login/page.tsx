@@ -4,8 +4,7 @@ import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { ChevronRight, AlertCircle } from 'lucide-react'
-import FacultyLoginSkeleton from '@/components/skeletons/FacultyLoginSkeleton'
+import { ChevronRight, AlertCircle, Loader2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
 function LoginPageContent() {
@@ -46,9 +45,7 @@ function LoginPageContent() {
     }
   }
 
-  if (authLoading || isSigningIn || isSwitching) {
-    return <FacultyLoginSkeleton />
-  }
+  const isLoading = authLoading || isSigningIn || isSwitching
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 bg-[#F8F9FA] relative overflow-hidden">
@@ -136,14 +133,14 @@ function LoginPageContent() {
             <div className="space-y-6">
               <button
                 onClick={handleSignIn}
-                disabled={isSigningIn || authLoading}
+                disabled={isLoading}
                 className="w-full group relative overflow-hidden bg-[#2F2F2F] text-white px-6 py-4 rounded-2xl font-bold text-sm transition-all duration-300 hover:bg-black hover:shadow-2xl hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 <div className="absolute inset-0 rounded-2xl ring-1 ring-white/10"></div>
 
                 <span className="relative z-10 flex items-center justify-center gap-3">
-                  {isSigningIn ? (
-                    <span className="w-5 h-5 flex items-center justify-center font-bold text-lg animate-pulse">...</span>
+                  {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <svg className="w-5 h-5" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M10.5 0.5H0.5V10.5H10.5V0.5Z" fill="#F25022" />
@@ -152,7 +149,7 @@ function LoginPageContent() {
                       <path d="M21.5 11.5H11.5V21.5H21.5V11.5Z" fill="#FFB900" />
                     </svg>
                   )}
-                  {isSigningIn ? 'Connecting...' : 'Sign in with Microsoft'}
+                  {isLoading ? 'Connecting...' : 'Sign in with Microsoft'}
                 </span>
 
                 {/* Hover Glow Effect */}
@@ -179,7 +176,11 @@ function LoginPageContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<FacultyLoginSkeleton />}>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+      </div>
+    }>
       <LoginPageContent />
     </Suspense>
   )

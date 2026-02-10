@@ -91,11 +91,14 @@ function PeerExamDetailsContent() {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Fetch exam subjects for this exam
+  // Fetch exam subjects for this exam (filtered for this peer tutor)
   const { data: examSubjects, isLoading: isSubjectsLoading, refetch: refetchSubjects } = useQuery({
-    queryKey: ['exam-subjects', examId],
-    queryFn: async () => await ExamSubjectService.getExamSubjects(examId),
-    enabled: !!examId,
+    queryKey: ['exam-subjects', examId, peertutorsInfo?.id],
+    queryFn: async () => {
+      if (!peertutorsInfo?.id) return []
+      return await ExamSubjectService.getExamSubjectsForPeerTutor(examId, peertutorsInfo.id)
+    },
+    enabled: !!examId && !!peertutorsInfo?.id,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
   })
@@ -206,7 +209,7 @@ function PeerExamDetailsContent() {
         queryClient.invalidateQueries({ queryKey: ['peer-tutor-info', user?.email] }),
         queryClient.invalidateQueries({ queryKey: ['exam-details', examId] }),
         queryClient.invalidateQueries({ queryKey: ['peer-tutor-students', peertutorsInfo?.id] }),
-        queryClient.invalidateQueries({ queryKey: ['exam-subjects', examId] }),
+        queryClient.invalidateQueries({ queryKey: ['exam-subjects', examId, peertutorsInfo?.id] }),
         queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsInfo?.id] }),
       ])
       refetchSubjects()
@@ -846,10 +849,10 @@ function PeerExamDetailsContent() {
                              ))}
                              <TableCell className="py-4 pr-6 text-right">
                                <span className={`text-xs font-black px-2 py-1 rounded-lg ${
-                                 avg >= 75 ? 'bg-gray-100 text-green-700' :
-                                 avg >= 50 ? 'bg-blue-100 text-blue-700' :
-                                 avg > 0 ? 'bg-yellow-100 text-yellow-700' :
-                                 'bg-gray-100 text-gray-500'
+                                 avg >= 75 ? 'bg-gray-500 text-white' :
+                                 avg >= 50 ? 'bg-blue-500 text-white' :
+                                 avg > 0 ? 'bg-yellow-500 text-white' :
+                                 'bg-gray-500 text-white'
                                }`}>
                                  {avg > 0 ? `${avg.toFixed(1)}%` : '-'}
                                </span>
@@ -921,9 +924,9 @@ function PeerExamDetailsContent() {
                           {attentionItems.length > 0 ? (
                              attentionItems.map((item, index) => {
                                 const priorityStyles = {
-                                   high: 'bg-red-50 border-red-200 text-red-700',
-                                   medium: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-                                   low: 'bg-green-50 border-green-200 text-green-700'
+                                   high: 'bg-red-500 border-red-500 text-white',
+                                   medium: 'bg-yellow-500 border-yellow-500 text-white',
+                                   low: 'bg-green-500 border-green-500 text-white'
                                 }
                                 
                                 return (

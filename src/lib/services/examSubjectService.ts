@@ -47,6 +47,69 @@ export class ExamSubjectService {
   }
 
   /**
+   * Get exam subjects filtered for a specific peer tutor
+   * Only returns subjects from classes scheduled for this peer tutor + custom subjects they added
+   */
+  static async getExamSubjectsForPeerTutor(examId: string, peertutorsId: string): Promise<ExamSubject[]> {
+    try {
+      const supabase = createClient()
+      
+      // Get all exam subjects for this exam
+      const { data: allSubjects, error: subjectsError } = await supabase
+        .from('exam_subjects')
+        .select('*')
+        .eq('exam_id', examId)
+        .order('created_at', { ascending: true })
+
+      if (subjectsError) {
+        logger.error('Error getting exam subjects:', subjectsError)
+        return []
+      }
+
+      if (!allSubjects || allSubjects.length === 0) {
+        return []
+      }
+
+      // Get unique class_ids that are scheduled for this specific peer tutor
+      const { data: scheduledClasses, error: scheduledError } = await supabase
+        .from('scheduled_classes')
+        .select('class_id')
+        .eq('peer_tutor_id', peertutorsId)
+
+      if (scheduledError) {
+        logger.error('Error getting scheduled classes for peer tutor:', scheduledError)
+        return []
+      }
+
+      const peerTutorClassIds = new Set(scheduledClasses?.map(sc => sc.class_id) || [])
+
+      // Also get subject names from those classes for matching subjects without class_id
+      const { data: peerTutorClasses } = await supabase
+        .from('classes')
+        .select('subject_name')
+        .in('id', [...peerTutorClassIds])
+
+      const peerTutorSubjectNames = new Set(peerTutorClasses?.map(c => c.subject_name) || [])
+
+      // Filter subjects: include if:
+      // 1. Subject's class_id is in peer tutor's scheduled classes
+      // 2. Subject's name matches one of peer tutor's class subjects (for custom-added duplicates)
+      // 3. Subject was custom-added by this peer tutor (created_by matches)
+      const filteredSubjects = allSubjects.filter(subject => {
+        if (subject.class_id && peerTutorClassIds.has(subject.class_id)) return true
+        if (peerTutorSubjectNames.has(subject.subject_name)) return true
+        if (subject.created_by === peertutorsId) return true
+        return false
+      })
+
+      return filteredSubjects as ExamSubject[]
+    } catch (error) {
+      logger.error('Error in getExamSubjectsForPeerTutor:', error)
+      return []
+    }
+  }
+
+  /**
    * Add a new subject to an exam
    */
   static async addExamSubject(data: CreateExamSubjectData): Promise<ExamSubject | null> {
@@ -127,6 +190,7 @@ export class ExamSubjectService {
 
   /**
    * Initialize exam subjects from classes for a peer tutor
+   * Only adds subjects from classes that are scheduled for this specific peer tutor
    */
   static async initializeSubjectsFromClasses(
     examId: string,
@@ -138,13 +202,32 @@ export class ExamSubjectService {
     try {
       const supabase = createClient()
       
-      // Get classes for this peer tutor
-      const { data: classes, error: classesError } = await supabase
-        .from('classes')
-        .select('id, subject_name')
+      // Get unique class_ids that are scheduled for this specific peer tutor
+      const { data: scheduledClasses, error: scheduledError } = await supabase
+        .from('scheduled_classes')
+        .select('class_id')
+        .eq('peer_tutor_id', peertutorsId)
         .eq('dept', dept)
         .eq('year', year)
         .eq('section', section)
+
+      if (scheduledError) {
+        logger.error('Error getting scheduled classes for peer tutor:', scheduledError)
+        return false
+      }
+
+      // Get unique class IDs assigned to this peer tutor
+      const peerTutorClassIds = [...new Set(scheduledClasses?.map(sc => sc.class_id) || [])]
+
+      if (peerTutorClassIds.length === 0) {
+        return true // No classes assigned to this peer tutor
+      }
+
+      // Get class details (subject_name) only for classes assigned to this peer tutor
+      const { data: classes, error: classesError } = await supabase
+        .from('classes')
+        .select('id, subject_name')
+        .in('id', peerTutorClassIds)
 
       if (classesError) {
         logger.error('Error getting classes:', classesError)
@@ -163,15 +246,22 @@ export class ExamSubjectService {
 
       const existingNames = new Set(existingSubjects?.map(s => s.subject_name) || [])
 
-      // Add subjects that don't exist
-      const subjectsToAdd = classes
+      // Add subjects that don't exist (deduplicate by subject_name)
+      const uniqueSubjects = new Map<string, { id: string, subject_name: string }>()
+      classes.forEach(cls => {
+        if (!uniqueSubjects.has(cls.subject_name)) {
+          uniqueSubjects.set(cls.subject_name, cls)
+        }
+      })
+
+      const subjectsToAdd = Array.from(uniqueSubjects.values())
         .filter(cls => !existingNames.has(cls.subject_name))
         .map(cls => ({
           exam_id: examId,
           subject_name: cls.subject_name,
           class_id: cls.id,
           is_custom: false,
-          created_by: null,
+          created_by: peertutorsId,
         }))
 
       if (subjectsToAdd.length > 0) {

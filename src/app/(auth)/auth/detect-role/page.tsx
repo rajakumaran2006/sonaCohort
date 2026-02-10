@@ -9,7 +9,7 @@ import FacultyLoginSkeleton from '@/components/skeletons/FacultyLoginSkeleton'
 function DetectRoleContent() {
   const router = useRouter()
   const { user, loading } = useAuth()
-  const [status, setStatus] = useState('Checking authentication...')
+  const [, setStatus] = useState('Checking authentication...')
 
   useEffect(() => {
     const detectRoles = async () => {

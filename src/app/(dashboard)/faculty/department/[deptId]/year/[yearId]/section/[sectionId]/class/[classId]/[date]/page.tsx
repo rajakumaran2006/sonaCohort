@@ -69,9 +69,9 @@ export default function ClassDetailsPage() {
           scheduled_date: dateStr
         })
 
-        setPeerTutors(scheduledClasses)
+        setPeerTutors(scheduledClasses as any)
       } catch (error) {
-        console.error('Error loading class details:', error)
+        // console.error('Error loading class details:', error)
       } finally {
         setLoading(false)
       }

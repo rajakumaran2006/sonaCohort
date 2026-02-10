@@ -99,7 +99,7 @@ function PeerExamsContent() {
         const progressMap: Record<string, number> = {}
 
         for (const exam of exams) {
-          const subjects = await ExamSubjectService.getExamSubjects(exam.id)
+          const subjects = await ExamSubjectService.getExamSubjectsForPeerTutor(exam.id, peertutorsInfo.id)
           const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peertutorsInfo.id, exam.id)
           
           const totalPossibleMarks = students.length * subjects.length
@@ -292,8 +292,8 @@ function PeerExamsContent() {
                                     </div>
                                     <span className={`text-[9px] font-bold px-2 py-1 rounded-md uppercase tracking-widest border flex-shrink-0 ml-3 ${
                                       isCompleted 
-                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                        : 'bg-blue-50 text-blue-600 border-blue-100'
+                                        ? 'bg-emerald-500 text-white border-emerald-100'
+                                        : 'bg-blue-500 text-white border-blue-100'
                                     }`}>
                                       {isCompleted ? 'Completed' : 'In Progress'}
                                     </span>
@@ -387,8 +387,8 @@ function PeerExamsContent() {
                                     <td className="px-6 py-4 whitespace-nowrap text-center">
                                       <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-widest border ${
                                           isCompleted 
-                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                            : 'bg-blue-50 text-blue-600 border-blue-100'
+                                            ? 'bg-emerald-500 text-white border-emerald-100'
+                                            : 'bg-blue-500 text-white border-blue-100'
                                       }`}>
                                           {isCompleted ? 'Completed' : 'In Progress'}
                                       </span>
