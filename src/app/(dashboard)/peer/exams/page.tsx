@@ -72,46 +72,24 @@ function PeerExamsContent() {
   //   }
   // }, [peertutorsInfo])
 
-  // Fetch exams where peer tutor has subjects assigned (through their scheduled classes)
+  // Fetch exams where peer tutor's year matches the exam years
   const { data: exams, isLoading: isExamsLoading } = useQuery({
-    queryKey: ['peer-exams', peertutorsInfo?.id],
+    queryKey: ['peer-exams', peertutorsInfo?.id, peertutorsInfo?.year, peertutorsInfo?.faculty_id],
     queryFn: async () => {
-      if (!peertutorsInfo?.id) {
+      if (!peertutorsInfo?.id || !peertutorsInfo?.year || !peertutorsInfo?.faculty_id) {
         return []
       }
       
       try {
         const supabase = await import('@/lib/supabase/client').then(m => m.createClient())
         
-        // Get peer tutor's scheduled class IDs
-        const { data: scheduledClasses } = await supabase
-          .from('scheduled_classes')
-          .select('class_id')
-          .eq('peer_tutor_id', peertutorsInfo.id)
-        
-        const classIds = scheduledClasses?.map(sc => sc.class_id) || []
-        
-        if (classIds.length === 0) {
-          return [] // No classes assigned, so no exams
-        }
-        
-        // Get exam IDs where exam_subjects exist for these classes
-        const { data: examSubjects } = await supabase
-          .from('exam_subjects')
-          .select('exam_id')
-          .in('class_id', classIds)
-        
-        const examIds = [...new Set(examSubjects?.map(es => es.exam_id) || [])]
-        
-        if (examIds.length === 0) {
-          return [] // No exam subjects for these classes
-        }
-        
-        // Fetch the actual exams
+        // Fetch exams directly by year and department match
+        // This ensures new peer tutors see exams even if their subjects haven't been added yet
         const { data: examsData, error } = await supabase
           .from('exams')
           .select('*')
-          .in('id', examIds)
+          .contains('years', [peertutorsInfo.year])
+          .eq('department_id', peertutorsInfo.faculty_id)
           .order('created_at', { ascending: false })
         
         if (error) {
@@ -125,7 +103,7 @@ function PeerExamsContent() {
         return []
       }
     },
-    enabled: !!peertutorsInfo?.id,
+    enabled: !!peertutorsInfo?.id && !!peertutorsInfo?.year && !!peertutorsInfo?.faculty_id,
     staleTime: 5 * 60 * 1000,
   })
 

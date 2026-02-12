@@ -117,7 +117,9 @@ export default function TransferModal({
       // Check if items already exist in the target section
       if (type === 'students') {
         const existingStudents = await StudentService.getStudentsBySection(dept, year, section)
-        const existingEmails = existingStudents.map(s => s.email.toLowerCase())
+        const existingEmails = existingStudents
+          .map(s => s.email?.toLowerCase() || '')
+          .filter(email => email !== '')
         validation.existingEmails = existingEmails
         
         // Find conflicting items

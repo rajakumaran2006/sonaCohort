@@ -17,12 +17,13 @@ export interface peertutors {
 
 export interface peertutorsAssignment {
   name: string
-  email: string
+  email: string | null
   faculty_id: string
   dept: string
   year: string
   section: string
   assigned_by: string
+  is_manual_entry?: boolean
 }
 
 export class peertutorservice {
@@ -225,37 +226,128 @@ export class peertutorservice {
   }
 
   /**
-   * Assign a new peer tutor
+   * Get peer tutor by email with full details
    */
-  static async assignpeertutors(assignment: peertutorsAssignment): Promise<boolean> {
+  static async getPeerTutorByEmail(email: string): Promise<peertutors | null> {
     try {
       const supabase = createClient()
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('peer_tutors')
-        .insert([assignment])
-
-      if (error) {
-        logger.error('Error assigning peer tutor:', error)
-        return false
-      }
-
-      // After successfully creating the peer tutor, get the created peer tutor with created_at
-      const { data: createdpeertutors, error: fetchError } = await supabase
-        .from('peer_tutors')
-        .select('id, created_at')
-        .eq('dept', assignment.dept)
-        .eq('year', assignment.year)
-        .eq('section', assignment.section)
-        .eq('email', assignment.email)
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .select('*')
+        .eq('email', email)
         .single()
 
-      if (fetchError || !createdpeertutors) {
-        logger.error('Error fetching created peer tutor:', fetchError)
-        return false
+      if (error) {
+        if (error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          logger.error('Error getting peer tutor by email:', error)
+        }
+        return null
       }
+
+      return data as peertutors
+    } catch (error) {
+      logger.error('Error in getPeerTutorByEmail:', error)
+      return null
+    }
+  }
+
+  /**
+   * Assign a new peer tutor
+   */
+  static async assignpeertutors(assignment: peertutorsAssignment): Promise<{ success: boolean; error?: string; data?: { id: string } }> {
+    try {
+      const supabase = createClient()
+
+      // First, check if this email is already a peer tutor ANYWHERE (any dept/year/section)
+      // Only perform email checks if email is provided
+      if (assignment.email) {
+        const existingPeerTutor = await this.getPeerTutorByEmail(assignment.email)
+        
+        if (existingPeerTutor) {
+          // Check if it's in the SAME section trying to add to
+          if (existingPeerTutor.dept === assignment.dept && 
+              existingPeerTutor.year === assignment.year && 
+              existingPeerTutor.section === assignment.section) {
+            return { 
+              success: false, 
+              error: `${assignment.name} is already a peer tutor in ${assignment.dept} Year ${assignment.year} Section ${assignment.section}` 
+            }
+          } else {
+            // Exists in a DIFFERENT section
+            return { 
+              success: false, 
+              error: `${assignment.name} already exists as peer tutor in ${existingPeerTutor.dept} Year ${existingPeerTutor.year} Section ${existingPeerTutor.section}` 
+            }
+          }
+        }
+
+        // Also check if this email is already a student
+        const { data: existingStudent, error: studentCheckError } = await supabase
+          .from('peer_students')
+          .select('id, name, dept, year, section')
+          .eq('email', assignment.email)
+          .maybeSingle()
+
+        if (studentCheckError) {
+          logger.error('Error checking for existing student:', studentCheckError)
+        }
+
+        if (existingStudent) {
+          return { 
+            success: false, 
+            error: `${assignment.name} already exists as student in ${existingStudent.dept} Year ${existingStudent.year} Section ${existingStudent.section}` 
+          }
+        }
+      }
+
+      // Insert the new peer tutor
+      const { data: insertedData, error: insertError } = await supabase
+        .from('peer_tutors')
+        .insert([{
+          name: assignment.name,
+          email: assignment.email,
+          faculty_id: assignment.faculty_id,
+          dept: assignment.dept,
+          year: assignment.year,
+          section: assignment.section,
+          assigned_by: assignment.assigned_by,
+          is_manual_entry: assignment.is_manual_entry
+        }])
+        .select('id, created_at')
+        .single()
+
+      if (insertError) {
+        logger.error('Error inserting peer tutor:', {
+          error: insertError,
+          message: insertError.message,
+          code: insertError.code,
+          details: insertError.details,
+          hint: insertError.hint,
+          assignment
+        })
+        
+        // Check for specific error codes
+        if (insertError.code === '23505') {
+          return { success: false, error: 'This user is already a peer tutor in this section' }
+        }
+        
+        return { success: false, error: `Failed to add peer tutor: ${insertError.message}` }
+      }
+
+      if (!insertedData) {
+        logger.error('No data returned after insert:', { assignment })
+        return { success: false, error: 'Failed to create peer tutor record' }
+      }
+
+      logger.info('Successfully created peer tutor:', {
+        id: insertedData.id,
+        name: assignment.name,
+        email: assignment.email,
+        dept: assignment.dept,
+        year: assignment.year,
+        section: assignment.section
+      })
 
       // After successfully creating the peer tutor, assign them to future scheduled classes
       // Pass the peer tutor ID and creation date to correctly filter classes
@@ -263,18 +355,25 @@ export class peertutorservice {
         assignment.dept,
         assignment.year,
         assignment.section,
-        createdpeertutors.id,
-        createdpeertutors.created_at
+        insertedData.id,
+        insertedData.created_at
       )
 
       if (!assignmentResult) {
         logger.warn('Failed to assign new peer tutor to future classes, but peer tutor was created successfully. The peer tutor will not be automatically assigned to future scheduled classes and will need to be manually assigned.')
       }
 
-      return true
+      return { success: true, data: { id: insertedData.id } }
     } catch (error) {
-      logger.error('Error in assignpeertutors:', error)
-      return false
+      logger.error('Unexpected error in assignpeertutors:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        assignment
+      })
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'An unexpected error occurred' 
+      }
     }
   }
 
@@ -422,38 +521,14 @@ export class peertutorservice {
   }
 
   /**
-   * Search for students using Microsoft Graph (excluding existing peer tutors and students)
+   * Search for students using Microsoft Graph (returns all results, validation happens during assignment)
    */
   static async searchAvailableStudents(query: string): Promise<MicrosoftUser[]> {
     try {
-      // Get all existing peer tutor emails to exclude them
-      const existingpeerTutor = await this.getAllpeerTutor()
-      const existingpeertutorsEmails = existingpeerTutor.map(pt => pt.email.toLowerCase())
-
-      // Get all existing student emails to exclude them
-      const supabase = createClient()
-      const { data: existingStudents, error } = await supabase
-        .from('peer_students')
-        .select('email')
-
-      if (error) {
-        logger.error('Error getting existing students:', error)
-      }
-
-      const existingStudentEmails = (existingStudents || []).map(s => s.email.toLowerCase())
-
-      // Combine all emails to exclude
-      const allExcludedEmails = [...existingpeertutorsEmails, ...existingStudentEmails]
-
-      // Search Microsoft Graph for students
+      // Search Microsoft Graph for students - return all results
+      // Validation for existing users will happen during the assignment process
       const searchResults = await MicrosoftGraphService.searchUsers(query)
-
-      // Filter out existing peer tutors and students
-      const availableStudents = searchResults.filter(student =>
-        !allExcludedEmails.includes(student.mail?.toLowerCase() || '')
-      )
-
-      return availableStudents
+      return searchResults
     } catch (error) {
       logger.error('Error searching available students:', error)
       return []

@@ -102,15 +102,18 @@ function PeerTutorsExamDetailsContent() {
 
   // Fetch exam subjects for this exam
   const { data: examSubjects, isLoading: isSubjectsLoading, refetch: refetchSubjects } = useQuery({
-    queryKey: ['exam-subjects', examId],
-    queryFn: async () => await ExamSubjectService.getExamSubjects(examId),
-    enabled: !!examId,
+    queryKey: ['exam-subjects', examId, peertutorsId],
+    queryFn: async () => {
+      if (!peertutorsId) return []
+      return await ExamSubjectService.getExamSubjectsForPeerTutor(examId, peertutorsId)
+    },
+    enabled: !!examId && !!peertutorsId,
     staleTime: 5 * 60 * 1000,
   })
 
-  // Initialize subjects from classes if none exist
+  // Initialize subjects from classes if none exist or if new classes were added
   useEffect(() => {
-    if (exam && peertutors && examSubjects && examSubjects.length === 0) {
+    if (exam && peertutors) {
       ExamSubjectService.initializeSubjectsFromClasses(
         examId,
         peertutors.id,
@@ -121,7 +124,8 @@ function PeerTutorsExamDetailsContent() {
         refetchSubjects()
       })
     }
-  }, [exam, peertutors, examSubjects, examId, refetchSubjects])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exam?.id, peertutors?.id, examId, refetchSubjects])
 
   // Fetch existing exam marks
   const { data: existingMarks, isLoading: isMarksLoading } = useQuery({

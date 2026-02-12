@@ -54,7 +54,7 @@ interface peertutorsInfo {
 interface Student {
   id: string
   name: string
-  email: string
+  email?: string | null
 }
 
 interface AdditionalClassesTabProps {
@@ -120,7 +120,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
       const attendanceRecords: AttendanceRecord[] = assignedStudents.map(student => ({
         student_id: student.id,
         student_name: student.name,
-        student_email: student.email,
+        student_email: student.email || '',
         status: 'present' as const
       }))
       setNewClass(prev => ({ ...prev, students: attendanceRecords }))
@@ -208,7 +208,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
       students: assignedStudents.map(student => ({
         student_id: student.id,
         student_name: student.name,
-        student_email: student.email,
+        student_email: student.email || '',
         status: 'present' as const
       }))
     }

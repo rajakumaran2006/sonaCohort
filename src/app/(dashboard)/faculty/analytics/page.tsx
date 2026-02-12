@@ -434,50 +434,80 @@ function AnalyticsContent() {
             <div className="space-y-6">
               <div>
                 <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Pending Scheduled Classes</h3>
-                <div className="space-y-2">
-                  {selectedStudent.scheduled_classes.map((cls) => (
-                    <div key={cls.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">{cls.subject_name}</p>
-                        <p className="text-xs text-gray-500 font-medium mt-1">
-                          {new Date(cls.scheduled_date).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </p>
-                      </div>
-                      <span className="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold">
-                        {cls.completion_status.replace(/_/g, ' ').toUpperCase()}
-                      </span>
-                    </div>
-                  ))}
+                <div className="overflow-hidden rounded-xl border border-gray-100 bg-white">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        <th className="text-left py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Subject</th>
+                        <th className="text-left py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                        <th className="text-center py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {selectedStudent.scheduled_classes.map((cls) => (
+                        <tr key={cls.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-3 px-4">
+                            <p className="text-sm font-bold text-gray-900">{cls.subject_name}</p>
+                          </td>
+                          <td className="py-3 px-4">
+                            <p className="text-sm text-gray-500 font-medium">
+                              {new Date(cls.scheduled_date).toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-block px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm">
+                              {cls.completion_status.replace(/_/g, ' ').toUpperCase()}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
               {selectedStudent.additional_classes.length > 0 && (
                 <div>
                   <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Additional Classes Taken</h3>
-                  <div className="space-y-2">
-                    {selectedStudent.additional_classes.map((cls) => (
-                      <div key={cls.id} className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl">
-                        <div>
-                          <p className="text-sm font-bold text-gray-900">{cls.subject_name}</p>
-                          <p className="text-xs text-gray-500 font-medium mt-1">
-                            {new Date(cls.class_date).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </p>
-                        </div>
-                        <span className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold">
-                          Additional
-                        </span>
-                      </div>
-                    ))}
+                  <div className="overflow-hidden rounded-xl border border-emerald-100 bg-white">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-emerald-50/50 border-b border-emerald-100">
+                          <th className="text-left py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Subject</th>
+                          <th className="text-left py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                          <th className="text-center py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-emerald-50">
+                        {selectedStudent.additional_classes.map((cls) => (
+                          <tr key={cls.id} className="hover:bg-emerald-50/30 transition-colors">
+                            <td className="py-3 px-4">
+                              <p className="text-sm font-bold text-gray-900">{cls.subject_name}</p>
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="text-sm text-gray-500 font-medium">
+                                {new Date(cls.class_date).toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </p>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="inline-block px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-sm">
+                                ADDITIONAL
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

@@ -180,7 +180,7 @@ export default function FacultyCommandPalette() {
     // 3. Students
     if (students) {
       students.forEach(s => {
-        if (s.name.toLowerCase().includes(lowerQuery) || s.email.toLowerCase().includes(lowerQuery)) {
+        if (s.name.toLowerCase().includes(lowerQuery) || s.email?.toLowerCase().includes(lowerQuery)) {
           // Direct to main page since we don't have separate student details page yet
           // But user asked for "studentts page it should have peer tutor...".
           // Assuming filtering on main page is best we can do for now

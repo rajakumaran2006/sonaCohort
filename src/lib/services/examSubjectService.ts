@@ -190,7 +190,8 @@ export class ExamSubjectService {
 
   /**
    * Initialize exam subjects from classes for a peer tutor
-   * Only adds subjects from classes that are scheduled for this specific peer tutor
+   * Adds subjects from classes that are scheduled for this specific peer tutor
+   * Uses class_id for exact matching to avoid duplicate issues
    */
   static async initializeSubjectsFromClasses(
     examId: string,
@@ -202,28 +203,24 @@ export class ExamSubjectService {
     try {
       const supabase = createClient()
       
-      // Get unique class_ids that are scheduled for this specific peer tutor
+      // Get unique class_ids scheduled for this peer tutor
       const { data: scheduledClasses, error: scheduledError } = await supabase
         .from('scheduled_classes')
         .select('class_id')
         .eq('peer_tutor_id', peertutorsId)
-        .eq('dept', dept)
-        .eq('year', year)
-        .eq('section', section)
 
       if (scheduledError) {
         logger.error('Error getting scheduled classes for peer tutor:', scheduledError)
         return false
       }
 
-      // Get unique class IDs assigned to this peer tutor
       const peerTutorClassIds = [...new Set(scheduledClasses?.map(sc => sc.class_id) || [])]
 
       if (peerTutorClassIds.length === 0) {
         return true // No classes assigned to this peer tutor
       }
 
-      // Get class details (subject_name) only for classes assigned to this peer tutor
+      // Get class details only for classes assigned to this peer tutor
       const { data: classes, error: classesError } = await supabase
         .from('classes')
         .select('id, subject_name')
@@ -238,30 +235,27 @@ export class ExamSubjectService {
         return true // No classes to add
       }
 
-      // Check existing subjects
+      // Check existing subjects for this exam by class_id
       const { data: existingSubjects } = await supabase
         .from('exam_subjects')
-        .select('subject_name')
+        .select('class_id, subject_name')
         .eq('exam_id', examId)
 
-      const existingNames = new Set(existingSubjects?.map(s => s.subject_name) || [])
+      // Create a set of existing class_ids (filter out nulls)
+      const existingClassIds = new Set(
+        existingSubjects?.filter(s => s.class_id).map(s => s.class_id) || []
+      )
 
-      // Add subjects that don't exist (deduplicate by subject_name)
-      const uniqueSubjects = new Map<string, { id: string, subject_name: string }>()
-      classes.forEach(cls => {
-        if (!uniqueSubjects.has(cls.subject_name)) {
-          uniqueSubjects.set(cls.subject_name, cls)
-        }
-      })
-
-      const subjectsToAdd = Array.from(uniqueSubjects.values())
-        .filter(cls => !existingNames.has(cls.subject_name))
+      // Add subjects for classes that don't have exam_subjects entries yet
+      // Use class_id for exact matching instead of subject name deduplication
+      const subjectsToAdd = classes
+        .filter(cls => !existingClassIds.has(cls.id))
         .map(cls => ({
           exam_id: examId,
           subject_name: cls.subject_name,
           class_id: cls.id,
           is_custom: false,
-          created_by: peertutorsId,
+          created_by: null, // Don't attribute to specific peer tutor - belongs to exam
         }))
 
       if (subjectsToAdd.length > 0) {
@@ -273,6 +267,8 @@ export class ExamSubjectService {
           logger.error('Error inserting exam subjects:', insertError)
           return false
         }
+
+        logger.info(`Added ${subjectsToAdd.length} new exam subjects for exam ${examId}`)
       }
 
       return true

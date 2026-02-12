@@ -3,62 +3,71 @@ import { logger } from '@/lib/logger'
 import { ScheduledClassWithDetails } from './scheduledClassService'
 import { AdditionalClass } from './additionalClassService'
 
+import { SupabaseClient } from '@supabase/supabase-js'
+
 export class EmailAutomationService {
   /**
    * Process morning reminders for today's scheduled classes
    */
-  static async processMorningReminders(): Promise<{ success: boolean; sentCount: number; errors: string[] }> {
+  static async processMorningReminders(options?: { departmentId?: string; force?: boolean }, supabaseClient?: SupabaseClient): Promise<{ success: boolean; sentCount: number; errors: string[]; debugInfo?: string[] }> {
     try {
-      const supabase = createClient()
+      const supabase = supabaseClient || createClient()
       const errors: string[] = []
+      const debugLogs: string[] = []
       let sentCount = 0
 
-      // 1. Get all departments with email notifications enabled
-      const { data: departments, error: deptError } = await supabase
+      // 1. Get departments with email notifications enabled
+      let query = supabase
         .from('departments')
         .select('*')
         .eq('enable_email_notifications', true)
+      
+      if (options?.departmentId) {
+        query = query.eq('id', options.departmentId)
+      }
+
+      const { data: departments, error: deptError } = await query
 
       if (deptError) {
         logger.error('Error fetching departments for reminders:', deptError)
         return { success: false, sentCount, errors: [deptError.message] }
       }
 
-      logger.info(`Found ${departments.length} departments with enabled notifications`)
+      debugLogs.push(`Found ${departments?.length || 0} departments`)
+      logger.info(`Found ${departments?.length || 0} departments with enabled notifications`)
 
       const today = new Date()
       const todayStr = today.toISOString().split('T')[0] // YYYY-MM-DD
-
-      const currentHour = new Date().getHours() // Local server time. Ideally utilize timezone from settings if available.
+      const currentHour = new Date().getHours()
 
       // 2. Iterate through each department
-      for (const dept of departments) {
+      for (const dept of departments || []) {
+        let deptHasError = false
         try {
-          // Check time window (simple check: match hour)
-          // If no time set, default to 8 AM. 
-          const reminderTime = dept.morning_reminder_time || '08:00'
-          const [reminderHourStr] = reminderTime.split(':')
-          const reminderHour = parseInt(reminderHourStr, 10)
-          
-          // Allow sending if current hour matches reminder hour. 
-          // This assumes cron runs hourly.
-          // Note: If running locally or irregular cron, this might miss. 
-          // For testing, user can force 'all' via API param which bypasses logic if we implemented that check there,
-          // but here we are inside the service.
-          // Let's assume strict hourly check for production safety.
-          if (currentHour !== reminderHour) {
-             // logger.info(`Skipping dept ${dept.name}: Current hour ${currentHour} != Reminder hour ${reminderHour}`)
+          // Check if already sent today (unless forced)
+          if (!options?.force && dept.last_daily_reminder_date === todayStr) {
+             debugLogs.push(`Skipping dept ${dept.name}: Already sent today`)
              continue
           }
 
-          // Check if custom message exists
-          // const messageTemplate = dept.morning_reminder_message || 
-          //   "This is a reminder for your scheduled class today. Please ensure you conduct the class on time."
+          // Check time window (simple check: match hour)
+          // Ignored if forced
+          if (!options?.force) {
+            const reminderTime = dept.morning_reminder_time || '08:00'
+            const [reminderHourStr] = reminderTime.split(':')
+            const reminderHour = parseInt(reminderHourStr, 10)
+            
+            if (currentHour !== reminderHour) {
+               // debugLogs.push(`Skipping dept ${dept.name}: Hour mismatch (${currentHour} vs ${reminderHour})`)
+               continue
+            }
+          }
+
+          
+          debugLogs.push(`Checking classes for dept: "${dept.name}" on date: ${todayStr}`)
 
           // Fetch peer tutors for this department who have scheduled classes TODAY
-          // We can't query scheduled_classes by 'dept' directly easily since schema is text based, 
-          // let's rely on querying scheduled_classes by date and filtering by department name
-          
+          // Using ilike for department name matching as text
           const { data: scheduledClasses, error: classError } = await supabase
             .from('scheduled_classes')
             .select(`
@@ -66,7 +75,7 @@ export class EmailAutomationService {
               peer_tutor:peer_tutors(id, name, email)
             `)
             .eq('scheduled_date', todayStr)
-            .ilike('dept', dept.name) // Assuming case might differ
+            .ilike('dept', dept.name)
             
           if (classError) {
             logger.error(`Error fetching classes for dept ${dept.name}:`, classError)
@@ -75,13 +84,29 @@ export class EmailAutomationService {
           }
 
           if (!scheduledClasses || scheduledClasses.length === 0) {
-            logger.info(`No scheduled classes for ${dept.name} today`)
+            debugLogs.push(`No classes found for ${dept.name} on ${todayStr}.`)
+            
+            // DIAGNOSTIC CHECKS
+            // 1. Check if ANY classes exist for today (ignoring dept)
+            const { count: totalToday } = await supabase
+              .from('scheduled_classes')
+              .select('*', { count: 'exact', head: true })
+              .eq('scheduled_date', todayStr)
+            debugLogs.push(`Diagnostic: Total classes in system for ${todayStr}: ${totalToday}`)
+
+            // 2. Check if ANY classes exist for this dept (ignoring date)
+            const { count: totalDept } = await supabase
+              .from('scheduled_classes')
+              .select('*', { count: 'exact', head: true })
+              .ilike('dept', dept.name)
+            debugLogs.push(`Diagnostic: Total classes in system for dept "${dept.name}": ${totalDept}`)
+            
             continue
           }
 
-          // Group by Peer Tutor to send one email per tutor if multiple classes (optional, or per class)
-          // The prompt says "if there is scheuded class they will get mail" - implies one email reminder.
-          
+          debugLogs.push(`Found ${scheduledClasses.length} classes for ${dept.name}.`)
+
+          // Group by Peer Tutor
           const tutorMap = new Map<string, { name: string; email: string; classes: ScheduledClassWithDetails[] }>()
           
           for (const cls of scheduledClasses) {
@@ -101,27 +126,25 @@ export class EmailAutomationService {
           // Send emails
           for (const [, tutorData] of tutorMap.entries()) {
             try {
-              // Extract class names/subjects
-              /* eslint-disable @typescript-eslint/no-explicit-any */
               const classNames = tutorData.classes
-                .map(c => (c as any).class?.subject_name || (c as any).subject || 'Untitled Class')
+                .map(c => {
+                  // Type guard or safe access
+                  const cls = c as unknown as { class?: { subject_name: string }, subject?: string }
+                  return cls.class?.subject_name || cls.subject || 'Untitled Class'
+                })
                 .join(', ')
-              /* eslint-enable @typescript-eslint/no-explicit-any */
               
-              // Get message template
               const messageTemplate = dept.morning_reminder_message || 
                 "Dear {tutor_name}, this is a reminder for your scheduled classes today: {class_names}"
               
-              // Replace placeholders
               const personalizedMessage = messageTemplate
                 .replace(/{tutor_name}/g, tutorData.name)
                 .replace(/{class_names}/g, classNames)
               
-              // Construct email
               const subject = `Class Reminder - ${todayStr}`
               const content = `${personalizedMessage}<br/><br/>Regards,<br/>${dept.faculty_name}`
 
-              // Send email via internal API (will use faculty's Microsoft Graph token)
+              // Call internal API
               const emailResponse = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('supabase.co', '') || 'http://localhost:3000'}/api/cron/send-email`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -140,11 +163,22 @@ export class EmailAutomationService {
                 const errorData = await emailResponse.text()
                 logger.error(`✗ Failed to send to ${tutorData.email}:`, errorData)
                 errors.push(`Failed to send to ${tutorData.email}: ${errorData}`)
+                deptHasError = true
               }
             } catch (emailError) {
               logger.error(`Error sending email to ${tutorData.email}:`, emailError)
               errors.push(`${tutorData.email}: ${emailError instanceof Error ? emailError.message : String(emailError)}`)
+              deptHasError = true
             }
+          }
+
+          // Update last_daily_reminder_date if emails were sent or if the check ran successfully without errors.
+          // This ensures we don't spam, but also allows retrying if there was an error.
+          
+          if (!deptHasError) { 
+             await supabase.from('departments')
+               .update({ last_daily_reminder_date: todayStr })
+               .eq('id', dept.id)
           }
 
         } catch (err) {
@@ -153,7 +187,7 @@ export class EmailAutomationService {
         }
       }
 
-      return { success: true, sentCount, errors }
+      return { success: true, sentCount, errors, debugInfo: debugLogs }
     } catch (error) {
       logger.error('Error in processMorningReminders:', error)
       return { success: false, sentCount: 0, errors: [error instanceof Error ? error.message : String(error)] }
@@ -164,9 +198,9 @@ export class EmailAutomationService {
    * Process pending notices for classes that are overdue
    * Logic: "takes only the shceudl class continous three pending"
    */
-  static async processPendingWarnings(): Promise<{ success: boolean; sentCount: number; errors: string[] }> {
+  static async processPendingWarnings(supabaseClient?: SupabaseClient): Promise<{ success: boolean; sentCount: number; errors: string[] }> {
     try {
-      const supabase = createClient()
+      const supabase = supabaseClient || createClient()
       const errors: string[] = []
       let sentCount = 0
 

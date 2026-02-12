@@ -36,6 +36,8 @@ import { Eye, X } from 'lucide-react'
 import { SearchIcon } from '@/components/icons/SearchIcon'
 import ExportButton from '@/components/ui/ExportButton'
 import UserSelectionModal from '@/components/forms/modals/UserSelectionModal'
+import EmailAssignmentModal from '@/components/forms/modals/EmailAssignmentModal'
+import { isManualStudent } from '@/lib/utils/manualStudentUtils'
 import { logger } from '@/lib/logger'
 import { motion } from 'framer-motion'
 import { Trophy, Crown, Medal } from 'lucide-react'
@@ -219,7 +221,11 @@ function FacultypeertutorsContent() {
   const [reportLoading, setReportLoading] = useState(false)
   const [selectedClass, setSelectedClass] = useState<ClassAttendanceReport | null>(null)
   const [showClassModal, setShowClassModal] = useState(false)
+
   const [leaderboardFilterYear, setLeaderboardFilterYear] = useState('all')
+  
+  // Email Assignment State
+  const [selectedStudentForEmail, setSelectedStudentForEmail] = useState<StudentWithpeertutors | null>(null)
 
   const loadData = useCallback(async () => {
     if (!user?.id || !department?.name) return
@@ -374,7 +380,7 @@ function FacultypeertutorsContent() {
         const assignedpeertutors = peerTutor.find(tutor => tutor.id === student.assigned_peer_tutor_id)
         return (
           student.name.toLowerCase().includes(q) ||
-          student.email.toLowerCase().includes(q) ||
+          (student.email && student.email.toLowerCase().includes(q)) ||
           student.year.toLowerCase().includes(q) ||
           student.section.toLowerCase().includes(q) ||
           assignedpeertutors?.name.toLowerCase().includes(q)
@@ -867,7 +873,7 @@ function FacultypeertutorsContent() {
     const selectedStudentsList = filteredStudents.filter(s => selectedStudentIds.has(s.id))
     const items = selectedStudentsList.map(s => ({
       name: s.name,
-      email: s.email,
+      email: s.email || undefined,
       additionalInfo: s.assigned_peer_tutor ? `Assigned to ${s.assigned_peer_tutor.name}` : 'Unassigned'
     }))
 
@@ -2443,8 +2449,24 @@ function FacultypeertutorsContent() {
                                   <div className="ml-4">
                                     <div className="text-sm font-medium text-gray-900">
                                       {student.name}
+                                      {isManualStudent(student) && (
+                                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                                          Manual
+                                        </span>
+                                      )}
                                     </div>
-                                    <div className="text-sm text-gray-500">{student.email}</div>
+                                    <div className="text-sm text-gray-500">
+                                      {isManualStudent(student) ? (
+                                        <button
+                                          onClick={() => setSelectedStudentForEmail(student)}
+                                          className="text-blue-600 hover:text-blue-800 text-xs font-semibold hover:underline flex items-center gap-1 mt-0.5"
+                                        >
+                                          + Assign Email
+                                        </button>
+                                      ) : (
+                                        student.email
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </td>
@@ -4370,7 +4392,16 @@ function FacultypeertutorsContent() {
         )
       }
 
-
-    </div >
+      {selectedStudentForEmail && (
+        <EmailAssignmentModal
+          student={selectedStudentForEmail}
+          onClose={() => setSelectedStudentForEmail(null)}
+          onSuccess={() => {
+            handleRefresh()
+            setSelectedStudentForEmail(null)
+          }}
+        />
+      )}
+    </div>
   )
 }

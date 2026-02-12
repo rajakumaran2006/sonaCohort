@@ -78,7 +78,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
         if (peerTutors && student) {
           exportData.push([
             peerTutors.email,
-            student.email
+            student.email || ''
           ])
         }
       })
@@ -168,7 +168,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
       if (!peerTutorsEmail || !studentEmail) continue
       
       let peerTutors: peertutors | undefined | null = existingpeerTutor.find(pt => pt.email.toLowerCase() === peerTutorsEmail.toLowerCase())
-      let student: Student | undefined | null = existingStudents.find(s => s.email.toLowerCase() === studentEmail.toLowerCase())
+      let student: Student | undefined | null = existingStudents.find(s => s.email?.toLowerCase() === studentEmail.toLowerCase())
       
       // If peer tutor not found locally, check Microsoft Graph and create if exists
       if (!peerTutors) {
@@ -309,7 +309,7 @@ export default function BulkImportExport({ dept, year, section, onImportComplete
           const students = await StudentService.getStudentsBySection(dept, year, section)
           
           const peerTutors = peerTutor.find(pt => pt.email.toLowerCase() === assignment.peerTutorsEmail.toLowerCase())
-          const student = students.find(s => s.email.toLowerCase() === assignment.studentEmail.toLowerCase())
+          const student = students.find(s => s.email?.toLowerCase() === assignment.studentEmail.toLowerCase())
           
           if (peerTutors && student) {
             const success = await AssignmentService.createAssignment({

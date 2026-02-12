@@ -27,6 +27,8 @@ import { FacultyService } from '@/lib/services/facultyService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { ReportService } from '@/lib/services/reportService'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
+import EmailAssignmentModal from '@/components/forms/modals/EmailAssignmentModal'
+import { isManualStudent } from '@/lib/utils/manualStudentUtils'
 
 
 
@@ -997,6 +999,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
   const [itemsToDeleteStudents, setItemsToDeleteStudents] = useState<Array<{ name: string, email: string, additionalInfo: string }>>([])
 
   const [loading, setLoading] = useState(true)
+  const [selectedStudentForEmail, setSelectedStudentForEmail] = useState<Student | null>(null)
 
   // Transfer state
   const [showTransferModal, setShowTransferModal] = useState(false)
@@ -1025,7 +1028,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
       .map(s => ({
         id: s.id,
         name: s.name,
-        email: s.email,
+        email: s.email || '',
         hasAssignment: !!s.assigned_peer_tutor_id
       }))
 
@@ -1048,7 +1051,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
         const assignedpeertutors = peerTutor.find(tutor => tutor.id === student.assigned_peer_tutor_id)
         return (
           student.name.toLowerCase().includes(q) ||
-          student.email.toLowerCase().includes(q) ||
+          (student.email || '').toLowerCase().includes(q) ||
           student.section.toLowerCase().includes(q) ||
           assignedpeertutors?.name.toLowerCase().includes(q)
         )
@@ -1137,7 +1140,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
         const assignedpeertutors = peerTutor.find(tutor => tutor.id === s.assigned_peer_tutor_id)
         return {
           name: s.name,
-          email: s.email,
+          email: s.email || '',
           additionalInfo: `${s.year} - ${s.section}${assignedpeertutors ? `, Assigned to: ${assignedpeertutors.name}` : ''}`
         }
       })
@@ -1564,8 +1567,26 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
                             </div>
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{student.name}</div>
-                            <div className="text-xs text-gray-500">{student.email}</div>
+                            <div className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                              {student.name}
+                              {isManualStudent(student) && (
+                                <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                                  Manual
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {isManualStudent(student) ? (
+                                <button
+                                  onClick={() => setSelectedStudentForEmail(student)}
+                                  className="text-blue-600 hover:text-blue-800 font-semibold hover:underline flex items-center gap-1"
+                                >
+                                  + Assign Email
+                                </button>
+                              ) : (
+                                student.email
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -3019,7 +3040,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
         students.forEach(student => {
           group.students.push({
             name: student.name,
-            email: student.email
+            email: student.email || ''
           })
         })
       })
@@ -3049,7 +3070,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
             'Peer Tutor Name': group.tutorName,
             'Peer Tutor Email': group.tutorEmail,
             'Student Name': student.name,
-            'Student Email': student.email
+            'Student Email': student.email || ''
           })
 
           rowIndex++

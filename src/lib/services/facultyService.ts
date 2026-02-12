@@ -16,6 +16,7 @@ export interface FacultyDepartment {
   morning_reminder_time?: string
   morning_reminder_message?: string
   pending_warning_message?: string
+  last_daily_reminder_date?: string
 }
 export interface FacultyAllocation {
   id: string
@@ -623,4 +624,51 @@ export class FacultyService {
     }
   }
 
+
+  /**
+   * Get all valid emails for a department (Peer Tutors and Students)
+   * @param deptName Department ID
+   * @param supabaseClient Optional Supabase client (for server-side usage)
+   * @returns List of valid emails
+   */
+  static async getAllDepartmentEmails(deptName: string, supabaseClient?: SupabaseClient): Promise<string[]> {
+    try {
+      const supabase = supabaseClient || createClient()
+      const emails = new Set<string>()
+
+      // 1. Get all peer tutors for the department
+      const { data: peerTutors, error: ptError } = await supabase
+        .from('peer_tutors')
+        .select('email')
+        .eq('dept', deptName)
+
+      if (ptError) {
+        logger.error('Error fetching peer tutor emails:', ptError)
+      } else if (peerTutors) {
+        peerTutors.forEach(pt => {
+          if (pt.email) emails.add(pt.email.toLowerCase().trim())
+        })
+      }
+
+      // 2. Get all students for the department
+      const { data: students, error: sError } = await supabase
+        .from('peer_students')
+        .select('email')
+        .eq('dept', deptName)
+
+      if (sError) {
+        logger.error('Error fetching student emails:', sError)
+      } else if (students) {
+        students.forEach(s => {
+          if (s.email) emails.add(s.email.toLowerCase().trim())
+        })
+      }
+
+      return Array.from(emails)
+    } catch (error) {
+      logger.error('Error in getAllDepartmentEmails:', error)
+      return []
+    }
+  }
 }
+

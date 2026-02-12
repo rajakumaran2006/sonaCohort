@@ -1,5 +1,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { EmailAutomationService } from '@/lib/services/emailAutomationService'
 import { logger } from '@/lib/logger'
 
@@ -18,15 +19,22 @@ export async function GET(request: NextRequest) {
 
     const results: Record<string, unknown> = {}
 
+    // Create a Supabase client with the service role key to bypass RLS
+    // This is critical for cron jobs which run without a user session
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
     if (type === 'morning' || !type || type === 'all') {
       logger.info('Starting morning reminder cron...')
-      const morningResult = await EmailAutomationService.processMorningReminders()
+      const morningResult = await EmailAutomationService.processMorningReminders({}, supabaseAdmin)
       results.morning = morningResult
     }
 
     if (type === 'pending' || !type || type === 'all') {
       logger.info('Starting pending warning cron...')
-      const pendingResult = await EmailAutomationService.processPendingWarnings()
+      const pendingResult = await EmailAutomationService.processPendingWarnings(supabaseAdmin)
       results.pending = pendingResult
     }
 

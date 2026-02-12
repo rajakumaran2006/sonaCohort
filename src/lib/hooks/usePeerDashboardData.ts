@@ -106,7 +106,8 @@ export function useStudentAttendanceStats(students: Student[] | undefined, peert
               section: student.section,
               classesPresent: presentCount,
               classesAbsent: absentCount,
-              attendancePercentage
+              attendancePercentage,
+              is_manual_entry: student.is_manual_entry
             }
           } catch (error) {
             logger.error(`Error loading attendance for student ${student.id}:`, error)

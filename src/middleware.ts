@@ -27,9 +27,14 @@ export async function middleware(request: NextRequest) {
   );
 
   // This will refresh session if needed
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (err) {
+    console.error('Middleware auth check failed:', err);
+    // Continue as unauthenticated
+  }
 
   // Check if the request is for protected routes
   const isProtectedRoute =

@@ -15,6 +15,7 @@ import ClassesExportModal from '@/components/forms/import-export/ClassesExportMo
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import ExportButton from '@/components/ui/ExportButton'
 import { logger } from '@/lib/logger'
+import { SearchIcon } from '@/components/icons/SearchIcon'
 
 export default function FacultyClassesPage() {
   return (
@@ -31,6 +32,7 @@ function FacultyClassesContent() {
   const [filterYear, setFilterYear] = useState('')
   const [filterSection, setFilterSection] = useState('')
   const [filterSubject, setFilterSubject] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   // scheduledClassCounts will be populated by useQuery
   const [showExportModal, setShowExportModal] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
@@ -68,6 +70,15 @@ function FacultyClassesContent() {
   const filteredClasses = useMemo(() => {
     let filtered = allClasses
 
+    // Apply search query
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      filtered = filtered.filter(classItem => 
+        classItem.subject_name.toLowerCase().includes(q) ||
+        classItem.dept.toLowerCase().includes(q)
+      )
+    }
+
     // Apply year filter
     if (filterYear) {
       filtered = filtered.filter(classItem => classItem.year === filterYear)
@@ -84,7 +95,7 @@ function FacultyClassesContent() {
     }
 
     return filtered
-  }, [allClasses, filterYear, filterSection, filterSubject])
+  }, [allClasses, filterYear, filterSection, filterSubject, searchQuery])
 
   // Get unique values for filter dropdowns
   const getUniqueYears = () => [...new Set(allClasses.map(c => c.year))].sort()
@@ -266,6 +277,19 @@ function FacultyClassesContent() {
                       </h3>
 
                       <div className="flex items-center gap-3 flex-wrap">
+                        {/* Search Bar */}
+                        <div className="relative group w-64">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                          </div>
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search subjects..."
+                            className="block w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                          />
+                        </div>
                         <div className="w-40">
                           <FilterDropdown
                             value={filterYear}

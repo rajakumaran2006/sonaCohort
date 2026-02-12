@@ -31,6 +31,8 @@ import {
   usePeerLeaderboard
 } from '@/lib/hooks/usePeerDashboardData'
 import { peertutorsRenumeration } from '@/lib/services/renumerationService'
+import EmailAssignmentModal from '@/components/forms/modals/EmailAssignmentModal'
+import { Student } from '@/lib/services/studentService'
 
 
 
@@ -48,6 +50,7 @@ function PeerDashboardContent() {
   const queryClient = useQueryClient()
   const [showRenumerationModal, setShowRenumerationModal] = useState(false)
   const [selectedRenumeration, setSelectedRenumeration] = useState<peertutorsRenumeration | null>(null)
+  const [selectedStudentForEmail, setSelectedStudentForEmail] = useState<Student | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Use custom hook for sidebar collapsed state
@@ -89,9 +92,9 @@ function PeerDashboardContent() {
       return
     }
 
-    const exportData = studentsWithAttendance.map((student: { name: string; email: string; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number }) => ({
+    const exportData = studentsWithAttendance.map((student: { name: string; email: string | null; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number }) => ({
       'Student Name': student.name,
-      'Email': student.email,
+      'Email': student.email || '',
       'Department': student.dept,
       'Year': student.year,
       'Section': student.section,
@@ -256,7 +259,7 @@ function PeerDashboardContent() {
                        </div>
                     ) : (
                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 max-h-[500px]">
-                          {studentsWithAttendance.map((student: { id: string; name: string; email: string; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number }) => (
+                          {studentsWithAttendance.map((student: { id: string; name: string; email: string | null; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number; is_manual_entry?: boolean }) => (
                              <div 
                                key={student.id} 
                                onClick={() => router.push(`/peer/attendance/${student.id}`)}
@@ -267,13 +270,35 @@ function PeerDashboardContent() {
                                       {student.name.substring(0, 2).toUpperCase()}
                                    </div>
                                    <div className="min-w-0 flex-1">
-                                      <h5 className="text-xs sm:text-[13px] font-bold text-gray-900 leading-tight mb-1 group-hover:text-blue-600 transition-colors truncate">{student.name}</h5>
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <h5 className="text-xs sm:text-[13px] font-bold text-gray-900 leading-tight group-hover:text-blue-600 transition-colors truncate">
+                                          {student.name}
+                                        </h5>
+                                        {student.is_manual_entry && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 border border-yellow-200 whitespace-nowrap">
+                                            Manual
+                                          </span>
+                                        )}
+                                      </div>
+                                      
                                       <div className="flex flex-wrap items-center gap-2 text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wide">
                                          <span>{student.dept}</span>
                                          <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                                          <span>Yr {student.year}</span>
                                          <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                                         <span className="truncate max-w-[120px] sm:max-w-none">{student.email}</span>
+                                         {student.is_manual_entry ? (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    setSelectedStudentForEmail(student as unknown as Student)
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 font-bold hover:underline"
+                                            >
+                                                + ASSIGN EMAIL
+                                            </button>
+                                         ) : (
+                                            <span className="truncate max-w-[120px] sm:max-w-none">{student.email}</span>
+                                         )}
                                       </div>
                                    </div>
                                 </div>
@@ -435,7 +460,7 @@ function PeerDashboardContent() {
           </div>
         </main>
       </div>
-
+      
       {showRenumerationModal && selectedRenumeration && (
         <PeerRenumerationModal
           renumeration={selectedRenumeration!}
@@ -447,6 +472,17 @@ function PeerDashboardContent() {
           onSuccess={() => {
             // Refetch renumerations when a form is submitted
             queryClient.invalidateQueries({ queryKey: ['renumerations'] })
+          }}
+        />
+      )}
+
+      {selectedStudentForEmail && (
+        <EmailAssignmentModal
+          student={selectedStudentForEmail}
+          onClose={() => setSelectedStudentForEmail(null)}
+          onSuccess={() => {
+            handleRefresh()
+            setSelectedStudentForEmail(null)
           }}
         />
       )}

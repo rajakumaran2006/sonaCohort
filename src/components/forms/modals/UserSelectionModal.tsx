@@ -5,9 +5,10 @@ import Image from 'next/image'
 import { peertutorservice, peertutorsAssignment } from '@/lib/services/peerTutorService'
 import { StudentService, StudentAssignment } from '@/lib/services/studentService'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { Search, X, Loader2, User, Mail, Check, AlertCircle, ChevronDown } from 'lucide-react'
+import { Search, X, Loader2, User, Mail, Check, AlertCircle, ChevronDown, UserPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MicrosoftUser } from '@/lib/types'
+import ManualStudentEntry from './ManualStudentEntry'
 
 interface UserSelectionModalProps {
     isOpen: boolean
@@ -22,6 +23,7 @@ interface UserSelectionModalProps {
 }
 
 type ViewMode = 'all' | 'selected'
+type EntryMode = 'microsoft' | 'manual'
 
 export default function UserSelectionModal({
     isOpen,
@@ -36,6 +38,7 @@ export default function UserSelectionModal({
 }: UserSelectionModalProps) {
     const { user } = useAuth()
     const [viewMode, setViewMode] = useState<ViewMode>('all')
+    const [entryMode, setEntryMode] = useState<EntryMode>('microsoft')
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState<MicrosoftUser[]>([])
     const [isSearching, setIsSearching] = useState(false)
@@ -50,6 +53,7 @@ export default function UserSelectionModal({
             setSelectedYear(year || '')
             setSelectedSection(section || '')
             setViewMode('all')
+            setEntryMode('microsoft')
             setSearchQuery('')
             setSearchResults([])
             setSelectedUsers(new Map())
@@ -198,7 +202,18 @@ export default function UserSelectionModal({
                 const results = await Promise.allSettled(
                     assignments.map(a => peertutorservice.assignpeertutors(a))
                 )
-                processResults(results)
+                
+                // Collect error messages
+                const errors: string[] = []
+                results.forEach((result, index) => {
+                    if (result.status === 'fulfilled' && !result.value.success) {
+                        errors.push(result.value.error || `${assignments[index].name}: Unknown error`)
+                    } else if (result.status === 'rejected') {
+                        errors.push(`${assignments[index].name}: Failed to add`)
+                    }
+                })
+                
+                processResults(results, errors)
 
             } else {
                 const students: StudentAssignment[] = Array.from(selectedUsers.values()).map(u => ({
@@ -214,7 +229,18 @@ export default function UserSelectionModal({
                 const results = await Promise.allSettled(
                     students.map(s => StudentService.addStudent(s))
                 )
-                processResults(results)
+                
+                // Collect error messages
+                const errors: string[] = []
+                results.forEach((result, index) => {
+                    if (result.status === 'fulfilled' && !result.value.success) {
+                        errors.push(result.value.error || `${students[index].name}: Unknown error`)
+                    } else if (result.status === 'rejected') {
+                        errors.push(`${students[index].name}: Failed to add`)
+                    }
+                })
+                
+                processResults(results, errors)
             }
         } catch {
             setError(`An error occurred while adding ${mode === 'peer-tutor' ? 'peer tutors' : 'students'}.`)
@@ -222,8 +248,18 @@ export default function UserSelectionModal({
         }
     }
 
-    const processResults = (results: PromiseSettledResult<unknown>[]) => {
-        const successful = results.filter(result => result.status === 'fulfilled' && result.value).length
+    const processResults = (results: PromiseSettledResult<unknown>[], errors: string[] = []) => {
+        const successful = results.filter(result => {
+            if (result.status === 'fulfilled') {
+                // For the new structured response format
+                const value = result.value as { success?: boolean } | boolean
+                if (typeof value === 'object' && value !== null) {
+                    return value.success === true
+                }
+                return value === true
+            }
+            return false
+        }).length
         const failed = results.length - successful
 
         setIsSubmitting(false)
@@ -234,10 +270,18 @@ export default function UserSelectionModal({
                 onClose()
                 handleClearSelection()
             } else {
-                setError(`Successfully added ${successful}. ${failed} failed.`)
+                // Format error messages with line breaks for better readability
+                const errorMessage = errors.length > 0 
+                    ? `Successfully added ${successful} user${successful !== 1 ? 's' : ''}.\n\n${errors.join('\n')}`
+                    : `Successfully added ${successful}. ${failed} failed.`
+                setError(errorMessage)
             }
         } else {
-            setError('Failed to add any users. Please try again.')
+            // All failed - show error messages
+            const errorMessage = errors.length > 0
+                ? errors.join('\n')
+                : 'Failed to add any users. Please try again.'
+            setError(errorMessage)
         }
     }
 
@@ -254,6 +298,32 @@ export default function UserSelectionModal({
                             <h3 className="text-xl font-bold uppercase text-gray-900 tracking-tight">
                                 {title}
                             </h3>
+                            {/* Manual Entry Toggle */}
+                            {/* Manual Entry Toggle */}
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                <button
+                                    onClick={() => setEntryMode('microsoft')}
+                                    className={cn(
+                                        "px-3 py-1 text-xs font-bold rounded-md transition-all",
+                                        entryMode === 'microsoft' 
+                                            ? "bg-white text-blue-600 shadow-sm" 
+                                            : "text-gray-500 hover:text-gray-700"
+                                    )}
+                                >
+                                    DIRECTORY
+                                </button>
+                                <button
+                                    onClick={() => setEntryMode('manual')}
+                                    className={cn(
+                                        "px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1",
+                                        entryMode === 'manual' 
+                                            ? "bg-white text-blue-600 shadow-sm" 
+                                            : "text-gray-500 hover:text-gray-700"
+                                    )}
+                                >
+                                    MANUAL
+                                </button>
+                            </div>
                             {/* Breadcrumb-like Info / Fake Dropdowns matching screenshot */}
                             <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
                                 <span className="uppercase text-gray-700">{dept}</span>
@@ -386,8 +456,8 @@ export default function UserSelectionModal({
                     {/* Error Message */}
                     {error && (
                         <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-700 shadow-sm shrink-0 animate-in slide-in-from-top-2 fade-in duration-300">
-                            <AlertCircle className="w-5 h-5 mt-0.5" />
-                            <p className="text-sm font-medium">{error}</p>
+                            <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                            <p className="text-sm font-medium whitespace-pre-line">{error}</p>
                         </div>
                     )}
 
@@ -533,6 +603,21 @@ export default function UserSelectionModal({
                         </div>
                     </div>
                 </div>
+            {/* Render Manual Entry Modal Overlay if in manual mode */}
+            {entryMode === 'manual' && isContextSelected && (
+                <div className="absolute inset-0 z-10 bg-white">
+                    <ManualStudentEntry
+                        dept={dept}
+                        year={selectedYear}
+                        section={selectedSection}
+                        mode={mode}
+                        onClose={() => setEntryMode('microsoft')}
+                        onSuccess={() => {
+                            onSuccess()
+                        }}
+                    />
+                </div>
+            )}
             </div>
         </div>
     )

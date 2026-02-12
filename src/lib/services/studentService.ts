@@ -8,13 +8,14 @@ import { MicrosoftUser } from '@/lib/types'
 export interface Student {
   id: string
   name: string
-  email: string
+  email: string | null
   dept: string
   year: string
   section: string
   faculty_id: string
   peer_tutor: boolean
   assigned_peer_tutor_id?: string | null
+  is_manual_entry?: boolean
   created_at: string
 }
 
@@ -28,12 +29,13 @@ export interface StudentWithpeertutors extends Student {
 
 export interface StudentAssignment {
   name: string
-  email: string
+  email?: string | null
   dept: string
   year: string
   section: string
   faculty_id: string
   peer_tutor?: boolean
+  is_manual_entry?: boolean
 }
 
 export class StudentService {
@@ -236,23 +238,70 @@ export class StudentService {
   /**
    * Add a new student
    */
-  static async addStudent(student: StudentAssignment): Promise<boolean> {
+  static async addStudent(student: StudentAssignment): Promise<{ success: boolean; error?: string }> {
     try {
       const supabase = createClient()
       
+      // Only check for existing email if email is provided
+      if (student.email) {
+        // First, check if this email is already a student ANYWHERE (any dept/year/section)
+        const existingStudent = await this.getStudentByEmail(student.email)
+        
+        if (existingStudent) {
+          // Check if it's in the SAME section trying to add to
+          if (existingStudent.dept === student.dept && 
+              existingStudent.year === student.year && 
+              existingStudent.section === student.section) {
+            return { 
+              success: false, 
+              error: `${student.name} is already a student in ${student.dept} Year ${student.year} Section ${student.section}` 
+            }
+          } else {
+            // Exists in a DIFFERENT section
+            return { 
+              success: false, 
+              error: `${student.name} already exists as student in ${existingStudent.dept} Year ${existingStudent.year} Section ${existingStudent.section}` 
+            }
+          }
+        }
+
+        // Also check if this email is already a peer tutor
+        const existingPeerTutor = await peertutorservice.getPeerTutorByEmail(student.email)
+        
+        if (existingPeerTutor) {
+          return { 
+            success: false, 
+            error: `${student.name} already exists as peer tutor in ${existingPeerTutor.dept} Year ${existingPeerTutor.year} Section ${existingPeerTutor.section}` 
+          }
+        }
+      }
+
+      // Set is_manual_entry flag if email is null
+      const studentData = {
+        ...student,
+        is_manual_entry: student.email ? false : true
+      }
+
+      // Insert the new student
       const { error } = await supabase
         .from('peer_students')
-        .insert([student])
+        .insert([studentData])
 
       if (error) {
         logger.error('Error adding student:', error)
-        return false
+        
+        // Check for specific error codes
+        if (error.code === '23505') {
+          return { success: false, error: 'This user is already a student in this section' }
+        }
+        
+        return { success: false, error: `Failed to add student: ${error.message}` }
       }
 
-      return true
+      return { success: true }
     } catch (error) {
       logger.error('Error in addStudent:', error)
-      return false
+      return { success: false, error: 'An unexpected error occurred while adding student' }
     }
   }
 
@@ -313,39 +362,15 @@ export class StudentService {
   }
 
   /**
-   * Search for available students using Microsoft Graph (excluding existing students and peer tutors)
+   * Search for available students using Microsoft Graph (returns all results, validation happens during addition)
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   static async searchAvailableStudents(query: string, dept: string, year: string, section: string): Promise<MicrosoftUser[]> {
     try {
-      // Get all existing student emails to exclude them (globally, not just in this section)
-      const supabase = createClient()
-      const { data: existingStudents, error: fetchError } = await supabase
-        .from('peer_students')
-        .select('email')
-      
-      if (fetchError) {
-        logger.error('Error fetching existing students:', fetchError)
-      }
-
-      const existingStudentEmails = (existingStudents || []).map(s => s.email.toLowerCase())
-
-      // Get all existing peer tutor emails to exclude them
-      const existingpeerTutor = await peertutorservice.getAllpeerTutor()
-      const existingpeertutorsEmails = existingpeerTutor.map(pt => pt.email.toLowerCase())
-
-      // Combine all emails to exclude
-      const allExcludedEmails = [...existingStudentEmails, ...existingpeertutorsEmails]
-
-      // Search Microsoft Graph for students
+      // Search Microsoft Graph for students - return all results
+      // Validation for existing users will happen during the addition process
       const searchResults = await MicrosoftGraphService.searchUsers(query)
-      
-      // Filter out existing students and peer tutors
-      const availableStudents = searchResults.filter(student => 
-        !allExcludedEmails.includes(student.mail?.toLowerCase() || '')
-      )
-
-      return availableStudents
+      return searchResults
     } catch (error) {
       logger.error('Error searching available students:', error)
       return []
@@ -469,6 +494,93 @@ export class StudentService {
     } catch (error) {
       logger.error('Error in getStudentsWithpeerTutorByDepartment:', error)
       return []
+    }
+  }
+
+  /**
+   * Get all manually added students (students with no email)
+   */
+  static async getManualStudents(dept: string, year: string, section: string): Promise<Student[]> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('peer_students')
+        .select('*')
+        .eq('dept', dept)
+        .eq('year', year)
+        .eq('section', section)
+        .eq('is_manual_entry', true)
+        .eq('peer_tutor', false)
+        .order('name')
+
+      if (error) {
+        logger.error('Error getting manual students:', error)
+        return []
+      }
+
+      return data as Student[] || []
+    } catch (error) {
+      logger.error('Error in getManualStudents:', error)
+      return []
+    }
+  }
+
+  /**
+   * Update student email from Microsoft Graph user
+   */
+  static async updateStudentEmail(
+    studentId: string,
+    microsoftUser: MicrosoftUser
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const supabase = createClient()
+      
+      // First, verify the student exists and is a manual entry
+      const { data: student, error: fetchError } = await supabase
+        .from('peer_students')
+        .select('*')
+        .eq('id', studentId)
+        .single()
+      
+      if (fetchError || !student) {
+        logger.error('Student not found:', fetchError)
+        return { success: false, error: 'Student not found' }
+      }
+
+      // Check if email already exists in the system
+      const email = microsoftUser.mail || microsoftUser.userPrincipalName
+      if (email) {
+        const { data: existingStudent } = await supabase
+          .from('peer_students')
+          .select('id')
+          .eq('email', email)
+          .single()
+        
+        if (existingStudent && existingStudent.id !== studentId) {
+          return { success: false, error: 'Email already exists in the system' }
+        }
+      }
+
+      // Update the student with Microsoft Graph data
+      const { error: updateError } = await supabase
+        .from('peer_students')
+        .update({
+          name: microsoftUser.displayName,
+          email: email,
+          is_manual_entry: false
+        })
+        .eq('id', studentId)
+
+      if (updateError) {
+        logger.error('Error updating student email:', updateError)
+        return { success: false, error: 'Failed to update student' }
+      }
+
+      return { success: true }
+    } catch (error) {
+      logger.error('Error in updateStudentEmail:', error)
+      return { success: false, error: 'An unexpected error occurred' }
     }
   }
 }

@@ -82,6 +82,29 @@ export class ScheduledClassService {
         return false
       }
 
+      // Handle case where faculty_id is a department name instead of UUID
+      // This happens when called from SectionPage where deptId (string) is passed as faculty_id
+      let finalFacultyId = data.faculty_id
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.faculty_id)
+
+      if (!isUUID) {
+        logger.info(`faculty_id "${data.faculty_id}" is not a UUID, attempting to lookup department`)
+        const { data: deptData, error: deptError } = await supabase
+          .from('departments')
+          .select('id')
+          .ilike('name', data.faculty_id) // Match by name (case insensitive)
+          .maybeSingle()
+
+        if (deptError) {
+          logger.error('Error resolving department name to ID:', deptError)
+        } else if (deptData) {
+          logger.info(`Resolved department name "${data.faculty_id}" to ID:`, deptData.id)
+          finalFacultyId = deptData.id
+        } else {
+          logger.warn(`Could not resolve department name "${data.faculty_id}" to an ID. Using original value.`)
+        }
+      }
+
       // Get the class to verify it exists and get section information
       const { data: classData, error: classError } = await supabase
         .from('classes')
@@ -190,7 +213,7 @@ export class ScheduledClassService {
             dept: normalizedDept,
             year: normalizedYear,
             section: normalizedSection,
-            faculty_id: data.faculty_id,
+            faculty_id: finalFacultyId,
             peer_tutor_id: null,
             topics: data.topics,
             start_time: data.start_time,

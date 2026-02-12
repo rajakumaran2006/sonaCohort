@@ -103,9 +103,10 @@ function PeerExamDetailsContent() {
     refetchOnWindowFocus: true,
   })
 
-  // Initialize subjects from classes if none exist
+  // Initialize subjects from classes for this peer tutor
+  // Always run initialization - the service will handle duplicates
   useEffect(() => {
-    if (exam && peertutorsInfo && examSubjects && examSubjects.length === 0) {
+    if (exam && peertutorsInfo) {
       ExamSubjectService.initializeSubjectsFromClasses(
         examId,
         peertutorsInfo.id,
@@ -116,7 +117,7 @@ function PeerExamDetailsContent() {
         refetchSubjects()
       })
     }
-  }, [exam, peertutorsInfo, examSubjects, examId, refetchSubjects])
+  }, [exam, peertutorsInfo, examId, refetchSubjects])
 
   // Fetch existing exam marks
   const { data: existingMarks, isLoading: isMarksLoading } = useQuery({

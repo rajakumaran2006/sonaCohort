@@ -75,6 +75,7 @@ function SettingsContent() {
   const [morningMessage, setMorningMessage] = useState("This is a reminder for your scheduled class today. Please ensure you conduct the class on time.")
   const [pendingMessage, setPendingMessage] = useState("You have consecutive pending classes. Please complete them and update the status immediately.")
   const [emailTab, setEmailTab] = useState<'daily' | 'pending'>('daily')
+  const [emailLastSent, setEmailLastSent] = useState<string | null>(null)
   
   const [updatingSettings, setUpdatingSettings] = useState(false)
 
@@ -122,6 +123,7 @@ function SettingsContent() {
         if (facultyDept.morning_reminder_time) setMorningTime(facultyDept.morning_reminder_time)
         if (facultyDept.morning_reminder_message) setMorningMessage(facultyDept.morning_reminder_message)
         if (facultyDept.pending_warning_message) setPendingMessage(facultyDept.pending_warning_message)
+        setEmailLastSent(facultyDept.last_daily_reminder_date || null)
       }
 
       // Get all peer tutors for this department
@@ -179,7 +181,7 @@ function SettingsContent() {
                 allStudents.push({
                   id: s.id,
                   name: s.name,
-                  email: s.email,
+                  email: s.email || '',
                   type: 'student' as const
                 })
               }
@@ -646,6 +648,66 @@ function SettingsContent() {
                             <li>Sends email when current time matches reminder time</li>
                             <li>Groups all classes per peer tutor into one email</li>
                           </ul>
+                        </div>
+                        
+                        {/* Status & Test Section */}
+                        <div className="pt-4 border-t border-gray-100">
+                          <div className="flex items-center justify-between">
+                             <div>
+                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Status for Today</p>
+                               <div className="flex items-center gap-2">
+                                  {stats.department && (
+                                    <>
+                                      {/* Note: We need to carry 'last_daily_reminder_date' from loadData to here. 
+                                          We can store it in a new state or extend stats. 
+                                          For now let's assume we added 'lastSent' state. */}
+                                      <div className={`w-2 h-2 rounded-full ${
+                                        emailLastSent === new Date().toISOString().split('T')[0] 
+                                        ? 'bg-green-500' 
+                                        : 'bg-amber-500'
+                                      }`} />
+                                      <p className="text-sm font-bold text-gray-700">
+                                        {emailLastSent === new Date().toISOString().split('T')[0] 
+                                          ? 'Sent' 
+                                          : 'Pending / Not Sent'
+                                        }
+                                      </p>
+                                    </>
+                                  )}
+                               </div>
+                             </div>
+                             
+                             <button
+                               onClick={async () => {
+                                 if (confirm('This will immediately send reminder emails to all peer tutors with scheduled classes today, regardless of time. Continue?')) {
+                                   try {
+                                     setUpdatingSettings(true)
+                                     const res = await fetch('/api/settings/test-email-automation', { method: 'POST' })
+                                     const data = await res.json()
+                                     if (data.success) {
+                                       let msg = `Test Run Complete.\nSent: ${data.sentCount}\nErrors: ${data.errors.length}`
+                                       if (data.debugInfo && data.debugInfo.length > 0) {
+                                          msg += `\n\nLogs:\n${data.debugInfo.join('\n')}`
+                                       }
+                                       alert(msg)
+                                       handleRefresh() // Reload to update status
+                                     } else {
+                                       alert('Test Run Failed: ' + (data.error || JSON.stringify(data.errors)))
+                                     }
+                                   } catch (e) {
+                                     alert('Error running test: ' + String(e))
+                                   } finally {
+                                      setUpdatingSettings(false)
+                                   }
+                                 }
+                               }}
+                               disabled={updatingSettings}
+                               className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2"
+                             >
+                               <Send className="w-3 h-3" />
+                               Test Run Now
+                             </button>
+                          </div>
                         </div>
                       </div>
                     ) : (

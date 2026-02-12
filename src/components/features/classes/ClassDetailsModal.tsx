@@ -151,7 +151,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
         return {
             student_id: student.id,
             student_name: student.name,
-            student_email: student.email,
+            student_email: student.email || '',
             status: record?.status || 'present' // Default to present
         }
       })

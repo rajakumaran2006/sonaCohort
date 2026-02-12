@@ -1,20 +1,21 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService, FacultySummary } from '@/lib/services/facultyService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Plus, User, Mail, School, Trash2 } from 'lucide-react'
+import { Plus, User, Mail, School, Eye, Pencil } from 'lucide-react'
 import { SearchIcon } from '@/components/icons/SearchIcon'
 import Image from 'next/image'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import AddFacultyModal from '@/components/forms/modals/AddFacultyModal'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
+
 import EditFacultyAssignmentsModal from '@/components/forms/modals/EditFacultyAssignmentsModal'
-import { Tooltip } from '@/components/ui/Tooltip'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +28,7 @@ export default function FacultyManagePage() {
 }
 
 function FacultyManageContent() {
+  const router = useRouter()
   const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed] = useSidebarCollapsed()
@@ -40,12 +42,14 @@ function FacultyManageContent() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [facultyToEdit, setFacultyToEdit] = useState<FacultySummary | null>(null)
-  const [departmentName, setDepartmentName] = useState('')
-  const [facultyToDelete, setFacultyToDelete] = useState<FacultySummary | null>(null)
 
-  // Selection State
-  const [selectedFaculty, setSelectedFaculty] = useState<string[]>([])
+  const [facultyToEdit, setFacultyToEdit] = useState<FacultySummary | null>(null)
+
+  const [departmentName, setDepartmentName] = useState('')
+
+  // Delete Mode State
+  const [isDeleteMode, setIsDeleteMode] = useState(false)
+  const [selectedFacultyEmails, setSelectedFacultyEmails] = useState<Set<string>>(new Set())
 
   // Load Data
   useEffect(() => {
@@ -80,23 +84,46 @@ function FacultyManageContent() {
 
   // Selection Handlers
 
+  // Delete Mode Handlers
+  const handleDeleteModeToggle = () => {
+    setIsDeleteMode(!isDeleteMode)
+    setSelectedFacultyEmails(new Set())
+  }
+
+  const handleSelectFaculty = (email: string) => {
+    const newSelected = new Set(selectedFacultyEmails)
+    if (newSelected.has(email)) {
+      newSelected.delete(email)
+    } else {
+      newSelected.add(email)
+    }
+    setSelectedFacultyEmails(newSelected)
+  }
+
+  const handleSelectAllFaculty = () => {
+    if (selectedFacultyEmails.size === filteredFaculty.length && filteredFaculty.length > 0) {
+      setSelectedFacultyEmails(new Set())
+    } else {
+      setSelectedFacultyEmails(new Set(filteredFaculty.map(f => f.email)))
+    }
+  }
+
+  const handleBulkDelete = () => {
+    if (selectedFacultyEmails.size === 0) return
+    setShowDeleteModal(true)
+  }
 
   const handleDelete = async () => {
     setLoading(true)
     try {
-      // If single faculty deletion
-      const emailsToDelete = facultyToDelete
-        ? [facultyToDelete.email]
-        : selectedFaculty
-
+      const emailsToDelete = Array.from(selectedFacultyEmails)
       const success = await FacultyService.deleteFaculty(emailsToDelete)
 
       if (success) {
-        // Remove deleted faculty from local state
         setFaculty(prev => prev.filter(f => !emailsToDelete.includes(f.email)))
-        setSelectedFaculty([])
+        setSelectedFacultyEmails(new Set())
+        setIsDeleteMode(false)
         setShowDeleteModal(false)
-        setFacultyToDelete(null)
       }
     } catch (error) {
       logger.error('Error deleting faculty', error)
@@ -110,20 +137,10 @@ function FacultyManageContent() {
     setShowEditModal(true)
   }
 
-  const handleDeleteClick = (f: FacultySummary) => {
-    setFacultyToDelete(f)
-    setShowDeleteModal(true)
-  }
+
 
   const getItemsToDelete = () => {
-    if (facultyToDelete) {
-      return [{
-        name: facultyToDelete.name || 'Unknown Faculty',
-        email: facultyToDelete.email
-      }]
-    }
-
-    return selectedFaculty.map(email => {
+    return Array.from(selectedFacultyEmails).map(email => {
       const f = faculty.find(item => item.email === email)
       return {
         name: f?.name || 'Unknown Faculty',
@@ -155,13 +172,46 @@ function FacultyManageContent() {
               <p className="text-sm text-gray-500 mt-1">Manage faculty members and their class assignments</p>
             </div>
 
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-gray-200 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
-            >
-              <Plus className="w-5 h-5" />
-              ADD FACULTY
-            </button>
+            <div className="flex items-center gap-3">
+              {!isDeleteMode ? (
+                <>
+                  <button
+                    onClick={() => setShowAddModal(true)}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-gray-200 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    <Plus className="w-5 h-5" />
+                    ADD FACULTY
+                  </button>
+                  {faculty.length > 0 && (
+                    <button
+                      onClick={handleDeleteModeToggle}
+                      className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
+                      title="Delete"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={selectedFacultyEmails.size === 0}
+                    className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors duration-200"
+                  >
+                    Delete Selected ({selectedFacultyEmails.size})
+                  </button>
+                  <button
+                    onClick={handleDeleteModeToggle}
+                    className="px-4 py-2.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -195,15 +245,37 @@ function FacultyManageContent() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/50">
+                      {isDeleteMode && (
+                        <th className="w-[50px] pl-6 py-4">
+                          <input
+                            type="checkbox"
+                            checked={filteredFaculty.length > 0 && selectedFacultyEmails.size === filteredFaculty.length}
+                            onChange={handleSelectAllFaculty}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          />
+                        </th>
+                      )}
                       <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Faculty Details</th>
                       <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Assigned Classes</th>
                       <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Subjects</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                      {!isDeleteMode && (
+                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredFaculty.map((f, i) => (
                       <tr key={i} className="group hover:bg-gray-50 transition-colors">
+                        {isDeleteMode && (
+                          <td className="pl-6 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedFacultyEmails.has(f.email)}
+                              onChange={() => handleSelectFaculty(f.email)}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                            />
+                          </td>
+                        )}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
@@ -221,13 +293,11 @@ function FacultyManageContent() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <School className="w-4 h-4 text-gray-400" />
-                            {/* Mock data display - replace with actual counts */}
                             <span>{f.totalClasses || 0} Classes Assigned</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-wrap gap-2">
-                            {/* Mock subjects */}
                             {(f.subjects || []).map((s: string, idx: number) => (
                               <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-md bg-emerald-600 text-white text-xs font-bold shadow-sm">
                                 {s}
@@ -238,25 +308,27 @@ function FacultyManageContent() {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            <button
-                              onClick={() => handleEditClick(f)}
-                              className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline"
-                            >
-                              Edit
-                            </button>
-                            <span className="text-gray-300">|</span>
-                            <Tooltip content="Delete Faculty">
+                        {!isDeleteMode && (
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-3">
                               <button
-                                onClick={() => handleDeleteClick(f)}
-                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                                onClick={() => router.push(`/faculty/manage-faculty/${encodeURIComponent(f.email)}`)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Eye className="w-3.5 h-3.5" />
+                                View
                               </button>
-                            </Tooltip>
-                          </div>
-                        </td>
+                              <span className="text-gray-300">|</span>
+                              <button
+                                onClick={() => handleEditClick(f)}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit Assignments"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -299,7 +371,7 @@ function FacultyManageContent() {
         isOpen={showDeleteModal}
         onClose={() => {
           setShowDeleteModal(false)
-          setFacultyToDelete(null)
+          setSelectedFacultyEmails(new Set())
         }}
         onConfirm={handleDelete}
         title="Delete Faculty"
@@ -307,6 +379,8 @@ function FacultyManageContent() {
         type="faculty"
         isLoading={loading}
       />
+
+
 
       {/* Edit Assignments Modal */}
       {facultyToEdit && (

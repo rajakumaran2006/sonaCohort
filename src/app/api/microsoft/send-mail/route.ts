@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { MicrosoftTokenService } from '@/lib/auth/microsoftTokenService'
 import { logger } from '@/lib/logger'
+import { FacultyService } from '@/lib/services/facultyService'
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,11 +11,12 @@ export async function POST(request: NextRequest) {
     // Authenticate the user securely
     const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (userError || !user || !user.email) {
+      return NextResponse.json({ error: 'Unauthorized: User not found or email missing' }, { status: 401 })
     }
 
     const userId = user.id
+    const userEmail = user.email.toLowerCase()
 
     // Get the session to access the provider_token if available
     const { data: { session } } = await supabase.auth.getSession()
@@ -41,6 +43,52 @@ export async function POST(request: NextRequest) {
     if (!content || typeof content !== 'string' || content.trim() === '') {
       return NextResponse.json({ error: 'Email content is required' }, { status: 400 })
     }
+
+    // --- Department Validation Logic ---
+    let allowedEmails = new Set<string>()
+    let isRestricted = false
+
+    // 1. Check if Superadmin (Allow all if superadmin)
+    const { data: superadmin } = await supabase
+      .from('superadmin')
+      .select('id')
+      .eq('email', userEmail)
+      .maybeSingle()
+    
+    if (!superadmin) {
+        // Not a superadmin, so we enforce department restrictions
+        isRestricted = true
+        
+        // 2. Check if Faculty is an Incharge (has department access)
+        const facultyDept = await FacultyService.verifyFacultyAccess(userEmail, supabase)
+        
+        if (!facultyDept) {
+             return NextResponse.json({ error: 'Access denied: You are not authorized to send department emails.' }, { status: 403 })
+        }
+        
+        // 3. Get allowed emails for this department
+        const deptEmails = await FacultyService.getAllDepartmentEmails(facultyDept.name, supabase)
+        deptEmails.forEach(e => allowedEmails.add(e.toLowerCase().trim()))
+        
+        // 4. Also allow sending TO superadmins (in case Incharge needs to contact admin)
+        const { data: superadmins } = await supabase.from('superadmin').select('email')
+        superadmins?.forEach(s => {
+           if (s.email) allowedEmails.add(s.email.toLowerCase().trim())
+        })
+    }
+    
+    // 5. Validate 'to' list if restricted
+    if (isRestricted) {
+       const invalidEmails = to.filter((email: string) => !allowedEmails.has(email.trim().toLowerCase()))
+       
+       if (invalidEmails.length > 0) {
+          logger.warn(`[send-mail] Blocked attempt to send email to invalid recipients by ${userEmail}:`, invalidEmails)
+          return NextResponse.json({ 
+            error: `Access Denied: You can only send emails to members of your allocated department. blocked recipients: ${invalidEmails.join(', ')}` 
+          }, { status: 403 })
+       }
+    }
+    // -----------------------------------
 
     // Get the provider token - try session first, then refresh
     let accessToken = session?.provider_token

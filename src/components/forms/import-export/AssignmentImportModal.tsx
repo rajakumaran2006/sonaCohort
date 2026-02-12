@@ -305,7 +305,7 @@ export default function AssignmentImportModal({
     if (email) {
       const normalizedEmail = email.toLowerCase().trim()
       const match = students.find(s =>
-        s.email.toLowerCase().trim() === normalizedEmail &&
+        s.email?.toLowerCase().trim() === normalizedEmail &&
         (!targetYear || s.year === targetYear) &&
         (!targetSection || s.section === targetSection) &&
         checkSuffix(s.email)
