@@ -4,12 +4,12 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { logger } from '@/lib/logger'
-import FacultyLoginSkeleton from '@/components/skeletons/FacultyLoginSkeleton'
+import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
 
 function DetectRoleContent() {
   const router = useRouter()
   const { user, loading } = useAuth()
-  const [, setStatus] = useState('Checking authentication...')
+  const [status, setStatus] = useState('Checking authentication...')
 
   useEffect(() => {
     const detectRoles = async () => {
@@ -87,13 +87,27 @@ function DetectRoleContent() {
   }, [user, loading, router])
 
   return (
-    <FacultyLoginSkeleton />
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
+      <LoadingOverlay size="xl">
+        <span className="text-slate-500 uppercase tracking-widest font-medium text-[10px] sm:text-xs">
+          {status}
+        </span>
+      </LoadingOverlay>
+    </div>
   )
 }
 
 export default function DetectRolePage() {
   return (
-    <Suspense fallback={<FacultyLoginSkeleton />}>
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
+        <LoadingOverlay size="xl">
+          <span className="text-slate-500 uppercase tracking-widest font-medium text-[10px] sm:text-xs">
+            Initializing...
+          </span>
+        </LoadingOverlay>
+      </div>
+    }>
       <DetectRoleContent />
     </Suspense>
   )

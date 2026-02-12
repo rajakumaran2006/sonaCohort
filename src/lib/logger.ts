@@ -19,27 +19,27 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 const pinoLogger = pino({
   // In production, set level to 'silent' to suppress all logs
   level: isDevelopment ? 'debug' : 'silent',
-  
+
   // Browser-specific configuration
   browser: {
     // In development, use console methods; in production, disable
     asObject: false,
     write: isDevelopment
       ? {
-          debug: (o) => console.debug(o),
-          info: (o) => console.info(o),
-          warn: (o) => console.warn(o),
-          error: (o) => console.error(o),
-        }
+        debug: (o) => console.debug(o),
+        info: (o) => console.info(o),
+        warn: (o) => console.warn(o),
+        error: (o) => console.error(o),
+      }
       : {
-          // Silent in production - no output
-          debug: () => {},
-          info: () => {},
-          warn: () => {},
-          error: () => {},
-        },
+        // Silent in production - no output
+        debug: () => { },
+        info: () => { },
+        warn: () => { },
+        error: () => { },
+      },
   },
-  
+
   // Pretty formatting in development (only works in Node.js, not browser)
   // Transport disabled due to Turbopack/Worker issues
   // ...(isDevelopment && {
@@ -62,9 +62,9 @@ const customLogger = {
       return;
     }
     if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && args.length === 1) {
-       pinoLogger.debug(args[0] as object, msg);
+      pinoLogger.debug(args[0] as object, msg);
     } else {
-       pinoLogger.debug({ context: args }, msg);
+      pinoLogger.debug({ context: args }, msg);
     }
   },
   info: (msg: string, ...args: unknown[]) => {
@@ -73,9 +73,9 @@ const customLogger = {
       return;
     }
     if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && args.length === 1) {
-       pinoLogger.info(args[0] as object, msg);
+      pinoLogger.info(args[0] as object, msg);
     } else {
-       pinoLogger.info({ context: args }, msg);
+      pinoLogger.info({ context: args }, msg);
     }
   },
   warn: (msg: string, ...args: unknown[]) => {
@@ -84,20 +84,32 @@ const customLogger = {
       return;
     }
     if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && args.length === 1) {
-       pinoLogger.warn(args[0] as object, msg);
+      pinoLogger.warn(args[0] as object, msg);
     } else {
-       pinoLogger.warn({ context: args }, msg);
+      pinoLogger.warn({ context: args }, msg);
     }
   },
   error: (msg: string, ...args: unknown[]) => {
     if (typeof window !== 'undefined' && isDevelopment) {
-      console.error(msg, ...args);
+      // Better handling for error objects in browser console
+      const processedArgs = args.map(arg => {
+        if (arg instanceof Error) {
+          return {
+            ...arg,
+            name: arg.name,
+            message: arg.message,
+            stack: arg.stack
+          };
+        }
+        return arg;
+      });
+      console.error(msg, ...processedArgs);
       return;
     }
     if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && args.length === 1) {
-       pinoLogger.error(args[0] as object, msg);
+      pinoLogger.error(args[0] as object, msg);
     } else {
-       pinoLogger.error({ context: args }, msg);
+      pinoLogger.error({ context: args }, msg);
     }
   },
 };

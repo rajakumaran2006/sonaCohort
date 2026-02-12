@@ -442,10 +442,7 @@ export default function UserSelectionModal({
                                                     />
                                                 </div>
                                                 <div className="flex items-center gap-3">
-                                                    <div className={cn(
-                                                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors shadow-sm",
-                                                        isSelected ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500 group-hover:bg-gray-200"
-                                                    )}>
+                                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors shadow-sm bg-gray-200 text-black">
                                                         <User className="w-4 h-4" />
                                                     </div>
                                                     <span className={cn("font-semibold text-sm", isSelected ? "text-blue-900" : "text-gray-900")}>
@@ -460,7 +457,7 @@ export default function UserSelectionModal({
                                                 </div>
                                                 <div className="text-right">
                                                     {isSelected && (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider">
+                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-blue-600 text-white text-xs font-bold uppercase tracking-wider">
                                                             Selected
                                                         </span>
                                                     )}
