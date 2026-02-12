@@ -51,6 +51,7 @@ import TransferModal from '@/components/common/TransferModal'
 import { useQueryClient } from '@tanstack/react-query'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { BackButton } from '@/components/ui/BackButton'
+import ExportButton from '@/components/ui/ExportButton'
 
 // Helper to build an XLSX worksheet with a common header block and ordered columns
 function createSheetWithHeader(
@@ -633,7 +634,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
                   title="Delete peer tutors"
                 >
                   <svg className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
               )}
@@ -658,13 +659,34 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
                 IMPORT
               </button>
               {sortedpeerTutor.length > 0 && (
-                <button
-                  onClick={exportpeerTutor}
-                  className="h-12 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <Download className="w-4 h-4" />
-                  EXPORT
-                </button>
+                <ExportButton
+                  onClick={() => {
+                    const handleExport = async () => {
+                      try {
+                        const tutorsWithStats = peerTutorWithStats.map(tutor => ({
+                          'Name': tutor.name,
+                          'Email': tutor.email,
+                          'Department': tutor.dept,
+                          'Year': tutor.year,
+                          'Section': tutor.section,
+                          'Completed Classes': tutor.classStats.completedClasses,
+                          'Pending Classes': tutor.classStats.pendingClasses,
+                          'Additional Classes': tutor.additionalClassesCount,
+                          'Students Assigned': peerTutortudentCounts[tutor.id] || 0
+                        }))
+
+                        const ws = XLSX.utils.json_to_sheet(tutorsWithStats)
+                        const wb = XLSX.utils.book_new()
+                        XLSX.utils.book_append_sheet(wb, ws, 'Peer Tutors')
+                        XLSX.writeFile(wb, `peer_tutors_${dept}_${year}_${section}_${new Date().toISOString().split('T')[0]}.xlsx`)
+                      } catch (error) {
+                        logger.error('Error exporting peer tutors:', error)
+                        toast.error('Failed to export peer tutor details')
+                      }
+                    }
+                    handleExport()
+                  }}
+                />
               )}
             </>
           )}
@@ -943,8 +965,6 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
         year={year}
         currentSection={section}
       />
-
-
 
 
 
@@ -1420,7 +1440,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
                   title="Delete students"
                 >
                   <svg className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 0 00-1-1h-4a1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
               )}
@@ -1433,13 +1453,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
                 IMPORT
               </button>
               {filteredStudents.length > 0 && (
-                <button
-                  onClick={exportStudents}
-                  className="h-12 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <Download className="w-4 h-4" />
-                  EXPORT
-                </button>
+                <ExportButton onClick={exportStudents} />
               )}
             </>
           )}
@@ -1795,17 +1809,6 @@ function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack }: Peertuto
               dateAttendance[date] = 'U'
               // Don't count upcoming hours in totalHours
             } else {
-              dateAttendance[date] = '' // Or 'A'? The original code had '' but maybe 'A' is correct for past? 
-              // Original logic:
-              // } else {
-              //   dateAttendance[date] = ''
-              //   totalHours++
-              // }
-              // Wait, if no record exists for a scheduled class, it should probably be 'A' if it's in the past? 
-              // BUT the previous logic set it to empty string but incremented totalHours.
-              // If totalHours is incremented but totalHoursPresent is NOT, it counts as absent in percentage calculation.
-              // So '' acts as Absent visually but counts numerically.
-              // I will keep the behavior but add 'U' logic.
               dateAttendance[date] = 'A' // Changing to 'A' to be explicit for past absence
               totalHours++
             }
@@ -2290,7 +2293,7 @@ function AdvancedAttendanceTab({ dept, year, section }: AdvancedAttendanceTabPro
               const date = sc.scheduled_date
               const isPresent = attendanceMap.has(sc.id) && attendanceMap.get(sc.id) === 'P'
 
-              // Robust date comparison 
+              // Robust date comparison
               // Create date objects for comparison (stripping time)
               const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
 
@@ -2741,53 +2744,25 @@ function ImportExportTab({ dept, year, section }: ImportExportTabProps) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Export Peer Details */}
-                <button
+                <ExportButton
                   onClick={handleExportPeerDetails}
-                  className="bg-white border border-gray-200 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">XLSX</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-gray-900 mb-1">PEER TUTOR DETAILS</h4>
-                  <p className="text-xs text-gray-500">Export all peer tutor information</p>
-                </button>
+                  text="PEER TUTOR DETAILS"
+                />
 
-                {/* Export Students */}
-                <button
+                <ExportButton
                   onClick={handleExportStudents}
-                  className="bg-white border border-gray-200 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">XLSX</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-gray-900 mb-1">STUDENT DETAILS</h4>
-                  <p className="text-xs text-gray-500">Export all student information</p>
-                </button>
+                  text="STUDENT DETAILS"
+                />
 
-                {/* Export Assignments */}
-                <button
+                <ExportButton
                   onClick={handleExportAssignments}
-                  className="bg-white border border-gray-200 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">XLSX</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-gray-900 mb-1">ASSIGNMENTS</h4>
-                  <p className="text-xs text-gray-500">Export assignment mappings</p>
-                </button>
+                  text="ASSIGNMENTS"
+                />
 
-                {/* Export Attendance */}
-                <button
+                <ExportButton
                   onClick={handleExportAttendance}
-                  className="bg-white border border-gray-200 rounded-xl p-5 transition-all duration-200 text-left shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">XLSX</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-gray-900 mb-1">ATTENDANCE RECORDS</h4>
-                  <p className="text-xs text-gray-500">Export all attendance data</p>
-                </button>
+                  text="ATTENDANCE RECORDS"
+                />
               </div>
             </div>
           )}
@@ -3058,7 +3033,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
         const studentCount = group.students.length
 
         if (studentCount === 0) {
-          // Should ideally not happen for "Assignments", but if tutor has 0 students? 
+          // Should ideally not happen for "Assignments", but if tutor has 0 students?
           // We normally don't export them in specific Assignment export, but let's check user intent.
           // User wants "Assignments". If no students, no assignment.
           // Code below assumes existing assignments.
@@ -3077,12 +3052,12 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
         })
 
         // Add merge for Peer Tutor columns if more than 1 student
-        // rowIndex currently points to the *next* empty row. 
+        // rowIndex currently points to the *next* empty row.
         // The rows we just added are from (rowIndex - studentCount) to (rowIndex - 1)
         if (studentCount > 1) {
           const startRow = rowIndex - studentCount // 0-indexed relative to data
-          // SheetJS adds header automatically with json_to_sheet, so header is Row 0. 
-          // Data starts Row 1. 
+          // SheetJS adds header automatically with json_to_sheet, so header is Row 0.
+          // Data starts Row 1.
           // So we need to offset by 1 for the actual sheet rows?
           // Yes. The merge object { s: {r, c}, e: {r, c} } uses 0-indexed absolute row numbers.
           // Our 'rows' array is just data.
@@ -3250,13 +3225,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                   IMPORT
                 </button>
                 {peerTutorWithStudents.some(({ students }) => students.length > 0) && (
-                  <button
-                    onClick={handleExportAssignments}
-                    className="h-10 px-5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    EXPORT
-                  </button>
+                  <ExportButton onClick={handleExportAssignments} />
                 )}
               </>
             )}
@@ -4084,17 +4053,12 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                     title="Delete subjects"
                   >
                     <svg className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 0 00-1-1h-4a1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
 
 
-                  <button
-                    onClick={() => setShowExportModal(true)}
-                    className="h-10 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
-                  >
-                    EXPORT
-                  </button>
+                  <ExportButton onClick={() => setShowExportModal(true)} />
                 </>
               )}
 
@@ -4573,15 +4537,10 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
               >
                 Cancel
               </button>
-              <button
+              <ExportButton
                 onClick={handleExportSubjects}
-                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 flex items-center space-x-2"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span>Export Excel</span>
-              </button>
+                text="EXPORT EXCEL"
+              />
             </div>
           </div>
         </div>
@@ -5359,12 +5318,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
           <div className="flex items-center gap-3">
 
             {uniqueClasses.length > 0 && (
-              <button
-                onClick={handleExportAllAttendance}
-                className="h-10 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
-              >
-                EXPORT
-              </button>
+              <ExportButton onClick={handleExportAllAttendance} />
             )}
           </div>
         </div>
@@ -5616,16 +5570,10 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
 
           {/* Export Button */}
           {peertutorsAttendance.length > 0 && (
-            <button
+            <ExportButton
               onClick={handleExportClassAttendance}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2 flex-shrink-0"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span className="hidden sm:inline">Export Attendance</span>
-              <span className="sm:hidden">Export</span>
-            </button>
+              text="EXPORT ATTENDANCE"
+            />
           )}
         </div>
 

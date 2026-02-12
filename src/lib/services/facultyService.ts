@@ -303,11 +303,17 @@ export class FacultyService {
         // We use the faculty_id if available, but filtering by subject/section is safer given the data model
         const { data: classes, error } = await supabase
           .from('scheduled_classes')
-          .select('peer_tutor_id, completion_status, attendance_completed, topics_completed')
+          .select(`
+            peer_tutor_id, 
+            completion_status, 
+            attendance_completed, 
+            topics_completed,
+            class:classes!inner(subject_name)
+          `)
           .eq('dept', assignment.dept)
           .eq('year', assignment.year)
           .eq('section', assignment.section)
-          .eq('subject_name', assignment.subject_name) // Assuming subject_name matches
+          .eq('classes.subject_name', assignment.subject_name)
 
         if (error) {
           logger.error(`Error fetching stats for ${assignment.subject_name}:`, error)
