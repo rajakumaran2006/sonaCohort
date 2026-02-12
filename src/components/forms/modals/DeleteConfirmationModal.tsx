@@ -179,8 +179,8 @@ export default function DeleteConfirmationModal({
             onClick={handleConfirm}
             disabled={(requireConfirmationCode && inputCode.length !== 6) || isLoading}
             className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-all
-              {(!requireConfirmationCode || inputCode.length === 6) && !isLoading
-                ? 'bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.98]'
+              ${(!requireConfirmationCode || inputCode.length === 6) && !isLoading
+                ? 'bg-gray-800 text-white hover:bg-gray-800 active:scale-[0.98]'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
           >

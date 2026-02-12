@@ -7,7 +7,7 @@ import { FacultyService } from '@/lib/services/facultyService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Mail, Send, Users, GraduationCap, Shield, X, Check, Loader2, Settings, Link as LinkIcon } from 'lucide-react'
+import { ArrowLeft, Mail, Send, Users, GraduationCap, Shield, X, Check, Loader2, Settings, Link as LinkIcon, Clock } from 'lucide-react'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { useRouter } from 'next/navigation'
 import { logger } from '@/lib/logger'
@@ -66,6 +66,16 @@ function SettingsContent() {
 
   // Class Settings
   const [isClassLinkMandatory, setIsClassLinkMandatory] = useState(true)
+  
+  // Email Automation Settings
+  const [enableEmailNotifications, setEnableEmailNotifications] = useState(false)
+  const [pendingThreshold, setPendingThreshold] = useState(3)
+  const [excludeAdditional, setExcludeAdditional] = useState(false)
+  const [morningTime, setMorningTime] = useState("08:00")
+  const [morningMessage, setMorningMessage] = useState("This is a reminder for your scheduled class today. Please ensure you conduct the class on time.")
+  const [pendingMessage, setPendingMessage] = useState("You have consecutive pending classes. Please complete them and update the status immediately.")
+  const [emailTab, setEmailTab] = useState<'daily' | 'pending'>('daily')
+  
   const [updatingSettings, setUpdatingSettings] = useState(false)
 
   // Check if sidebar is collapsed
@@ -106,6 +116,12 @@ function SettingsContent() {
       // Load settings
       if (facultyDept) {
         setIsClassLinkMandatory(facultyDept.is_class_link_mandatory !== false) // Default to true if null/undefined
+        setEnableEmailNotifications(facultyDept.enable_email_notifications || false)
+        setPendingThreshold(facultyDept.pending_class_threshold || 3)
+        setExcludeAdditional(facultyDept.exclude_additional_classes || false)
+        if (facultyDept.morning_reminder_time) setMorningTime(facultyDept.morning_reminder_time)
+        if (facultyDept.morning_reminder_message) setMorningMessage(facultyDept.morning_reminder_message)
+        if (facultyDept.pending_warning_message) setPendingMessage(facultyDept.pending_warning_message)
       }
 
       // Get all peer tutors for this department
@@ -464,7 +480,6 @@ function SettingsContent() {
                   <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Mandatory Class Link</h4>
                   <p className="text-xs text-gray-500 mt-1 max-w-md">
                     When enabled, students must provide a valid meeting link when adding an additional class.
-                    Disable this if you want to allow offline classes or classes without links.
                   </p>
                 </div>
               </div>
@@ -480,6 +495,226 @@ function SettingsContent() {
                     } inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm`}
                 />
               </button>
+            </div>
+          </div>
+
+          {/* Email Automation Settings */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-6">
+               <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                Email Automation
+              </h3>
+              
+               <button
+                  onClick={async () => {
+                    setUpdatingSettings(true)
+                    try {
+                      const facultyDept = await FacultyService.verifyFacultyAccess(user?.email || '')
+                      if (facultyDept) {
+                        await FacultyService.updateFacultySettings(facultyDept.id, {
+                          enable_email_notifications: enableEmailNotifications,
+                          pending_class_threshold: pendingThreshold,
+                          exclude_additional_classes: excludeAdditional,
+                          morning_reminder_time: morningTime,
+                          morning_reminder_message: morningMessage,
+                          pending_warning_message: pendingMessage
+                        })
+                        // toast.success('Settings saved') 
+                        // Assuming using simple state update visual feedback
+                      }
+                    } catch (e) {
+                      logger.error('Error saving settings', e)
+                    } finally {
+                      setUpdatingSettings(false)
+                    }
+                  }}
+                  disabled={updatingSettings}
+                  className="px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-50"
+               >
+                 {updatingSettings ? 'Saving...' : 'Save Settings'}
+               </button>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              
+              {/* Enable Toggle */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Enable Automated Emails</h4>
+                    <p className="text-xs text-gray-500 mt-1 max-w-md">
+                      Send morning reminders and pending class warnings automatically.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEnableEmailNotifications(!enableEmailNotifications)}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${enableEmailNotifications ? 'bg-purple-600' : 'bg-gray-200'}`}
+                >
+                  <span className={`${enableEmailNotifications ? 'translate-x-6' : 'translate-x-1'} inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm`} />
+                </button>
+              </div>
+
+              {enableEmailNotifications && (
+                <>
+                  {/* Tabs Navigation */}
+                  <div className="flex border-b border-gray-200 bg-gray-50">
+                    <button
+                      onClick={() => setEmailTab('daily')}
+                      className={`flex-1 px-6 py-4 text-sm font-bold uppercase tracking-wide transition-colors relative ${
+                        emailTab === 'daily'
+                          ? 'text-purple-600 bg-white'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Daily Reminder
+                      </div>
+                      {emailTab === 'daily' && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setEmailTab('pending')}
+                      className={`flex-1 px-6 py-4 text-sm font-bold uppercase tracking-wide transition-colors relative ${
+                        emailTab === 'pending'
+                          ? 'text-purple-600 bg-white'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <Mail className="w-4 h-4" />
+                        Pending Reminder
+                      </div>
+                      {emailTab === 'pending' && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Tab Content */}
+                  <div className="p-6">
+                    {emailTab === 'daily' ? (
+                      <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {/* Morning Reminder Time */}
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                            Morning Reminder Time
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                              <input
+                                type="time"
+                                value={morningTime}
+                                onChange={(e) => setMorningTime(e.target.value)}
+                                className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-purple-500 outline-none"
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">Local Time</p>
+                          </div>
+                          <p className="text-[10px] text-gray-400">
+                            Emails will be sent to peer tutors at this time if they have scheduled classes today.
+                          </p>
+                        </div>
+
+                        {/* Morning Reminder Message */}
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Morning Reminder Message</label>
+                           <p className="text-[10px] text-gray-400 mb-2">
+                             Available placeholders: <code className="bg-gray-100 px-1 py-0.5 rounded text-purple-600">{'{'}class_names{'}'}</code>, <code className="bg-gray-100 px-1 py-0.5 rounded text-purple-600">{'{'}tutor_name{'}'}</code>
+                           </p>
+                           <textarea 
+                              value={morningMessage}
+                              onChange={(e) => setMorningMessage(e.target.value)}
+                              rows={3}
+                              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                              placeholder="Dear {tutor_name}, you have classes scheduled today: {class_names}"
+                           />
+                        </div>
+
+                        {/* Preview Info */}
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                          <p className="text-xs font-bold text-blue-900 mb-2">How it works:</p>
+                          <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
+                            <li>Checks for scheduled classes every hour</li>
+                            <li>Sends email when current time matches reminder time</li>
+                            <li>Groups all classes per peer tutor into one email</li>
+                          </ul>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {/* Pending Class Threshold */}
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                            Pending Class Threshold
+                          </label>
+                          <div className="flex items-center gap-3">
+                             <input 
+                               type="number" 
+                               min="1"
+                               max="10"
+                               value={pendingThreshold}
+                               onChange={(e) => setPendingThreshold(parseInt(e.target.value) || 3)}
+                               className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm font-bold text-center focus:ring-2 focus:ring-purple-500 outline-none"
+                             />
+                             <p className="text-xs text-gray-500">consecutive pending classes triggers a warning</p>
+                          </div>
+                        </div>
+
+                        {/* Exclude Additional Classes */}
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                             Additional Classes
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => setExcludeAdditional(!excludeAdditional)}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${excludeAdditional ? 'bg-purple-600' : 'bg-gray-200'}`}
+                            >
+                              <span className={`${excludeAdditional ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm`} />
+                            </button>
+                            <span className="text-xs font-medium text-gray-700">Exclude from pending count</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400 max-w-md">
+                            If enabled, &ldquo;Additional Classes&rdquo; won&apos;t count towards the pending threshold or reset the consecutive pending count.
+                            Only regularly scheduled classes will be considered.
+                          </p>
+                        </div>
+
+                        {/* Pending Warning Message */}
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Pending Warning Message</label>
+                           <textarea 
+                              value={pendingMessage}
+                              onChange={(e) => setPendingMessage(e.target.value)}
+                              rows={3}
+                              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                              placeholder="Enter message for pending warnings..."
+                           />
+                        </div>
+
+                        {/* Preview Info */}
+                        <div className="bg-orange-50 border border-orange-100 rounded-lg p-4">
+                          <p className="text-xs font-bold text-orange-900 mb-2">How it works:</p>
+                          <ul className="text-xs text-orange-700 space-y-1 list-disc list-inside">
+                            <li>Checks for consecutive pending classes hourly</li>
+                            <li>Only counts classes with status other than &ldquo;completed&rdquo;</li>
+                            <li>Sends warning when threshold is met or exceeded</li>
+                            <li>Resets count when a completed class is found</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

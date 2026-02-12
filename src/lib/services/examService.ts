@@ -6,6 +6,7 @@ export interface Exam {
   name: string
   years: string[]
   created_by: string | null
+  department_id: string | null
   max_marks: number | null
   created_at: string
   updated_at: string
@@ -46,6 +47,7 @@ export interface CreateExamData {
   name: string
   years: string[]
   created_by: string | null
+  department_id: string
   max_marks?: number
 }
 
@@ -63,6 +65,7 @@ export class ExamService {
           name: data.name,
           years: data.years,
           created_by: data.created_by,
+          department_id: data.department_id,
           max_marks: data.max_marks || 100,
         })
         .select()
@@ -83,13 +86,20 @@ export class ExamService {
   /**
    * Get all exams
    */
-  static async getAllExams(): Promise<Exam[]> {
+  static async getAllExams(createdBy?: string): Promise<Exam[]> {
     try {
       const supabase = createClient()
+      
+      // CRITICAL: Always require department filter for proper isolation
+      if (!createdBy) {
+        logger.warn('getAllExams called without department ID - returning empty array')
+        return []
+      }
       
       const { data, error } = await supabase
         .from('exams')
         .select('*')
+        .eq('department_id', createdBy)
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -107,16 +117,23 @@ export class ExamService {
   /**
    * Get exams by year
    */
-  static async getExamsByYear(year: string): Promise<Exam[]> {
+  static async getExamsByYear(year: string, departmentId?: string): Promise<Exam[]> {
     try {
       const supabase = createClient()
       
       // Fetch all exams and filter in memory for array contains
       // This is more reliable than using .contains() which may have issues with array columns
-      const { data, error } = await supabase
+      let query = supabase
         .from('exams')
         .select('*')
         .order('created_at', { ascending: false })
+
+      // Filter by department if provided
+      if (departmentId) {
+        query = query.eq('department_id', departmentId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         logger.error('Error getting exams by year:', error)

@@ -9,11 +9,11 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
-import { ExamService } from '@/lib/services/examService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import type { Exam } from '@/lib/services/examService'
 
 import { 
   FileText,
@@ -72,14 +72,60 @@ function PeerExamsContent() {
   //   }
   // }, [peertutorsInfo])
 
-  // Fetch exams for peer tutor's year
+  // Fetch exams where peer tutor has subjects assigned (through their scheduled classes)
   const { data: exams, isLoading: isExamsLoading } = useQuery({
-    queryKey: ['peer-exams', peertutorsYear],
+    queryKey: ['peer-exams', peertutorsInfo?.id],
     queryFn: async () => {
-      if (!peertutorsYear) return []
-      return await ExamService.getExamsByYear(peertutorsYear)
+      if (!peertutorsInfo?.id) {
+        return []
+      }
+      
+      try {
+        const supabase = await import('@/lib/supabase/client').then(m => m.createClient())
+        
+        // Get peer tutor's scheduled class IDs
+        const { data: scheduledClasses } = await supabase
+          .from('scheduled_classes')
+          .select('class_id')
+          .eq('peer_tutor_id', peertutorsInfo.id)
+        
+        const classIds = scheduledClasses?.map(sc => sc.class_id) || []
+        
+        if (classIds.length === 0) {
+          return [] // No classes assigned, so no exams
+        }
+        
+        // Get exam IDs where exam_subjects exist for these classes
+        const { data: examSubjects } = await supabase
+          .from('exam_subjects')
+          .select('exam_id')
+          .in('class_id', classIds)
+        
+        const examIds = [...new Set(examSubjects?.map(es => es.exam_id) || [])]
+        
+        if (examIds.length === 0) {
+          return [] // No exam subjects for these classes
+        }
+        
+        // Fetch the actual exams
+        const { data: examsData, error } = await supabase
+          .from('exams')
+          .select('*')
+          .in('id', examIds)
+          .order('created_at', { ascending: false })
+        
+        if (error) {
+          logger.error('Error fetching exams:', error)
+          return []
+        }
+        
+        return (examsData || []) as Exam[]
+      } catch (error) {
+        logger.error('Error in exam fetch:', error)
+        return []
+      }
     },
-    enabled: !!peertutorsYear,
+    enabled: !!peertutorsInfo?.id,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -152,7 +198,7 @@ function PeerExamsContent() {
     try {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['peer-tutor-info', user?.email] }),
-        queryClient.invalidateQueries({ queryKey: ['peer-exams', peertutorsYear] }),
+        queryClient.invalidateQueries({ queryKey: ['peer-exams', peertutorsYear, peertutorsInfo?.dept] }),
       ])
       setLastRefresh(new Date())
     } finally {
@@ -260,10 +306,10 @@ function PeerExamsContent() {
                   <div>
                     {!exams || exams.length === 0 ? (
                       <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <FileText className="w-8 h-8 text-blue-600" />
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <FileText className="w-8 h-8 text-black-600" />
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No exams found</h3>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2 uppercase">No exams found</h3>
                         <p className="text-gray-500">There are currently no exams assigned to your year.</p>
                       </div>
                     ) : (

@@ -10,6 +10,12 @@ export interface FacultyDepartment {
   created_at: string
   admin_email?: string
   is_class_link_mandatory?: boolean
+  enable_email_notifications?: boolean
+  pending_class_threshold?: number
+  exclude_additional_classes?: boolean
+  morning_reminder_time?: string
+  morning_reminder_message?: string
+  pending_warning_message?: string
 }
 export interface FacultyAllocation {
   id: string
@@ -52,7 +58,7 @@ export class FacultyService {
         .eq('id', facultyId)
 
       if (error) {
-        logger.error('Error updating faculty settings:', error)
+        logger.error('Error updating faculty settings:', JSON.stringify(error, null, 2))
         return false
       }
 

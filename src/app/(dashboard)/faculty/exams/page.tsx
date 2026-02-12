@@ -70,8 +70,12 @@ function FacultyExamsContent() {
 
   // Fetch exams
   const { data: exams, isLoading: isExamsLoading, refetch: refetchExams } = useQuery({
-    queryKey: ['faculty-exams'],
-    queryFn: async () => await ExamService.getAllExams(),
+    queryKey: ['faculty-exams', department?.id],
+    queryFn: async () => {
+      if (!department?.id) return []
+      return await ExamService.getAllExams(department.id)
+    },
+    enabled: !!department?.id,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -269,6 +273,7 @@ function FacultyExamsContent() {
   const handleExamClick = (exam: Exam) => {
     router.push(`/faculty/exams/${exam.id}`)
   }
+
 
   const formatYears = (years: string[]): string => {
     const yearMap: { [key: string]: string } = {
@@ -753,17 +758,19 @@ function FacultyExamsContent() {
                                   </div>
                                 </TableCell>
                                 {!isDeleteMode && (
-                                  <TableCell className="text-right pr-6 py-4">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleExamClick(exam);
-                                      }}
-                                      className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
-                                    >
-                                      view
-                                    </button>
-                                  </TableCell>
+                                    <TableCell className="text-right pr-6 py-4">
+                                      <div className="flex items-center justify-end gap-2">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleExamClick(exam);
+                                          }}
+                                          className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
+                                        >
+                                          view
+                                        </button>
+                                      </div>
+                                    </TableCell>
                                 )}
                               </TableRow>
                             )
@@ -799,6 +806,7 @@ function FacultyExamsContent() {
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={handleCreateSuccess}
         facultyId={department?.id || null}
+        departmentId={department?.id || null}
       />
 
       {/* Delete Confirmation Modal */}

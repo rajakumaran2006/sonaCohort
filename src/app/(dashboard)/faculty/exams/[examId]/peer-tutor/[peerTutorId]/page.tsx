@@ -46,7 +46,7 @@ function PeerTutorsExamDetailsContent() {
   const router = useRouter()
   const params = useParams()
   const examId = params.examId as string
-  const peertutorsId = params.peertutorsId as string
+  const peertutorsId = params.peerTutorId as string
   const queryClient = useQueryClient()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
@@ -791,8 +791,8 @@ function PeerTutorsExamDetailsContent() {
                           <TableRow key={student.id} className="hover:bg-gray-50/50 transition-colors group border-b border-gray-50">
                             <TableCell className="pl-6 py-4 sticky left-0 bg-white z-10 group-hover:bg-gray-50/50 transition-colors">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-[10px] font-bold text-blue-600">{student.name.substring(0, 2).toUpperCase()}</span>
+                                <div className="w-8 h-8 rounded-full bg-white border border-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-[10px] font-bold text-gray-600">{student.name.substring(0, 2).toUpperCase()}</span>
                                 </div>
                                 <span className="text-sm font-bold text-gray-700">{student.name}</span>
                               </div>

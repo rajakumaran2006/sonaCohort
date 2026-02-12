@@ -36,6 +36,14 @@ const parseLocalDate = (dateStr: string) => {
   return new Date(y, m - 1, d)
 }
 
+const getTodayDateStr = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 interface peertutorsInfo {
   id: string
   name: string
@@ -55,7 +63,7 @@ interface AdditionalClassesTabProps {
   scheduledClasses?: { scheduled_date?: string }[]
 }
 
-export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents, scheduledClasses = [] }: AdditionalClassesTabProps) {
+export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents }: AdditionalClassesTabProps) {
   // const { user } = useAuth() // keeping user if it might be needed, or remove if truly unused. The error said 'user' is assigned but never used.
 
   const [additionalClasses, setAdditionalClasses] = useState<AdditionalClassWithAttendance[]>([])
@@ -64,7 +72,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
   const [newClass, setNewClass] = useState({
     subject: '',
     topic: '',
-    date: '',
+    date: getTodayDateStr(),
     startTime: '',
     endTime: '',
     link: '',
@@ -83,25 +91,9 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
   const [isLinkMandatory, setIsLinkMandatory] = useState(true) // Default to true for safety
 
   const disabledDates = React.useMemo(() => {
-    const dates = new Set<string>()
-    
-    // Add scheduled classes dates
-    scheduledClasses.forEach(c => {
-      if (c.scheduled_date) {
-        dates.add(c.scheduled_date.split('T')[0])
-      }
-    })
-    
-    // Add existing additional classes dates
-    additionalClasses.forEach(c => {
-      if (c.class_date) {
-        dates.add(c.class_date.split('T')[0])
-      }
-    })
-    
-    // Convert YYYY-MM-DD strings to local Date objects for the DatePicker
-    return Array.from(dates).map(d => parseLocalDate(d))
-  }, [scheduledClasses, additionalClasses])
+    // We want to allow additional classes on any day, even if there are existing classes
+    return []
+  }, [])
 
   const loadAdditionalClasses = useCallback(async () => {
     if (!peertutorsInfo?.id) return
@@ -209,7 +201,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
     const startState = {
       subject: '',
       topic: '',
-      date: '',
+      date: getTodayDateStr(),
       startTime: '',
       endTime: '',
       link: '',
@@ -352,7 +344,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
     setNewClass({
       subject: '',
       topic: '',
-      date: '',
+      date: getTodayDateStr(),
       startTime: '',
       endTime: '',
       link: '',
@@ -632,7 +624,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents,
                 value={newClass.link}
                 onChange={(e) => setNewClass(prev => ({ ...prev, link: e.target.value }))}
                 className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl text-sm font-medium transition-all outline-none"
-                placeholder={isLinkMandatory ? "https://meet.google.com/..." : "https://meet.google.com/... (Optional)"}
+                placeholder={isLinkMandatory ? "https:/outlook.com/..." : "https:/outlook.com/... (Optional)"}
               />
             </div>
           </div>

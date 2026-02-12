@@ -885,6 +885,7 @@ export class ScheduledClassService {
   static async getpeertutorsClassStatus(dept: string, year: string, section: string, subject?: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
+    upcoming: ScheduledClassWithDetails[]
   }> {
     try {
       const supabase = createClient()
@@ -943,7 +944,7 @@ export class ScheduledClassService {
           code: error.code
         })
         logger.error('Query filters:', { dept, year, section, subject })
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       const relevantClasses = data || []
@@ -961,18 +962,74 @@ export class ScheduledClassService {
 
       const pending = relevantClasses.filter(cls => {
         // A class is considered pending if:
-        // 1. completion_status is 'pending' and not both attendance and topics are done
-        // 2. completion_status is 'not_started'
-        // 3. completion_status is null/undefined but not both attendance and topics are done
-        return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
+        // 1. Not completed
+        // 2. Scheduled date is today or in the past
+        const isNotCompleted = (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
           cls.completion_status === 'not_started' ||
           (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+
+        if (!isNotCompleted) return false
+
+        // Check date - only include today or past dates
+        if (!cls.scheduled_date) return true // Treat as pending if no date (safe fallback)
+
+        try {
+          const dateParts = cls.scheduled_date.split(/[-/]/)
+          let classDate: Date
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1
+            const day = parseInt(dateParts[2])
+            classDate = new Date(year, month, day)
+          } else {
+            classDate = new Date(cls.scheduled_date)
+          }
+          classDate.setHours(0, 0, 0, 0)
+
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+
+          return classDate <= today
+        } catch {
+          return true // Fallback to include if date comparison fails
+        }
       })
 
-      return { completed, pending }
+      const upcoming = relevantClasses.filter(cls => {
+        const isNotCompleted = (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+
+        if (!isNotCompleted) return false
+
+        if (!cls.scheduled_date) return false
+
+        try {
+          const dateParts = cls.scheduled_date.split(/[-/]/)
+          let classDate: Date
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1
+            const day = parseInt(dateParts[2])
+            classDate = new Date(year, month, day)
+          } else {
+            classDate = new Date(cls.scheduled_date)
+          }
+          classDate.setHours(0, 0, 0, 0)
+
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+
+          return classDate > today
+        } catch {
+          return false
+        }
+      })
+
+      return { completed, pending, upcoming }
     } catch (error) {
       logger.error('Error in getpeertutorsClassStatus:', error)
-      return { completed: [], pending: [] }
+      return { completed: [], pending: [], upcoming: [] }
     }
   }
 
@@ -982,6 +1039,7 @@ export class ScheduledClassService {
   static async getpeertutorsClassStatusWithDate(dept: string, year: string, section: string, dateFilter: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
+    upcoming: ScheduledClassWithDetails[]
   }> {
     try {
       const supabase = createClient()
@@ -1050,7 +1108,7 @@ export class ScheduledClassService {
 
       if (error) {
         logger.error('Error getting peer tutor class status with date:', error)
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       const relevantClasses = data || []
@@ -1076,10 +1134,10 @@ export class ScheduledClassService {
           (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
-      return { completed, pending }
+      return { completed, pending, upcoming: [] }
     } catch (error) {
       logger.error('Error in getpeertutorsClassStatusWithDate:', error)
-      return { completed: [], pending: [] }
+      return { completed: [], pending: [], upcoming: [] }
     }
   }
 
@@ -1089,6 +1147,7 @@ export class ScheduledClassService {
   static async getpeertutorsClassStatusByYear(dept: string, year: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
+    upcoming: ScheduledClassWithDetails[]
   }> {
     try {
       const supabase = createClient()
@@ -1122,7 +1181,7 @@ export class ScheduledClassService {
 
       if (error) {
         logger.error('Error getting peer tutor class status by year:', error)
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       const relevantClasses = data || []
@@ -1135,15 +1194,72 @@ export class ScheduledClassService {
       })
 
       const pending = relevantClasses.filter(cls => {
-        return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
+        const isNotCompleted = (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
           cls.completion_status === 'not_started' ||
           (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+
+        if (!isNotCompleted) return false
+
+        // Check date - only include today or past dates
+        if (!cls.scheduled_date) return true
+
+        try {
+          const dateParts = cls.scheduled_date.split(/[-/]/)
+          let classDate: Date
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1
+            const day = parseInt(dateParts[2])
+            classDate = new Date(year, month, day)
+          } else {
+            classDate = new Date(cls.scheduled_date)
+          }
+          classDate.setHours(0, 0, 0, 0)
+
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+
+          return classDate <= today
+        } catch {
+          return true
+        }
+      })
+      
+      const upcoming = relevantClasses.filter(cls => {
+        const isNotCompleted = (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+
+        if (!isNotCompleted) return false
+
+        if (!cls.scheduled_date) return false
+
+        try {
+          const dateParts = cls.scheduled_date.split(/[-/]/)
+          let classDate: Date
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1
+            const day = parseInt(dateParts[2])
+            classDate = new Date(year, month, day)
+          } else {
+            classDate = new Date(cls.scheduled_date)
+          }
+          classDate.setHours(0, 0, 0, 0)
+
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+
+          return classDate > today
+        } catch {
+          return false
+        }
       })
 
-      return { completed, pending }
+      return { completed, pending, upcoming }
     } catch (error) {
       logger.error('Error in getpeertutorsClassStatusByYear:', error)
-      return { completed: [], pending: [] }
+      return { completed: [], pending: [], upcoming: [] }
     }
   }
 
@@ -1153,6 +1269,7 @@ export class ScheduledClassService {
   static async getpeertutorsClassStatusByYearAndDate(dept: string, year: string, dateFilter: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
+    upcoming: ScheduledClassWithDetails[]
   }> {
     try {
       const supabase = createClient()
@@ -1208,7 +1325,7 @@ export class ScheduledClassService {
 
       if (error) {
         logger.error('Error getting peer tutor class status by year and date:', error)
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       const relevantClasses = data || []
@@ -1226,17 +1343,21 @@ export class ScheduledClassService {
           (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
       })
 
-      return { completed, pending }
+      return { completed, pending, upcoming: [] }
     } catch (error) {
       logger.error('Error in getpeertutorsClassStatusByYearAndDate:', error)
-      return { completed: [], pending: [] }
+      return { completed: [], pending: [], upcoming: [] }
     }
   }
 
   /**
    * Get all classes for a department (when no filters are selected)
    */
-  static async getAllClassesForDepartment(dept: string): Promise<{ completed: ScheduledClassWithDetails[], pending: ScheduledClassWithDetails[] }> {
+  static async getAllClassesForDepartment(dept: string): Promise<{ 
+    completed: ScheduledClassWithDetails[], 
+    pending: ScheduledClassWithDetails[],
+    upcoming: ScheduledClassWithDetails[] 
+  }> {
     try {
       const supabase = createClient()
 
@@ -1245,7 +1366,7 @@ export class ScheduledClassService {
       // Validate department parameter
       if (!dept || typeof dept !== 'string' || dept.trim() === '') {
         logger.error('Invalid department parameter:', dept)
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       // First, get all scheduled classes for the department
@@ -1269,12 +1390,12 @@ export class ScheduledClassService {
           logger.error('Table "scheduled_classes" may not exist or be accessible')
         }
 
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       if (!scheduledClasses || scheduledClasses.length === 0) {
         logger.info('No scheduled classes found for department:', dept)
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       logger.info('Found scheduled classes:', scheduledClasses.length)
@@ -1291,7 +1412,7 @@ export class ScheduledClassService {
 
       if (classesError) {
         logger.error('Error getting class details:', classesError)
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       // Get peer tutor details
@@ -1302,7 +1423,7 @@ export class ScheduledClassService {
 
       if (tutorsError) {
         logger.error('Error getting peer tutor details:', tutorsError)
-        return { completed: [], pending: [] }
+        return { completed: [], pending: [], upcoming: [] }
       }
 
       // Create lookup maps
@@ -1342,22 +1463,80 @@ export class ScheduledClassService {
 
       const pending = relevantClasses.filter(cls => {
         // A class is considered pending if:
-        // 1. completion_status is 'pending' and not both attendance and topics are done
-        // 2. completion_status is 'not_started'
-        // 3. completion_status is null/undefined but not both attendance and topics are done
-        return (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
+        // 1. Not completed
+        // 2. Scheduled date is today or in the past
+        const isNotCompleted = (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
           cls.completion_status === 'not_started' ||
           (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+
+        if (!isNotCompleted) return false
+
+        // Check date - only include today or past dates
+        if (!cls.scheduled_date) return true // Treat as pending if no date (safe fallback)
+
+        try {
+          const dateParts = cls.scheduled_date.split(/[-/]/)
+          let classDate: Date
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1
+            const day = parseInt(dateParts[2])
+            classDate = new Date(year, month, day)
+          } else {
+            classDate = new Date(cls.scheduled_date)
+          }
+          classDate.setHours(0, 0, 0, 0)
+
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+
+          return classDate <= today
+        } catch {
+          return true // Fallback to include if date comparison fails
+        }
       })
 
-      logger.info('Processed classes - Completed:', completed.length, 'Pending:', pending.length)
-      return { completed, pending }
+
+
+      const upcoming = relevantClasses.filter(cls => {
+        const isNotCompleted = (cls.completion_status === 'pending' && !(cls.attendance_completed && cls.topics_completed)) ||
+          cls.completion_status === 'not_started' ||
+          (!cls.completion_status && !(cls.attendance_completed && cls.topics_completed))
+
+        if (!isNotCompleted) return false
+
+        if (!cls.scheduled_date) return false
+
+        try {
+          const dateParts = cls.scheduled_date.split(/[-/]/)
+          let classDate: Date
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1
+            const day = parseInt(dateParts[2])
+            classDate = new Date(year, month, day)
+          } else {
+            classDate = new Date(cls.scheduled_date)
+          }
+          classDate.setHours(0, 0, 0, 0)
+
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+
+          return classDate > today
+        } catch {
+          return false
+        }
+      })
+
+      logger.info('Processed classes - Completed:', completed.length, 'Pending:', pending.length, 'Upcoming:', upcoming.length)
+      return { completed, pending, upcoming }
     } catch (error) {
       logger.error('Error in getAllClassesForDepartment:', error)
       logger.error('Error type:', typeof error)
       logger.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
       logger.error('Department parameter:', dept)
-      return { completed: [], pending: [] }
+      return { completed: [], pending: [], upcoming: [] }
     }
   }
 
