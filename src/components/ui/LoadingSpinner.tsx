@@ -37,7 +37,7 @@ export function LoadingOverlay({ children, size = 'lg', className }: LoadingOver
       <div className="text-center">
         <LoadingSpinner size={size} className="mx-auto mb-4" />
         {children && (
-          <p className="text-gray-600">{children}</p>
+          <div className="text-gray-600">{children}</div>
         )}
       </div>
     </div>

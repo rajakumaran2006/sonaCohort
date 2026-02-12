@@ -66,7 +66,7 @@ function SettingsContent() {
 
   // Class Settings
   const [isClassLinkMandatory, setIsClassLinkMandatory] = useState(true)
-  
+
   // Email Automation Settings
   const [enableEmailNotifications, setEnableEmailNotifications] = useState(false)
   const [pendingThreshold, setPendingThreshold] = useState(3)
@@ -76,7 +76,7 @@ function SettingsContent() {
   const [pendingMessage, setPendingMessage] = useState("You have consecutive pending classes. Please complete them and update the status immediately.")
   const [emailTab, setEmailTab] = useState<'daily' | 'pending'>('daily')
   const [emailLastSent, setEmailLastSent] = useState<string | null>(null)
-  
+
   const [updatingSettings, setUpdatingSettings] = useState(false)
 
   // Check if sidebar is collapsed
@@ -398,17 +398,17 @@ function SettingsContent() {
                 <p className="text-sm text-gray-500 mb-4">{user?.email}</p>
 
                 <div className="flex flex-col sm:flex-row items-center md:items-start gap-4 mt-6">
-                  <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-xl">
+                  <div className="flex items-center gap-3 px-4 py-2 bg-black rounded-xl shadow-sm border border-gray-800">
                     <div>
-                      <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Department</p>
-                      <p className="text-sm font-bold text-blue-900">{stats.department}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Department</p>
+                      <p className="text-sm font-bold text-white">{stats.department}</p>
                     </div>
                   </div>
                   {superadmins.length > 0 && (
-                    <div className="flex items-center gap-3 px-4 py-2 bg-purple-50 rounded-xl">
+                    <div className="flex items-center gap-3 px-4 py-2 bg-black rounded-xl shadow-sm border border-gray-800">
                       <div>
-                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Superadmin</p>
-                        <p className="text-sm font-bold text-purple-900">{superadmins[0]?.name || 'N/A'}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Superadmin</p>
+                        <p className="text-sm font-bold text-white">{superadmins[0]?.name || 'N/A'}</p>
                       </div>
                     </div>
                   )}
@@ -475,7 +475,7 @@ function SettingsContent() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
+                <div className="p-3 bg-blue-600 rounded-xl text-white shadow-sm shadow-blue-200/50">
                   <LinkIcon className="w-6 h-6" />
                 </div>
                 <div>
@@ -503,47 +503,47 @@ function SettingsContent() {
           {/* Email Automation Settings */}
           <div className="mb-6">
             <div className="flex justify-between items-center mb-6">
-               <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 Email Automation
               </h3>
-              
-               <button
-                  onClick={async () => {
-                    setUpdatingSettings(true)
-                    try {
-                      const facultyDept = await FacultyService.verifyFacultyAccess(user?.email || '')
-                      if (facultyDept) {
-                        await FacultyService.updateFacultySettings(facultyDept.id, {
-                          enable_email_notifications: enableEmailNotifications,
-                          pending_class_threshold: pendingThreshold,
-                          exclude_additional_classes: excludeAdditional,
-                          morning_reminder_time: morningTime,
-                          morning_reminder_message: morningMessage,
-                          pending_warning_message: pendingMessage
-                        })
-                        // toast.success('Settings saved') 
-                        // Assuming using simple state update visual feedback
-                      }
-                    } catch (e) {
-                      logger.error('Error saving settings', e)
-                    } finally {
-                      setUpdatingSettings(false)
+
+              <button
+                onClick={async () => {
+                  setUpdatingSettings(true)
+                  try {
+                    const facultyDept = await FacultyService.verifyFacultyAccess(user?.email || '')
+                    if (facultyDept) {
+                      await FacultyService.updateFacultySettings(facultyDept.id, {
+                        enable_email_notifications: enableEmailNotifications,
+                        pending_class_threshold: pendingThreshold,
+                        exclude_additional_classes: excludeAdditional,
+                        morning_reminder_time: morningTime,
+                        morning_reminder_message: morningMessage,
+                        pending_warning_message: pendingMessage
+                      })
+                      // toast.success('Settings saved') 
+                      // Assuming using simple state update visual feedback
                     }
-                  }}
-                  disabled={updatingSettings}
-                  className="px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-50"
-               >
-                 {updatingSettings ? 'Saving...' : 'Save Settings'}
-               </button>
+                  } catch (e) {
+                    logger.error('Error saving settings', e)
+                  } finally {
+                    setUpdatingSettings(false)
+                  }
+                }}
+                disabled={updatingSettings}
+                className="px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-50"
+              >
+                {updatingSettings ? 'Saving...' : 'Save Settings'}
+              </button>
             </div>
-            
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              
+
               {/* Enable Toggle */}
               <div className="flex items-center justify-between p-6 border-b border-gray-100">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
+                  <div className="p-3 bg-purple-600 rounded-xl text-white shadow-sm shadow-purple-200/50">
                     <Mail className="w-6 h-6" />
                   </div>
                   <div>
@@ -567,11 +567,10 @@ function SettingsContent() {
                   <div className="flex border-b border-gray-200 bg-gray-50">
                     <button
                       onClick={() => setEmailTab('daily')}
-                      className={`flex-1 px-6 py-4 text-sm font-bold uppercase tracking-wide transition-colors relative ${
-                        emailTab === 'daily'
-                          ? 'text-purple-600 bg-white'
-                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`flex-1 px-6 py-4 text-sm font-bold uppercase tracking-wide transition-colors relative ${emailTab === 'daily'
+                        ? 'text-purple-600 bg-white'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <div className="flex items-center justify-center gap-2">
                         <Clock className="w-4 h-4" />
@@ -583,11 +582,10 @@ function SettingsContent() {
                     </button>
                     <button
                       onClick={() => setEmailTab('pending')}
-                      className={`flex-1 px-6 py-4 text-sm font-bold uppercase tracking-wide transition-colors relative ${
-                        emailTab === 'pending'
-                          ? 'text-purple-600 bg-white'
-                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`flex-1 px-6 py-4 text-sm font-bold uppercase tracking-wide transition-colors relative ${emailTab === 'pending'
+                        ? 'text-purple-600 bg-white'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <div className="flex items-center justify-center gap-2">
                         <Mail className="w-4 h-4" />
@@ -627,86 +625,87 @@ function SettingsContent() {
 
                         {/* Morning Reminder Message */}
                         <div className="space-y-2">
-                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Morning Reminder Message</label>
-                           <p className="text-[10px] text-gray-400 mb-2">
-                             Available placeholders: <code className="bg-gray-100 px-1 py-0.5 rounded text-purple-600">{'{'}class_names{'}'}</code>, <code className="bg-gray-100 px-1 py-0.5 rounded text-purple-600">{'{'}tutor_name{'}'}</code>
-                           </p>
-                           <textarea 
-                              value={morningMessage}
-                              onChange={(e) => setMorningMessage(e.target.value)}
-                              rows={3}
-                              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                              placeholder="Dear {tutor_name}, you have classes scheduled today: {class_names}"
-                           />
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Morning Reminder Message</label>
+                          <p className="text-[10px] text-gray-400 mb-2 flex items-center gap-2">
+                            Available placeholders:
+                            <code className="bg-gray-100 px-2.5 py-1 rounded-md text-gray-900 font-medium border border-gray-200">{'{'}class_names{'}'}</code>
+                            <code className="bg-gray-100 px-2.5 py-1 rounded-md text-gray-900 font-medium border border-gray-200">{'{'}tutor_name{'}'}</code>
+                          </p>
+                          <textarea
+                            value={morningMessage}
+                            onChange={(e) => setMorningMessage(e.target.value)}
+                            rows={3}
+                            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                            placeholder="Dear {tutor_name}, you have classes scheduled today: {class_names}"
+                          />
                         </div>
 
                         {/* Preview Info */}
-                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                          <p className="text-xs font-bold text-blue-900 mb-2">How it works:</p>
-                          <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
+                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
+                          <p className="text-xs font-bold text-gray-900 mb-2">How it works:</p>
+                          <ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
                             <li>Checks for scheduled classes every hour</li>
                             <li>Sends email when current time matches reminder time</li>
                             <li>Groups all classes per peer tutor into one email</li>
                           </ul>
                         </div>
-                        
+
                         {/* Status & Test Section */}
                         <div className="pt-4 border-t border-gray-100">
                           <div className="flex items-center justify-between">
-                             <div>
-                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Status for Today</p>
-                               <div className="flex items-center gap-2">
-                                  {stats.department && (
-                                    <>
-                                      {/* Note: We need to carry 'last_daily_reminder_date' from loadData to here. 
+                            <div>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Status for Today</p>
+                              <div className="flex items-center gap-2">
+                                {stats.department && (
+                                  <>
+                                    {/* Note: We need to carry 'last_daily_reminder_date' from loadData to here. 
                                           We can store it in a new state or extend stats. 
                                           For now let's assume we added 'lastSent' state. */}
-                                      <div className={`w-2 h-2 rounded-full ${
-                                        emailLastSent === new Date().toISOString().split('T')[0] 
-                                        ? 'bg-green-500' 
-                                        : 'bg-amber-500'
+                                    <div className={`w-2 h-2 rounded-full ${emailLastSent === new Date().toISOString().split('T')[0]
+                                      ? 'bg-green-500'
+                                      : 'bg-amber-500'
                                       }`} />
-                                      <p className="text-sm font-bold text-gray-700">
-                                        {emailLastSent === new Date().toISOString().split('T')[0] 
-                                          ? 'Sent' 
-                                          : 'Pending / Not Sent'
-                                        }
-                                      </p>
-                                    </>
-                                  )}
-                               </div>
-                             </div>
-                             
-                             <button
-                               onClick={async () => {
-                                 if (confirm('This will immediately send reminder emails to all peer tutors with scheduled classes today, regardless of time. Continue?')) {
-                                   try {
-                                     setUpdatingSettings(true)
-                                     const res = await fetch('/api/settings/test-email-automation', { method: 'POST' })
-                                     const data = await res.json()
-                                     if (data.success) {
-                                       let msg = `Test Run Complete.\nSent: ${data.sentCount}\nErrors: ${data.errors.length}`
-                                       if (data.debugInfo && data.debugInfo.length > 0) {
-                                          msg += `\n\nLogs:\n${data.debugInfo.join('\n')}`
-                                       }
-                                       alert(msg)
-                                       handleRefresh() // Reload to update status
-                                     } else {
-                                       alert('Test Run Failed: ' + (data.error || JSON.stringify(data.errors)))
-                                     }
-                                   } catch (e) {
-                                     alert('Error running test: ' + String(e))
-                                   } finally {
-                                      setUpdatingSettings(false)
-                                   }
-                                 }
-                               }}
-                               disabled={updatingSettings}
-                               className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2"
-                             >
-                               <Send className="w-3 h-3" />
-                               Test Run Now
-                             </button>
+                                    <p className="text-sm font-bold text-gray-700">
+                                      {emailLastSent === new Date().toISOString().split('T')[0]
+                                        ? 'Sent'
+                                        : 'Pending / Not Sent'
+                                      }
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={async () => {
+                                if (confirm('This will immediately send reminder emails to all peer tutors with scheduled classes today, regardless of time. Continue?')) {
+                                  try {
+                                    setUpdatingSettings(true)
+                                    const res = await fetch('/api/settings/test-email-automation', { method: 'POST' })
+                                    const data = await res.json()
+                                    if (data.success) {
+                                      let msg = `Test Run Complete.\nSent: ${data.sentCount}\nErrors: ${data.errors.length}`
+                                      if (data.debugInfo && data.debugInfo.length > 0) {
+                                        msg += `\n\nLogs:\n${data.debugInfo.join('\n')}`
+                                      }
+                                      alert(msg)
+                                      handleRefresh() // Reload to update status
+                                    } else {
+                                      alert('Test Run Failed: ' + (data.error || JSON.stringify(data.errors)))
+                                    }
+                                  } catch (e) {
+                                    alert('Error running test: ' + String(e))
+                                  } finally {
+                                    setUpdatingSettings(false)
+                                  }
+                                }
+                              }}
+                              disabled={updatingSettings}
+                              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2"
+                            >
+                              <Send className="w-3 h-3" />
+                              Test Run Now
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -718,22 +717,22 @@ function SettingsContent() {
                             Pending Class Threshold
                           </label>
                           <div className="flex items-center gap-3">
-                             <input 
-                               type="number" 
-                               min="1"
-                               max="10"
-                               value={pendingThreshold}
-                               onChange={(e) => setPendingThreshold(parseInt(e.target.value) || 3)}
-                               className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm font-bold text-center focus:ring-2 focus:ring-purple-500 outline-none"
-                             />
-                             <p className="text-xs text-gray-500">consecutive pending classes triggers a warning</p>
+                            <input
+                              type="number"
+                              min="1"
+                              max="10"
+                              value={pendingThreshold}
+                              onChange={(e) => setPendingThreshold(parseInt(e.target.value) || 3)}
+                              className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm font-bold text-center focus:ring-2 focus:ring-purple-500 outline-none"
+                            />
+                            <p className="text-xs text-gray-500">consecutive pending classes triggers a warning</p>
                           </div>
                         </div>
 
                         {/* Exclude Additional Classes */}
                         <div className="space-y-3">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                             Additional Classes
+                            Additional Classes
                           </label>
                           <div className="flex items-center gap-3">
                             <button
@@ -752,20 +751,25 @@ function SettingsContent() {
 
                         {/* Pending Warning Message */}
                         <div className="space-y-2">
-                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Pending Warning Message</label>
-                           <textarea 
-                              value={pendingMessage}
-                              onChange={(e) => setPendingMessage(e.target.value)}
-                              rows={3}
-                              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                              placeholder="Enter message for pending warnings..."
-                           />
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Pending Warning Message</label>
+                          <p className="text-[10px] text-gray-400 mb-2 flex items-center gap-2">
+                            Available placeholders:
+                            <code className="bg-gray-100 px-2.5 py-1 rounded-md text-gray-900 font-medium border border-gray-200">{'{'}class_names{'}'}</code>
+                            <code className="bg-gray-100 px-2.5 py-1 rounded-md text-gray-900 font-medium border border-gray-200">{'{'}tutor_name{'}'}</code>
+                          </p>
+                          <textarea
+                            value={pendingMessage}
+                            onChange={(e) => setPendingMessage(e.target.value)}
+                            rows={3}
+                            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                            placeholder="Enter message for pending warnings..."
+                          />
                         </div>
 
                         {/* Preview Info */}
-                        <div className="bg-orange-50 border border-orange-100 rounded-lg p-4">
-                          <p className="text-xs font-bold text-orange-900 mb-2">How it works:</p>
-                          <ul className="text-xs text-orange-700 space-y-1 list-disc list-inside">
+                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
+                          <p className="text-xs font-bold text-gray-900 mb-2">How it works:</p>
+                          <ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
                             <li>Checks for consecutive pending classes hourly</li>
                             <li>Only counts classes with status other than &ldquo;completed&rdquo;</li>
                             <li>Sends warning when threshold is met or exceeded</li>

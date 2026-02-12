@@ -8,6 +8,7 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { useAuth } from '@/lib/auth/AuthContext'
+import { cn } from '@/lib/utils'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService, AdditionalClass } from '@/lib/services/additionalClassService'
@@ -530,7 +531,10 @@ function FacultyDashboardContent() {
       {/* Content Container */}
       <div
         suppressHydrationWarning
-        className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
+        className={cn(
+          "transition-all duration-300 min-h-screen flex flex-col w-full lg:w-auto",
+          isSidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
+        )}>
         {isLoading ? (
           <FacultyDashboardSkeleton />
         ) : (
@@ -547,34 +551,34 @@ function FacultyDashboardContent() {
             />
 
             {/* Dashboard Content */}
-            <main className="flex-1 p-6 overflow-y-auto bg-gray-50/50">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 max-w-[1600px] mx-auto w-full">
+            <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-gray-50/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 sm:gap-6 max-w-[1600px] mx-auto w-full">
 
                 {/* --- LEFT COLUMN --- */}
                 <div className="lg:col-span-4 flex flex-col gap-6">
 
                   {/* Update Card */}
-                  <div className="bg-gradient-to-br from-[#1C2434] to-[#2D3748] text-white rounded-[2rem] p-8 relative overflow-hidden shadow-2xl border border-white/10 group">
+                  <div className="bg-gradient-to-br from-[#1C2434] to-[#2D3748] text-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 relative overflow-hidden shadow-2xl border border-white/10 group">
                     <div className="relative z-10">
-                      <div className="flex items-center gap-2 mb-6">
+                      <div className="flex items-center gap-2 mb-4 sm:mb-6">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]"></span>
-                        <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">Department Overview</span>
+                        <span className="text-[10px] sm:text-xs font-bold tracking-widest text-gray-400 uppercase">Department Overview</span>
                       </div>
-                      <p className="text-sm text-gray-400 font-medium mb-1">
+                      <p className="text-xs sm:text-sm text-gray-400 font-medium mb-1">
                         {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                       </p>
-                      <h3 className="text-3xl font-bold tracking-tight mb-4 leading-tight">
+                      <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4 leading-tight">
                         DEPT OVERVIEW<br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">{department?.name}</span>
                       </h3>
-                      <div className="flex items-center gap-4 mt-8">
-                        <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/5">
-                          <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Total Classes</p>
-                          <p className="text-xl font-bold">{stats.totalClasses}</p>
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-6 sm:mt-8">
+                        <div className="bg-white/10 backdrop-blur-md rounded-xl p-2.5 sm:p-3 border border-white/5 flex-1 min-w-[100px]">
+                          <p className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-bold mb-1">Total Classes</p>
+                          <p className="text-lg sm:text-xl font-bold">{stats.totalClasses}</p>
                         </div>
-                        <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/5">
-                          <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Attendance</p>
-                          <p className="text-xl font-bold">{stats.attendanceRate}%</p>
+                        <div className="bg-white/10 backdrop-blur-md rounded-xl p-2.5 sm:p-3 border border-white/5 flex-1 min-w-[100px]">
+                          <p className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-bold mb-1">Attendance</p>
+                          <p className="text-lg sm:text-xl font-bold">{stats.attendanceRate}%</p>
                         </div>
                       </div>
                     </div>
@@ -583,29 +587,29 @@ function FacultyDashboardContent() {
                   </div>
 
                   {/* Stats Row */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <Card className="rounded-[2rem] shadow-sm border-none p-7 bg-white hover:shadow-md transition-all duration-300">
-                      <div className="flex justify-between items-start mb-6">
-                        <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Tutors / Students</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none p-5 sm:p-7 bg-white hover:shadow-md transition-all duration-300">
+                      <div className="flex justify-between items-start mb-4 sm:mb-6">
+                        <div className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Tutors / Students</div>
                         <div className="p-1.5 bg-gray-50 rounded-lg">
                           <Users className="w-3.5 h-3.5 text-gray-400" />
                         </div>
                       </div>
-                      <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{stats.totalpeerTutor} / {stats.totalStudents}</div>
-                      <div className="flex items-center text-[10px] text-black font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
+                      <div className="text-3xl sm:text-4xl font-black text-gray-900 mb-4 sm:mb-6 tracking-tight">{stats.totalpeerTutor} / {stats.totalStudents}</div>
+                      <div className="flex items-center text-[9px] sm:text-[10px] text-black font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
                         <span>ALLOCATED</span>
                       </div>
                     </Card>
 
-                    <Card className="rounded-[2rem] shadow-sm border-none p-7 bg-white hover:shadow-md transition-all duration-300">
-                      <div className="flex justify-between items-start mb-6">
-                        <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Additional Classes</div>
+                    <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none p-5 sm:p-7 bg-white hover:shadow-md transition-all duration-300">
+                      <div className="flex justify-between items-start mb-4 sm:mb-6">
+                        <div className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Additional Classes</div>
                         <div className="p-1.5 bg-gray-50 rounded-lg">
                           <GraduationCap className="w-3.5 h-3.5 text-gray-400" />
                         </div>
                       </div>
-                      <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{stats.totalAdditionalClasses}</div>
-                      <div className="flex items-center text-[10px] text-black- font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
+                      <div className="text-3xl sm:text-4xl font-black text-gray-900 mb-4 sm:mb-6 tracking-tight">{stats.totalAdditionalClasses}</div>
+                      <div className="flex items-center text-[9px] sm:text-[10px] text-black- font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
                         <span>CUMULATIVE</span>
                       </div>
                     </Card>
@@ -613,23 +617,26 @@ function FacultyDashboardContent() {
 
 
                   {/* Weekly Activity */}
-                  <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7">
-                    <div className="flex flex-row items-center justify-between mb-8">
+                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                       <div>
-                        <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none mb-2">Weekly Activity</h4>
+                        <h4 className="text-[10px] sm:text-sm font-black text-gray-400 uppercase tracking-widest leading-none mb-2">Weekly Activity</h4>
                         <div className="flex items-center gap-2">
-                          <span className="text-2xl font-black text-gray-900">{stats.currentWeekTotal}</span>
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center ${stats.weeklyChange >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-600 text-white'}`}>
+                          <span className="text-xl sm:text-2xl font-black text-gray-900">{stats.currentWeekTotal}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center ${stats.weeklyChange >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-600 text-white'}`}>
                             {stats.weeklyChange >= 0 ? <ArrowUpRight size={10} className="mr-0.5" /> : <ArrowDownRight size={10} className="mr-0.5" />}
                             {Math.abs(stats.weeklyChange)}%
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#1C2434]"></span><span className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">Classes Taken</span></div>
+                      <div className="flex items-center gap-1.5 sm:justify-end">
+                        <span className="w-2 h-2 rounded-full bg-[#1C2434]"></span>
+                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-tight">Classes Taken</span>
+                      </div>
                     </div>
-                    <div className="w-full h-[160px]">
+                    <div className="w-full h-[160px] sm:h-[180px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={stats.weeklyActivity} barSize={16}>
+                        <BarChart data={stats.weeklyActivity} barSize={window.innerWidth < 640 ? 10 : 16}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                           <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94A3B8', fontWeight: 600 }} dy={10} />
                           <RechartsTooltip cursor={{ fill: '#F8FAFC', radius: 4 }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', padding: '8px 12px' }} itemStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
@@ -646,22 +653,22 @@ function FacultyDashboardContent() {
                 {/* --- MIDDLE COLUMN --- */}
                 <div className="lg:col-span-4 flex flex-col gap-6">
                   {/* Year Overview */}
-                  <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 overflow-hidden relative">
-                    <div className="flex flex-row items-center justify-between mb-8 relative z-10">
-                      <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Year Overview</h4>
+                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7 overflow-hidden relative">
+                    <div className="flex flex-row items-center justify-between mb-6 sm:mb-8 relative z-10">
+                      <h4 className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-widest">Year Overview</h4>
                       <MoreHorizontal className="w-5 h-5 text-gray-400 cursor-pointer" />
                     </div>
-                    <div className="space-y-8 mt-2 relative z-10">
+                    <div className="space-y-6 sm:space-y-8 mt-2 relative z-10">
                       {stats.yearStats.map((yearStat) => (
                         <div key={yearStat.year} className="group cursor-pointer" onClick={() => handleYearClick(yearStat.year)}>
-                          <div className="flex justify-between items-end mb-0">
+                          <div className="flex justify-between items-end mb-1 sm:mb-0">
                             <div>
-                              <span className="text-base font-bold text-gray-800 group-hover:text-blue-600 transition-colors">YEAR {yearStat.year}</span>
-                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{yearStat.count} Total Classes</p>
+                              <span className="text-sm sm:text-base font-bold text-gray-800 group-hover:text-blue-600 transition-colors uppercase">YEAR {yearStat.year}</span>
+                              <p className="text-[9px] sm:text-[10px] text-gray-400 font-bold uppercase tracking-tight">{yearStat.count} Total Classes</p>
                             </div>
-                            <span className="text-sm font-bold text-gray-900">{Math.round(yearStat.percentage)}%</span>
+                            <span className="text-xs sm:text-sm font-bold text-gray-900">{Math.round(yearStat.percentage)}%</span>
                           </div>
-                          <div className="relative w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="relative w-full h-2 sm:h-2.5 bg-gray-100 rounded-full overflow-hidden">
                             <div
                               className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-1000 ease-out group-hover:from-blue-400 group-hover:to-blue-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
                               style={{ width: `${Math.min(100, yearStat.percentage)}%` }}
@@ -675,10 +682,10 @@ function FacultyDashboardContent() {
 
 
                   {/* Recent Sessions */}
-                  <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 overflow-hidden">
+                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7 overflow-hidden">
                     <div className="flex flex-row items-center justify-between pb-4 border-b border-gray-50">
-                      <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest">Recent Sessions</h4>
-                      <span className="text-[10px] font-black text-black-400 px-2.5 py-1 bg-gray-50 rounded-lg uppercase tracking-widest border border-gray-100">Last 3</span>
+                      <h4 className="text-[10px] sm:text-sm font-black text-gray-400 uppercase tracking-widest">Recent Sessions</h4>
+                      <span className="text-[9px] sm:text-[10px] font-black text-black-400 px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gray-50 rounded-lg uppercase tracking-widest border border-gray-100">Last 3</span>
                     </div>
                     <div className="space-y-4">
                       {stats.recentClasses.length > 0 ? (
@@ -696,24 +703,24 @@ function FacultyDashboardContent() {
                           }
 
                           return (
-                            <div key={i} className="flex items-center justify-between p-4 rounded-2xl hover:bg-gray-50/80 transition-all duration-200 border border-transparent hover:border-gray-100 group">
-                              <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 flex-shrink-0 rounded-xl ${bgColor} flex items-center justify-center font-bold text-black relative`}>
+                            <div key={i} className="flex items-center justify-between p-3 sm:p-4 rounded-2xl hover:bg-gray-50/80 transition-all duration-200 border border-transparent hover:border-gray-100 group">
+                              <div className="flex items-center gap-3 sm:gap-4">
+                                <div className={`w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 rounded-xl ${bgColor} flex items-center justify-center text-xs sm:text-base font-bold text-black relative`}>
                                   {cls.year}
-                                  <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${statusColor}`}></div>
+                                  <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 border-white ${statusColor}`}></div>
                                 </div>
-                                <div>
-                                  <h5 className="text-sm font-bold text-gray-900 mb-0.5 group-hover:text-blue-600 transition-colors uppercase tracking-tight" title={cls.subject_name}>
+                                <div className="min-w-0">
+                                  <h5 className="text-xs sm:text-sm font-bold text-gray-900 mb-0.5 group-hover:text-blue-600 transition-colors uppercase tracking-tight truncate" title={cls.subject_name}>
                                     {cls.subject_name.split(' ').slice(0, 3).join(' ')}{cls.subject_name.split(' ').length > 3 ? '...' : ''}
                                   </h5>
-                                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                  <p className="text-[9px] sm:text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                                     {new Date(cls.scheduled_date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
                                   </p>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <p className="text-xs font-black text-gray-900 mb-0.5">{cls.percentage}%</p>
-                                <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">{statusText}</p>
+                              <div className="text-right flex-shrink-0">
+                                <p className="text-[10px] sm:text-xs font-black text-gray-900 mb-0.5">{cls.percentage}%</p>
+                                <p className="text-[8px] sm:text-[9px] text-gray-400 font-black uppercase tracking-widest">{statusText}</p>
                               </div>
                             </div>
                           )
@@ -730,10 +737,10 @@ function FacultyDashboardContent() {
                   </Card>
 
                   {/* Additional Classes by Year */}
-                  <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7">
+                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7">
                     <div className="flex flex-row items-center justify-between mb-8">
-                      <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest">Additional Classes</h4>
-                      <span className="text-[10px] font-bold text-black-400 bg-gray-50 px-2 py-0.5 rounded-full uppercase">By Year</span>
+                      <h4 className="text-[10px] sm:text-sm font-black text-gray-400 uppercase tracking-widest">Additional Classes</h4>
+                      <span className="text-[9px] sm:text-[10px] font-bold text-black-400 bg-gray-50 px-2 py-0.5 rounded-full uppercase">By Year</span>
                     </div>
                     <div className="w-full h-[160px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -767,9 +774,9 @@ function FacultyDashboardContent() {
                 <div className="lg:col-span-4 flex flex-col gap-6">
 
                   {/* Class Status Chart Card */}
-                  <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 relative overflow-hidden group">
+                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7 relative overflow-hidden group">
                     <div className="flex flex-row items-center justify-between mb-8 border-b border-gray-50 pb-4">
-                      <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest">Performance</h4>
+                      <h4 className="text-[10px] sm:text-sm font-black text-gray-400 uppercase tracking-widest">Performance</h4>
                       <div className="flex gap-1">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                         <div className="w-1.5 h-1.5 rounded-full bg-gray-200"></div>
