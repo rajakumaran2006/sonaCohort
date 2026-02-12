@@ -13,7 +13,17 @@ import {
   ArrowRight,
   ClipboardList,
   CreditCard,
-  MessageSquare
+  MessageSquare,
+  Settings,
+  Mail,
+  Award,
+  Building2,
+  Trophy,
+  ChevronRight as ChevronRightIcon,
+  Clock,
+  ToggleLeft,
+  LinkIcon,
+  BookOpen
 } from 'lucide-react'
 import { SearchIcon } from '@/components/icons/SearchIcon'
 import Modal from '@/components/ui/Modal'
@@ -107,19 +117,54 @@ export default function FacultyCommandPalette() {
     staleTime: 5 * 60 * 1000
   })
 
-  // Define Static Navigation Pages
+  // Define Static Navigation Pages — all routes with proper hierarchy
   const staticPages = useMemo<SearchResult[]>(() => [
-    { id: 'nav-dashboard', title: 'Dashboard', type: 'page', href: '/faculty/dashboard', icon: LayoutGrid, category: 'Navigation' },
+    // ── Main Navigation ──
+    { id: 'nav-dashboard', title: 'Dashboard', subtitle: 'Overview & Statistics', type: 'page', href: '/faculty/dashboard', icon: LayoutGrid, category: 'Navigation' },
     { id: 'nav-students', title: 'Students', subtitle: 'Manage Students', type: 'page', href: '/faculty/peer-tutor?tab=students', icon: Users, category: 'Navigation' },
     { id: 'nav-peer-tutors', title: 'Peer Tutors', subtitle: 'Manage Peer Tutors', type: 'page', href: '/faculty/peer-tutor?tab=tutors', icon: Users, category: 'Navigation' },
     { id: 'nav-classes', title: 'Classes', subtitle: 'Class Schedules', type: 'page', href: '/faculty/classes', icon: GraduationCap, category: 'Navigation' },
-    { id: 'nav-attendance', title: 'Attendance', type: 'page', href: '/faculty/attendance', icon: ClipboardList, category: 'Navigation' },
+    { id: 'nav-attendance', title: 'Attendance', subtitle: 'Track Attendance', type: 'page', href: '/faculty/attendance', icon: ClipboardList, category: 'Navigation' },
     { id: 'nav-exams', title: 'Exams', subtitle: 'Manage Exams', type: 'page', href: '/faculty/exams', icon: FileText, category: 'Navigation' },
-    { id: 'nav-analytics', title: 'Analytics', type: 'page', href: '/faculty/analytics', icon: BarChart3, category: 'Navigation' },
-    { id: 'nav-feedback', title: 'Feedback', type: 'page', href: '/faculty/peer-tutor?tab=feedback', icon: MessageSquare, category: 'Navigation' },
-    { id: 'nav-renumeration', title: 'Remuneration', type: 'page', href: '/faculty/peer-tutor?tab=renumeration', icon: CreditCard, category: 'Navigation' },
-    { id: 'nav-leaderboard', title: 'Leaderboard', type: 'page', href: '/faculty/peer-tutor?tab=leaderboard', icon: BarChart3, category: 'Navigation' },
-  ], [])
+    { id: 'nav-analytics', title: 'Analytics', subtitle: 'Performance Insights', type: 'page', href: '/faculty/analytics', icon: BarChart3, category: 'Navigation' },
+    { id: 'nav-manage-faculty', title: 'Manage Faculty', subtitle: 'Faculty Members', type: 'page', href: '/faculty/manage-faculty', icon: User, category: 'Navigation' },
+    { id: 'nav-settings', title: 'Settings', subtitle: 'Profile & Configuration', type: 'page', href: '/faculty/settings', icon: Settings, category: 'Navigation' },
+
+    // ── Student Management Tabs ──
+    { id: 'tab-feedback', title: 'Feedback', subtitle: 'Students → Feedback Tab', type: 'page', href: '/faculty/peer-tutor?tab=feedback', icon: MessageSquare, category: 'Student Management' },
+    { id: 'tab-renumeration', title: 'Remuneration', subtitle: 'Students → Remuneration Tab', type: 'page', href: '/faculty/peer-tutor?tab=renumeration', icon: CreditCard, category: 'Student Management' },
+    { id: 'tab-leaderboard', title: 'Leaderboard', subtitle: 'Students → Leaderboard Tab', type: 'page', href: '/faculty/peer-tutor?tab=leaderboard', icon: Trophy, category: 'Student Management' },
+
+    // ── Department Navigation ──
+    ...(department?.name ? [
+      { id: 'nav-dept', title: department.name, subtitle: 'Department Overview', type: 'page' as const, href: `/faculty/department/${department.name}`, icon: Building2, category: 'Department' },
+      // Year pages
+      { id: 'nav-dept-year-2', title: '2nd Year', subtitle: `${department.name} → 2nd Year`, type: 'page' as const, href: `/faculty/department/${department.name}/year/2`, icon: BookOpen, category: 'Department' },
+      { id: 'nav-dept-year-3', title: '3rd Year', subtitle: `${department.name} → 3rd Year`, type: 'page' as const, href: `/faculty/department/${department.name}/year/3`, icon: BookOpen, category: 'Department' },
+      { id: 'nav-dept-year-4', title: '4th Year', subtitle: `${department.name} → 4th Year`, type: 'page' as const, href: `/faculty/department/${department.name}/year/4`, icon: BookOpen, category: 'Department' },
+      // Section pages for each year
+      ...(['2', '3', '4'].flatMap(year => 
+        ['A', 'B', 'C'].map(section => ({
+          id: `nav-dept-y${year}-s${section}`,
+          title: `Year ${year} — Section ${section}`,
+          subtitle: `${department.name} → Year ${year} → Section ${section}`,
+          type: 'page' as const,
+          href: `/faculty/department/${department.name}/year/${year}/section/${section}`,
+          icon: GraduationCap,
+          category: 'Department Sections'
+        }))
+      ))
+    ] : []),
+
+    // ── Settings & Mail ──
+    { id: 'settings-send-mail', title: 'Send Mail', subtitle: 'Settings → Compose & Send Email', type: 'page', href: '/faculty/settings?tab=send_mail', icon: Mail, category: 'Settings & Mail' },
+    { id: 'settings-daily-reminder', title: 'Daily Reminder', subtitle: 'Settings → Email Automation', type: 'page', href: '/faculty/settings?tab=daily', icon: Clock, category: 'Settings & Mail' },
+    { id: 'settings-class-config', title: 'Class Configuration', subtitle: 'Settings → Mandatory Class Link', type: 'page', href: '/faculty/settings', icon: LinkIcon, category: 'Settings & Mail' },
+
+    // ── Reports & Analytics ──
+    { id: 'nav-feedback-analytics', title: 'Feedback Analytics', subtitle: 'Detailed Feedback Reports', type: 'page', href: '/faculty/feedback-analytics', icon: BarChart3, category: 'Reports & Analytics' },
+    { id: 'nav-renumeration-page', title: 'Remuneration Page', subtitle: 'Payment & Compensation', type: 'page', href: '/faculty/renumeration', icon: CreditCard, category: 'Reports & Analytics' },
+  ], [department?.name])
 
   // Filter and Compute Results
   const filteredResults = useMemo(() => {

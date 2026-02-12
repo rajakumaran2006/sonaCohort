@@ -32,6 +32,7 @@ export async function middleware(request: NextRequest) {
     const { data } = await supabase.auth.getUser();
     user = data.user;
   } catch (err) {
+    // eslint-disable-next-line no-console
     console.error('Middleware auth check failed:', err);
     // Continue as unauthenticated
   }

@@ -74,7 +74,6 @@ function PeerDashboardContent() {
   const showPendingAlert = alertData?.showPendingAlert ?? false
   const consecutivePendingCount = alertData?.consecutivePendingCount ?? 0
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: _activeFeedbackForms = [] } = useActiveFeedbackForms(peertutorsInfo?.id)
   // Always use undefined to default to user's own year - peer tutors can only see their year's leaderboard
   const { data: leaderboardData, isLoading: isLeaderboardLoading } = usePeerLeaderboard(peertutorsInfo, undefined)

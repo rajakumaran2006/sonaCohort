@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
     
-    const { to, subject, content } = body
+    const { to, subject, content, attachments } = body
 
     // Validate required fields
     if (!to || !Array.isArray(to) || to.length === 0) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Department Validation Logic ---
-    let allowedEmails = new Set<string>()
+    const allowedEmails = new Set<string>()
     let isRestricted = false
 
     // 1. Check if Superadmin (Allow all if superadmin)
@@ -111,6 +111,12 @@ export async function POST(request: NextRequest) {
       logger.info('[send-mail] Token refreshed successfully')
     }
 
+    interface EmailAttachment {
+      name: string;
+      contentBytes: string;
+      contentType: string;
+    }
+
     // Build the email message payload for Microsoft Graph
     const message = {
       message: {
@@ -123,9 +129,34 @@ export async function POST(request: NextRequest) {
           emailAddress: {
             address: email.trim()
           }
-        }))
+        })),
+        attachments: [] as { '@odata.type': string; name: string; contentBytes: string; contentType: string }[]
       },
       saveToSentItems: true
+    }
+
+    // Add attachments if present
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      if (attachments.length > 10) { // Limit number of attachments
+         return NextResponse.json({ error: 'Too many attachments. Max 10 allowed.' }, { status: 400 })
+      }
+      
+      // Basic validation of attachment objects
+      const validAttachments = attachments.every((att: unknown) => 
+        typeof att === 'object' && att !== null &&
+        'name' in att && 'contentBytes' in att && 'contentType' in att
+      )
+      
+      if (!validAttachments) {
+         return NextResponse.json({ error: 'Invalid attachment format. Required: name, contentBytes, contentType' }, { status: 400 })
+      }
+
+      message.message.attachments = (attachments as EmailAttachment[]).map((att) => ({
+        '@odata.type': '#microsoft.graph.fileAttachment',
+        name: att.name,
+        contentBytes: att.contentBytes,
+        contentType: att.contentType
+      }))
     }
 
     logger.info('[send-mail] Sending email to', to.length, 'recipient(s)')

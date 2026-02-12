@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, User, Mail, BookOpen, Users, Phone, Calendar } from 'lucide-react'
-import { FacultyService, FacultySummary, FacultyAllocation } from '@/lib/services/facultyService'
+import { User, Mail, BookOpen, Users } from 'lucide-react'
+import { FacultyService } from '@/lib/services/facultyService'
 import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
@@ -32,6 +32,12 @@ interface SubjectAssignment {
   peerTutors: PeerTutorStats[]
 }
 
+interface Superadmin {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export default function FacultyDetailsPage() {
   const params = useParams()
   const router = useRouter()
@@ -44,7 +50,7 @@ export default function FacultyDetailsPage() {
   const [subjectAssignments, setSubjectAssignments] = useState<SubjectAssignment[]>([])
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [superadmins, setSuperadmins] = useState<any[]>([])
+  const [superadmins, setSuperadmins] = useState<Superadmin[]>([])
   const [currentDept, setCurrentDept] = useState<string>('')
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -55,6 +61,7 @@ export default function FacultyDetailsPage() {
       loadFacultyDetails()
       fetchSuperadmins()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facultyEmail, user])
 
   const fetchSuperadmins = async () => {

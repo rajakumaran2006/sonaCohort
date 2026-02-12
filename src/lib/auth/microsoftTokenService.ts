@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 
 export interface TokenData {
@@ -14,9 +15,9 @@ export class MicrosoftTokenService {
   /**
    * Store or update the Microsoft refresh token for a user
    */
-  static async storeRefreshToken(userId: string, refreshToken: string): Promise<boolean> {
+  static async storeRefreshToken(userId: string, refreshToken: string, supabaseClient?: SupabaseClient): Promise<boolean> {
     try {
-      const supabase = await createClient()
+      const supabase = supabaseClient || await createClient()
       
       const { error } = await supabase
         .from('user_tokens')
@@ -45,9 +46,9 @@ export class MicrosoftTokenService {
   /**
    * Get the stored refresh token for a user
    */
-  static async getRefreshToken(userId: string): Promise<string | null> {
+  static async getRefreshToken(userId: string, supabaseClient?: SupabaseClient): Promise<string | null> {
     try {
-      const supabase = await createClient()
+      const supabase = supabaseClient || await createClient()
       
       const { data, error } = await supabase
         .from('user_tokens')
@@ -96,9 +97,9 @@ export class MicrosoftTokenService {
   /**
    * Refresh the Microsoft access token using the stored refresh token
    */
-  static async refreshAccessToken(userId: string): Promise<TokenData | null> {
+  static async refreshAccessToken(userId: string, supabaseClient?: SupabaseClient): Promise<TokenData | null> {
     try {
-      const refreshToken = await this.getRefreshToken(userId)
+      const refreshToken = await this.getRefreshToken(userId, supabaseClient)
       
       if (!refreshToken) {
         logger.warn('No refresh token available for user:', userId)
@@ -150,7 +151,7 @@ export class MicrosoftTokenService {
 
       // If Azure returns a new refresh token (token rotation), store it
       if (tokenData.refresh_token && tokenData.refresh_token !== refreshToken) {
-        await this.storeRefreshToken(userId, tokenData.refresh_token)
+        await this.storeRefreshToken(userId, tokenData.refresh_token, supabaseClient)
       }
 
       return {

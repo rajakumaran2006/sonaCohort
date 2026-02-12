@@ -70,7 +70,7 @@ export default function StudentImportModal({
       ]
       
       students.forEach(s => {
-        exportData.push([s.name, s.email, s.year, s.section])
+        exportData.push([s.name, s.email || '', s.year, s.section])
       })
 
       // If we are exporting a blank template because no data exists, add an example row
@@ -232,7 +232,7 @@ export default function StudentImportModal({
     
     if (email) {
       const match = students.find(s => 
-        s.email.toLowerCase().trim() === email.toLowerCase().trim() &&
+        s.email && s.email.toLowerCase().trim() === email.toLowerCase().trim() &&
         (!targetYear || s.year === targetYear) && 
         (!targetSection || s.section === targetSection)
       )

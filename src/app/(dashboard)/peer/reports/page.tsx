@@ -101,7 +101,7 @@ function PeerReportsContent() {
 
       // Add data for each subject
       for (const subject of reportData.subjects) {
-        const totalTaken = subject.completed_classes + subject.additional_classes
+        const totalTaken = subject.completed_classes + (subject.additional_classes || 0)
         const completionRate = subject.total_classes > 0 
           ? Math.round((totalTaken / subject.total_classes) * 100)
           : 0
@@ -110,7 +110,7 @@ function PeerReportsContent() {
           subject.subject_name,
           subject.total_classes,
           subject.completed_classes > 0 ? subject.completed_classes : '',
-          subject.additional_classes > 0 ? subject.additional_classes : '',
+          (subject.additional_classes || 0) > 0 ? (subject.additional_classes || 0) : '',
           subject.pending_classes,
           totalTaken > 0 ? totalTaken : '',
           totalTaken > 0 ? completionRate : ''
@@ -120,7 +120,7 @@ function PeerReportsContent() {
       // Add summary row
       const totalScheduled = reportData.subjects.reduce((sum, s) => sum + s.total_classes, 0)
       const totalCompleted = reportData.subjects.reduce((sum, s) => sum + s.completed_classes, 0)
-      const totalAdditional = reportData.subjects.reduce((sum, s) => sum + s.additional_classes, 0)
+      const totalAdditional = reportData.subjects.reduce((sum, s) => sum + (s.additional_classes || 0), 0)
       const totalPending = reportData.subjects.reduce((sum, s) => sum + s.pending_classes, 0)
       const grandTotalTaken = totalCompleted + totalAdditional
       const overallRate = totalScheduled > 0 ? Math.round((grandTotalTaken / totalScheduled) * 100) : 0
@@ -283,7 +283,7 @@ function PeerReportsContent() {
                           <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">Additional Classes</p>
                             <p className="text-3xl font-bold text-gray-900 tracking-tight">
-                              {reportData.subjects.reduce((sum, subject) => sum + subject.additional_classes, 0)}
+                              {reportData.subjects.reduce((sum, subject) => sum + (subject.additional_classes || 0), 0)}
                             </p>
                           </div>
                           <div className="p-2 border border-gray-100 rounded-lg group-hover:bg-gray-50 transition-colors">
@@ -354,7 +354,7 @@ function PeerReportsContent() {
                             {/* Mobile Card View */}
                             <div className="md:hidden divide-y divide-gray-100">
                               {reportData.subjects.map((subject) => {
-                                const totalTaken = subject.completed_classes + subject.additional_classes
+                                const totalTaken = subject.completed_classes + (subject.additional_classes || 0)
                                 const completionRate = subject.total_classes > 0 
                                   ? Math.round((totalTaken / subject.total_classes) * 100)
                                   : 0
@@ -385,7 +385,7 @@ function PeerReportsContent() {
                                       </div>
                                       <div className="text-center p-2 bg-gray-50 rounded-lg">
                                         <p className="text-[9px] font-bold text-gray-400 uppercase">Extra</p>
-                                        <p className="text-sm font-bold text-gray-900">{subject.additional_classes}</p>
+                                        <p className="text-sm font-bold text-gray-900">{subject.additional_classes || 0}</p>
                                       </div>
                                       <div className="text-center p-2 bg-gray-50 rounded-lg">
                                         <p className="text-[9px] font-bold text-gray-400 uppercase">Pending</p>
@@ -437,7 +437,7 @@ function PeerReportsContent() {
                                 <tbody className="bg-white divide-y divide-gray-200">
                                   {reportData.subjects.map((subject) => {
                                     // Calculate completion rate: (completed + additional) / scheduled
-                                    const totalTaken = subject.completed_classes + subject.additional_classes
+                                    const totalTaken = subject.completed_classes + (subject.additional_classes || 0)
                                     const completionRate = subject.total_classes > 0 
                                       ? Math.round((totalTaken / subject.total_classes) * 100)
                                       : 0
@@ -464,7 +464,7 @@ function PeerReportsContent() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-center">
                                           <div className="text-sm font-bold text-purple-900">
-                                            {subject.additional_classes}
+                                            {subject.additional_classes || 0}
                                           </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-center">

@@ -91,9 +91,9 @@ function LoginPageContent() {
 
           {/* Error Message */}
           {errorMessage && (
-            <div className="mb-6 p-4 bg-red-50/80 backdrop-blur-sm border-2 border-red-100 rounded-2xl flex items-center gap-3 animate-in slide-in-from-top-2 fade-in">
-              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-              <p className="text-xs font-bold text-red-700">{errorMessage}</p>
+            <div className="mb-6 p-4 bg-gray-100 backdrop-blur-sm border-2 border-black rounded-2xl flex items-center gap-3 animate-in slide-in-from-top-2 fade-in">
+              <AlertCircle className="h-5 w-5 text-black-500 flex-shrink-0" />
+              <p className="text-xs font-bold text-black-700">{errorMessage}</p>
             </div>
           )}
 

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { EmailAutomationService } from '@/lib/services/emailAutomationService'
 import { logger } from '@/lib/logger'
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -26,7 +26,8 @@ export async function POST(request: NextRequest) {
     // Trigger automation with force=true
     const result = await EmailAutomationService.processMorningReminders({
       departmentId: dept.id,
-      force: true
+      force: true,
+      userId: user.id
     }, supabase)
 
     return NextResponse.json(result)

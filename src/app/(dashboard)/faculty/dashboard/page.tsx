@@ -790,7 +790,7 @@ function FacultyDashboardContent() {
                           <PieChart>
                             <Pie
                               data={[{ value: 100 }]}
-                              cx="50%" cy="80%" startAngle={180} endAngle={0}
+                              cx="50%" cy="70%" startAngle={180} endAngle={0}
                               innerRadius="50%" outerRadius="90%" paddingAngle={0}
                               dataKey="value" stroke="none" isAnimationActive={false}
                             >
@@ -798,7 +798,7 @@ function FacultyDashboardContent() {
                             </Pie>
                             <Pie
                               data={[{ value: stats.attendanceRate }, { value: 100 - stats.attendanceRate }]}
-                              cx="50%" cy="80%" startAngle={180} endAngle={0}
+                              cx="50%" cy="70%" startAngle={180} endAngle={0}
                               innerRadius="50%" outerRadius="90%" paddingAngle={0}
                               dataKey="value" stroke="none" cornerRadius={10}
                               className="drop-shadow-xl"

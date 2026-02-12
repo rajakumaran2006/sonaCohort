@@ -380,7 +380,7 @@ export class peertutorservice {
   /**
    * Remove a peer tutor and unassign related students (students and their attendance remain intact)
    */
-  static async removepeertutors(id: string, // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  static async removepeertutors(id: string,
     _forceDelete: boolean = false): Promise<{ success: boolean; message: string }> {
     try {
       const supabase = createClient()

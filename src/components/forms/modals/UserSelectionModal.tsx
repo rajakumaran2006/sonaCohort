@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { peertutorservice, peertutorsAssignment } from '@/lib/services/peerTutorService'
 import { StudentService, StudentAssignment } from '@/lib/services/studentService'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { Search, X, Loader2, User, Mail, Check, AlertCircle, ChevronDown, UserPlus } from 'lucide-react'
+import { Search, X, Loader2, User, Mail, Check, AlertCircle, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MicrosoftUser } from '@/lib/types'
 

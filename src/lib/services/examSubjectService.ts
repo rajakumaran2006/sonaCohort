@@ -196,9 +196,9 @@ export class ExamSubjectService {
   static async initializeSubjectsFromClasses(
     examId: string,
     peertutorsId: string,
-    dept: string,
-    year: string,
-    section: string
+    _dept: string,
+    _year: string,
+    _section: string
   ): Promise<boolean> {
     try {
       const supabase = createClient()

@@ -1,257 +1,371 @@
-import { createClient } from '@/lib/supabase/client'
+import * as XLSX from 'xlsx'
+import { Student, StudentService } from '@/lib/services/studentService'
+import { peertutors, peertutorservice } from '@/lib/services/peerTutorService'
+import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { logger } from '@/lib/logger'
-import { AttendanceService } from './attendanceService'
-import { ScheduledClassWithDetails } from './scheduledClassService'
-import { AdditionalClassService } from './additionalClassService'
+import { createClient } from '@/lib/supabase/client'
 
-export interface peerTutorubject {
-  subject_name: string
-  class_id: string
-  total_classes: number
-  completed_classes: number
-  pending_classes: number
-  additional_classes: number
+// Define types for mapping report
+export interface PeerTutorWithStudents {
+  peertutors: peertutors
+  students: Student[]
 }
 
-export interface peertutorsReportData {
-  peer_tutor_id: string
-  peer_tutor_name: string
-  peer_tutor_email: string
-  dept: string
+export interface YearSectionGroup {
   year: string
   section: string
-  subjects: peerTutorubject[]
-}
-
-export interface ClassAttendanceReport {
-  class_id: string
-  scheduled_class_id: string
-  subject_name: string
-  scheduled_date: string
-  topics: string
-  attendance_records: {
-    student_id: string
-    student_name: string
-    student_email: string
-    status: 'present' | 'absent'
-  }[]
-  present_count: number
-  absent_count: number
-  total_students: number
-  start_time?: string
-  end_time?: string
-  link?: string
-}
-
-export interface FullClassReport {
-  subject_name: string
-  columns: {
-    id: string
-    date: string
-    time: string
-    is_additional: boolean
-    topics: string
-  }[]
-  rows: {
-    student_id: string
-    student_name: string
-    student_email: string
-    attendance: {
-      [class_id: string]: 'present' | 'absent' | 'on_duty' | 'late' | 'upcoming'
-    }
-    stats: {
-      present: number
-      total: number
-      percentage: number
-    }
-  }[]
-}
-
-export interface TopicSheetData {
-  subject_name: string
-  classes: {
-    id: string
-    date: string
-    hour: string
-    topic: string
-    is_additional: boolean
-  }[]
-}
-
-export interface ExcelExportData {
-  subject_name: string
-  student_name: string
-  present_absent_status: string
-  hours_present: number
-  attendance_percentage: number
-  topics_taught: string[]
+  peerTutorWithStudents: PeerTutorWithStudents[]
 }
 
 export class ReportService {
   /**
-   * Get all subjects assigned to a peer tutor
+   * Fetch Mapping Data (Logic refactored from PeerTutorMappingExport)
    */
-  static async getpeerTutorubjects(peertutorsId: string): Promise<peerTutorubject[]> {
+  static async fetchMappingData(dept: string): Promise<YearSectionGroup[]> {
     try {
-      const supabase = createClient()
-
-      // Get peer tutor info first (including created_at)
-      const { data: peertutors, error: tutorError } = await supabase
-        .from('peer_tutors')
-        .select('dept, year, section, created_at')
-        .eq('id', peertutorsId)
-        .single()
-
-      if (tutorError || !peertutors) {
-        logger.error('Error getting peer tutor info:', tutorError)
+      // Get all students for the department
+      const allStudents = await StudentService.getAllStudents()
+      const departmentStudents = allStudents.filter(s => s.dept === dept && !s.peer_tutor)
+      
+      // Get all peer tutors for the department
+      const allpeerTutor = await peertutorservice.getAllpeerTutor()
+      const departmentpeerTutor = allpeerTutor.filter(pt => pt.dept === dept)
+      
+      if (departmentStudents.length === 0 && departmentpeerTutor.length === 0) {
         return []
       }
-
-      // Calculate the minimum date for classes (day after peer tutor was created)
-      const createdDate = new Date(peertutors.created_at)
-      createdDate.setHours(0, 0, 0, 0)
-      const minimumClassDate = new Date(createdDate)
-      minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
-
-      // Get ALL scheduled classes for this peer tutor with class details (no date filter)
-      // This ensures we get all subjects that are assigned to this peer tutor
-      const { data: allScheduledClasses, error: allScheduledError } = await supabase
-        .from('scheduled_classes')
-        .select(`
-          class_id,
-          scheduled_date,
-          completion_status,
-          attendance_completed,
-          topics_completed,
-          class:classes!inner(
-            id,
-            subject_name
+      
+      // Get unique year/section combinations
+      const yearSectionSet = new Set<string>()
+      
+      departmentStudents.forEach(student => {
+        yearSectionSet.add(`${student.year}|${student.section}`)
+      })
+      
+      departmentpeerTutor.forEach(peertutors => {
+        yearSectionSet.add(`${peertutors.year}|${peertutors.section}`)
+      })
+      
+      const yearSectionGroups: YearSectionGroup[] = []
+      
+      for (const key of yearSectionSet) {
+        const [yearValue, sectionValue] = key.split('|')
+        
+        const sectionStudents = departmentStudents.filter(s => 
+          s.year === yearValue && s.section === sectionValue
+        )
+        
+        const sectionpeerTutor = departmentpeerTutor.filter(pt => 
+          pt.year === yearValue && pt.section === sectionValue
+        )
+        
+        const peerTutorWithStudents: PeerTutorWithStudents[] = []
+        
+        for (const peertutors of sectionpeerTutor) {
+          const assignedStudents = sectionStudents.filter(student => 
+            student.assigned_peer_tutor_id === peertutors.id
           )
-        `)
-        .eq('peer_tutor_id', peertutorsId)
-
-      if (allScheduledError) {
-        logger.error('Error getting scheduled classes:', allScheduledError)
-        return []
-      }
-
-
-
-      if (!allScheduledClasses || allScheduledClasses.length === 0) {
-        // If no scheduled classes at all, check if there are classes available for this dept/year/section
-        // This handles the case where a peer tutor exists but hasn't been assigned any classes yet
-        const { data: classes, error: classesError } = await supabase
-          .from('classes')
-          .select('id, subject_name')
-          .eq('dept', peertutors.dept)
-          .eq('year', peertutors.year)
-          .eq('section', peertutors.section)
-
-        if (classesError) {
-          logger.error('Error getting classes:', classesError)
-          return []
-        }
-
-        // Return subjects with zero stats if no scheduled classes exist
-        return classes.map(cls => ({
-          subject_name: cls.subject_name,
-          class_id: cls.id,
-          total_classes: 0,
-          completed_classes: 0,
-          pending_classes: 0,
-          additional_classes: 0
-        }))
-      }
-
-      // Get additional classes for this peer tutor
-      const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsId)
-
-      // Group scheduled classes by class_id to get unique subjects
-      // Use all scheduled classes to determine which subjects are assigned
-      const classMap = new Map<string, {
-        class_id: string
-        subject_name: string
-        allScheduledClasses: {
-          class_id: string
-          scheduled_date: string
-          completion_status?: 'not_started' | 'pending' | 'completed'
-          attendance_completed?: boolean
-          topics_completed?: boolean
-          class: {
-            id: string
-            subject_name: string
-          } | {
-            id: string
-            subject_name: string
-          }[]
-        }[]
-        scheduledClassesForStats: {
-          class_id: string
-          scheduled_date: string
-          completion_status?: 'not_started' | 'pending' | 'completed'
-          attendance_completed?: boolean
-          topics_completed?: boolean
-          class: {
-            id: string
-            subject_name: string
-          } | {
-            id: string
-            subject_name: string
-          }[]
-        }[]
-      }>()
-
-      allScheduledClasses.forEach(sc => {
-        const classId = sc.class_id
-        const classData = Array.isArray(sc.class) ? sc.class[0] : sc.class
-        const subjectName = classData?.subject_name || ''
-
-        if (!classMap.has(classId)) {
-          classMap.set(classId, {
-            class_id: classId,
-            subject_name: subjectName,
-            allScheduledClasses: [],
-            scheduledClassesForStats: []
+          
+          peerTutorWithStudents.push({
+            peertutors,
+            students: assignedStudents
           })
         }
-
-        classMap.get(classId)!.allScheduledClasses.push(sc)
-
-        // Add to stats array if it's after the creation date
-        const classDate = new Date(sc.scheduled_date)
-        classDate.setHours(0, 0, 0, 0)
-        if (classDate >= minimumClassDate) {
-          classMap.get(classId)!.scheduledClassesForStats.push(sc)
+        
+        // Unassigned peer tutors
+        const peertutorsIdsWithStudents = new Set(peerTutorWithStudents.map(pts => pts.peertutors.id))
+        const unassignedpeerTutor = sectionpeerTutor.filter(pt => 
+          !peertutorsIdsWithStudents.has(pt.id)
+        )
+        
+        for (const peertutors of unassignedpeerTutor) {
+          peerTutorWithStudents.push({
+            peertutors,
+            students: []
+          })
         }
-      })
-
-      // Process subjects with class statistics
-      // Use scheduledClassesForStats for counting (only classes after creation date)
-      const subjects: peerTutorubject[] = Array.from(classMap.values()).map(classData => {
-        const classScheduledClasses = classData.scheduledClassesForStats
-        const totalClasses = classScheduledClasses.length
-        const completedClasses = classScheduledClasses.filter(sc =>
-          sc.completion_status === 'completed' ||
-          (sc.attendance_completed && sc.topics_completed)
-        ).length
-        const pendingClasses = totalClasses - completedClasses
-
-        // Count additional classes for this subject
-        const additionalClassesForSubject = additionalClasses.filter(ac => ac.subject_name === classData.subject_name).length
-
-        return {
-          subject_name: classData.subject_name,
-          class_id: classData.class_id,
-          total_classes: totalClasses,
-          completed_classes: completedClasses,
-          pending_classes: pendingClasses,
-          additional_classes: additionalClassesForSubject
+        
+        if (peerTutorWithStudents.length > 0) {
+          yearSectionGroups.push({
+            year: yearValue,
+            section: sectionValue,
+            peerTutorWithStudents
+          })
         }
+      }
+      
+      // Sort
+      yearSectionGroups.sort((a, b) => {
+        if (a.year !== b.year) return a.year.localeCompare(b.year)
+        return a.section.localeCompare(b.section)
       })
-
-      return subjects
+      
+      return yearSectionGroups
     } catch (error) {
-      logger.error('Error in getpeerTutorubjects:', error)
+      logger.error('Error fetching mapping data:', error)
+      return []
+    }
+  }
+
+  /**
+   * Helper to convert a workbook to a File object
+   */
+  private static workbookToFile(wb: XLSX.WorkBook, filename: string): File {
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    return new File([blob], filename, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  }
+
+  /**
+   * Helper to append a worksheet to a workbook with styling
+   */
+  private static appendSheet(wb: XLSX.WorkBook, data: (string | number | undefined | null)[][], sheetName: string, headerMerges: XLSX.Range[] = []) {
+    const ws = XLSX.utils.aoa_to_sheet(data)
+    
+    // Apply merges
+    if (headerMerges.length > 0) {
+      ws['!merges'] = headerMerges
+    }
+
+    // Basic styling for headers (first row is usually title, next few are metadata)
+    // Note: xlsx basic version doesn't support advanced styling like colors without Pro version or additional libraries
+    // We strictly use basic features here.
+    
+    // Auto-adjust column widths based on content length (simple estimation)
+    const colWidths = data[0]?.map((_, i) => {
+        let maxLen = 10
+        data.forEach(row => {
+            const cellVal = row[i] ? String(row[i]) : ''
+            if (cellVal.length > maxLen) maxLen = cellVal.length
+        })
+        return { wch: Math.min(maxLen + 2, 50) } // Cap at 50 chars
+    })
+    ws['!cols'] = colWidths
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+  }
+
+  /**
+   * Generate Student Report
+   */
+  static async generateStudentReport(students: Student[], dept: string): Promise<File> {
+    const wb = XLSX.utils.book_new()
+    
+    // Format data: S.No, Name, Email, Year, Section, Assigned Tutor
+    const data: (string | number)[][] = [
+      ['STUDENT LIST REPORT'],
+      [`Department: ${dept}`],
+      [`Generated: ${new Date().toLocaleDateString()}`],
+      [],
+      ['S.No', 'Name', 'Email', 'Year', 'Section', 'Assigned Peer Tutor', 'Manual Entry']
+    ]
+
+    students.forEach((s, index) => {
+      data.push([
+        index + 1,
+        s.name,
+        s.email || 'N/A',
+        s.year,
+        s.section,
+        s.assigned_peer_tutor_id ? 'Yes' : 'No', // We don't have tutor name readily available in simple Student object unless verified
+        s.is_manual_entry ? 'Yes' : 'No'
+      ])
+    })
+
+    const merges = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // Title merge
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }
+    ]
+
+    this.appendSheet(wb, data, 'Students', merges)
+    return this.workbookToFile(wb, `Student_Report_${dept}_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
+  /**
+   * Generate Peer Tutor Report
+   */
+  static async generatePeerTutorReport(tutors: peertutors[], dept: string): Promise<File> {
+    const wb = XLSX.utils.book_new()
+    
+    // Format data
+    const data: (string | number)[][] = [
+        ['PEER TUTOR LIST REPORT'],
+        [`Department: ${dept}`],
+        [`Generated: ${new Date().toLocaleDateString()}`],
+        [],
+        ['S.No', 'Name', 'Email', 'Year', 'Section']
+    ]
+
+    tutors.forEach((t, index) => {
+        data.push([
+            index + 1,
+            t.name,
+            t.email,
+            t.year,
+            t.section
+        ])
+    })
+    
+    const merges = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }
+    ]
+
+    this.appendSheet(wb, data, 'Peer Tutors', merges)
+    return this.workbookToFile(wb, `Peer_Tutor_Report_${dept}_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
+  /**
+   * Generate Scheduled Classes Report
+   */
+  static async generateClassReport(classes: ScheduledClassWithDetails[], dept: string): Promise<File> {
+    const wb = XLSX.utils.book_new()
+
+    const data: (string | number)[][] = [
+        ['SCHEDULED CLASSES REPORT'],
+        [`Department: ${dept}`],
+        [`Generated: ${new Date().toLocaleDateString()}`],
+        [],
+        ['S.No', 'Date', 'Year', 'Section', 'Subject', 'Peer Tutor', 'Topics', 'Status', 'Time']
+    ]
+
+    classes.forEach((c, index) => {
+        data.push([
+            index + 1,
+            c.scheduled_date,
+            c.year,
+            c.section,
+            c.class?.subject_name || 'N/A',
+            c.peer_tutor?.name || 'Unassigned',
+            c.topics || 'N/A',
+            c.completion_status || 'not_started',
+            `${c.start_time || ''} - ${c.end_time || ''}`
+        ])
+    })
+
+    const merges = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } }
+    ]
+
+    this.appendSheet(wb, data, 'Scheduled Classes', merges)
+    return this.workbookToFile(wb, `Class_Report_${dept}_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
+  /**
+   * Generate Mapping Report (Reusing logic from PeerTutorMappingExport.tsx)
+   */
+  static async generateMappingReport(groups: YearSectionGroup[], dept: string): Promise<File> {
+    const wb = XLSX.utils.book_new()
+    
+    // Common Header Info
+    const headerInfo = {
+        collegeName: 'SONA COLLEGE OF TECHNOLOGY (Autonomous)',
+        department: `DEPARTMENT OF ${dept.toUpperCase()}`, // Approximation
+        documentTitle: 'PEER TUTORS - SLOW LEARNERS MAPPING LIST',
+        academicYear: `ACADEMIC YEAR ${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+        date: new Date().toLocaleDateString('en-GB').replace(/\//g, '.')
+    }
+
+    if (groups.length === 0) {
+        // Create an empty sheet if no data
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['No Data Available']]), 'No Data')
+    }
+
+    for (const group of groups) {
+         const data: (string | number | undefined | null)[][] = []
+         
+         // Rows 1-4: Headers
+         data.push([headerInfo.collegeName])
+         data.push([headerInfo.department])
+         data.push([headerInfo.documentTitle])
+         data.push([headerInfo.academicYear])
+         data.push([]) 
+         data.push([`Year: ${group.year}`, '', '', '', 'SEMESTER: --']) // We don't have semester readily available
+         data.push(['', '', '', '', `Date: ${headerInfo.date}`])
+         data.push([])
+
+         // Table Header
+         data.push(['S NO', 'Name of the tutor', 'Year/Sec', 'Count', 'Name of Slow Learners'])
+
+         let serialNumber = 1
+         
+         group.peerTutorWithStudents.forEach(({ peertutors, students }) => {
+             if (students.length === 0) {
+                 data.push([
+                     serialNumber,
+                     peertutors.name,
+                     `${peertutors.year}/${peertutors.section}`,
+                     0,
+                     'No students assigned'
+                 ])
+                 serialNumber++
+             } else {
+                 // First student on same row
+                 data.push([
+                     serialNumber,
+                     peertutors.name,
+                     `${peertutors.year}/${peertutors.section}`,
+                     students.length,
+                     students[0].name
+                 ])
+                 // Remaining students
+                 for (let i = 1; i < students.length; i++) {
+                     data.push(['', '', '', '', students[i].name])
+                 }
+                 serialNumber++
+             }
+         })
+
+         // Merges for this sheet
+         const sheetMerges = [
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+            { s: { r: 2, c: 0 }, e: { r: 2, c: 4 } },
+            { s: { r: 3, c: 0 }, e: { r: 3, c: 4 } }
+         ]
+
+         // Add sheet
+         this.appendSheet(wb, data, `Year ${group.year} - Sec ${group.section}`, sheetMerges)
+    }
+
+    return this.workbookToFile(wb, `Mapping_Report_${dept}_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
+  /**
+   * Get all subjects assigned to a peer tutor (based on scheduled classes)
+   */
+  static async getPeerTutorSubjects(peerTutorId: string): Promise<{ subject_name: string }[]> {
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('scheduled_classes')
+        .select('class:classes!inner(subject_name)')
+        .eq('peer_tutor_id', peerTutorId)
+      
+      if (error) {
+        logger.error('Error getting peer tutor subjects:', error)
+        return []
+      }
+      
+      // Extract unique subject names
+      const uniqueSubjects = new Set<string>()
+      
+      interface ScheduledClassResult {
+        class: {
+          subject_name: string
+        } | null | undefined
+      }
+
+      (data as unknown as ScheduledClassResult[])?.forEach((item) => {
+        if (item.class?.subject_name) {
+          uniqueSubjects.add(item.class.subject_name)
+        }
+      })
+      
+      return Array.from(uniqueSubjects).map(name => ({ subject_name: name }))
+    } catch (error) {
+      logger.error('Error in getPeerTutorSubjects:', error)
       return []
     }
   }
@@ -259,58 +373,26 @@ export class ReportService {
   /**
    * Get scheduled classes for a specific subject and peer tutor
    */
-  static async getSubjectScheduledClasses(peertutorsId: string, subjectName: string): Promise<ScheduledClassWithDetails[]> {
+  static async getSubjectScheduledClasses(peerTutorId: string, subjectName: string): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
-
-      // Get peer tutor info (including created_at)
-      const { data: peertutors, error: tutorError } = await supabase
-        .from('peer_tutors')
-        .select('dept, year, section, created_at')
-        .eq('id', peertutorsId)
-        .single()
-
-      if (tutorError || !peertutors) {
-        logger.error('Error getting peer tutor info:', tutorError)
-        return []
-      }
-
-      // Calculate the minimum date for classes (day after peer tutor was created)
-      const createdDate = new Date(peertutors.created_at)
-      createdDate.setHours(0, 0, 0, 0)
-      const minimumClassDate = new Date(createdDate)
-      minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
-
-      // Get scheduled classes for this subject (only from day after creation)
-      const { data: scheduledClasses, error: scheduledError } = await supabase
+      const { data, error } = await supabase
         .from('scheduled_classes')
         .select(`
           *,
-          class:classes!inner(
-            id,
-            subject_name,
-            created_at,
-            dept,
-            year,
-            section
-          ),
-          peer_tutor:peer_tutors!inner(
-            id,
-            name,
-            email
-          )
+          class:classes!inner(subject_name),
+          peer_tutor:peer_tutors!peer_tutor_id(*)
         `)
-        .eq('peer_tutor_id', peertutorsId)
+        .eq('peer_tutor_id', peerTutorId)
         .eq('class.subject_name', subjectName)
-        .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0])
-        .order('scheduled_date', { ascending: true })
+        .order('scheduled_date', { ascending: false })
 
-      if (scheduledError) {
-        logger.error('Error getting scheduled classes:', scheduledError)
+      if (error) {
+        logger.error('Error getting subject scheduled classes:', error)
         return []
       }
 
-      return scheduledClasses || []
+      return (data as unknown as ScheduledClassWithDetails[]) || []
     } catch (error) {
       logger.error('Error in getSubjectScheduledClasses:', error)
       return []
@@ -318,54 +400,70 @@ export class ReportService {
   }
 
   /**
-   * Get detailed attendance report for a specific scheduled class
+   * Get attendance report for a specific scheduled class
    */
   static async getClassAttendanceReport(scheduledClassId: string): Promise<ClassAttendanceReport | null> {
     try {
       const supabase = createClient()
-
-      // Get scheduled class details
-      const { data: scheduledClass, error: classError } = await supabase
+      
+      // Get class details
+      const { data: classData, error: classError } = await supabase
         .from('scheduled_classes')
         .select(`
           *,
-          class:classes!inner(
-            id,
-            subject_name
-          )
+          class:classes(subject_name)
         `)
         .eq('id', scheduledClassId)
         .single()
-
-      if (classError || !scheduledClass) {
-        logger.error('Error getting scheduled class:', classError)
+        
+      if (classError || !classData) {
+        logger.error('Error getting class details:', classError)
         return null
       }
 
-      // Get attendance records
-      const attendanceRecords = await AttendanceService.getAttendanceByScheduledClass(scheduledClassId)
+      // Get attendance records with student details
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .select(`
+          *,
+          student:peer_students(id, name, email)
+        `)
+        .eq('scheduled_class_id', scheduledClassId)
 
-      const presentCount = attendanceRecords.filter(record => record.status === 'present').length
-      const absentCount = attendanceRecords.filter(record => record.status === 'absent').length
+      if (attendanceError) {
+        logger.error('Error getting attendance records:', attendanceError)
+        return null
+      }
+
+      interface AttendanceRecord {
+        student_id: string;
+        student: {
+          name: string;
+          email: string;
+        } | null;
+        status: string;
+      }
+
+      const records = ((attendanceData as unknown as AttendanceRecord[]) || []).map((record) => ({
+        student_id: record.student_id,
+        student_name: record.student?.name || 'Unknown',
+        student_email: record.student?.email || '',
+        status: (record.status === 'P' ? 'present' : 'absent') as 'present' | 'absent'
+      }))
+
+      const presentCount = records.filter(r => r.status === 'present').length
+      const absentCount = records.length - presentCount
 
       return {
-        class_id: scheduledClass.class_id,
-        scheduled_class_id: scheduledClassId,
-        subject_name: scheduledClass.class.subject_name,
-        scheduled_date: scheduledClass.scheduled_date,
-        topics: scheduledClass.topics || '',
-        attendance_records: attendanceRecords.map(record => ({
-          student_id: record.student_id,
-          student_name: record.student_name,
-          student_email: record.student_email,
-          status: record.status
-        })),
+        subject_name: classData.class?.subject_name || 'Unknown',
+        scheduled_date: classData.scheduled_date,
+        topics: classData.topics,
+        link: classData.link,
+        start_time: classData.start_time,
+        end_time: classData.end_time,
         present_count: presentCount,
         absent_count: absentCount,
-        total_students: attendanceRecords.length,
-        start_time: scheduledClass.start_time,
-        end_time: scheduledClass.end_time,
-        link: scheduledClass.link
+        attendance_records: records
       }
     } catch (error) {
       logger.error('Error in getClassAttendanceReport:', error)
@@ -374,36 +472,293 @@ export class ReportService {
   }
 
   /**
-   * Get comprehensive report data for a peer tutor
+   * Get comprehensive reports for all peer tutors assigned to a faculty
    */
-  static async getpeertutorsReportData(peertutorsId: string): Promise<peertutorsReportData | null> {
+  static async getAllpeertutorsReports(facultyId: string): Promise<peertutorsReportData[]> {
     try {
       const supabase = createClient()
-
-      // Get peer tutor info
-      const { data: peertutors, error: tutorError } = await supabase
+      
+      // Get all peer tutors assigned by this faculty
+      // Note: In a real app, you might want to filter by faculty_id if that column exists/is used
+      // For now, based on previous code, we might just get all or filter by dept
+      // But the call site passes user.id, so let's try to filter by assigned_by or faculty_id
+      
+      // Re-using getAllpeerTutor but we need to know if we should filter by facultyId
+      // The previous code in peertutor/page.tsx just passed user.id
+      
+      const { data: tutors, error: tutorError } = await supabase
         .from('peer_tutors')
         .select('*')
-        .eq('id', peertutorsId)
+        // We might need to filter by faculty_id if the schema supports it
+        // based on peertutorservice.getAllpeerTutor it does
+        .eq('faculty_id', facultyId) 
+        .order('name')
+
+      if (tutorError) {
+        logger.error('Error getting peer tutors:', tutorError)
+        return []
+      }
+
+      if (!tutors || tutors.length === 0) return []
+
+      const reports: peertutorsReportData[] = []
+
+      for (const tutor of tutors) {
+
+        // Get additional classes
+        const { data: additionalClasses, error: additionalError } = await supabase
+          .from('additional_classes')
+          .select('id, subject_name')
+          .eq('peer_tutor_id', tutor.id)
+
+        if (additionalError) {
+          logger.error(`Error getting additional classes for tutor ${tutor.id}:`, additionalError)
+          continue
+        }
+
+        // Get scheduled classes with subject info
+         const { data: classesWithSubject, error: classesSubjectError } = await supabase
+          .from('scheduled_classes')
+          .select(`
+            id, 
+            completion_status, 
+            attendance_completed, 
+            topics_completed,
+            class:classes(id, subject_name)
+          `)
+          .eq('peer_tutor_id', tutor.id)
+
+        if (classesSubjectError) {
+             logger.error(`Error getting classes with subject for tutor ${tutor.id}:`, classesSubjectError)
+             continue
+        }
+        
+        const subjectStats = new Map<string, {
+            subject_name: string
+            class_id: string
+            total_classes: number
+            completed_classes: number
+            pending_classes: number
+            additional_classes: number
+        }>()
+
+        interface ScheduledClassWithSubject {
+          id: string
+          completion_status: string
+          attendance_completed: boolean
+          topics_completed: boolean
+          class: {
+            id: string
+            subject_name: string
+          } | null
+        }
+
+        // Process scheduled classes
+        ((classesWithSubject as unknown as ScheduledClassWithSubject[]) || [])?.forEach((cls) => {
+            const subjectName = cls.class?.subject_name || 'Unknown Subject'
+            const classId = cls.class?.id || ''
+            
+            if (!subjectStats.has(subjectName)) {
+                subjectStats.set(subjectName, {
+                    subject_name: subjectName,
+                    class_id: classId,
+                    total_classes: 0,
+                    completed_classes: 0,
+                    pending_classes: 0,
+                    additional_classes: 0
+                })
+            }
+            
+            const stats = subjectStats.get(subjectName)!
+            // If we found a valid class ID and didn't have one before (e.g. from dummy init), update it
+            if (classId && !stats.class_id) {
+                stats.class_id = classId
+            }
+            
+            stats.total_classes++
+            
+            const isCompleted = cls.completion_status === 'completed' || 
+                              (cls.attendance_completed && cls.topics_completed)
+            
+            if (isCompleted) {
+                stats.completed_classes++
+            } else {
+                stats.pending_classes++
+            }
+        })
+
+        interface AdditionalClassResult {
+          id: string
+          subject_name: string
+        }
+
+        // Process additional classes
+        ((additionalClasses as unknown as AdditionalClassResult[]) || [])?.forEach((cls) => {
+            const subjectName = cls.subject_name || 'Unknown Subject'
+             if (!subjectStats.has(subjectName)) {
+                subjectStats.set(subjectName, {
+                    subject_name: subjectName,
+                    class_id: '', // Additional classes might not link to 'classes' table directly in this context
+                    total_classes: 0,
+                    completed_classes: 0, // Additional classes are usually considered completed/extra
+                    pending_classes: 0,
+                    additional_classes: 0
+                })
+            }
+            const stats = subjectStats.get(subjectName)!
+            stats.additional_classes++
+        })
+
+        reports.push({
+            peer_tutor_id: tutor.id,
+            peer_tutor_name: tutor.name,
+            peer_tutor_email: tutor.email,
+            dept: tutor.dept,
+            year: tutor.year,
+            section: tutor.section,
+            subjects: Array.from(subjectStats.values())
+        })
+      }
+
+      return reports
+
+    } catch (error) {
+      logger.error('Error in getAllpeertutorsReports:', error)
+      return []
+    }
+  }
+
+  /**
+   * Get comprehensive report for a single peer tutor
+   */
+  static async getpeertutorsReportData(peerTutorId: string): Promise<peertutorsReportData | null> {
+    try {
+      const supabase = createClient()
+      
+      const { data: tutor, error: tutorError } = await supabase
+        .from('peer_tutors')
+        .select('*')
+        .eq('id', peerTutorId)
         .single()
 
-      if (tutorError || !peertutors) {
-        logger.error('Error getting peer tutor info:', tutorError)
+      if (tutorError || !tutor) {
+        logger.error('Error getting peer tutor:', tutorError)
         return null
       }
 
-      // Get subjects
-      const subjects = await this.getpeerTutorubjects(peertutorsId)
+      // Get additional classes
+      const { data: additionalClasses, error: additionalError } = await supabase
+        .from('additional_classes')
+        .select('id, subject_name')
+        .eq('peer_tutor_id', tutor.id)
+
+      if (additionalError) {
+        logger.error(`Error getting additional classes for tutor ${tutor.id}:`, additionalError)
+        return null
+      }
+
+      // Get scheduled classes with subject info
+      const { data: classesWithSubject, error: classesSubjectError } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          id, 
+          completion_status, 
+          attendance_completed, 
+          topics_completed,
+          class:classes(id, subject_name)
+        `)
+        .eq('peer_tutor_id', tutor.id)
+
+      if (classesSubjectError) {
+            logger.error(`Error getting classes with subject for tutor ${tutor.id}:`, classesSubjectError)
+            return null
+      }
+      
+      const subjectStats = new Map<string, {
+          subject_name: string
+          class_id: string
+          total_classes: number
+          completed_classes: number
+          pending_classes: number
+          additional_classes: number
+      }>()
+
+      interface ScheduledClassWithSubject {
+        id: string
+        completion_status: string
+        attendance_completed: boolean
+        topics_completed: boolean
+        class: {
+          id: string
+          subject_name: string
+        } | null
+      }
+
+      // Process scheduled classes
+      ((classesWithSubject as unknown as ScheduledClassWithSubject[]) || [])?.forEach((cls) => {
+          const subjectName = cls.class?.subject_name || 'Unknown Subject'
+          const classId = cls.class?.id || ''
+          
+          if (!subjectStats.has(subjectName)) {
+              subjectStats.set(subjectName, {
+                  subject_name: subjectName,
+                  class_id: classId,
+                  total_classes: 0,
+                  completed_classes: 0,
+                  pending_classes: 0,
+                  additional_classes: 0
+              })
+          }
+          
+          const stats = subjectStats.get(subjectName)!
+          if (classId && !stats.class_id) {
+              stats.class_id = classId
+          }
+          
+          stats.total_classes++
+          
+          const isCompleted = cls.completion_status === 'completed' || 
+                            (cls.attendance_completed && cls.topics_completed)
+          
+          if (isCompleted) {
+              stats.completed_classes++
+          } else {
+              stats.pending_classes++
+          }
+      })
+
+      interface AdditionalClassResult {
+        id: string
+        subject_name: string
+      }
+
+      // Process additional classes
+      ((additionalClasses as unknown as AdditionalClassResult[]) || [])?.forEach((cls) => {
+          const subjectName = cls.subject_name || 'Unknown Subject'
+            if (!subjectStats.has(subjectName)) {
+              subjectStats.set(subjectName, {
+                  subject_name: subjectName,
+                  class_id: '',
+                  total_classes: 0,
+                  completed_classes: 0,
+                  pending_classes: 0,
+                  additional_classes: 0
+              })
+          }
+          const stats = subjectStats.get(subjectName)!
+          stats.additional_classes++
+      })
 
       return {
-        peer_tutor_id: peertutors.id,
-        peer_tutor_name: peertutors.name,
-        peer_tutor_email: peertutors.email,
-        dept: peertutors.dept,
-        year: peertutors.year,
-        section: peertutors.section,
-        subjects
+          peer_tutor_id: tutor.id,
+          peer_tutor_name: tutor.name,
+          peer_tutor_email: tutor.email,
+          dept: tutor.dept,
+          year: tutor.year,
+          section: tutor.section,
+          subjects: Array.from(subjectStats.values())
       }
+
     } catch (error) {
       logger.error('Error in getpeertutorsReportData:', error)
       return null
@@ -411,94 +766,34 @@ export class ReportService {
   }
 
   /**
-   * Get comprehensive attendance report matrix for a specific subject
+   * Get full class attendance matrix report
    */
-  static async getSubjectFullClassReport(peertutorsId: string, subjectName: string): Promise<FullClassReport | null> {
+  static async getSubjectFullClassReport(peerTutorId: string, subjectName: string): Promise<FullClassReport | null> {
     try {
       const supabase = createClient()
-
-      // 1. Get peer tutor info
-      const { data: peertutors, error: tutorError } = await supabase
-        .from('peer_tutors')
-        .select('*')
-        .eq('id', peertutorsId)
-        .single()
-
-      if (tutorError || !peertutors) {
-        logger.error('Error getting peer tutor info:', tutorError)
-        return null
-      }
-
-      // Calculate start date
-      const createdDate = new Date(peertutors.created_at)
-      createdDate.setHours(0, 0, 0, 0)
-      const minimumClassDate = new Date(createdDate)
-      minimumClassDate.setDate(minimumClassDate.getDate() + 1)
-
-      // 2. Get Scheduled Classes (Completed only)
-      const { data: scheduledClasses, error: scheduledError } = await supabase
+      
+      // Get all scheduled classes for this subject
+      const { data: classes, error: classesError } = await supabase
         .from('scheduled_classes')
-        .select(`
-          id,
-          class_id,
-          scheduled_date,
-          start_time,
-          end_time,
-          topics,
-          class:classes!inner(subject_name)
-        `)
-        .eq('peer_tutor_id', peertutorsId)
+        .select('*, class:classes!inner(subject_name)')
+        .eq('peer_tutor_id', peerTutorId)
         .eq('class.subject_name', subjectName)
-        .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0])
-        .or('completion_status.eq.completed,and(attendance_completed.eq.true,topics_completed.eq.true)')
         .order('scheduled_date', { ascending: true })
 
-      if (scheduledError) {
-        logger.error('Error getting scheduled classes:', scheduledError)
+      if (classesError) {
+        logger.error('Error getting classes:', classesError)
         return null
       }
 
-      // 3. Get Additional Classes
-      const { data: additionalClasses, error: additionalError } = await supabase
-        .from('additional_classes')
-        .select('*')
-        .eq('peer_tutor_id', peertutorsId)
-        .eq('subject_name', subjectName)
-        .order('class_date', { ascending: true })
-
-      if (additionalError) {
-        logger.error('Error getting additional classes:', additionalError)
-        return null
-      }
-
-      // 4. Merge and Sort Classes (Columns)
-      const columns = [
-        ...(scheduledClasses || []).map(c => ({
-          id: c.id,
-          date: c.scheduled_date,
-          time: c.start_time && c.end_time ? `${formatTime(c.start_time)} - ${formatTime(c.end_time)}` : new Date(c.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          is_additional: false,
-          topics: c.topics || ''
-        })),
-        ...(additionalClasses || []).map(c => ({
-          id: c.id,
-          date: c.class_date,
-          time: c.start_time && c.end_time ? `${formatTime(c.start_time)} - ${formatTime(c.end_time)}` : 'Additional',
-          is_additional: true,
-          topics: c.topic || ''
-        }))
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-      if (columns.length === 0) {
+      if (!classes || classes.length === 0) {
         return { subject_name: subjectName, columns: [], rows: [] }
       }
 
-      // 5. Get Students
+      // Get all students for this peer tutor
       const { data: students, error: studentsError } = await supabase
         .from('peer_students')
-        .select('id, name, email')
-        .eq('assigned_peer_tutor_id', peertutorsId)
-        .eq('peer_tutor', false)
+        .select('*')
+        .eq('peer_tutor_id', peerTutorId)
         .order('name')
 
       if (studentsError) {
@@ -506,85 +801,74 @@ export class ReportService {
         return null
       }
 
-      // 6. Get Attendance Records
-      // Scheduled
-      const scheduledIds = scheduledClasses?.map(c => c.id) || []
-      let scheduledAttendance: { student_id: string; scheduled_class_id: string; status: string }[] = []
-      if (scheduledIds.length > 0) {
-        const { data: sa, error: saError } = await supabase
-          .from('attendance')
-          .select('student_id, scheduled_class_id, status')
-          .in('scheduled_class_id', scheduledIds)
+      // Get all attendance records for these classes
+      const classIds = classes.map(c => c.id)
+      const { data: attendance, error: attendanceError } = await supabase
+        .from('attendance')
+        .select('*')
+        .in('scheduled_class_id', classIds)
 
-        if (saError) logger.error('Error fetching scheduled attendance', saError)
-        else scheduledAttendance = sa || []
+      if (attendanceError) {
+        logger.error('Error getting attendance:', attendanceError)
+        return null
       }
 
-      // Additional
-      const additionalIds = additionalClasses?.map(c => c.id) || []
-      let additionalAttendance: { student_id: string; additional_class_id: string; status: string }[] = []
-      if (additionalIds.length > 0) {
-        const { data: aa, error: aaError } = await supabase
-          .from('additional_class_attendance')
-          .select('student_id, additional_class_id, status')
-          .in('additional_class_id', additionalIds)
+      // Build Columns
+      const columns = classes.map(cls => ({
+        id: cls.id,
+        date: cls.scheduled_date,
+        time: new Date(cls.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        is_additional: false // logic for additional classes needs to be clarified, likely checking strict match with 'additional_classes' table or flag
+      }))
 
-        if (aaError) logger.error('Error fetching additional attendance', aaError)
-        else additionalAttendance = aa || []
-      }
-
-
-      // Get current date for upcoming logic
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // 7. Build Rows
-      const rows = students.map(student => {
-        const attendanceMap: Record<string, 'present' | 'absent' | 'on_duty' | 'late' | 'upcoming'> = {}
+      // Build Rows
+      const rows = (students || []).map(student => {
+        const studentAttendance: Record<string, 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown'> = {}
         let presentCount = 0
-        let totalCount = 0
+        let totalScorable = 0
 
-        // Process columns to populate map and stats
         columns.forEach(col => {
-          let status: string | null = null
-
-          if (!col.is_additional) {
-            const record = scheduledAttendance.find(r => r.student_id === student.id && r.scheduled_class_id === col.id)
-            status = record?.status ?? null
+          // Find attendance record
+          const record = attendance?.find(a => a.scheduled_class_id === col.id && a.student_id === student.id)
+          
+          let status: 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown' = 'unknown'
+          
+          if (record) {
+             if (record.status === 'P') status = 'present'
+             else if (record.status === 'A') status = 'absent'
+             else if (record.status === 'OD') status = 'on_duty'
           } else {
-            const record = additionalAttendance.find(r => r.student_id === student.id && r.additional_class_id === col.id)
-            status = record?.status ?? null
+             // Check if class is future
+             if (new Date(col.date) > new Date()) {
+                 status = 'upcoming'
+             } else {
+                 status = 'absent' // Assume absent if past and no record? Or unknown. Let's use absent for stricter reporting or unknown.
+                 // Actually, if attendance wasn't taken, it should be unknown.
+                 // Check class completion status?
+                 const cls = classes.find(c => c.id === col.id)
+                 if (cls && !cls.attendance_completed) {
+                     status = 'upcoming' // Or 'pending'
+                 }
+             }
           }
 
-          const classDate = new Date(col.date);
-          classDate.setHours(0, 0, 0, 0);
+          studentAttendance[col.id] = status
 
-          if (status) {
-            attendanceMap[col.id] = status as 'present' | 'absent' | 'on_duty' | 'late'
-            totalCount++
-            if (status === 'present') presentCount++
-          } else {
-            // Logic for upcoming classes
-            if (!col.is_additional && classDate.getTime() > today.getTime()) {
-              attendanceMap[col.id] = 'upcoming';
-              // Do NOT increment totalCount for upcoming classes
-            } else {
-              // Past or today with no record = Absent
-              totalCount++
-              attendanceMap[col.id] = 'absent'
-            }
+          if (status === 'present' || status === 'on_duty') {
+              presentCount++
+          }
+          if (status === 'present' || status === 'absent' || status === 'on_duty') {
+              totalScorable++
           }
         })
 
         return {
           student_id: student.id,
           student_name: student.name,
-          student_email: student.email,
-          attendance: attendanceMap,
+          attendance: studentAttendance,
           stats: {
             present: presentCount,
-            total: totalCount,
-            percentage: totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0
+            percentage: totalScorable > 0 ? Math.round((presentCount / totalScorable) * 100) : 0
           }
         }
       })
@@ -602,301 +886,160 @@ export class ReportService {
   }
 
   /**
-   * Get Excel export data for a peer tutor
+   * Get attendance sheet data for all subjects of a peer tutor.
+   * Returns an array of FullClassReport, one per subject.
    */
-  static async getExcelExportData(peertutorsId: string): Promise<ExcelExportData[]> {
+  static async getAttendanceSheetData(peerTutorId: string): Promise<FullClassReport[]> {
     try {
       const supabase = createClient()
 
-      // Get peer tutor info (including created_at)
-      const { data: peertutors, error: tutorError } = await supabase
-        .from('peer_tutors')
-        .select('dept, year, section, created_at')
-        .eq('id', peertutorsId)
-        .single()
-
-      if (tutorError || !peertutors) {
-        logger.error('Error getting peer tutor info:', tutorError)
-        return []
-      }
-
-      // Calculate the minimum date for classes (day after peer tutor was created)
-      const createdDate = new Date(peertutors.created_at)
-      createdDate.setHours(0, 0, 0, 0)
-      const minimumClassDate = new Date(createdDate)
-      minimumClassDate.setDate(minimumClassDate.getDate() + 1) // Day after creation
-
-      // Get all scheduled classes for this peer tutor (only from day after creation)
-      const { data: scheduledClasses, error: scheduledError } = await supabase
+      // Get all distinct subjects for this peer tutor via their classes
+      const { data: classes, error: classesError } = await supabase
         .from('scheduled_classes')
-        .select(`
-          *,
-          class:classes!inner(
-            id,
-            subject_name
-          )
-        `)
-        .eq('peer_tutor_id', peertutorsId)
-        .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0])
-        .order('scheduled_date', { ascending: true })
+        .select('class:classes!inner(subject_name)')
+        .eq('peer_tutor_id', peerTutorId)
 
-      if (scheduledError) {
-        logger.error('Error getting scheduled classes:', scheduledError)
+      if (classesError || !classes) {
+        logger.error('Error getting classes for attendance sheet:', classesError)
         return []
       }
 
-      // Get all students assigned to this peer tutor
-      const { data: students, error: studentsError } = await supabase
-        .from('peer_students')
-        .select('id, name, email')
-        .eq('assigned_peer_tutor_id', peertutorsId)
-        .eq('peer_tutor', false)
+      // Extract unique subject names
+      interface ClassJoin { class: { subject_name: string } | null }
+      const subjectNames = [
+        ...new Set(
+          (classes as unknown as ClassJoin[])
+            .map(c => c.class?.subject_name)
+            .filter((name): name is string => !!name)
+        )
+      ]
 
-      if (studentsError) {
-        logger.error('Error getting students:', studentsError)
-        return []
-      }
-
-      // Get all attendance records for this peer tutor
-      const { data: attendanceRecords, error: attendanceError } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('peer_tutor_id', peertutorsId)
-
-      if (attendanceError) {
-        logger.error('Error getting attendance records:', attendanceError)
-        return []
-      }
-
-      // Process data for Excel export
-      const exportData: ExcelExportData[] = []
-
-      for (const student of students) {
-        // Get attendance records for this student
-        const studentAttendance = attendanceRecords.filter(record => record.student_id === student.id)
-
-        // Group by subject
-        const subjectGroups = new Map<string, {
-          presentCount: number
-          totalCount: number
-          topics: string[]
-        }>()
-
-        for (const attendance of studentAttendance) {
-          // Find the corresponding scheduled class
-          const scheduledClass = scheduledClasses.find(sc =>
-            sc.class_id === attendance.class_id || sc.id === attendance.scheduled_class_id
-          )
-
-          if (scheduledClass) {
-            const subjectName = scheduledClass.class.subject_name
-            const key = subjectName
-
-            if (!subjectGroups.has(key)) {
-              subjectGroups.set(key, {
-                presentCount: 0,
-                totalCount: 0,
-                topics: []
-              })
-            }
-
-            const group = subjectGroups.get(key)!
-            group.totalCount++
-            if (attendance.status === 'present') {
-              group.presentCount++
-            }
-
-            // Add topic if available
-            if (scheduledClass.topics && !group.topics.includes(scheduledClass.topics)) {
-              group.topics.push(scheduledClass.topics)
-            }
-          }
-        }
-
-        // Create export data for each subject
-        for (const [subjectName, data] of subjectGroups) {
-          const attendancePercentage = data.totalCount > 0 ? (data.presentCount / data.totalCount) * 100 : 0
-
-          exportData.push({
-            subject_name: subjectName,
-            student_name: student.name,
-            present_absent_status: data.presentCount > 0 ? 'Present' : 'Absent',
-            hours_present: data.presentCount, // Assuming 1 hour per class
-            attendance_percentage: Math.round(attendancePercentage * 100) / 100,
-            topics_taught: data.topics
-          })
+      // Build a FullClassReport for each subject
+      const reports: FullClassReport[] = []
+      for (const subjectName of subjectNames) {
+        const report = await this.getSubjectFullClassReport(peerTutorId, subjectName)
+        if (report) {
+          reports.push(report)
         }
       }
-
-      return exportData
-    } catch (error) {
-      logger.error('Error in getExcelExportData:', error)
-      return []
-    }
-  }
-
-  /**
-   * Get all peer tutors with their report data
-   */
-  static async getAllpeertutorsReports(facultyId?: string): Promise<peertutorsReportData[]> {
-    try {
-      const supabase = createClient()
-
-      // Get all peer tutors
-      let query = supabase
-        .from('peer_tutors')
-        .select('*')
-        .order('name')
-
-      if (facultyId) {
-        query = query.eq('faculty_id', facultyId)
-      }
-
-      const { data: peerTutor, error: tutorsError } = await query
-
-      if (tutorsError) {
-        logger.error('Error getting peer tutors:', tutorsError)
-        return []
-      }
-
-      // Get report data for each peer tutor
-      const reports = await Promise.all(
-        peerTutor.map(async (tutor) => {
-          const subjects = await this.getpeerTutorubjects(tutor.id)
-          return {
-            peer_tutor_id: tutor.id,
-            peer_tutor_name: tutor.name,
-            peer_tutor_email: tutor.email,
-            dept: tutor.dept,
-            year: tutor.year,
-            section: tutor.section,
-            subjects
-          }
-        })
-      )
 
       return reports
     } catch (error) {
-      logger.error('Error in getAllpeertutorsReports:', error)
+      logger.error('Error in getAttendanceSheetData:', error)
       return []
     }
   }
+
   /**
-   * Get topic sheet data (only class details, no attendance) for all subjects
+   * Get topic sheet data for all subjects of a peer tutor.
+   * Returns an array of TopicSheetData, one per subject.
    */
-  static async getTopicSheetData(peertutorsId: string): Promise<TopicSheetData[]> {
+  static async getTopicSheetData(peerTutorId: string): Promise<TopicSheetData[]> {
     try {
       const supabase = createClient()
 
-      // 1. Get all assigned subjects first
-      const assignedSubjects = await this.getpeerTutorubjects(peertutorsId)
-
-      // Initialize map with all subjects
-      const subjectMap = new Map<string, TopicSheetData>()
-      assignedSubjects.forEach(sub => {
-        subjectMap.set(sub.subject_name, {
-          subject_name: sub.subject_name,
-          classes: []
-        })
-      })
-
-      // 2. Get peer tutor info for creation date filter
-      const { data: peertutors, error: tutorError } = await supabase
-        .from('peer_tutors')
-        .select('created_at')
-        .eq('id', peertutorsId)
-        .single()
-
-      if (tutorError || !peertutors) {
-        logger.error('Error getting peer tutor info:', tutorError)
-        return []
-      }
-
-      // Calculate the minimum date for classes (day after peer tutor was created)
-      const createdDate = new Date(peertutors.created_at)
-      createdDate.setHours(0, 0, 0, 0)
-      const minimumClassDate = new Date(createdDate)
-      minimumClassDate.setDate(minimumClassDate.getDate() + 1)
-
-      // 3. Get All Scheduled Classes (Completed only)
-      const { data: scheduledClasses, error: scheduledError } = await supabase
+      // Get all scheduled classes with subject info, topics, and times
+      const { data: scheduledClasses, error: scError } = await supabase
         .from('scheduled_classes')
         .select(`
           id,
-          class_id,
           scheduled_date,
           start_time,
           end_time,
           topics,
+          topics_completed,
+          completion_status,
           class:classes!inner(subject_name)
         `)
-        .eq('peer_tutor_id', peertutorsId)
-        .gte('scheduled_date', minimumClassDate.toISOString().split('T')[0])
-        .or('completion_status.eq.completed,and(attendance_completed.eq.true,topics_completed.eq.true)')
+        .eq('peer_tutor_id', peerTutorId)
         .order('scheduled_date', { ascending: true })
 
-      if (scheduledError) {
-        logger.error('Error getting scheduled classes:', scheduledError)
+      if (scError) {
+        logger.error('Error getting scheduled classes for topic sheet:', scError)
         return []
       }
 
-      // 4. Get All Additional Classes
-      const { data: additionalClasses, error: additionalError } = await supabase
+      // Get additional classes
+      const { data: additionalClasses, error: acError } = await supabase
         .from('additional_classes')
-        .select('*')
-        .eq('peer_tutor_id', peertutorsId)
+        .select('id, subject_name, class_date, start_time, end_time, topics')
+        .eq('peer_tutor_id', peerTutorId)
         .order('class_date', { ascending: true })
 
-      if (additionalError) {
-        logger.error('Error getting additional classes:', additionalError)
-        return []
+      if (acError) {
+        logger.error('Error getting additional classes for topic sheet:', acError)
+        // continue without additional classes
       }
 
-      // 5. Populate classes
-      // Process Scheduled Classes
-      scheduledClasses?.forEach(sc => {
-        // @ts-expect-error - Supabase returns nested class object
-        const subjectName = sc.class?.subject_name
-        if (!subjectName) return
+      // Group by subject
+      interface ScWithSubject {
+        id: string
+        scheduled_date: string
+        start_time: string | null
+        end_time: string | null
+        topics: string | null
+        topics_completed: boolean
+        completion_status: string
+        class: { subject_name: string } | null
+      }
 
+      const subjectMap = new Map<string, TopicSheetClass[]>()
+
+      // Process scheduled classes
+      for (const cls of (scheduledClasses as unknown as ScWithSubject[]) || []) {
+        const subjectName = cls.class?.subject_name || 'Unknown Subject'
         if (!subjectMap.has(subjectName)) {
-          // This ensures even if a subject wasn't in the initial list (unlikely if logic is correct), it's added
-          subjectMap.set(subjectName, { subject_name: subjectName, classes: [] })
+          subjectMap.set(subjectName, [])
         }
 
-        subjectMap.get(subjectName)!.classes.push({
-          id: sc.id,
-          date: sc.scheduled_date,
-          hour: sc.start_time && sc.end_time ? `${formatTime(sc.start_time)} - ${formatTime(sc.end_time)}` : new Date(sc.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          topic: sc.topics || '',
+        const hour = cls.start_time && cls.end_time
+          ? `${cls.start_time} - ${cls.end_time}`
+          : cls.start_time || ''
+
+        subjectMap.get(subjectName)!.push({
+          id: cls.id,
+          date: cls.scheduled_date,
+          hour,
+          topic: cls.topics || '',
           is_additional: false
         })
-      })
+      }
 
-      // Process Additional Classes
-      additionalClasses?.forEach(ac => {
-        const subjectName = ac.subject_name
-        if (!subjectName) return
+      // Process additional classes
+      interface AdditionalClassData {
+        id: string
+        subject_name: string
+        class_date: string
+        start_time: string | null
+        end_time: string | null
+        topics: string | null
+      }
 
+      for (const cls of (additionalClasses as unknown as AdditionalClassData[]) || []) {
+        const subjectName = cls.subject_name || 'Unknown Subject'
         if (!subjectMap.has(subjectName)) {
-          // Should ideally be there, but safe to add
-          subjectMap.set(subjectName, { subject_name: subjectName, classes: [] })
+          subjectMap.set(subjectName, [])
         }
 
-        subjectMap.get(subjectName)!.classes.push({
-          id: ac.id,
-          date: ac.class_date,
-          hour: ac.start_time && ac.end_time ? `${formatTime(ac.start_time)} - ${formatTime(ac.end_time)}` : 'Additional',
-          topic: ac.topic || '',
+        const hour = cls.start_time && cls.end_time
+          ? `${cls.start_time} - ${cls.end_time}`
+          : cls.start_time || ''
+
+        subjectMap.get(subjectName)!.push({
+          id: cls.id,
+          date: cls.class_date,
+          hour,
+          topic: cls.topics || '',
           is_additional: true
         })
-      })
+      }
 
-      // Sort classes by date for each subject and return values
-      const result = Array.from(subjectMap.values()).map(data => ({
-        ...data,
-        classes: data.classes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      }))
+      // Build result, sorting classes by date within each subject
+      const result: TopicSheetData[] = []
+      for (const [subjectName, classes] of subjectMap.entries()) {
+        classes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        result.push({ subject_name: subjectName, classes })
+      }
 
       return result
     } catch (error) {
@@ -904,37 +1047,72 @@ export class ReportService {
       return []
     }
   }
-
-  /**
-   * Get attendance sheet data for all subjects
-   */
-  static async getAttendanceSheetData(peertutorsId: string): Promise<FullClassReport[]> {
-    try {
-      // 1. Get all subjects for the peer tutor
-      const subjects = await this.getpeerTutorubjects(peertutorsId)
-
-      if (!subjects || subjects.length === 0) return []
-
-      // 2. Fetch full class report for each subject
-      const reports = await Promise.all(
-        subjects.map(async (subject) => {
-          return await this.getSubjectFullClassReport(peertutorsId, subject.subject_name)
-        })
-      )
-
-      // Filter out nulls
-      return reports.filter((r): r is FullClassReport => r !== null)
-    } catch (error) {
-      logger.error('Error in getAttendanceSheetData:', error)
-      return []
-    }
-  }
 }
 
-function formatTime(timeString: string) {
-  if (!timeString) return ''
-  const [hours, minutes] = timeString.split(':')
-  const date = new Date()
-  date.setHours(parseInt(hours), parseInt(minutes))
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+export interface ClassAttendanceReport {
+  subject_name: string
+  scheduled_date: string
+  present_count: number
+  absent_count: number
+  topics?: string
+  link?: string
+  start_time?: string
+  end_time?: string
+  attendance_records: {
+    student_id: string
+    student_name: string
+    student_email: string
+    status: 'present' | 'absent'
+  }[]
+}
+
+export interface FullClassReport {
+  subject_name: string
+  columns: {
+    id: string
+    date: string
+    time: string
+    is_additional: boolean
+  }[]
+  rows: {
+    student_id: string
+    student_name: string
+    attendance: Record<string, 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown'>
+    stats: {
+      present: number
+      percentage: number
+    }
+  }[]
+}
+
+
+
+export interface peertutorsReportData {
+  peer_tutor_id: string
+  peer_tutor_name: string
+  peer_tutor_email: string
+  dept: string
+  year: string
+  section: string
+  subjects: {
+    subject_name: string
+    class_id: string
+    total_classes: number
+    completed_classes: number
+    pending_classes: number
+    additional_classes?: number
+  }[]
+}
+
+export interface TopicSheetClass {
+  id: string
+  date: string
+  hour: string
+  topic: string
+  is_additional: boolean
+}
+
+export interface TopicSheetData {
+  subject_name: string
+  classes: TopicSheetClass[]
 }

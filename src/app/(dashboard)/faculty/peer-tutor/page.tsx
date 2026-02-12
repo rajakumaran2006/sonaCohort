@@ -3249,7 +3249,7 @@ function FacultypeertutorsContent() {
 
                                   // Otherwise, show one row per subject
                                   return report.subjects.map((subject, subjectIndex) => (
-                                    <tr key={`${report.peer_tutor_id}-${subject.class_id}`} className="hover:bg-gray-50">
+                                    <tr key={`${report.peer_tutor_id}-${subject.subject_name}`} className="hover:bg-gray-50">
                                       {subjectIndex === 0 && (
                                         <>
                                           <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200" rowSpan={report.subjects.length}>

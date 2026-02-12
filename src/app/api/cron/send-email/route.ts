@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { MicrosoftTokenService } from '@/lib/auth/microsoftTokenService'
 import { logger } from '@/lib/logger'
 
@@ -36,8 +36,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email content is required' }, { status: 400 })
     }
 
-    // Get the faculty member's user ID from their email
-    const supabase = await createClient()
+    // Initialize Supabase Admin Client (Service Role)
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
     
     // Find the faculty department record
     const { data: deptData, error: deptError } = await supabase
@@ -71,8 +74,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Faculty authentication not found' }, { status: 404 })
     }
 
-    // Get or refresh access token
-    const tokenData = await MicrosoftTokenService.refreshAccessToken(facultyUser.id)
+    // Get or refresh access token (pass admin client to bypass RLS in cron context)
+    const tokenData = await MicrosoftTokenService.refreshAccessToken(facultyUser.id, supabase)
     
     if (!tokenData) {
       logger.error('[cron-email] Failed to get access token for:', from)

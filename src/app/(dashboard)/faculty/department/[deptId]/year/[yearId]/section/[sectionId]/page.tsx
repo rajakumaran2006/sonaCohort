@@ -34,7 +34,7 @@ import { isManualStudent } from '@/lib/utils/manualStudentUtils'
 
 
 import { createClient } from '@/lib/supabase/client'
-import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Download, Upload, X, Eye, ChevronDown, ChevronUp } from 'lucide-react'
+import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Upload, X, Eye, ChevronDown, ChevronUp } from 'lucide-react'
 import { SearchIcon } from '@/components/icons/SearchIcon'
 import { toast } from 'sonner'
 import { logger } from '@/lib/logger'
@@ -297,7 +297,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
   const sortedpeerTutor = filteredAndSortedpeerTutor
 
   // Export function for peer tutors (matches table order + header)
-  const exportpeerTutor = () => {
+  const _exportpeerTutor = () => {
     const rows = peerTutorWithStats.map(tutor => ({
       'Name': tutor.name,
       'Total Classes Allocated': tutor.classStats?.totalClasses || 0,
@@ -1723,7 +1723,7 @@ function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack }: Peertuto
       const students = await AttendanceService.getStudentsForAttendance(peertutorsId)
 
       // Get all subjects assigned to this peer tutor
-      const subjects = await ReportService.getpeerTutorubjects(peertutorsId)
+      const subjects = await ReportService.getPeerTutorSubjects(peertutorsId)
 
       // Get all scheduled classes for this peer tutor
       const { data: scheduledClasses } = await supabase

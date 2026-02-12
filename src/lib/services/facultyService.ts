@@ -11,6 +11,8 @@ export interface FacultyDepartment {
   admin_email?: string
   is_class_link_mandatory?: boolean
   enable_email_notifications?: boolean
+  enable_daily_reminders?: boolean
+  enable_pending_reminders?: boolean
   pending_class_threshold?: number
   exclude_additional_classes?: boolean
   morning_reminder_time?: string

@@ -4,23 +4,28 @@ import { ScheduledClassWithDetails } from './scheduledClassService'
 import { AdditionalClass } from './additionalClassService'
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { MicrosoftTokenService } from '@/lib/auth/microsoftTokenService'
 
 export class EmailAutomationService {
   /**
    * Process morning reminders for today's scheduled classes
    */
-  static async processMorningReminders(options?: { departmentId?: string; force?: boolean }, supabaseClient?: SupabaseClient): Promise<{ success: boolean; sentCount: number; errors: string[]; debugInfo?: string[] }> {
+  static async processMorningReminders(options?: { departmentId?: string; force?: boolean; userId?: string }, supabaseClient?: SupabaseClient): Promise<{ success: boolean; sentCount: number; errors: string[]; debugInfo?: string[] }> {
     try {
       const supabase = supabaseClient || createClient()
       const errors: string[] = []
       const debugLogs: string[] = []
       let sentCount = 0
 
-      // 1. Get departments with email notifications enabled
+      // 1. Get departments
       let query = supabase
         .from('departments')
         .select('*')
-        .eq('enable_email_notifications', true)
+      
+      // Only filter by enabled if NOT forced
+      if (!options?.force) {
+        query = query.eq('enable_daily_reminders', true)
+      }
       
       if (options?.departmentId) {
         query = query.eq('id', options.departmentId)
@@ -38,7 +43,7 @@ export class EmailAutomationService {
 
       const today = new Date()
       const todayStr = today.toISOString().split('T')[0] // YYYY-MM-DD
-      const currentHour = new Date().getHours()
+
 
       // 2. Iterate through each department
       for (const dept of departments || []) {
@@ -56,9 +61,25 @@ export class EmailAutomationService {
             const reminderTime = dept.morning_reminder_time || '08:00'
             const [reminderHourStr] = reminderTime.split(':')
             const reminderHour = parseInt(reminderHourStr, 10)
+
+            // Convert current UTC time to IST (UTC+5:30)
+            // Note: This is an approximation. Ideally use date-fns-tz or moment-timezone but keeping deps minimal.
+            // Or better: Just check the hour in the department's timezone if we knew it. 
+            // The user requested IST.
             
-            if (currentHour !== reminderHour) {
-               // debugLogs.push(`Skipping dept ${dept.name}: Hour mismatch (${currentHour} vs ${reminderHour})`)
+            const now = new Date()
+            
+            // Format time in Asia/Kolkata
+            const istTimeStr = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'Asia/Kolkata',
+              hour: 'numeric',
+              hour12: false
+            }).format(now)
+            
+            const currentIstHour = parseInt(istTimeStr, 10)
+            
+            if (currentIstHour !== reminderHour) {
+               // debugLogs.push(`Skipping dept ${dept.name}: Hour mismatch (IST ${currentIstHour} vs Set ${reminderHour})`)
                continue
             }
           }
@@ -72,7 +93,8 @@ export class EmailAutomationService {
             .from('scheduled_classes')
             .select(`
               *,
-              peer_tutor:peer_tutors(id, name, email)
+              peer_tutor:peer_tutors(id, name, email),
+              class:classes(subject_name)
             `)
             .eq('scheduled_date', todayStr)
             .ilike('dept', dept.name)
@@ -107,16 +129,18 @@ export class EmailAutomationService {
           debugLogs.push(`Found ${scheduledClasses.length} classes for ${dept.name}.`)
 
           // Group by Peer Tutor
-          const tutorMap = new Map<string, { name: string; email: string; classes: ScheduledClassWithDetails[] }>()
+          const tutorMap = new Map<string, { name: string; email: string; classes: typeof scheduledClasses }>()
           
           for (const cls of scheduledClasses) {
             if (!cls.peer_tutor) continue
             
-            const tutorId = cls.peer_tutor.id
+            const tutorId = (cls.peer_tutor as unknown as { id: string }).id
+            const tutorName = (cls.peer_tutor as unknown as { name: string }).name
+            const tutorEmail = (cls.peer_tutor as unknown as { email: string }).email
             if (!tutorMap.has(tutorId)) {
               tutorMap.set(tutorId, {
-                name: cls.peer_tutor.name,
-                email: cls.peer_tutor.email,
+                name: tutorName,
+                email: tutorEmail,
                 classes: []
               })
             }
@@ -128,9 +152,9 @@ export class EmailAutomationService {
             try {
               const classNames = tutorData.classes
                 .map(c => {
-                  // Type guard or safe access
-                  const cls = c as unknown as { class?: { subject_name: string }, subject?: string }
-                  return cls.class?.subject_name || cls.subject || 'Untitled Class'
+                  // Access the joined class data for subject_name
+                  const classData = c.class as unknown as { subject_name: string } | null
+                  return classData?.subject_name || 'Untitled Class'
                 })
                 .join(', ')
               
@@ -140,30 +164,49 @@ export class EmailAutomationService {
               const personalizedMessage = messageTemplate
                 .replace(/{tutor_name}/g, tutorData.name)
                 .replace(/{class_names}/g, classNames)
+                .replace(/{class_name}/g, classNames)
               
               const subject = `Class Reminder - ${todayStr}`
               const content = `${personalizedMessage}<br/><br/>Regards,<br/>${dept.faculty_name}`
 
-              // Call internal API
-              const emailResponse = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('supabase.co', '') || 'http://localhost:3000'}/api/cron/send-email`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  from: dept.faculty_email,
-                  to: [tutorData.email],
-                  subject,
-                  content
-                })
-              })
-
-              if (emailResponse.ok) {
-                logger.info(`✓ Morning reminder sent to ${tutorData.email}`)
-                sentCount++
+              // Check if we should send directly (Test Run context with userId)
+              // We match the dept.faculty_email with the authenticated user logic? 
+              // Actually, if userId is provided, we assume the caller has verified access to this department/user.
+              
+              if (options?.userId && options.force) {
+                 const result = await this.sendEmailDirectly(options.userId, [tutorData.email], subject, content)
+                 if (result.success) {
+                    logger.info(`✓ Morning reminder sent to ${tutorData.email} (Direct)`)
+                    sentCount++
+                 } else {
+                    const errMsg = result.error || 'Unknown error'
+                    logger.error(`✗ Failed to send to ${tutorData.email} (Direct):`, errMsg)
+                    errors.push(`Failed to send to ${tutorData.email}: ${errMsg}`)
+                    deptHasError = true
+                 }
               } else {
-                const errorData = await emailResponse.text()
-                logger.error(`✗ Failed to send to ${tutorData.email}:`, errorData)
-                errors.push(`Failed to send to ${tutorData.email}: ${errorData}`)
-                deptHasError = true
+                  // Call internal API (Cron context)
+                  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                  const emailResponse = await fetch(`${appUrl}/api/cron/send-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      from: dept.faculty_email,
+                      to: [tutorData.email],
+                      subject,
+                      content
+                    })
+                  })
+
+                  if (emailResponse.ok) {
+                    logger.info(`✓ Morning reminder sent to ${tutorData.email}`)
+                    sentCount++
+                  } else {
+                    const errorData = await emailResponse.text()
+                    logger.error(`✗ Failed to send to ${tutorData.email}:`, errorData)
+                    errors.push(`Failed to send to ${tutorData.email}: ${errorData}`)
+                    deptHasError = true
+                  }
               }
             } catch (emailError) {
               logger.error(`Error sending email to ${tutorData.email}:`, emailError)
@@ -195,6 +238,55 @@ export class EmailAutomationService {
   }
 
   /**
+   * Helper to send email directly using Microsoft Graph (bypassing the cron API)
+   * Used for "Test Runs" where we have the user's session/ID but no service role key.
+   */
+  private static async sendEmailDirectly(userId: string, to: string[], subject: string, content: string): Promise<{ success: boolean; error?: string }> {
+     try {
+        const tokenData = await MicrosoftTokenService.refreshAccessToken(userId)
+        
+        if (!tokenData || !tokenData.accessToken) {
+            return { success: false, error: 'Failed to get access token for user. Try signing in again.' }
+        }
+
+        const message = {
+          message: {
+            subject: subject,
+            body: {
+              contentType: 'HTML',
+              content: content
+            },
+            toRecipients: to.map(email => ({
+              emailAddress: {
+                address: email
+              }
+            }))
+          },
+          saveToSentItems: true
+        }
+
+        const graphResponse = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${tokenData.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(message)
+        })
+
+        if (!graphResponse.ok) {
+           const text = await graphResponse.text()
+           return { success: false, error: `Graph Error: ${text}` }
+        }
+
+        return { success: true }
+     } catch (e) {
+        logger.error('Error in sendEmailDirectly:', e)
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+     }
+  }
+
+  /**
    * Process pending notices for classes that are overdue
    * Logic: "takes only the shceudl class continous three pending"
    */
@@ -208,7 +300,7 @@ export class EmailAutomationService {
       const { data: departments, error: deptError } = await supabase
         .from('departments')
         .select('*')
-        .eq('enable_email_notifications', true)
+        .eq('enable_pending_reminders', true)
 
       if (deptError) {
         return { success: false, sentCount, errors: [deptError.message] }
@@ -312,7 +404,8 @@ export class EmailAutomationService {
                   `Regards,<br/>${dept.faculty_name}`
 
                 // Send email via internal API
-                const emailResponse = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('supabase.co', '') || 'http://localhost:3000'}/api/cron/send-email`, {
+                const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                const emailResponse = await fetch(`${appUrl}/api/cron/send-email`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({

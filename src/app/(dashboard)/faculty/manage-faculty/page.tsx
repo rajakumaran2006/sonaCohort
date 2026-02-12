@@ -53,7 +53,7 @@ function FacultyManageContent() {
   const [selectedFacultyEmails, setSelectedFacultyEmails] = useState<Set<string>>(new Set())
 
   // Refresh State
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Load Data

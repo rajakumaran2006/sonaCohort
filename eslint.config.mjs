@@ -31,6 +31,15 @@ const eslintConfig = [
     rules: {
       // Warn on console usage - use logger from @/lib/logger instead
       "no-console": "warn",
+      // Allow underscore-prefixed variables to be unused (common convention for intentionally unused params)
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
 ];

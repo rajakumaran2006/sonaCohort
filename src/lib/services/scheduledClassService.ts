@@ -366,6 +366,43 @@ export class ScheduledClassService {
   }
 
   /**
+   * Get all scheduled classes for a specific department
+   */
+  static async getScheduledClassesByDepartment(dept: string): Promise<ScheduledClassWithDetails[]> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          *,
+          class:classes!inner(
+            id,
+            subject_name,
+            created_at
+          ),
+          peer_tutor:peer_tutors(
+            id,
+            name,
+            email
+          )
+        `)
+        .ilike('dept', dept.trim())
+        .order('scheduled_date', { ascending: true })
+
+      if (error) {
+        logger.error('Error getting scheduled classes by department:', error)
+        return []
+      }
+
+      return data || []
+    } catch (error) {
+      logger.error('Error in getScheduledClassesByDepartment:', error)
+      return []
+    }
+  }
+
+  /**
    * Get scheduled classes ordered by date for a specific dept/year/section
    */
   static async getScheduledClassesByDate(dept: string, year: string, section: string, peertutorsId?: string): Promise<ScheduledClassWithDetails[]> {
