@@ -96,27 +96,27 @@ export default function EmailAssignmentModal({
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 uppercase">ASSIGN EMAIL</h3>
-            <p className="text-xs text-gray-600 mt-1">
-              Current: <span className="font-semibold">{student.name}</span> (Manual Entry)
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 uppercase">ASSIGN EMAIL</h3>
+            <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
+              Current: <span className="font-semibold">{student.name}</span> (Manual)
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-h-0">
           {!showConfirmation ? (
             <>
               {/* Search Bar */}
-              <div className="relative mb-6">
+              <div className="relative mb-4 sm:mb-6">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Search className="h-5 w-5 text-gray-400" />
                 </div>
@@ -124,8 +124,8 @@ export default function EmailAssignmentModal({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for user by name or email..."
-                  className="block w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                  placeholder="Search for user..."
+                  className="block w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-sm sm:text-base"
                   autoFocus
                 />
                 {isSearching && (
@@ -199,31 +199,31 @@ export default function EmailAssignmentModal({
               </div>
 
               {/* Current vs New Comparison */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-gray-500 mb-2 uppercase">Current</p>
-                  <div className="space-y-2">
+                  <p className="text-[10px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Current</p>
+                  <div className="space-y-3">
                     <div>
-                      <p className="text-xs text-gray-500">Name</p>
+                      <p className="text-[10px] text-gray-400 uppercase font-bold mb-0.5">Name</p>
                       <p className="text-sm font-semibold text-gray-900">{student.name}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Email</p>
-                      <p className="text-sm font-semibold text-gray-400">No email</p>
+                      <p className="text-[10px] text-gray-400 uppercase font-bold mb-0.5">Email</p>
+                      <p className="text-sm font-semibold text-gray-300">No email assigned</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-blue-700 mb-2 uppercase">New</p>
-                  <div className="space-y-2">
+                  <p className="text-[10px] font-semibold text-blue-700 mb-2 uppercase tracking-wider">New</p>
+                  <div className="space-y-3">
                     <div>
-                      <p className="text-xs text-blue-600">Name</p>
+                      <p className="text-[10px] text-blue-400 uppercase font-bold mb-0.5">Name</p>
                       <p className="text-sm font-semibold text-blue-900">{selectedUser?.displayName}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-blue-600">Email</p>
-                      <p className="text-sm font-semibold text-blue-900 break-all">
+                      <p className="text-[10px] text-blue-400 uppercase font-bold mb-0.5">Email</p>
+                      <p className="text-sm font-semibold text-blue-900 break-all leading-relaxed">
                         {selectedUser?.mail || selectedUser?.userPrincipalName}
                       </p>
                     </div>
@@ -235,11 +235,11 @@ export default function EmailAssignmentModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-5 border-t border-gray-200 flex justify-end gap-3">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-3 shrink-0">
           <button
             onClick={showConfirmation ? handleCancelConfirmation : onClose}
             disabled={isAssigning}
-            className="px-5 py-2.5 text-sm font-semibold text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-all disabled:opacity-50"
+            className="order-2 sm:order-1 px-5 py-2.5 text-sm font-semibold text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-all disabled:opacity-50"
           >
             {showConfirmation ? 'BACK' : 'CANCEL'}
           </button>
@@ -247,7 +247,7 @@ export default function EmailAssignmentModal({
             <button
               onClick={handleConfirmAssignment}
               disabled={isAssigning}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg shadow-lg transition-all flex items-center gap-2"
+              className="order-1 sm:order-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg shadow-lg transition-all flex items-center justify-center gap-2"
             >
               {isAssigning ? (
                 <>

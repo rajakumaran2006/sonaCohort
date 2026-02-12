@@ -87,11 +87,16 @@ function DetectRoleContent() {
   }, [user, loading, router])
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
+    <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-white">
       <LoadingOverlay size="xl">
-        <span className="text-slate-500 uppercase tracking-widest font-medium text-[10px] sm:text-xs">
-          {status}
-        </span>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <span className="text-gray-400 uppercase tracking-[0.3em] font-bold text-[10px] sm:text-xs">
+            {status}
+          </span>
+          <div className="h-0.5 w-12 bg-blue-600/20 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-600 animate-[loading_2s_ease-in-out_infinite] w-1/2" />
+          </div>
+        </div>
       </LoadingOverlay>
     </div>
   )
@@ -100,11 +105,16 @@ function DetectRoleContent() {
 export default function DetectRolePage() {
   return (
     <Suspense fallback={
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-white">
         <LoadingOverlay size="xl">
-          <span className="text-slate-500 uppercase tracking-widest font-medium text-[10px] sm:text-xs">
-            Initializing...
-          </span>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <span className="text-gray-400 uppercase tracking-[0.3em] font-bold text-[10px] sm:text-xs">
+              INITIALIZING...
+            </span>
+            <div className="h-0.5 w-12 bg-blue-600/20 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-600 animate-[loading_2s_ease-in-out_infinite] w-1/2" />
+            </div>
+          </div>
         </LoadingOverlay>
       </div>
     }>

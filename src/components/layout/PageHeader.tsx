@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Menu } from 'lucide-react'
+import { Menu, ArrowLeft } from 'lucide-react'
 import { AnimatedRefreshButton } from '../ui/AnimatedRefreshButton'
 
 import { usePeerSidebar } from './PeerSidebarContext'
@@ -18,6 +18,7 @@ interface PageHeaderProps {
   onToggleSidebar?: () => void
   isSidebarCollapsed?: boolean
   children?: React.ReactNode
+  onBack?: () => void
 }
 
 export default function PageHeader({
@@ -30,10 +31,11 @@ export default function PageHeader({
   showRefresh = true,
   onToggleSidebar,
   children,
+  onBack,
 }: PageHeaderProps) {
   // Use tagline if provided, otherwise fall back to subtitle for backward compatibility
   const displayTagline = tagline || subtitle
-  
+
   // Try to use context, fail silently if not inside provider (for other dashboards)
   let toggleSidebar = onToggleSidebar
   try {
@@ -59,6 +61,14 @@ export default function PageHeader({
                 <Menu className="w-6 h-6" />
               </button>
             )}
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 relative items-center justify-center flex mr-1"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+            )}
             <h1 className="text-xl font-black text-gray-900 uppercase tracking-tight">
               {title}
               {context && (
@@ -78,7 +88,7 @@ export default function PageHeader({
         <div className="flex items-center gap-4 w-auto">
           {showRefresh && onRefresh && (
             <div className="flex flex-col items-end">
-              <AnimatedRefreshButton 
+              <AnimatedRefreshButton
                 onRefresh={onRefresh}
                 isRefreshing={isRefreshing}
               />

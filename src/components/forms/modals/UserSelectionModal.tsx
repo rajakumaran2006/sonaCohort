@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { Search, X, Loader2, User, Mail, Check, AlertCircle, ChevronDown, UserPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MicrosoftUser } from '@/lib/types'
-import ManualStudentEntry from './ManualStudentEntry'
+
 
 interface UserSelectionModalProps {
     isOpen: boolean
@@ -66,6 +66,9 @@ export default function UserSelectionModal({
 
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    // Manual Entry State
+    const [manualStudentName, setManualStudentName] = useState('')
 
     const isContextSelected = !!selectedYear && !!selectedSection
 
@@ -182,12 +185,68 @@ export default function UserSelectionModal({
 
     // Submit logic (Assign Peer Tutor or Add Student)
     const handleSubmit = async () => {
-        if (selectedUsers.size === 0 || !user || !isContextSelected) return
+        if (!user || !isContextSelected) return
+
+        if (entryMode === 'manual') {
+            if (!manualStudentName.trim()) {
+                setError('Please enter a student name')
+                return
+            }
+        } else {
+            if (selectedUsers.size === 0) return
+        }
 
         setIsSubmitting(true)
         setError(null)
 
         try {
+            if (entryMode === 'manual') {
+                let result;
+                if (mode === 'peer-tutor') {
+                    result = await peertutorservice.assignpeertutors({
+                        name: manualStudentName.trim(),
+                        email: null,
+                        dept,
+                        year: selectedYear,
+                        section: selectedSection,
+                        faculty_id: user.id,
+                        assigned_by: user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Unknown',
+                        is_manual_entry: true
+                    })
+                } else {
+                    result = await StudentService.addStudent({
+                        name: manualStudentName.trim(),
+                        email: null,
+                        dept,
+                        year: selectedYear,
+                        section: selectedSection,
+                        faculty_id: user.id,
+                        peer_tutor: false,
+                        is_manual_entry: true
+                    })
+                }
+
+                if (result.success) {
+                    onSuccess()
+                    setManualStudentName('')
+                    // Optional: keep modal open or close? Usually close on success if singular action
+                    // But manual entry might want to add multiple?
+                    // The original manual entry closed on success.
+                    // Let's close it for now to match verified plan behavior roughly, or check plan.
+                    // Plan says: "Verify the student is added successfully."
+                    // Let's mimic the bulk add behavior: show success message or close.
+                    // The bulk add closes if all successful.
+                    onClose()
+                    handleClearSelection() // helper to reset state
+                } else {
+                    setError(result.error || 'Failed to add user')
+                }
+                setIsSubmitting(false)
+                return
+            }
+
+            // Microsoft Directory Logic
+            if (selectedUsers.size === 0) return
             if (mode === 'peer-tutor') {
                 const assignments: peertutorsAssignment[] = Array.from(selectedUsers.values()).map(u => ({
                     name: u.displayName || 'Unknown',
@@ -202,7 +261,7 @@ export default function UserSelectionModal({
                 const results = await Promise.allSettled(
                     assignments.map(a => peertutorservice.assignpeertutors(a))
                 )
-                
+
                 // Collect error messages
                 const errors: string[] = []
                 results.forEach((result, index) => {
@@ -212,7 +271,7 @@ export default function UserSelectionModal({
                         errors.push(`${assignments[index].name}: Failed to add`)
                     }
                 })
-                
+
                 processResults(results, errors)
 
             } else {
@@ -229,7 +288,7 @@ export default function UserSelectionModal({
                 const results = await Promise.allSettled(
                     students.map(s => StudentService.addStudent(s))
                 )
-                
+
                 // Collect error messages
                 const errors: string[] = []
                 results.forEach((result, index) => {
@@ -239,7 +298,7 @@ export default function UserSelectionModal({
                         errors.push(`${students[index].name}: Failed to add`)
                     }
                 })
-                
+
                 processResults(results, errors)
             }
         } catch {
@@ -271,7 +330,7 @@ export default function UserSelectionModal({
                 handleClearSelection()
             } else {
                 // Format error messages with line breaks for better readability
-                const errorMessage = errors.length > 0 
+                const errorMessage = errors.length > 0
                     ? `Successfully added ${successful} user${successful !== 1 ? 's' : ''}.\n\n${errors.join('\n')}`
                     : `Successfully added ${successful}. ${failed} failed.`
                 setError(errorMessage)
@@ -299,31 +358,33 @@ export default function UserSelectionModal({
                                 {title}
                             </h3>
                             {/* Manual Entry Toggle */}
-                            {/* Manual Entry Toggle */}
-                            <div className="flex bg-gray-100 p-1 rounded-lg">
-                                <button
-                                    onClick={() => setEntryMode('microsoft')}
-                                    className={cn(
-                                        "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                                        entryMode === 'microsoft' 
-                                            ? "bg-white text-blue-600 shadow-sm" 
-                                            : "text-gray-500 hover:text-gray-700"
-                                    )}
-                                >
-                                    DIRECTORY
-                                </button>
-                                <button
-                                    onClick={() => setEntryMode('manual')}
-                                    className={cn(
-                                        "px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1",
-                                        entryMode === 'manual' 
-                                            ? "bg-white text-blue-600 shadow-sm" 
-                                            : "text-gray-500 hover:text-gray-700"
-                                    )}
-                                >
-                                    MANUAL
-                                </button>
-                            </div>
+                            {/* Manual Entry Toggle - Only for Students */}
+                            {mode === 'student' && (
+                                <div className="flex bg-gray-100 p-1 rounded-lg">
+                                    <button
+                                        onClick={() => setEntryMode('microsoft')}
+                                        className={cn(
+                                            "px-3 py-1 text-xs font-bold rounded-md transition-all",
+                                            entryMode === 'microsoft'
+                                                ? "bg-white text-blue-600 shadow-sm"
+                                                : "text-gray-500 hover:text-gray-700"
+                                        )}
+                                    >
+                                        DIRECTORY
+                                    </button>
+                                    <button
+                                        onClick={() => setEntryMode('manual')}
+                                        className={cn(
+                                            "px-3 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1",
+                                            entryMode === 'manual'
+                                                ? "bg-white text-blue-600 shadow-sm"
+                                                : "text-gray-500 hover:text-gray-700"
+                                        )}
+                                    >
+                                        MANUAL
+                                    </button>
+                                </div>
+                            )}
                             {/* Breadcrumb-like Info / Fake Dropdowns matching screenshot */}
                             <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
                                 <span className="uppercase text-gray-700">{dept}</span>
@@ -386,191 +447,224 @@ export default function UserSelectionModal({
                         </button>
                     </div>
 
-                    {/* Navigation Tabs */}
-                    <div className="flex px-8 gap-6 border-b border-gray-100/50">
-                        <button
-                            onClick={() => setViewMode('all')}
-                            className={cn(
-                                "pb-3 text-sm font-bold uppercase transition-all relative tracking-wide",
-                                viewMode === 'all'
-                                    ? "text-blue-600"
-                                    : "text-gray-400 hover:text-gray-600"
-                            )}
-                        >
-                            All USERS
-                            {viewMode === 'all' && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setViewMode('selected')}
-                            className={cn(
-                                "pb-3 text-sm font-bold uppercase transition-all relative tracking-wide",
-                                viewMode === 'selected'
-                                    ? "text-blue-600"
-                                    : "text-gray-400 hover:text-gray-600"
-                            )}
-                        >
-                            SELECTED
-                            {selectedUsers.size > 0 && (
-                                <span className="ml-2 bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold border border-gray-200">
-                                    {selectedUsers.size}
-                                </span>
-                            )}
-                            {viewMode === 'selected' && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
-                            )}
-                        </button>
-                    </div>
+
+                    {/* Only show these tabs in Directory mode */}
+                    {entryMode === 'microsoft' && (
+                        <div className="flex px-8 gap-6 border-b border-gray-100/50">
+                            <button
+                                onClick={() => setViewMode('all')}
+                                className={cn(
+                                    "pb-3 text-sm font-bold uppercase transition-all relative tracking-wide",
+                                    viewMode === 'all'
+                                        ? "text-blue-600"
+                                        : "text-gray-400 hover:text-gray-600"
+                                )}
+                            >
+                                All USERS
+                                {viewMode === 'all' && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setViewMode('selected')}
+                                className={cn(
+                                    "pb-3 text-sm font-bold uppercase transition-all relative tracking-wide",
+                                    viewMode === 'selected'
+                                        ? "text-blue-600"
+                                        : "text-gray-400 hover:text-gray-600"
+                                )}
+                            >
+                                SELECTED
+                                {selectedUsers.size > 0 && (
+                                    <span className="ml-2 bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold border border-gray-200">
+                                        {selectedUsers.size}
+                                    </span>
+                                )}
+                                {viewMode === 'selected' && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-hidden flex flex-col p-8 bg-gray-50/50 min-h-0">
-
-                    {/* Search Bar - Only visible in 'all' mode */}
-                    {viewMode === 'all' && (
-                        <div className="relative mb-6 shrink-0 group">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <Search className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                            </div>
+                <div className="flex-1 overflow-hidden flex flex-col p-4 sm:p-8 bg-gray-50/50 min-h-0">
+                    {entryMode === 'manual' ? (
+                        <div className="flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                            <label className="block text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">
+                                Student Name <span className="text-red-500">*</span>
+                            </label>
                             <input
                                 type="text"
-                                value={searchQuery}
-                                disabled={!isContextSelected}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder={searchPlaceholder}
-                                className={cn(
-                                    "block w-full pl-11 pr-4 py-4 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-base",
-                                    !isContextSelected && "bg-gray-50 cursor-not-allowed opacity-80"
-                                )}
-                                autoFocus={isContextSelected}
+                                value={manualStudentName}
+                                onChange={(e) => setManualStudentName(e.target.value)}
+                                placeholder="Enter student name"
+                                className="block w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                autoFocus
                             />
-                            {isSearching && (
-                                <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
-                                    <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                            <p className="text-xs text-blue-600 mt-3 flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4" />
+                                Email can be assigned later
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+
+                            {/* Search Bar - Only visible in 'all' mode */}
+                            {viewMode === 'all' && (
+                                <div className="relative mb-6 shrink-0 group">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <Search className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        disabled={!isContextSelected}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder={searchPlaceholder}
+                                        className={cn(
+                                            "block w-full pl-11 pr-4 py-4 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-base",
+                                            !isContextSelected && "bg-gray-50 cursor-not-allowed opacity-80"
+                                        )}
+                                        autoFocus={isContextSelected}
+                                    />
+                                    {isSearching && (
+                                        <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
+                                            <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                                        </div>
+                                    )}
                                 </div>
                             )}
-                        </div>
-                    )}
 
-                    {/* Error Message */}
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-700 shadow-sm shrink-0 animate-in slide-in-from-top-2 fade-in duration-300">
-                            <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-                            <p className="text-sm font-medium whitespace-pre-line">{error}</p>
-                        </div>
-                    )}
-
-                    {/* Table Container */}
-                    <div className="bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden shadow-sm flex-1 min-h-0">
-                        {(getDisplayedUsers().length > 0) ? (
-                            <div className="flex flex-col h-full animate-in fade-in duration-300">
-                                {/* Table Header */}
-                                <div className="bg-gray-50/80 border-b border-gray-200 px-6 py-3 grid grid-cols-[auto_1.5fr_2fr_1fr] gap-4 items-center shrink-0">
-                                    <div className="w-5 flex items-center justify-center">
-                                        {viewMode === 'all' && searchQuery ? (
-                                            <input
-                                                type="checkbox"
-                                                checked={areAllSelected}
-                                                onChange={(e) => handleSelectAll(e.target.checked)}
-                                                className="w-5 h-5 rounded border-gray-300 text-gray-900 focus:ring-gray-900 cursor-pointer transition-all focus:ring-offset-0 focus:ring-2"
-                                            />
-                                        ) : (
-                                            <div className="w-5 h-5" />
-                                        )}
-                                    </div>
-                                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Name</div>
-                                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Email</div>
-                                    {/* Just a spacer/column for role or whatever */}
-                                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Action</div>
+                            {/* Error Message */}
+                            {error && (
+                                <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-700 shadow-sm shrink-0 animate-in slide-in-from-top-2 fade-in duration-300">
+                                    <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                                    <p className="text-sm font-medium whitespace-pre-line">{error}</p>
                                 </div>
+                            )}
 
-                                {/* Table Body (Scrollable) */}
-                                <div
-                                    className="overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden"
-                                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                                >
-                                    {getDisplayedUsers().map((user, index) => {
-                                        const key = user.mail || user.userPrincipalName
-                                        const isSelected = key ? selectedUsers.has(key) : false
-                                        return (
-                                            <div
-                                                key={key || index}
-                                                onClick={() => handleToggleUser(user)}
-                                                className={cn(
-                                                    "px-6 py-4 grid grid-cols-[auto_1.5fr_2fr_1fr] gap-4 items-center border-b border-gray-100 last:border-0 cursor-pointer transition-all duration-200 group",
-                                                    isSelected ? "bg-blue-50/50 hover:bg-blue-50" : "hover:bg-gray-50"
-                                                )}
-                                            >
-                                                <div className="w-5 flex items-center justify-center">
+                            {/* Table Container */}
+                            <div className="bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden shadow-sm flex-1 min-h-0">
+                                {(getDisplayedUsers().length > 0) ? (
+                                    <div className="flex flex-col h-full animate-in fade-in duration-300">
+                                        {/* Table Header */}
+                                        <div className="hidden sm:grid bg-gray-50/80 border-b border-gray-200 px-6 py-3 grid-cols-[auto_1.5fr_2fr_1fr] gap-4 items-center shrink-0">
+                                            <div className="w-5 flex items-center justify-center">
+                                                {viewMode === 'all' && searchQuery ? (
                                                     <input
                                                         type="checkbox"
-                                                        checked={isSelected}
-                                                        onChange={() => handleToggleUser(user)}
-                                                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600 cursor-pointer"
-                                                        onClick={(e) => e.stopPropagation()}
+                                                        checked={areAllSelected}
+                                                        onChange={(e) => handleSelectAll(e.target.checked)}
+                                                        className="w-5 h-5 rounded border-gray-300 text-gray-900 focus:ring-gray-900 cursor-pointer transition-all focus:ring-offset-0 focus:ring-2"
                                                     />
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors shadow-sm bg-gray-200 text-black">
-                                                        <User className="w-4 h-4" />
-                                                    </div>
-                                                    <span className={cn("font-semibold text-sm", isSelected ? "text-blue-900" : "text-gray-900")}>
-                                                        {user.displayName || 'Unknown Name'}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-sm overflow-hidden">
-                                                    <Mail className={cn("w-3.5 h-3.5 shrink-0", isSelected ? "text-blue-400" : "text-gray-400")} />
-                                                    <span className={cn("truncate", isSelected ? "text-blue-700" : "text-gray-500")}>
-                                                        {key || 'No email provided'}
-                                                    </span>
-                                                </div>
-                                                <div className="text-right">
-                                                    {isSelected && (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-blue-600 text-white text-xs font-bold uppercase tracking-wider">
-                                                            Selected
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                ) : (
+                                                    <div className="w-5 h-5" />
+                                                )}
                                             </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-gray-400 animate-in fade-in duration-300">
-                                {viewMode === 'all' ? (
-                                    searchQuery ? (
-                                        <>
-                                            <Image src="/icons/search.png" alt="No results" width={96} height={96} className="mx-auto opacity-60 grayscale" />
-                                            <p className="text-black font-semibold mt-4">NO RESULTS FOUND</p>
-                                            <p className="text-sm mt-1 text-gray-500">Try searching with a different name or email</p>
-                                        </>
-                                    ) : ( // Initial State
-                                        <>
-                                            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                                                <Search className="w-8 h-8 text-gray-400" />
-                                            </div>
-                                            <p className="text-gray-900 font-bold text-lg">{emptySearchMessage}</p>
-                                            <p className="text-sm mt-2 max-w-xs mx-auto text-gray-500 leading-relaxed">
-                                                {emptySearchSubtext}
-                                            </p>
-                                        </>
-                                    )
-                                ) : ( // Selected Empty State
-                                    <>
-                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <User className="text-gray-400 w-8 h-8" />
+                                            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Name</div>
+                                            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Email</div>
+                                            {/* Just a spacer/column for role or whatever */}
+                                            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Action</div>
                                         </div>
-                                        <p className="text-gray-900 font-semibold text-lg">NO USERS SELECTED</p>
-                                        <p className="text-sm mt-1 max-w-xs mx-auto text-gray-500">
-                                            Select users from the &quot;Available&quot; tab to see them here
-                                        </p>
-                                    </>
+
+                                        {/* Table Body (Scrollable) */}
+                                        <div
+                                            className="overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden"
+                                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                                        >
+                                            {getDisplayedUsers().map((user, index) => {
+                                                const key = user.mail || user.userPrincipalName
+                                                const isSelected = key ? selectedUsers.has(key) : false
+                                                return (
+                                                    <div
+                                                        key={key || index}
+                                                        onClick={() => handleToggleUser(user)}
+                                                        className={cn(
+                                                            "px-4 sm:px-6 py-4 flex flex-col sm:grid sm:grid-cols-[auto_1.5fr_2fr_1fr] gap-3 sm:gap-4 items-start sm:items-center border-b border-gray-100 last:border-0 cursor-pointer transition-all duration-200 group relative",
+                                                            isSelected ? "bg-blue-50/50 hover:bg-blue-50" : "hover:bg-gray-50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                                                            <div className="w-5 flex items-center justify-center shrink-0">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => handleToggleUser(user)}
+                                                                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600 cursor-pointer"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors shadow-sm bg-gray-200 text-black shrink-0">
+                                                                    <User className="w-4 h-4" />
+                                                                </div>
+                                                                <span className={cn("font-semibold text-sm truncate", isSelected ? "text-blue-900" : "text-gray-900")}>
+                                                                    {user.displayName || 'Unknown Name'}
+                                                                </span>
+                                                            </div>
+                                                            {/* Mobile Checkmark Badge */}
+                                                            {isSelected && (
+                                                                <span className="sm:hidden inline-flex items-center px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider">
+                                                                    Selected
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-sm overflow-hidden w-full sm:w-auto ml-8 sm:ml-0">
+                                                            <Mail className={cn("w-3.5 h-3.5 shrink-0", isSelected ? "text-blue-400" : "text-gray-400")} />
+                                                            <span className={cn("truncate", isSelected ? "text-blue-700" : "text-gray-500")}>
+                                                                {key || 'No email provided'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="hidden sm:block text-right">
+                                                            {isSelected && (
+                                                                <span className="inline-flex items-center px-2 py-1 rounded bg-blue-600 text-white text-xs font-bold uppercase tracking-wider">
+                                                                    Selected
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-gray-400 animate-in fade-in duration-300">
+                                        {viewMode === 'all' ? (
+                                            searchQuery ? (
+                                                <>
+                                                    <Image src="/icons/search.png" alt="No results" width={96} height={96} className="mx-auto opacity-60 grayscale" />
+                                                    <p className="text-black font-semibold mt-4">NO RESULTS FOUND</p>
+                                                    <p className="text-sm mt-1 text-gray-500">Try searching with a different name or email</p>
+                                                </>
+                                            ) : ( // Initial State
+                                                <>
+                                                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                                                        <Search className="w-8 h-8 text-gray-400" />
+                                                    </div>
+                                                    <p className="text-gray-900 font-bold text-lg">{emptySearchMessage}</p>
+                                                    <p className="text-sm mt-2 max-w-xs mx-auto text-gray-500 leading-relaxed">
+                                                        {emptySearchSubtext}
+                                                    </p>
+                                                </>
+                                            )
+                                        ) : ( // Selected Empty State
+                                            <>
+                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                    <User className="text-gray-400 w-8 h-8" />
+                                                </div>
+                                                <p className="text-gray-900 font-semibold text-lg">NO USERS SELECTED</p>
+                                                <p className="text-sm mt-1 max-w-xs mx-auto text-gray-500">
+                                                    Select users from the &quot;Available&quot; tab to see them here
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                        )}
-                    </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Footer */}
@@ -590,31 +684,22 @@ export default function UserSelectionModal({
                             </button>
                             <button
                                 onClick={handleSubmit}
-                                disabled={selectedUsers.size === 0 || isSubmitting || !isContextSelected}
+                                disabled={
+                                    (!isContextSelected || isSubmitting) ||
+                                    (entryMode === 'microsoft' && selectedUsers.size === 0) ||
+                                    (entryMode === 'manual' && !manualStudentName.trim())
+                                }
                                 className="px-6 py-2.5 text-sm font-bold text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-gray-200 transition-all duration-200 flex items-center gap-2 focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
                             >
                                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                                {!isSubmitting && selectedUsers.size > 0 && <Check className="w-4 h-4" />}
-                                {isSubmitting ? 'PROCESSING...' : 'ADD SELECTED'}
+                                {!isSubmitting && selectedUsers.size > 0 && entryMode === 'microsoft' && <Check className="w-4 h-4" />}
+                                {isSubmitting ? 'PROCESSING...' : (entryMode === 'manual' ? 'ADD STUDENT' : 'ADD SELECTED')}
                             </button>
                         </div>
                     </div>
                 </div>
-            {/* Render Manual Entry Modal Overlay if in manual mode */}
-            {entryMode === 'manual' && isContextSelected && (
-                <div className="absolute inset-0 z-10 bg-white">
-                    <ManualStudentEntry
-                        dept={dept}
-                        year={selectedYear}
-                        section={selectedSection}
-                        mode={mode}
-                        onClose={() => setEntryMode('microsoft')}
-                        onSuccess={() => {
-                            onSuccess()
-                        }}
-                    />
-                </div>
-            )}
+                {/* Render Manual Entry Modal Overlay if in manual mode */}
+                {/* End of Render */}
             </div>
         </div>
     )

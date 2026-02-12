@@ -630,12 +630,10 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
               {peerTutor.length > 0 && (
                 <button
                   onClick={toggleDeleteMode}
-                  className="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 transition-all flex items-center justify-center group"
+                  className="p-3 rounded-xl bg-white border border-gray-200 text-red-600 hover:bg-red-50 transition-all shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center group"
                   title="Delete peer tutors"
                 >
-                  <svg className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                  <Trash2 className="w-5 h-5" />
                 </button>
               )}
 
@@ -1246,25 +1244,25 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
   return (
     <div>
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
+        <div className="bg-white rounded-[20px] p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
           <div className="flex justify-between items-start mb-4 relative z-10">
-            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Students</h3>
+            <h3 className="text-gray-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider">Total Students</h3>
             <button className="text-gray-300 hover:text-gray-500 transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
           </div>
-          <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{students.length}</div>
-          <div className="flex items-center text-emerald-500 text-xs font-bold relative z-10">
+          <div className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{students.length}</div>
+          <div className="flex items-center text-emerald-500 text-[10px] sm:text-xs font-bold relative z-10">
             <span>TOTAL</span>
           </div>
         </div>
 
-        <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
+        <div className="bg-white rounded-[20px] p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden group">
           <div className="flex justify-between items-start mb-4 relative z-10">
-            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider">Assigned / Unassigned</h3>
+            <h3 className="text-gray-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider">Assigned / Unassigned</h3>
             <button className="text-gray-300 hover:text-gray-500 transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
           </div>
-          <div className="text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{students.filter(s => s.assigned_peer_tutor_id).length} <span className="text-gray-300 text-2xl font-normal">/</span> {students.length}</div>
-          <div className="flex items-center text-blue-500 text-xs font-bold relative z-10">
+          <div className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 relative z-10">{students.filter(s => s.assigned_peer_tutor_id).length} <span className="text-gray-300 text-xl sm:text-2xl font-normal">/</span> {students.length}</div>
+          <div className="flex items-center text-blue-500 text-[10px] sm:text-xs font-bold relative z-10">
             <span>ALLOCATED</span>
           </div>
         </div>
@@ -1323,7 +1321,7 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
             <>
               {/* Search Bar */}
               {students.length > 0 && (
-                <div className={`relative flex items-center transition-all duration-300 ease-in-out ${isSearchExpanded ? 'w-64' : 'w-10'}`}>
+                <div className={`relative flex items-center transition-all duration-300 ease-in-out ${isSearchExpanded ? 'w-full sm:w-64' : 'w-10'}`}>
                   {isSearchExpanded ? (
                     <div className="absolute inset-0 flex items-center w-full">
                       <input
@@ -1432,16 +1430,14 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
 
 
 
-              {/* Delete Button - Circular with User Icon */}
+              {/* Delete Button - Rounded XL with red outline */}
               {students.length > 0 && (
                 <button
                   onClick={toggleDeleteModeStudents}
-                  className="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 transition-all flex items-center justify-center group"
+                  className="p-3 rounded-xl bg-white border border-gray-200 text-red-600 hover:bg-red-50 transition-all shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center group"
                   title="Delete students"
                 >
-                  <svg className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 0 00-1-1h-4a1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                  <Trash2 className="w-5 h-5" />
                 </button>
               )}
               {/* Import/Export Buttons */}
@@ -1676,6 +1672,18 @@ function StudentsTab({ students, peerTutor, setIsStudentModalOpen, handleRemoveS
           }}
         />
       )}
+
+      {/* Email Assignment Modal */}
+      {selectedStudentForEmail && (
+        <EmailAssignmentModal
+          student={selectedStudentForEmail}
+          onClose={() => setSelectedStudentForEmail(null)}
+          onSuccess={() => {
+            setSelectedStudentForEmail(null)
+            onRefresh()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1879,9 +1887,7 @@ function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack }: Peertuto
         >
           General
         </button>
-        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
+        <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
         <span className="text-gray-900 font-medium">{peertutorsName}</span>
       </div>
 
@@ -3161,9 +3167,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
                 onClick={handleAutoAssign}
                 className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+                <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                 <span>AUTO ASSIGN</span>
               </button>
             </div>
@@ -3242,10 +3246,10 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
             {peerTutorWithStudents.some(({ students }) => students.length > 0) && (
               <button
                 onClick={toggleDeleteMode}
-                className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-700 transition-all flex items-center justify-center group shadow-sm"
+                className="p-3 rounded-xl bg-white border border-gray-200 text-red-600 hover:bg-red-50 transition-all shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center group"
                 title={isDeleteMode ? 'Exit delete mode' : 'Enter delete mode'}
               >
-                <Trash2 className="w-5 h-5 text-white" />
+                <Trash2 className="w-5 h-5 transition-transform group-hover:scale-110" />
               </button>
             )}
           </div>
@@ -3434,9 +3438,7 @@ function AssignTab({ dept, year, section }: AssignTabProps) {
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-6">
               <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
-                <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
                 Unassign All Students?
@@ -4013,9 +4015,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                   onClick={() => setShowAddModal(true)}
                   className="h-10 px-5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                   <span>ADD</span>
                 </button>
               )}
@@ -4037,9 +4037,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                   onClick={() => setShowDateAssignmentModal(true)}
                   className="h-10 px-5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                   <span>ASSIGN</span>
                 </button>
               )}
@@ -4049,12 +4047,10 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                   {/* Delete Button */}
                   <button
                     onClick={toggleDeleteMode}
-                    className="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 transition-all flex items-center justify-center group"
+                    className="p-3 rounded-xl bg-white border border-gray-200 text-red-600 hover:bg-red-50 transition-all shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center group text-red-600"
                     title="Delete subjects"
                   >
-                    <svg className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 0 00-1-1h-4a1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    <Trash2 className="w-5 h-5 transition-transform group-hover:scale-110" />
                   </button>
 
 
@@ -4162,9 +4158,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-gray-100">
-                              <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                              </svg>
+                              <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                             </div>
                             <div className="ml-4">
                               <div className="text-sm font-medium text-gray-900 uppercase">{subject.name}</div>
@@ -4324,9 +4318,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center gap-3">
                                 <div className="p-2 bg-gray-100 rounded-lg">
-                                  <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                  </svg>
+                                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                                 </div>
                                 <span className="text-sm font-medium text-gray-900 uppercase group-hover:text-blue-600 transition-colors">
                                   {group.subject_name}
@@ -4513,9 +4505,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                 onClick={() => setShowExportModal(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
               </button>
             </div>
 
@@ -5349,9 +5339,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                       </div>
                     </div>
                     <div className="flex-shrink-0 ml-3">
-                      <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                      <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                     </div>
                   </div>
                 </div>
@@ -5390,9 +5378,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mr-3">
-                                <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                </svg>
+                                <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                               </div>
                               <button
                                 onClick={() => toggleExpandClass(classItem.subject_name)}
@@ -5418,9 +5404,9 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                                 aria-label={expandedClassRows.has(classItem.subject_name) ? 'Collapse' : 'Expand'}
                               >
                                 {expandedClassRows.has(classItem.subject_name) ? (
-                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                                 ) : (
-                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                                 )}
                               </button>
                             </div>
@@ -5549,9 +5535,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
               onClick={handleBackToClasses}
               className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors duration-200"
             >
-              <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
             </button>
             <div className="flex-1 min-w-0">
               <h3 className="text-sm sm:text-base lg:text-lg font-medium text-gray-900 truncate">
@@ -5815,9 +5799,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-8 text-center">
             <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-              </svg>
+              <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
             </div>
             <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No attendance records found</h3>
             <p className="text-sm text-gray-500 px-4">No attendance has been marked for this class yet.</p>
@@ -5847,9 +5829,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                   onClick={handleBackTopeerTutor}
                   className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors duration-200"
                 >
-                  <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
+                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                 </button>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm sm:text-base lg:text-lg font-medium text-gray-900 truncate">
@@ -5879,9 +5859,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
                   onClick={handleBackTopeerTutor}
                   className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors duration-200"
                 >
-                  <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                 </button>
               </div>
             </div>
@@ -6038,9 +6016,7 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
               ) : (
                 <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-8 text-center">
                   <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                    </svg>
+                    <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                   </div>
                   <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No student records found</h3>
                   <p className="text-sm text-gray-500 px-4">No attendance has been marked for this peer tutor yet.</p>
@@ -6534,6 +6510,7 @@ function SectionContent() {
     </div>
   )
 }
+
 
 
 

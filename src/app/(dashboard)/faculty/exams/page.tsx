@@ -19,7 +19,7 @@ import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import CreateExamModal from '@/components/forms/modals/CreateExamModal'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
-import { FileText, Plus } from 'lucide-react'
+import { FileText, Plus, Trash2 } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
 import { calculatepeertutorsAscendScore } from '@/lib/utils/ascendScore'
@@ -624,12 +624,10 @@ function FacultyExamsContent() {
                             {exams && exams.length > 0 && (
                               <button
                                 onClick={handleDeleteModeToggle}
-                                className="p-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors duration-200"
-                                title="Delete"
+                                className="p-3 rounded-xl bg-white border border-gray-200 text-red-600 hover:bg-red-50 transition-all shadow-sm hover:shadow-md active:scale-95 flex items-center justify-center group"
+                                title="Delete Mode"
                               >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
+                                <Trash2 className="w-5 h-5 transition-transform group-hover:scale-110" />
                               </button>
                             )}
 
@@ -758,19 +756,19 @@ function FacultyExamsContent() {
                                   </div>
                                 </TableCell>
                                 {!isDeleteMode && (
-                                    <TableCell className="text-right pr-6 py-4">
-                                      <div className="flex items-center justify-end gap-2">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleExamClick(exam);
-                                          }}
-                                          className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
-                                        >
-                                          view
-                                        </button>
-                                      </div>
-                                    </TableCell>
+                                  <TableCell className="text-right pr-6 py-4">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleExamClick(exam);
+                                        }}
+                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:bg-gray-50 hover:text-gray-700 transition-all shadow-sm"
+                                      >
+                                        view
+                                      </button>
+                                    </div>
+                                  </TableCell>
                                 )}
                               </TableRow>
                             )
