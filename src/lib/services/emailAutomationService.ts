@@ -57,7 +57,7 @@ export class EmailAutomationService {
 
           // Check time window (simple check: match hour)
           // Ignored if forced
-          // Time check removed - we now rely on the Cron job schedule (9:30 AM default)
+          // Time check removed - we now rely on the Cron job schedule (9:35 AM default)
           // if (!options?.force) { ... }
 
           
