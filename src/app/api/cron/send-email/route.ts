@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     // Get stored tokens for this faculty member
     // We need to find their Supabase auth user ID
     // Since we're using Microsoft auth, we can look up by email in auth.users
-    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
+    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers({ perPage: 1000 })
     
     if (usersError) {
       logger.error('[cron-email] Error listing users:', usersError)

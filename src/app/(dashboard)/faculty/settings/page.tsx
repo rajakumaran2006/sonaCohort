@@ -793,12 +793,12 @@ function SettingsContent() {
                           <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
                             <Clock className="w-5 h-5 text-purple-600" />
                             <div>
-                               <p className="text-sm font-bold text-gray-900">09:35 AM</p>
+                               <p className="text-sm font-bold text-gray-900">09:50 AM</p>
                                <p className="text-[10px] text-gray-500 font-medium">Daily Automatic Schedule (IST)</p>
                             </div>
                           </div>
                           <p className="text-[10px] text-gray-400">
-                            System will automatically send reminders at 09:35 AM IST.
+                            System will automatically send reminders at 09:50 AM IST.
                           </p>
                         </div>
 
@@ -848,11 +848,11 @@ function SettingsContent() {
                                     )
                                   }
 
-                                  // Check if the scheduled time has passed today (08:30 AM)
+                                  // Check if the scheduled time has passed today (10:00 AM)
                                   const now = new Date()
-                                  // Fixed at 09:35 AM
-                                  const rHour = 9
-                                  const rMin = 35
+                                  // Fixed at 10:00 AM for cutoff
+                                  const rHour = 10
+                                  const rMin = 0
                                   const reminderToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), rHour, rMin)
                                   const hasTimePassed = now >= reminderToday
 

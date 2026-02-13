@@ -123,12 +123,11 @@ export class EmailAutomationService {
             tutorMap.get(tutorId)?.classes.push(cls)
           }
 
-          // Send emails
-          for (const [, tutorData] of tutorMap.entries()) {
+          // Send emails in parallel to avoid Vercel timeouts
+          const emailPromises = Array.from(tutorMap.entries()).map(async ([, tutorData]) => {
             try {
               const classNames = tutorData.classes
                 .map(c => {
-                  // Access the joined class data for subject_name
                   const classData = c.class as unknown as { subject_name: string } | null
                   return classData?.subject_name || 'Untitled Class'
                 })
@@ -145,23 +144,17 @@ export class EmailAutomationService {
               const subject = `Class Reminder - ${todayStr}`
               const content = `${personalizedMessage}<br/><br/>Regards,<br/>${dept.faculty_name}`
 
-              // Check if we should send directly (Test Run context with userId)
-              // We match the dept.faculty_email with the authenticated user logic? 
-              // Actually, if userId is provided, we assume the caller has verified access to this department/user.
-              
               if (options?.userId && options.force) {
                  const result = await this.sendEmailDirectly(options.userId, [tutorData.email], subject, content)
                  if (result.success) {
                     logger.info(`✓ Morning reminder sent to ${tutorData.email} (Direct)`)
-                    sentCount++
+                    return { success: true, email: tutorData.email }
                  } else {
                     const errMsg = result.error || 'Unknown error'
                     logger.error(`✗ Failed to send to ${tutorData.email} (Direct):`, errMsg)
-                    errors.push(`Failed to send to ${tutorData.email}: ${errMsg}`)
-                    deptHasError = true
+                    return { success: false, email: tutorData.email, error: errMsg }
                  }
               } else {
-                  // Call internal API (Cron context)
                   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
                   const emailResponse = await fetch(`${appUrl}/api/cron/send-email`, {
                     method: 'POST',
@@ -176,17 +169,28 @@ export class EmailAutomationService {
 
                   if (emailResponse.ok) {
                     logger.info(`✓ Morning reminder sent to ${tutorData.email}`)
-                    sentCount++
+                    return { success: true, email: tutorData.email }
                   } else {
                     const errorData = await emailResponse.text()
                     logger.error(`✗ Failed to send to ${tutorData.email}:`, errorData)
-                    errors.push(`Failed to send to ${tutorData.email}: ${errorData}`)
-                    deptHasError = true
+                    return { success: false, email: tutorData.email, error: errorData }
                   }
               }
             } catch (emailError) {
+              const errMsg = emailError instanceof Error ? emailError.message : String(emailError)
               logger.error(`Error sending email to ${tutorData.email}:`, emailError)
-              errors.push(`${tutorData.email}: ${emailError instanceof Error ? emailError.message : String(emailError)}`)
+              return { success: false, email: tutorData.email, error: errMsg }
+            }
+          })
+
+          const emailResults = await Promise.all(emailPromises)
+          
+          // Process results
+          for (const res of emailResults) {
+            if (res.success) {
+              sentCount++
+            } else {
+              errors.push(`Failed to send to ${res.email}: ${res.error}`)
               deptHasError = true
             }
           }
