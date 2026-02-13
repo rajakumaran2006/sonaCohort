@@ -72,24 +72,57 @@ function PeerExamsContent() {
   //   }
   // }, [peertutorsInfo])
 
-  // Fetch exams where peer tutor's year matches the exam years
+    // Fetch exams where peer tutor's year matches the exam years
   const { data: exams, isLoading: isExamsLoading } = useQuery({
-    queryKey: ['peer-exams', peertutorsInfo?.id, peertutorsInfo?.year, peertutorsInfo?.faculty_id],
+    queryKey: ['peer-exams', peertutorsInfo?.id, peertutorsInfo?.year, peertutorsInfo?.dept],
     queryFn: async () => {
-      if (!peertutorsInfo?.id || !peertutorsInfo?.year || !peertutorsInfo?.faculty_id) {
+      if (!peertutorsInfo?.id || !peertutorsInfo?.year || !peertutorsInfo?.dept) {
         return []
       }
       
       try {
         const supabase = await import('@/lib/supabase/client').then(m => m.createClient())
         
-        // Fetch exams directly by year and department match
-        // This ensures new peer tutors see exams even if their subjects haven't been added yet
+        // Normalize year: Extract the number from strings like "Year 3", "3rd Year", "3"
+        const rawYear = peertutorsInfo.year.toString()
+        const normalizedYear = rawYear.replace(/\D/g, '') || rawYear
+
+        // CRITICAL FIX: The peertutorsInfo.faculty_id is the Auth ID of the faculty user.
+        // But exams are linked to the Department UUID. We must find the Department ID first.
+        
+        // 1. Find the department ID based on the peer tutor's department name
+        const { data: deptData, error: deptError } = await supabase
+          .from('departments')
+          .select('id')
+          .ilike('name', peertutorsInfo.dept) 
+          .maybeSingle()
+
+        if (deptError) {
+          logger.error('Error fetching department for exams:', deptError)
+          return []
+        }
+
+        if (!deptData) {
+          logger.warn(`No department found with name "${peertutorsInfo.dept}" for peer tutor exam fetch`)
+          return []
+        }
+
+        const correctDepartmentId = deptData.id
+
+        logger.debug('Fetching exams for peer tutor:', {
+          tutorId: peertutorsInfo.id,
+          rawYear,
+          normalizedYear,
+          tutorDeptName: peertutorsInfo.dept,
+          resolvedDepartmentId: correctDepartmentId
+        })
+
+        // 2. Fetch exams using the CORRECT Department ID and normalized year
         const { data: examsData, error } = await supabase
           .from('exams')
           .select('*')
-          .contains('years', [peertutorsInfo.year])
-          .eq('department_id', peertutorsInfo.faculty_id)
+          .contains('years', [normalizedYear])
+          .eq('department_id', correctDepartmentId) // Use the resolved DB ID, not the Auth ID
           .order('created_at', { ascending: false })
         
         if (error) {
@@ -103,7 +136,7 @@ function PeerExamsContent() {
         return []
       }
     },
-    enabled: !!peertutorsInfo?.id && !!peertutorsInfo?.year && !!peertutorsInfo?.faculty_id,
+    enabled: !!peertutorsInfo?.id && !!peertutorsInfo?.year && !!peertutorsInfo?.dept,
     staleTime: 5 * 60 * 1000,
   })
 

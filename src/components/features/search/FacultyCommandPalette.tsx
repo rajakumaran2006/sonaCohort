@@ -16,12 +16,9 @@ import {
   MessageSquare,
   Settings,
   Mail,
-  Award,
   Building2,
   Trophy,
-  ChevronRight as ChevronRightIcon,
   Clock,
-  ToggleLeft,
   LinkIcon,
   BookOpen
 } from 'lucide-react'
