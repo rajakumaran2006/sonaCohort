@@ -14,7 +14,7 @@ import { Department } from '@/lib/types'
 import { Button, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import { AdminDashboardSkeleton } from '@/components/skeletons/AdminDashboardSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Plus, Trash2, Building2, Users } from 'lucide-react'
+import { Plus, Trash2, Building2, Users, GraduationCap, User } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
 export default function AdminDashboardPage() {
@@ -39,6 +39,8 @@ function AdminDashboardContent() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [departmentToDelete, setDepartmentToDelete] = useState<DepartmentWithCounts | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [totalPeerTutors, setTotalPeerTutors] = useState(0)
+  const [totalStudents, setTotalStudents] = useState(0)
   const [isCollapsed, setIsCollapsed] = useSidebarCollapsed()
 
   // Listen for sidebar toggle events (from sidebar button)
@@ -80,6 +82,8 @@ function AdminDashboardContent() {
       })
       
       setDepartments(enrichedDepartments)
+      setTotalPeerTutors(allpeerTutor.length)
+      setTotalStudents(allStudents.length)
     } catch (error) {
       logger.error('Error loading departments:', error)
       setDepartments([]) 
@@ -158,24 +162,9 @@ function AdminDashboardContent() {
              <AdminDashboardSkeleton />
           ) : (
             <div className="max-w-7xl mx-auto space-y-6">
-              
-              {/* Welcome Banner */}
-              <div className="bg-gradient-to-br from-[#0f291e] to-[#1a4432] rounded p-8 text-white relative overflow-hidden shadow-lg">
-                <div className="relative z-10 max-w-2xl">
-                  <h2 className="text-3xl font-bold mb-2">
-                    Hey {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Admin'}!
-                  </h2>
-                  <p className="text-green-100/90 text-lg leading-relaxed">
-                    Welcome to your command center. You have full control over departmental structures and faculty assignments here.
-                  </p>
-                </div>
-                {/* Decorative circles */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-                <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full blur-2xl -ml-12 -mb-12 pointer-events-none"></div>
-              </div>
 
               {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-white rounded-[2rem] p-7 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 group">
                    <div className="flex justify-between items-start mb-6">
                       <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Total Departments</div>
@@ -199,6 +188,32 @@ function AdminDashboardContent() {
                    <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{totalFaculty}</div>
                    <div className="flex items-center text-[10px] text-black font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
                       <span>ALLOCATED FACULTY MEMBERS</span>
+                   </div>
+                </div>
+
+                <div className="bg-white rounded-[2rem] p-7 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 group">
+                   <div className="flex justify-between items-start mb-6">
+                      <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Total Peer Tutors</div>
+                      <div className="p-1.5 bg-gray-50 rounded-lg">
+                         <GraduationCap className="w-3.5 h-3.5 text-gray-400" />
+                      </div>
+                   </div>
+                   <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{totalPeerTutors}</div>
+                   <div className="flex items-center text-[10px] text-black font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
+                      <span>ACTIVE PEER TUTORS</span>
+                   </div>
+                </div>
+
+                <div className="bg-white rounded-[2rem] p-7 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 group">
+                   <div className="flex justify-between items-start mb-6">
+                      <div className="text-[10px] text-gray-400 uppercase font-black tracking-[0.15em]">Total Students</div>
+                       <div className="p-1.5 bg-gray-50 rounded-lg">
+                         <User className="w-3.5 h-3.5 text-gray-400" />
+                      </div>
+                   </div>
+                   <div className="text-4xl font-black text-gray-900 mb-6 tracking-tight">{totalStudents}</div>
+                   <div className="flex items-center text-[10px] text-black font-black tracking-widest bg-gray-100 w-fit px-3 py-1.5 rounded-xl border border-gray-100/50">
+                      <span>REGISTERED STUDENTS</span>
                    </div>
                 </div>
               </div>
