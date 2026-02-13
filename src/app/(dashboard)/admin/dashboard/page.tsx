@@ -6,7 +6,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import CreateDepartmentModal from '@/components/forms/modals/CreateDepartmentModal'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
-import { useAuth } from '@/lib/auth/AuthContext'
+
 import { DepartmentService } from '@/lib/services/departmentService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
@@ -31,7 +31,7 @@ interface DepartmentWithCounts extends Department {
 }
 
 function AdminDashboardContent() {
-  const { user } = useAuth()
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [departments, setDepartments] = useState<DepartmentWithCounts[]>([])
   const [isLoading, setIsLoading] = useState(true)
