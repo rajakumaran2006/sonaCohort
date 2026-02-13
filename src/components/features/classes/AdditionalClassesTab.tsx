@@ -1,5 +1,5 @@
 'use client'
-import { createClient } from '@/lib/supabase/client'
+
 import React, { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { AttendanceRecord } from '@/lib/services/attendanceService'
@@ -144,45 +144,24 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
   // Fetch settings on mount or when peer tutor info changes
   useEffect(() => {
     const fetchSettings = async () => {
-      if (!peertutorsInfo) return
-
-      let settingFound = false
-      const supabase = createClient()
+      // We prioritize fetching by department name because peertutorsInfo.faculty_id is likely the Auth ID,
+      // while getFacultyDepartment expects the Department UUID.
+      if (!peertutorsInfo?.dept) {
+        logger.warn('No department found in peer tutor info, skipping settings fetch')
+        return
+      }
 
       try {
-        if (peertutorsInfo.faculty_id) {
-          logger.info(`Checking mandatory link setting for faculty: ${peertutorsInfo.faculty_id}`)
-          const facultyDept = await FacultyService.getFacultyDepartment(peertutorsInfo.faculty_id)
-          if (facultyDept) {
-             // Explicit check: only true if it is NOT false. (null/undefined => true)
-             const isMandatory = facultyDept.is_class_link_mandatory !== false
-             logger.info(`Mandatory link setting retrieved via ID: ${isMandatory}`)
-             setIsLinkMandatory(isMandatory)
-             settingFound = true
-          }
-        } 
+        logger.info(`Checking mandatory link setting for dept: ${peertutorsInfo.dept}`)
+        const facultyDept = await FacultyService.getFacultyDepartmentByName(peertutorsInfo.dept)
         
-        // Fallback: Try by department name if ID lookup failed
-        if (!settingFound && peertutorsInfo.dept) {
-           logger.info(`Checking mandatory link setting for dept: ${peertutorsInfo.dept}`)
-           const { data: deptData } = await supabase
-              .from('departments')
-              .select('is_class_link_mandatory')
-              .ilike('name', peertutorsInfo.dept) // Case insensitive match
-              .limit(1)
-              .maybeSingle()
-           
-           if (deptData) {
-               const isMandatory = deptData.is_class_link_mandatory !== false
-               logger.info(`Mandatory link setting retrieved via Name: ${isMandatory}`)
-               setIsLinkMandatory(isMandatory)
-               settingFound = true
-           }
-        }
-  
-        if (!settingFound) {
-             logger.warn('Could not retrieve faculty settings, defaulting to mandatory link')
-             // Verify if we should default to false if not found? No, safety first.
+        if (facultyDept) {
+            // Explicit check: only true if it is NOT false. (null/undefined => true)
+            const isMandatory = facultyDept.is_class_link_mandatory !== false
+            logger.info(`Mandatory link setting retrieved: ${isMandatory}`)
+            setIsLinkMandatory(isMandatory)
+        } else {
+            logger.warn(`Could not retrieve faculty settings for department: ${peertutorsInfo.dept}`)
         }
       } catch (error) {
         logger.error('Error fetching class settings:', error)
@@ -287,17 +266,17 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
     try {
       if (editingId) {
           // Update existing class
+
           const success = await AdditionalClassService.updateAdditionalClassDetails(editingId, {
+              subject_name: newClass.subject,
+              topic: newClass.topic,
+              class_date: newClass.date,
               start_time: newClass.startTime,
               end_time: newClass.endTime,
               link: newClass.link
           })
           
-          // Also update attendance if needed (assuming topics/subject don't change or handled separately - but generic update for now)
-          // Note: Current updateAdditionalClassDetails only updates details. 
-          // If we want to update subject/topic/date, we might need another method or extend the existing one.
-          // For now, let's assume details + status update.
-          // And update attendance:
+          // Update attendance
           await AdditionalClassService.updateAttendanceForAdditionalClass(editingId, peertutorsInfo.id, newClass.students)
 
           if (success) {
@@ -517,13 +496,46 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
         </div>
         <div className="flex items-center gap-3">
             {assignedStudents.length > 0 && (
-            <button
-               onClick={handleAddClass}
-               className="flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
-            >
-               <Plus size={14} strokeWidth={3} />
-               <span>Add Class</span>
-            </button>
+            <>
+               <button
+                  onClick={toggleDeleteMode}
+                  title={deleteMode ? "Cancel Delete Mode" : "Delete Classes"}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm ${
+                     deleteMode 
+                        ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' 
+                        : 'bg-red-600 hover:bg-red-700 text-white'
+                  }`}
+               >
+                  {deleteMode ? (
+                     <>
+                        <span className="text-lg leading-none">&times;</span>
+                        <span>Cancel</span>
+                     </>
+                  ) : (
+                     <>
+                        <Trash2 size={14} strokeWidth={2.5} />
+                        <span>Delete</span>
+                     </>
+                  )}
+               </button>
+
+               {deleteMode && selectedClasses.size > 0 && (
+                  <button
+                     onClick={handleDeleteClick}
+                     className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+                  >
+                     Delete ({selectedClasses.size})
+                  </button>
+               )}
+
+               <button
+                  onClick={handleAddClass}
+                  className="flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+               >
+                  <Plus size={14} strokeWidth={3} />
+                  <span>Add Class</span>
+               </button>
+            </>
             )}
         </div>
       </div>
@@ -727,9 +739,10 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
                                        {parseLocalDate(classItem.class_date).toLocaleDateString()}
                                     </span>
                                     <div className="flex items-center gap-2">
+
                                        <button
                                           onClick={() => handleEditClass(classItem)}
-                                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-black border border-gray-300 text-white shadow-sm active:bg-gray-50"
+                                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase bg-black border border-gray-300 text-white shadow-sm active:bg-gray-800"
                                        >
                                           Manage
                                        </button>
@@ -828,36 +841,8 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
                                        <ExportButton onClick={handleExportToExcel} />
                                     )}
                                     
-                                    {additionalClasses.length > 0 && (
-                                       <button
-                                          onClick={toggleDeleteMode}
-                                          title={deleteMode ? "Cancel Delete Mode" : "Delete Classes"}
-                                          className={`transition-all ${
-                                             deleteMode 
-                                                ? 'flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 hover:bg-gray-200' 
-                                                : 'w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 shadow-md hover:shadow-lg hover:scale-105 active:scale-95'
-                                          }`}
-                                       >
-                                          {deleteMode ? (
-                                             <>
-                                                <span className="text-lg leading-none">&times;</span> <span>Cancel</span>
-                                             </>
-                                          ) : (
-                                             <Trash2 size={18} strokeWidth={2.5} />
-                                          )}
-                                       </button>
-                                    )}
-                                    
-                                    {deleteMode && selectedClasses.size > 0 && (
-                                       <button
-                                          onClick={handleDeleteClick}
-                                          className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
-                                       >
-                                          <span>Delete ({selectedClasses.size})</span>
-                                       </button>
-                                    )}
-                                 </div>
-                              </div>
+                                  </div>
+                               </div>
                            </th>
                         </tr>
                         <tr className="border-b border-gray-100">

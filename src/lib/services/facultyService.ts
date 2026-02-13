@@ -181,13 +181,46 @@ export class FacultyService {
         .single()
 
       if (error) {
-        logger.error('Error getting faculty department:', error)
+        logger.error('Error getting faculty department:', JSON.stringify(error, null, 2))
+        logger.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+        })
         return null
       }
 
       return data as FacultyDepartment
     } catch (error) {
       logger.error('Error in getFacultyDepartment:', error)
+      return null
+    }
+  }
+
+  /**
+   * Get faculty department by name (case-insensitive)
+   * @param deptName Department Name
+   * @returns Department information
+   */
+  static async getFacultyDepartmentByName(deptName: string): Promise<FacultyDepartment | null> {
+    try {
+      const supabase = createClient()
+
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .ilike('name', deptName.trim())
+        .maybeSingle()
+
+      if (error) {
+        logger.error('Error getting faculty department by name:', error)
+        return null
+      }
+
+      return data as FacultyDepartment
+    } catch (error) {
+      logger.error('Error in getFacultyDepartmentByName:', error)
       return null
     }
   }

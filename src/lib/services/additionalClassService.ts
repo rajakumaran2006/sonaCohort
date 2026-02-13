@@ -350,6 +350,9 @@ export class AdditionalClassService {
   static async updateAdditionalClassDetails(
     additionalClassId: string,
     data: {
+      subject_name?: string,
+      topic?: string,
+      class_date?: string,
       start_time?: string,
       end_time?: string,
       link?: string
@@ -362,9 +365,15 @@ export class AdditionalClassService {
         updated_at: new Date().toISOString()
       }
 
-      if (data.start_time !== undefined) updateData.start_time = data.start_time
-      if (data.end_time !== undefined) updateData.end_time = data.end_time
-      if (data.link !== undefined) updateData.link = createLink(data.link)
+      if (data.subject_name !== undefined) updateData.subject_name = data.subject_name
+      if (data.topic !== undefined) updateData.topic = data.topic
+      if (data.class_date !== undefined) updateData.class_date = data.class_date
+      
+      // Handle optional fields: convert empty strings to null if needed, or update if provided
+      if (data.start_time !== undefined) updateData.start_time = data.start_time || null
+      if (data.end_time !== undefined) updateData.end_time = data.end_time || null
+      if (data.link !== undefined) updateData.link = createLink(data.link) || null
+
 
       const { error } = await supabase
         .from('additional_classes')
@@ -375,6 +384,7 @@ export class AdditionalClassService {
         logger.error('Error updating additional class details:', JSON.stringify(error, null, 2))
         return false
       }
+      
 
       return true
     } catch (error) {

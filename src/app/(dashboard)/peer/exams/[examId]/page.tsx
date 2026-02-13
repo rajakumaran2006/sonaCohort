@@ -134,7 +134,8 @@ function PeerExamDetailsContent() {
   const loading = isTutorLoading || isExamLoading || isStudentsLoading || isSubjectsLoading || isMarksLoading
 
   // Initialize marks data from existing marks
-  useEffect(() => {
+  // Helper function to initialize marks from DB
+  const initializeMarksFromDB = useCallback(() => {
     if (existingMarks && students && examSubjects) {
       const initialMarks: Record<string, Record<string, Record<string, number | string>>> = {}
       
@@ -165,6 +166,13 @@ function PeerExamDetailsContent() {
       setMarksData(initialMarks)
     }
   }, [existingMarks, students, examSubjects])
+
+  // Initialize marks data from existing marks
+  useEffect(() => {
+    if (!isEditing) {
+      initializeMarksFromDB()
+    }
+  }, [initializeMarksFromDB, isEditing])
 
   // Update marks data when new students or subjects are added
   useEffect(() => {
@@ -277,8 +285,8 @@ function PeerExamDetailsContent() {
   }
 
   const handleCancel = () => {
-    // Reload existing marks
-    queryClient.invalidateQueries({ queryKey: ['exam-marks', examId, peertutorsInfo?.id] })
+    // Reset marks to original DB state
+    initializeMarksFromDB()
     setIsEditing(false)
   }
 
@@ -415,6 +423,14 @@ function PeerExamDetailsContent() {
     
     return count > 0 ? totalMarks / count : 0
   }, [examSubjects, marksData])
+
+  // Calculate percentage based on max marks
+  const calculateStudentPercentage = useCallback((studentId: string): number => {
+    const avg = calculateStudentAverage(studentId)
+    const maxMarks = exam?.max_marks || 100
+    if (maxMarks === 0) return 0
+    return (avg / maxMarks) * 100
+  }, [calculateStudentAverage, exam])
 
   // Get sorted students
   const sortedStudents = useMemo(() => {
@@ -736,7 +752,7 @@ function PeerExamDetailsContent() {
                  {students && examSubjects && students.length > 0 && examSubjects.length > 0 ? (
                    <div className="divide-y divide-gray-100">
                      {sortedStudents.map((student) => {
-                       const avg = calculateStudentAverage(student.id)
+                       const pct = calculateStudentPercentage(student.id)
                        return (
                          <div key={student.id} className="p-4">
                            {/* Student Header */}
@@ -748,12 +764,12 @@ function PeerExamDetailsContent() {
                                <span className="text-xs font-bold text-gray-900 uppercase tracking-wide">{student.name}</span>
                              </div>
                              <span className={`text-xs font-black px-2 py-1 rounded-lg ${
-                               avg >= 75 ? 'bg-green-100 text-green-700' :
-                               avg >= 50 ? 'bg-blue-100 text-blue-700' :
-                               avg > 0 ? 'bg-yellow-100 text-yellow-700' :
+                               pct >= 75 ? 'bg-green-100 text-green-700' :
+                               pct >= 50 ? 'bg-blue-100 text-blue-700' :
+                               pct > 0 ? 'bg-yellow-100 text-yellow-700' :
                                'bg-gray-100 text-gray-500'
                              }`}>
-                               {avg > 0 ? `${avg.toFixed(1)}%` : '-'}
+                               {pct > 0 ? `${pct.toFixed(1)}%` : '-'}
                              </span>
                            </div>
                            
@@ -818,7 +834,7 @@ function PeerExamDetailsContent() {
                      </TableHeader>
                      <TableBody>
                        {sortedStudents.map((student) => {
-                         const avg = calculateStudentAverage(student.id)
+                         const pct = calculateStudentPercentage(student.id)
                          return (
                            <TableRow key={student.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
                              <TableCell className="py-4 pl-6 font-medium text-gray-900">
@@ -850,12 +866,12 @@ function PeerExamDetailsContent() {
                              ))}
                              <TableCell className="py-4 pr-6 text-right">
                                <span className={`text-xs font-black px-2 py-1 rounded-lg ${
-                                 avg >= 75 ? 'bg-gray-500 text-white' :
-                                 avg >= 50 ? 'bg-blue-500 text-white' :
-                                 avg > 0 ? 'bg-yellow-500 text-white' :
+                                 pct >= 75 ? 'bg-gray-500 text-white' :
+                                 pct >= 50 ? 'bg-blue-500 text-white' :
+                                 pct > 0 ? 'bg-yellow-500 text-white' :
                                  'bg-gray-500 text-white'
                                }`}>
-                                 {avg > 0 ? `${avg.toFixed(1)}%` : '-'}
+                                 {pct > 0 ? `${pct.toFixed(1)}%` : '-'}
                                </span>
                              </TableCell>
                            </TableRow>
