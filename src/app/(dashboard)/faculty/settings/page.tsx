@@ -785,25 +785,20 @@ function SettingsContent() {
 
                         {/* Content disabled if toggle off */}
                         <div className={`space-y-6 transition-opacity duration-200 ${enableDailyReminders ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                        {/* Morning Reminder Time */}
+                        {/* Morning Reminder Time - Fixed */}
                         <div className="space-y-3">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                            Morning Reminder Time
+                            Morning Reminder Schedule
                           </label>
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-                              <input
-                                type="time"
-                                value={morningTime}
-                                onChange={(e) => setMorningTime(e.target.value)}
-                                className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-purple-500 outline-none"
-                              />
+                          <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                            <Clock className="w-5 h-5 text-purple-600" />
+                            <div>
+                               <p className="text-sm font-bold text-gray-900">08:30 AM</p>
+                               <p className="text-[10px] text-gray-500 font-medium">Daily Automatic Schedule (IST)</p>
                             </div>
-                            <p className="text-xs text-gray-500">Local Time</p>
                           </div>
                           <p className="text-[10px] text-gray-400">
-                            Emails will be sent to peer tutors at this time if they have scheduled classes today.
+                            System will automatically send reminders at 08:30 AM IST.
                           </p>
                         </div>
 
@@ -853,9 +848,11 @@ function SettingsContent() {
                                     )
                                   }
 
-                                  // Check if the scheduled time has passed today
+                                  // Check if the scheduled time has passed today (08:30 AM)
                                   const now = new Date()
-                                  const [rHour, rMin] = morningTime.split(':').map(Number)
+                                  // Fixed at 08:30 AM
+                                  const rHour = 8
+                                  const rMin = 30
                                   const reminderToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), rHour, rMin)
                                   const hasTimePassed = now >= reminderToday
 

@@ -57,32 +57,8 @@ export class EmailAutomationService {
 
           // Check time window (simple check: match hour)
           // Ignored if forced
-          if (!options?.force) {
-            const reminderTime = dept.morning_reminder_time || '08:00'
-            const [reminderHourStr] = reminderTime.split(':')
-            const reminderHour = parseInt(reminderHourStr, 10)
-
-            // Convert current UTC time to IST (UTC+5:30)
-            // Note: This is an approximation. Ideally use date-fns-tz or moment-timezone but keeping deps minimal.
-            // Or better: Just check the hour in the department's timezone if we knew it. 
-            // The user requested IST.
-            
-            const now = new Date()
-            
-            // Format time in Asia/Kolkata
-            const istTimeStr = new Intl.DateTimeFormat('en-US', {
-              timeZone: 'Asia/Kolkata',
-              hour: 'numeric',
-              hour12: false
-            }).format(now)
-            
-            const currentIstHour = parseInt(istTimeStr, 10)
-            
-            if (currentIstHour !== reminderHour) {
-               // debugLogs.push(`Skipping dept ${dept.name}: Hour mismatch (IST ${currentIstHour} vs Set ${reminderHour})`)
-               continue
-            }
-          }
+          // Time check removed - we now rely on the Cron job schedule (8:30 AM default)
+          // if (!options?.force) { ... }
 
           
           debugLogs.push(`Checking classes for dept: "${dept.name}" on date: ${todayStr}`)
