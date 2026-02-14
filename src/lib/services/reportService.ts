@@ -448,7 +448,7 @@ export class ReportService {
         student_id: record.student_id,
         student_name: record.student?.name || 'Unknown',
         student_email: record.student?.email || '',
-        status: (record.status === 'P' ? 'present' : 'absent') as 'present' | 'absent'
+        status: (['present', 'p'].includes((record.status || '').toLowerCase()) ? 'present' : 'absent') as 'present' | 'absent'
       }))
 
       const presentCount = records.filter(r => r.status === 'present').length
@@ -793,7 +793,7 @@ export class ReportService {
       const { data: students, error: studentsError } = await supabase
         .from('peer_students')
         .select('*')
-        .eq('peer_tutor_id', peerTutorId)
+        .eq('assigned_peer_tutor_id', peerTutorId)
         .order('name')
 
       if (studentsError) {

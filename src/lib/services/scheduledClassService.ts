@@ -1864,8 +1864,20 @@ export class ScheduledClassService {
         `)
         .in('scheduled_class_id', scheduledClassIds)
 
+      logger.info('getScheduledClassesForSession debug:', {
+        classId,
+        date,
+        foundScheduledClasses: scheduledClasses.length,
+        scheduledClassIds,
+      })
+
       if (attendanceError) {
         logger.error('Error getting attendance for session:', attendanceError)
+      } else {
+         logger.info('getScheduledClassesForSession attendance data:', {
+            count: attendanceData?.length || 0,
+            sample: attendanceData?.slice(0, 3)
+         })
       }
 
       // 3. Get total assigned students for each peer tutor (for denominator)
@@ -1892,10 +1904,10 @@ export class ScheduledClassService {
 
         // Map attendance records to the format expected by UI
         const studentRecords = classAttendance.map(a => ({
-          student_id: a.student_id,
-          student_name: Array.isArray(a.peer_students) ? (a.peer_students[0] as { name: string })?.name : (a.peer_students as { name: string })?.name || 'Unknown',
-          student_email: Array.isArray(a.peer_students) ? (a.peer_students[0] as { email: string })?.email : (a.peer_students as { email: string })?.email || 'Unknown',
-          status: a.status
+            student_id: a.student_id,
+            student_name: Array.isArray(a.peer_students) ? (a.peer_students[0] as { name: string })?.name : (a.peer_students as { name: string })?.name || 'Unknown',
+            student_email: Array.isArray(a.peer_students) ? (a.peer_students[0] as { email: string })?.email : (a.peer_students as { email: string })?.email || 'Unknown',
+            status: a.status
         }))
 
         // Determine status
@@ -1909,6 +1921,14 @@ export class ScheduledClassService {
           else if (sc.attendance_completed || sc.topics_completed) status = 'pending'
           else status = 'upcoming'
         }
+
+        logger.info(`Processed Scheduled Class ${sc.id}:`, {
+            peerTutor: (sc.peer_tutor as any)?.name,
+            totalStudents,
+            presentCount,
+            recordCount: studentRecords.length,
+            firstRecordStatus: studentRecords[0]?.status
+        })
 
         return {
           ...sc,
