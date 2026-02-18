@@ -10,6 +10,12 @@ export interface ExamSubject {
   created_by: string | null
   created_at: string
   updated_at: string
+  classes?: {
+    id: string
+    year: string
+    section: string
+    dept: string
+  } | null
 }
 
 export interface CreateExamSubjectData {
@@ -54,10 +60,18 @@ export class ExamSubjectService {
     try {
       const supabase = createClient()
       
-      // Get all exam subjects for this exam
+      // Get all exam subjects for this exam with class details
       const { data: allSubjects, error: subjectsError } = await supabase
         .from('exam_subjects')
-        .select('*')
+        .select(`
+          *,
+          classes (
+            id,
+            year,
+            section,
+            dept
+          )
+        `)
         .eq('exam_id', examId)
         .order('created_at', { ascending: true })
 

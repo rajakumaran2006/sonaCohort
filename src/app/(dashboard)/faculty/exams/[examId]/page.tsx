@@ -13,12 +13,13 @@ import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
+import { ExamSummaryService } from '@/lib/services/examSummaryService'
 import { calculatepeertutorsAscendScore } from '@/lib/utils/ascendScore'
 import { Card, CardContent, Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { BackButton } from '@/components/ui/BackButton'
 import ExamDetailSkeleton from '@/components/skeletons/ExamDetailSkeleton'
-import { ArrowLeft, Download } from 'lucide-react'
+import { ArrowLeft, Download, RefreshCw } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import { useMemo, useEffect } from 'react'
@@ -83,73 +84,47 @@ function ExamDetailsContent() {
   // Calculate Ascend scores and completion percentages for each peer tutor
   const [ascendScores, setAscendScores] = useState<Record<string, number>>({})
 
-  useEffect(() => {
-    if (!peerTutor || !exam || !examId) return
+  // Fetch summaries
+  const { data: summaries, refetch: refetchSummaries } = useQuery({
+    queryKey: ['exam-summaries', examId],
+    queryFn: async () => await ExamSummaryService.getSummariesForExam(examId),
+    enabled: !!examId,
+  })
 
-    const fetchScoresAndCompletion = async () => {
+  // Update state when summaries are loaded
+  useEffect(() => {
+    if (summaries) {
       const scores: Record<string, number> = {}
       const completions: Record<string, number> = {}
 
-      // Get exam subjects once
-      const examSubjects = await ExamSubjectService.getExamSubjects(examId)
-      const totalSubjects = examSubjects.length
-
-      for (const tutor of peerTutor) {
-        try {
-          const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(tutor.id, examId)
-          const students = await AssignmentService.getStudentsBypeertutors(tutor.id)
-
-          // Organize marks by student and subject
-          const allStudentsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
-
-          students.forEach(student => {
-            allStudentsMarks[student.id] = {}
-            marks.forEach(mark => {
-              if (mark.student_id === student.id && mark.exam_subject_id) {
-                if (!allStudentsMarks[student.id][mark.exam_subject_id]) {
-                  allStudentsMarks[student.id][mark.exam_subject_id] = {}
-                }
-                if (mark.marks) {
-                  Object.assign(allStudentsMarks[student.id][mark.exam_subject_id], mark.marks)
-                }
-              }
-            })
-          })
-
-          scores[tutor.id] = calculatepeertutorsAscendScore(allStudentsMarks, exam.max_marks || 100)
-
-          // Calculate completion percentage
-          // Count how many marks have been entered (marks field is not empty)
-          let enteredMarks = 0
-          const totalPossible = students.length * totalSubjects
-
-          if (totalPossible > 0) {
-            students.forEach(student => {
-              examSubjects.forEach(subject => {
-                const markData = allStudentsMarks[student.id]?.[subject.id]
-                if (markData && markData.marks !== undefined && markData.marks !== null && markData.marks !== '') {
-                  enteredMarks++
-                }
-              })
-            })
-
-            completions[tutor.id] = Math.round((enteredMarks / totalPossible) * 100)
-          } else {
-            completions[tutor.id] = 0
-          }
-        } catch (error) {
-          logger.error(`Error calculating scores for tutor ${tutor.id}:`, error)
-          scores[tutor.id] = 0
-          completions[tutor.id] = 0
-        }
-      }
+      summaries.forEach(s => {
+        scores[s.peer_tutor_id] = Number(s.ascend_score)
+        completions[s.peer_tutor_id] = s.completion_percentage
+      })
 
       setAscendScores(scores)
       setCompletionPercentages(completions)
     }
+  }, [summaries])
 
-    fetchScoresAndCompletion()
-  }, [peerTutor, exam, examId])
+  // Sync function to calculate all scores
+  const [isSyncing, setIsSyncing] = useState(false)
+  const handleSyncScores = async () => {
+    if (!peerTutor || !examId) return
+    setIsSyncing(true)
+    try {
+      await Promise.all(peerTutor.map(tutor => 
+        ExamSummaryService.updateSummary(examId, tutor.id)
+      ))
+      await refetchSummaries()
+      // Refresh caching
+      queryClient.invalidateQueries({ queryKey: ['exam-summaries', examId] })
+    } catch (error) {
+      logger.error('Error syncing scores:', error)
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   const loading = isDepartmentLoading || isExamLoading || ispeerTutorLoading
 
@@ -659,6 +634,19 @@ function ExamDetailsContent() {
                     </div>
 
                     <div className="h-8 w-[1px] bg-gray-200 mx-1"></div>
+
+                    <div className="h-8 w-[1px] bg-gray-200 mx-1"></div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncScores}
+                      disabled={isSyncing}
+                      className="whitespace-nowrap"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                      {isSyncing ? 'Syncing...' : 'Sync Scores'}
+                    </Button>
 
                     <ExportButton
                       onClick={() => handleExportToExcel()}

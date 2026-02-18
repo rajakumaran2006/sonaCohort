@@ -363,22 +363,17 @@ function PeerTutorsExamDetailsContent() {
       })
 
       // Add data rows using sortedStudents (respects current filter/sort)
-      // Skip students with no marks (pending)
       sortedStudents.forEach(student => {
-        // Check if student has any marks
-        const hasMarks = subjects.some(subject => {
-          return marksByStudentSubject[student.id]?.[subject.id] && marksByStudentSubject[student.id][subject.id] !== ''
-        })
-
-        // Only include students who have at least one mark
-        if (hasMarks) {
-          const row = [student.name]
-          subjects.forEach(subject => {
+        const row = [student.name]
+        subjects.forEach(subject => {
+          if (!isSubjectRelevant(subject, student)) {
+            row.push('N/A')
+          } else {
             const markValue = marksByStudentSubject[student.id]?.[subject.id] || ''
             row.push(markValue)
-          })
-          exportData.push(row)
-        }
+          }
+        })
+        exportData.push(row)
       })
 
       // Create workbook and worksheet
@@ -399,28 +394,45 @@ function PeerTutorsExamDetailsContent() {
 
   const markField = 'marks'
 
+  // Helper to check if a subject is relevant for a student
+  const isSubjectRelevant = useCallback((subject: any, student: any) => {
+    if (!subject || !student) return false
+    // Custom subjects or subjects without class_id are relevant to all
+    if (subject.is_custom || !subject.class_id) return true
+    
+    // If it has class details, match year and section
+    if (subject.classes) {
+      return subject.classes.year === student.year && subject.classes.section === student.section
+    }
+    
+    return true // Fallback
+  }, [])
+
   // Calculate average marks for each student
-  const calculateStudentAverage = useCallback((studentId: string): number => {
+  const calculateStudentAverage = useCallback((student: any): number => {
     if (!examSubjects || examSubjects.length === 0) return 0
 
     let totalMarks = 0
     let count = 0
 
     examSubjects.forEach(subject => {
-      const markValue = marksData[studentId]?.[subject.id]?.[markField]
+      // Only include relevant subjects in average
+      if (!isSubjectRelevant(subject, student)) return
+
+      const markValue = marksData[student.id]?.[subject.id]?.[markField]
       if (markValue) {
         // Handle "40/100" format or just "40"
         const markStr = String(markValue)
         const numericValue = parseFloat(markStr.split('/')[0])
         if (!isNaN(numericValue)) {
           totalMarks += numericValue
-          count++
         }
       }
+      count++ // Increment count for all relevant subjects (even if no marks yet)
     })
 
     return count > 0 ? totalMarks / count : 0
-  }, [examSubjects, marksData])
+  }, [examSubjects, marksData, isSubjectRelevant])
 
   // Get sorted students
   const sortedStudents = useMemo(() => {
@@ -429,8 +441,8 @@ function PeerTutorsExamDetailsContent() {
     const sorted = [...students]
     if (sortBy === 'avg') {
       sorted.sort((a, b) => {
-        const avgA = calculateStudentAverage(a.id)
-        const avgB = calculateStudentAverage(b.id)
+        const avgA = calculateStudentAverage(a)
+        const avgB = calculateStudentAverage(b)
         return avgB - avgA // Sort descending (highest first)
       })
     } else {
@@ -456,8 +468,21 @@ function PeerTutorsExamDetailsContent() {
   // Process analytics data
   const processedMarks = useMemo(() => {
     if (!students || !examSubjects || !marksData || !exam) return []
-    return preprocessMarks(marksData, students, examSubjects, exam.max_marks || 100)
-  }, [students, examSubjects, marksData, exam])
+    
+    // Filter out irrelevant marks before processing analytics
+    const studentSubjectsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
+    
+    students.forEach(student => {
+      studentSubjectsMarks[student.id] = {}
+      examSubjects.forEach(subject => {
+        if (isSubjectRelevant(subject, student)) {
+          studentSubjectsMarks[student.id][subject.id] = marksData[student.id]?.[subject.id] || { 'marks': '' }
+        }
+      })
+    })
+
+    return preprocessMarks(studentSubjectsMarks, students, examSubjects, exam.max_marks || 100)
+  }, [students, examSubjects, marksData, exam, isSubjectRelevant])
 
   const studentPerformance = useMemo(() => {
     return calculateStudentPerformance(processedMarks)
@@ -790,7 +815,7 @@ function PeerTutorsExamDetailsContent() {
                     </TableHeader>
                     <TableBody>
                       {sortedStudents.map((student) => {
-                        const avg = calculateStudentAverage(student.id)
+                        const avg = calculateStudentAverage(student)
                         return (
                           <TableRow key={student.id} className="hover:bg-gray-50/50 transition-colors group border-b border-gray-50">
                             <TableCell className="pl-6 py-4 sticky left-0 bg-white z-10 group-hover:bg-gray-50/50 transition-colors">
@@ -798,35 +823,38 @@ function PeerTutorsExamDetailsContent() {
                                 <div className="w-8 h-8 rounded-full bg-white border border-gray-100 flex items-center justify-center flex-shrink-0">
                                   <span className="text-[10px] font-bold text-gray-600">{student.name.substring(0, 2).toUpperCase()}</span>
                                 </div>
-                                <span className="text-sm font-bold text-gray-700">{student.name}</span>
+                                <div>
+                                  <p className="text-xs font-bold text-gray-900 line-clamp-1">{student.name}</p>
+                                  <p className="text-[9px] text-gray-400 font-medium">{student.year} - {student.section}</p>
+                                </div>
                               </div>
                             </TableCell>
-                            {examSubjects.map((subject) => (
-                              <TableCell key={subject.id} className="text-center py-4">
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={marksData[student.id]?.[subject.id]?.[markField] || ''}
-                                    onChange={(e) => handleMarkChange(student.id, subject.id, markField, e.target.value)}
-                                    className="w-16 mx-auto px-2 py-1 text-center text-sm font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
-                                    placeholder="-"
-                                  />
-                                ) : (
-                                  <span className={`text-sm font-bold ${(marksData[student.id]?.[subject.id]?.[markField]) ? 'text-gray-700' : 'text-gray-300'
-                                    }`}>
-                                    {marksData[student.id]?.[subject.id]?.[markField] || '-'}
-                                  </span>
-                                )}
-                              </TableCell>
-                            ))}
+                            {examSubjects.map((subject) => {
+                              const isRelevant = isSubjectRelevant(subject, student)
+                              return (
+                                <TableCell key={subject.id} className="text-center py-2 px-2">
+                                  {!isRelevant ? (
+                                    <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">N/A</span>
+                                  ) : isEditing ? (
+                                    <Input
+                                      type="text"
+                                      value={marksData[student.id]?.[subject.id]?.[markField] || ''}
+                                      onChange={(e) => handleMarkChange(student.id, subject.id, markField, e.target.value)}
+                                      className="w-16 mx-auto text-center h-8 text-xs font-bold"
+                                      placeholder="-"
+                                    />
+                                  ) : (
+                                    <span className={`text-sm font-bold ${marksData[student.id]?.[subject.id]?.[markField] ? 'text-gray-900' : 'text-gray-300'}`}>
+                                      {marksData[student.id]?.[subject.id]?.[markField] || '-'}
+                                    </span>
+                                  )}
+                                </TableCell>
+                              )
+                            })}
                             <TableCell className="text-right pr-6 py-4">
-                              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50/50 border border-blue-100">
-                                <span className={`text-xs font-black ${avg >= 80 ? 'text-green-600' :
-                                  avg >= 60 ? 'text-blue-600' :
-                                    avg > 0 ? 'text-orange-600' :
-                                      'text-gray-400'
-                                  }`}>
-                                  {avg.toFixed(1)}%
+                              <div className="inline-flex items-center px-2 py-1 rounded-lg bg-blue-50 border border-blue-100">
+                                <span className="text-xs font-bold text-blue-600">
+                                  {avg.toFixed(1)}
                                 </span>
                               </div>
                             </TableCell>

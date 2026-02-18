@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { ExamSummaryService } from './examSummaryService'
 
 export interface ExamMark {
   id: string
@@ -56,6 +57,10 @@ export class ExamMarksService {
           return null
         }
 
+        // Update summary asynchronously (don't block return)
+        ExamSummaryService.updateSummary(data.exam_id, data.peer_tutor_id)
+          .catch(err => logger.error('Error updating exam summary trigger:', err))
+
         return updated as ExamMark
       } else {
         // Insert new record
@@ -76,6 +81,10 @@ export class ExamMarksService {
           logger.error('Error inserting exam marks:', error)
           return null
         }
+
+        // Update summary asynchronously (don't block return)
+        ExamSummaryService.updateSummary(data.exam_id, data.peer_tutor_id)
+          .catch(err => logger.error('Error updating exam summary trigger:', err))
 
         return inserted as ExamMark
       }
