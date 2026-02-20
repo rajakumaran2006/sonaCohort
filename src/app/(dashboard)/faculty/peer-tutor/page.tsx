@@ -20,6 +20,7 @@ import { FeedbackAnalyticsService } from '@/lib/services/feedbackAnalyticsServic
 import { ReportService, peertutorsReportData, ClassAttendanceReport } from '@/lib/services/reportService'
 import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
+import { ExamSummaryService, ExamPeerTutorSummary } from '@/lib/services/examSummaryService'
 import RenumerationModal from '@/components/forms/modals/RenumerationModal'
 import RenumerationDetailsModal from '@/components/forms/modals/RenumerationDetailsModal'
 import FeedbackFormModal from '@/components/forms/feedback/FeedbackFormModal'
@@ -40,7 +41,9 @@ import EmailAssignmentModal from '@/components/forms/modals/EmailAssignmentModal
 import { isManualStudent } from '@/lib/utils/manualStudentUtils'
 import { logger } from '@/lib/logger'
 import { motion } from 'framer-motion'
-import { Trophy, Crown, Medal } from 'lucide-react'
+import { Trophy, Crown, Medal, Settings } from 'lucide-react'
+import LeaderboardScoringModal from '@/components/forms/modals/LeaderboardScoringModal'
+import { LeaderboardConfigService, LeaderboardScoringConfig } from '@/lib/services/leaderboardConfigService'
 
 
 
@@ -223,6 +226,38 @@ function FacultypeertutorsContent() {
   const [showClassModal, setShowClassModal] = useState(false)
 
   const [leaderboardFilterYear, setLeaderboardFilterYear] = useState('all')
+  const [showScoringModal, setShowScoringModal] = useState(false)
+  const [scoringConfig, setScoringConfig] = useState<LeaderboardScoringConfig>({
+    department: '',
+    scheduled_classes_weight: 100,
+    additional_classes_weight: 0,
+    exam_weight: 0,
+    exam_config: [],
+  })
+  const [examSummariesMap, setExamSummariesMap] = useState<Record<string, ExamPeerTutorSummary[]>>({})
+
+  // Load leaderboard scoring config and exam summaries when department is available
+  useEffect(() => {
+    const loadScoringConfig = async () => {
+      if (!department?.name) return
+      const config = await LeaderboardConfigService.getConfig(department.name)
+      setScoringConfig(config)
+
+      // If exam weight > 0, fetch exam summaries for included exams
+      if (config.exam_weight > 0 && config.exam_config.length > 0) {
+        const includedExams = config.exam_config.filter(e => e.included)
+        const summariesMap: Record<string, ExamPeerTutorSummary[]> = {}
+        await Promise.all(
+          includedExams.map(async (examCfg) => {
+            const summaries = await ExamSummaryService.getSummariesForExam(examCfg.exam_id)
+            summariesMap[examCfg.exam_id] = summaries
+          })
+        )
+        setExamSummariesMap(summariesMap)
+      }
+    }
+    loadScoringConfig()
+  }, [department?.name])
 
   // Email Assignment State
   const [selectedStudentForEmail, setSelectedStudentForEmail] = useState<StudentWithpeertutors | null>(null)
@@ -3311,11 +3346,19 @@ function FacultypeertutorsContent() {
                     displayTutors = displayTutors.filter(t => t.year === leaderboardFilterYear)
                   }
 
-                  // 2. Score Calculation (Fallback to completedClasses if apexScore is 0)
-                  const rankedTutors = displayTutors.map(t => ({
-                    ...t,
-                    score: t.classStats?.completedClasses || 0 // Use completed classes as score
-                  }));
+                  // 2. Score Calculation (uses configurable weights, out of 100)
+                  const rankedTutors = displayTutors.map(t => {
+                    // Gather exam summaries for this tutor
+                    const tutorExamSummaries = Object.entries(examSummariesMap).flatMap(
+                      ([examId, summaries]) => summaries
+                        .filter(s => s.peer_tutor_id === t.id)
+                        .map(s => ({ exam_id: examId, peer_tutor_id: s.peer_tutor_id, ascend_score: s.ascend_score }))
+                    )
+                    return {
+                      ...t,
+                      score: LeaderboardConfigService.calculateScore(t, scoringConfig, tutorExamSummaries)
+                    }
+                  });
 
                   // 3. Sort by Score DESC
                   rankedTutors.sort((a, b) => {
@@ -3374,16 +3417,25 @@ function FacultypeertutorsContent() {
                                 <p className="text-xs text-gray-500 font-medium tracking-wide uppercase">Recognizing Excellence</p>
                               </div>
                             </div>
-                            <select
-                              value={leaderboardFilterYear}
-                              onChange={(e) => setLeaderboardFilterYear(e.target.value)}
-                              className="w-full sm:w-auto bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 py-2.5 px-4 outline-none transition-all shadow-sm hover:border-gray-300"
-                            >
-                              <option value="all">All Years</option>
-                              {availableYears.map(year => (
-                                <option key={year} value={year}>{year}</option>
-                              ))}
-                            </select>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={leaderboardFilterYear}
+                                onChange={(e) => setLeaderboardFilterYear(e.target.value)}
+                                className="w-full sm:w-auto bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 py-2.5 px-4 outline-none transition-all shadow-sm hover:border-gray-300"
+                              >
+                                <option value="all">All Years</option>
+                                {availableYears.map(year => (
+                                  <option key={year} value={year}>{year}</option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => setShowScoringModal(true)}
+                                className="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm group"
+                                title="Configure Scoring Rules"
+                              >
+                                <Settings className="w-4 h-4 text-gray-500 group-hover:text-gray-700 transition-colors" />
+                              </button>
+                            </div>
                           </div>
 
                           <div className="relative z-10 flex flex-col md:flex-row justify-end md:justify-center items-center md:items-end gap-6 md:gap-4 h-auto md:h-[400px] pt-4 md:pt-0">
@@ -4391,6 +4443,35 @@ function FacultypeertutorsContent() {
           onSuccess={() => {
             handleRefresh()
             setSelectedStudentForEmail(null)
+          }}
+        />
+      )}
+
+      {/* Leaderboard Scoring Modal */}
+      {department?.name && department?.id && (
+        <LeaderboardScoringModal
+          isOpen={showScoringModal}
+          onClose={() => setShowScoringModal(false)}
+          department={department.name}
+          departmentId={department.id}
+          currentConfig={scoringConfig}
+          onSave={async (config) => {
+            setScoringConfig(config)
+            // Reload exam summaries if exam weight changed
+            if (config.exam_weight > 0 && config.exam_config.length > 0) {
+              const includedExams = config.exam_config.filter(e => e.included)
+              const summariesMap: Record<string, ExamPeerTutorSummary[]> = {}
+              await Promise.all(
+                includedExams.map(async (examCfg) => {
+                  const summaries = await ExamSummaryService.getSummariesForExam(examCfg.exam_id)
+                  summariesMap[examCfg.exam_id] = summaries
+                })
+              )
+              setExamSummariesMap(summariesMap)
+            } else {
+              setExamSummariesMap({})
+            }
+            toast.success('Scoring rules updated successfully')
           }}
         />
       )}

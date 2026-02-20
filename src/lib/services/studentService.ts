@@ -317,12 +317,30 @@ export class StudentService {
       
       logger.info(`Starting student removal for: ${id}`)
       
-      // 1. Delete authentication/attendance records linked to this student
-      // Note: We need to check if there are any other tables linking to students
-      // For now, primarily attendance records
-      
-      // Attempt to delete from attendance table if it exists and has student_id
-      // We'll wrap this in a try-catch or check error codes in case columns differ
+      // 1. Delete all records linked to this student across all FK tables
+      // Order: exam marks → exam allocations → attendance → additional attendance → student
+
+      // Delete exam marks first (no other table depends on it)
+      const { error: examMarksError } = await supabase
+        .from('peer_tutor_exam_marks')
+        .delete()
+        .eq('student_id', id)
+
+      if (examMarksError) {
+        logger.warn('Error deleting exam marks (or records not found):', examMarksError)
+      }
+
+      // Delete exam allocations
+      const { error: examAllocError } = await supabase
+        .from('peer_tutor_exam_allocations')
+        .delete()
+        .eq('student_id', id)
+
+      if (examAllocError) {
+        logger.warn('Error deleting exam allocations (or records not found):', examAllocError)
+      }
+
+      // Delete attendance records
       const { error: attendanceError } = await supabase
         .from('attendance')
         .delete()
@@ -330,7 +348,6 @@ export class StudentService {
 
       if (attendanceError) {
         logger.warn('Error deleting student attendance (or records not found):', attendanceError)
-        // Proceeding anyway as it might be a schema mismatch or no records
       }
 
       // 1.5 Delete additional class attendance records

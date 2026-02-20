@@ -246,15 +246,49 @@ export function usePendingClassAlert(peertutorsInfo: { id?: string, dept?: strin
     })
 }
 
-// 8. Leaderboard Hook (RPC Version)
-export function usePeerLeaderboard(peertutorsInfo: { id?: string, dept?: string, year?: string } | null | undefined, selectedYear?: string) {
+// 8. Leaderboard Config Hook
+export function useLeaderboardConfig(department: string | undefined) {
   return useQuery({
-    queryKey: ['peerLeaderboard', peertutorsInfo?.dept, peertutorsInfo?.year, selectedYear],
+    queryKey: ['leaderboardConfig', department],
+    queryFn: async () => {
+      if (!department) return null
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('leaderboard_scoring_config')
+        .select('*')
+        .eq('department', department)
+        .single()
+
+      if (error || !data) {
+        // Return defaults
+        return {
+          department,
+          scheduled_classes_weight: 100,
+          additional_classes_weight: 0,
+          exam_weight: 0,
+          exam_config: [],
+        }
+      }
+      return {
+        ...data,
+        exam_config: data.exam_config || [],
+      }
+    },
+    enabled: !!department,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// 9. Leaderboard Hook (RPC Version with configurable scoring)
+export function usePeerLeaderboard(peertutorsInfo: { id?: string, dept?: string, year?: string } | null | undefined, selectedYear?: string) {
+  // Fetch leaderboard config for the department
+  const { data: scoringConfig } = useLeaderboardConfig(peertutorsInfo?.dept)
+
+  return useQuery({
+    queryKey: ['peerLeaderboard', peertutorsInfo?.dept, peertutorsInfo?.year, selectedYear, scoringConfig],
     queryFn: async () => {
       if (!peertutorsInfo?.dept || !peertutorsInfo?.year || !peertutorsInfo?.id) return null
 
-      // Use selected year or fallback to user's year, unless 'all' is selected
-      // If 'all' is selected, we pass null to the RPC to get all years
       const targetYear = selectedYear === 'all' ? null : (selectedYear || peertutorsInfo.year)
       const targetDept = peertutorsInfo.dept
 
@@ -280,19 +314,115 @@ export function usePeerLeaderboard(peertutorsInfo: { id?: string, dept?: string,
         return null
       }
 
-      // Map RPC result to expected format
-      // RPC returns: id, name, year, dept, score, rank
-      // Component expects: totalScore (we map score -> totalScore)
-      const formattedTutors = (rankedTutors as unknown as RPCTutor[] || []).map((tutor) => ({
-        id: tutor.id,
-        name: tutor.name,
-        year: tutor.year,
-        // The RPC returns 'score' (completed classes view), map it to totalScore for compatibility
-        totalScore: Number(tutor.score),
-        rank: Number(tutor.rank)
-      }))
+      const rpcTutors = (rankedTutors as unknown as RPCTutor[] || [])
 
-      // Find current user's data from the returned list
+      // Check if we need custom scoring (non-default config)
+      const isDefaultConfig = !scoringConfig || 
+        (scoringConfig.scheduled_classes_weight === 100 && 
+         scoringConfig.additional_classes_weight === 0 && 
+         scoringConfig.exam_weight === 0)
+
+      let formattedTutors
+
+      if (isDefaultConfig) {
+        // Use RPC results directly (backward compatible — RPC returns completed class count)
+        formattedTutors = rpcTutors.map((tutor) => ({
+          id: tutor.id,
+          name: tutor.name,
+          year: tutor.year,
+          totalScore: Number(tutor.score),
+          rank: Number(tutor.rank)
+        }))
+      } else {
+        // Custom scoring: fetch stats and calculate using the same formula as faculty page
+
+        // If exam weight > 0, fetch exam summaries for included exams
+        const includedExams = (scoringConfig.exam_config || []).filter((e: { included: boolean }) => e.included)
+        const examSummariesMap: Record<string, Array<{ exam_id: string; peer_tutor_id: string; ascend_score: number }>> = {}
+
+        if (scoringConfig.exam_weight > 0 && includedExams.length > 0) {
+          await Promise.all(
+            includedExams.map(async (examCfg: { exam_id: string }) => {
+              const { data: summaries } = await supabase
+                .from('exam_peer_tutor_summary')
+                .select('exam_id, peer_tutor_id, ascend_score')
+                .eq('exam_id', examCfg.exam_id)
+              examSummariesMap[examCfg.exam_id] = summaries || []
+            })
+          )
+        }
+
+        const tutorsWithScores = await Promise.all(
+          rpcTutors.map(async (tutor) => {
+            try {
+              // Fetch class stats
+              const { data: classData } = await supabase
+                .from('scheduled_classes')
+                .select('id, completion_status')
+                .eq('peer_tutor_id', tutor.id)
+
+              const { data: additionalData } = await supabase
+                .from('additional_classes')
+                .select('id')
+                .eq('peer_tutor_id', tutor.id)
+
+              const totalClasses = classData?.length || 0
+              const completedClasses = classData?.filter(c => c.completion_status === 'completed').length || 0
+              const additionalClassesCount = additionalData?.length || 0
+
+              // Gather exam summaries for this tutor
+              const tutorExamSummaries = Object.entries(examSummariesMap).flatMap(
+                ([examId, summaries]) => summaries
+                  .filter(s => s.peer_tutor_id === tutor.id)
+                  .map(s => ({ exam_id: examId, peer_tutor_id: s.peer_tutor_id, ascend_score: s.ascend_score }))
+              )
+
+              // Calculate scheduled score (0-100)
+              const scheduledScore = totalClasses > 0 ? (completedClasses / totalClasses) * 100 : 0
+              // Calculate additional score (0-100, capped)
+              const additionalScore = Math.min(additionalClassesCount * 10, 100)
+              // Calculate exam score
+              let examScore = 0
+              if (scoringConfig.exam_weight > 0 && includedExams.length > 0) {
+                for (const examCfg of includedExams) {
+                  const summary = tutorExamSummaries.find((s: { exam_id: string }) => s.exam_id === examCfg.exam_id)
+                  const normalizedScore = summary ? (summary.ascend_score / 10) * 100 : 0
+                  examScore += normalizedScore * (examCfg.weight / 100)
+                }
+              }
+
+              const score =
+                (scheduledScore * scoringConfig.scheduled_classes_weight / 100) +
+                (additionalScore * scoringConfig.additional_classes_weight / 100) +
+                (examScore * scoringConfig.exam_weight / 100)
+
+              return {
+                id: tutor.id,
+                name: tutor.name,
+                year: tutor.year,
+                totalScore: Math.round(score * 10) / 10,
+                rank: 0
+              }
+            } catch {
+              return {
+                id: tutor.id,
+                name: tutor.name,
+                year: tutor.year,
+                totalScore: Number(tutor.score),
+                rank: 0
+              }
+            }
+          })
+        )
+
+        // Sort by score DESC and assign ranks
+        tutorsWithScores.sort((a, b) => b.totalScore - a.totalScore)
+        tutorsWithScores.forEach((t, idx) => { t.rank = idx + 1 })
+
+        formattedTutors = tutorsWithScores
+      }
+
+      // Find current user's data
       const myData = formattedTutors.find((t) => t.id === peertutorsInfo.id) || null
       
       return {
@@ -303,6 +433,6 @@ export function usePeerLeaderboard(peertutorsInfo: { id?: string, dept?: string,
       }
     },
     enabled: !!peertutorsInfo?.dept && !!peertutorsInfo?.year && !!peertutorsInfo?.id,
-    staleTime: 5 * 60 * 1000 // 5 minutes
+    staleTime: 5 * 60 * 1000
   })
 }
