@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Modal, { ModalHeader, ModalTitle, ModalDescription, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Settings, RotateCcw, Save } from 'lucide-react'
+import { RotateCcw, Save } from 'lucide-react'
 import { LeaderboardScoringConfig, LeaderboardConfigService, ExamConfigItem } from '@/lib/services/leaderboardConfigService'
 import { ExamService, Exam } from '@/lib/services/examService'
 

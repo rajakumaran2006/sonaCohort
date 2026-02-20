@@ -4157,8 +4157,10 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                         )}
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-gray-100">
-                              <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
+                            <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-black">
+                              <span className="text-xs font-bold text-white">
+                                {subject.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
+                              </span>
                             </div>
                             <div className="ml-4">
                               <div className="text-sm font-medium text-gray-900 uppercase">{subject.name}</div>
@@ -4317,10 +4319,12 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                             )}
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center gap-3">
-                                <div className="p-2 bg-gray-100 rounded-lg">
-                                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
+                                <div className="h-8 w-8 rounded-full bg-black flex items-center justify-center flex-shrink-0">
+                                  <span className="text-xs font-bold text-white">
+                                    {group.subject_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
+                                  </span>
                                 </div>
-                                <span className="text-sm font-medium text-gray-900 uppercase group-hover:text-blue-600 transition-colors">
+                                <span className="text-sm font-medium text-black uppercase">
                                   {group.subject_name}
                                 </span>
                               </div>
