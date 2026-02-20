@@ -5,7 +5,7 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, useParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import { ExamService } from '@/lib/services/examService'
@@ -14,12 +14,12 @@ import { ExamMarksService } from '@/lib/services/examMarksService'
 import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { ExamSummaryService } from '@/lib/services/examSummaryService'
-import { calculatepeertutorsAscendScore } from '@/lib/utils/ascendScore'
+
 import { Card, CardContent, Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyTable } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { BackButton } from '@/components/ui/BackButton'
 import ExamDetailSkeleton from '@/components/skeletons/ExamDetailSkeleton'
-import { ArrowLeft, Download, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Download, Search } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import { useMemo, useEffect } from 'react'
@@ -46,6 +46,7 @@ function ExamDetailsContent() {
   const [selectedYear, setSelectedYear] = useState<string>('all')
   const [selectedSection, setSelectedSection] = useState<string>('all')
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [completionPercentages, setCompletionPercentages] = useState<Record<string, number>>({})
   const [showExportModal, setShowExportModal] = useState(false)
 
@@ -109,7 +110,7 @@ function ExamDetailsContent() {
 
   // Sync function to calculate all scores
   const [isSyncing, setIsSyncing] = useState(false)
-  const handleSyncScores = async () => {
+  const handleSyncScores = useCallback(async () => {
     if (!peerTutor || !examId) return
     setIsSyncing(true)
     try {
@@ -124,7 +125,19 @@ function ExamDetailsContent() {
     } finally {
       setIsSyncing(false)
     }
-  }
+  }, [peerTutor, examId, refetchSummaries, queryClient])
+
+  // Automatically sync scores when peer tutors are loaded
+  useEffect(() => {
+    if (peerTutor && peerTutor.length > 0 && !isSyncing) {
+      // Use a timeout to avoid blocking the initial render
+      const timer = setTimeout(() => {
+        handleSyncScores()
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleSyncScores])
 
   const loading = isDepartmentLoading || isExamLoading || ispeerTutorLoading
 
@@ -135,6 +148,7 @@ function ExamDetailsContent() {
         queryClient.invalidateQueries({ queryKey: ['faculty-department', user?.email] }),
         queryClient.invalidateQueries({ queryKey: ['exam-details', examId] }),
         queryClient.invalidateQueries({ queryKey: ['exam-peer-tutors', examId] }),
+        handleSyncScores()
       ])
       setLastRefresh(new Date())
     } finally {
@@ -182,13 +196,29 @@ function ExamDetailsContent() {
       })
     }
 
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(pt => 
+        pt.name.toLowerCase().includes(query) || 
+        pt.email.toLowerCase().includes(query)
+      )
+    }
+
     return filtered.sort((a, b) => {
-      // Sort by year, then section, then name
+      // Sort by Ascend Score first (descending)
+      const scoreA = ascendScores[a.id] || 0
+      const scoreB = ascendScores[b.id] || 0
+      
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA
+      }
+      
+      // Fallback to year, then section, then name
       if (a.year !== b.year) return a.year.localeCompare(b.year)
       if (a.section !== b.section) return a.section.localeCompare(b.section)
       return a.name.localeCompare(b.name)
     })
-  }, [peerTutor, selectedYear, selectedSection, selectedStatus, completionPercentages])
+  }, [peerTutor, selectedYear, selectedSection, selectedStatus, completionPercentages, ascendScores, searchQuery])
 
   // Reset section filter when year changes
   useEffect(() => {
@@ -219,7 +249,7 @@ function ExamDetailsContent() {
     router.push(`/faculty/exams/${examId}/peer-tutor/${peertutors.id}`)
   }
 
-  const hasActiveFilters = selectedYear !== 'all' || selectedSection !== 'all' || selectedStatus !== 'all'
+  const hasActiveFilters = selectedYear !== 'all' || selectedSection !== 'all' || selectedStatus !== 'all' || searchQuery.trim() !== ''
 
   // Excel export function - handles pending, ongoing, and completed statuses
   const handleExportToExcel = async (exportType?: 'student-details' | 'marks-details') => {
@@ -597,6 +627,19 @@ function ExamDetailsContent() {
                   </h3>
 
                   <div className="flex items-center gap-3 flex-wrap">
+                    <div className="relative w-64">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search student..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2 bg-gray-50/50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+
                     <div className="w-40">
                       <FilterDropdown
                         value={selectedYear}
@@ -636,17 +679,6 @@ function ExamDetailsContent() {
                     <div className="h-8 w-[1px] bg-gray-200 mx-1"></div>
 
                     <div className="h-8 w-[1px] bg-gray-200 mx-1"></div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSyncScores}
-                      disabled={isSyncing}
-                      className="whitespace-nowrap"
-                    >
-                      <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                      {isSyncing ? 'Syncing...' : 'Sync Scores'}
-                    </Button>
 
                     <ExportButton
                       onClick={() => handleExportToExcel()}

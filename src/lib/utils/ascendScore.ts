@@ -11,7 +11,8 @@
  */
 export function calculateAscendScore(
   marksData: Record<string, Record<string, number | string>>,
-  maxMarks: number
+  maxMarks: number,
+  relevantSubjectCount?: number
 ): number {
   if (!marksData || Object.keys(marksData).length === 0) {
     return 0
@@ -50,9 +51,9 @@ export function calculateAscendScore(
   const stdDev = Math.sqrt(variance)
   const consistencyScore = Math.max(0, 100 - (stdDev / maxMarks) * 100)
 
-  // Completion rate (already handled by subjectScores.length, but normalize)
-  const totalSubjects = Object.keys(marksData).length
-  const completionRate = (subjectScores.length / totalSubjects) * 100
+  // Completion rate (normalize against the provided count, or default to the number of subjects in marksData)
+  const totalSubjects = relevantSubjectCount !== undefined ? relevantSubjectCount : Object.keys(marksData).length
+  const completionRate = totalSubjects > 0 ? (subjectScores.length / totalSubjects) * 100 : 0
 
   // Weighted formula:
   // - 60% weight on average percentage
@@ -79,7 +80,8 @@ export function calculateAscendScore(
  */
 export function calculatepeertutorsAscendScore(
   allStudentsMarks: Record<string, Record<string, Record<string, number | string>>>,
-  maxMarks: number
+  maxMarks: number,
+  relevantSubjectCounts?: Record<string, number>
 ): number {
   if (!allStudentsMarks || Object.keys(allStudentsMarks).length === 0) {
     return 0
@@ -88,8 +90,13 @@ export function calculatepeertutorsAscendScore(
   const studentScores: number[] = []
 
   // Calculate Ascend score for each student
-  Object.values(allStudentsMarks).forEach((studentMarks) => {
-    const studentAscend = calculateAscendScore(studentMarks, maxMarks)
+  Object.keys(allStudentsMarks).forEach((studentId) => {
+    const studentMarks = allStudentsMarks[studentId]
+    const studentAscend = calculateAscendScore(
+      studentMarks, 
+      maxMarks, 
+      relevantSubjectCounts ? relevantSubjectCounts[studentId] : undefined
+    )
     if (studentAscend > 0) {
       studentScores.push(studentAscend)
     }

@@ -1923,7 +1923,7 @@ export class ScheduledClassService {
         }
 
         logger.info(`Processed Scheduled Class ${sc.id}:`, {
-            peerTutor: (sc.peer_tutor as any)?.name,
+            peerTutor: (sc.peer_tutor as { name?: string })?.name,
             totalStudents,
             presentCount,
             recordCount: studentRecords.length,

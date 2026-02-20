@@ -13,6 +13,7 @@ import { peertutorservice } from '@/lib/services/peerTutorService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { AssignmentService } from '@/lib/services/assignmentService'
+import { ExamSummaryService, ExamPeerTutorSummary } from '@/lib/services/examSummaryService'
 import ExamPageSkeleton from '@/components/skeletons/ExamPageSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { Button } from '@/components/ui'
@@ -93,9 +94,9 @@ function FacultyExamsContent() {
 
   const loading = isDepartmentLoading || isExamsLoading || ispeerTutorLoading
 
-  // Calculate exam statistics
+  // Calculate exam statistics using the pre-computed summaries
   useEffect(() => {
-    if (!exams || exams.length === 0) return
+    if (!exams || exams.length === 0 || !allpeerTutor) return
 
     const calculateStats = async () => {
       setIsLoadingStats(true)
@@ -108,71 +109,32 @@ function FacultyExamsContent() {
 
       for (const exam of exams) {
         try {
-          // Get peer tutors for this exam's years
-          const peerTutor = await peertutorservice.getpeerTutorByYears(exam.years)
-          const examSubjects = await ExamSubjectService.getExamSubjects(exam.id)
-          const totalSubjects = examSubjects.length
+          // Get peer tutors for this exam's years from the already-loaded list
+          const examPeerTutors = allpeerTutor.filter(pt => exam.years.includes(pt.year))
+
+          // Read pre-computed summaries from the database
+          const summaries = await ExamSummaryService.getSummariesForExam(exam.id)
+          const summaryMap = new Map<string, ExamPeerTutorSummary>(summaries.map(s => [s.peer_tutor_id, s]))
 
           let completed = 0
           let pending = 0
           let ongoing = 0
 
-          for (const tutor of peerTutor) {
-            try {
-              const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(tutor.id, exam.id)
-              const students = await AssignmentService.getStudentsBypeertutors(tutor.id)
-
-              // Organize marks by student and subject
-              const allStudentsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
-
-              students.forEach(student => {
-                allStudentsMarks[student.id] = {}
-                marks.forEach(mark => {
-                  if (mark.student_id === student.id && mark.exam_subject_id) {
-                    if (!allStudentsMarks[student.id][mark.exam_subject_id]) {
-                      allStudentsMarks[student.id][mark.exam_subject_id] = {}
-                    }
-                    if (mark.marks) {
-                      Object.assign(allStudentsMarks[student.id][mark.exam_subject_id], mark.marks)
-                    }
-                  }
-                })
-              })
-
-              // Calculate completion percentage
-              let enteredMarks = 0
-              const totalPossible = students.length * totalSubjects
-
-              if (totalPossible > 0) {
-                students.forEach(student => {
-                  examSubjects.forEach(subject => {
-                    const markData = allStudentsMarks[student.id]?.[subject.id]
-                    if (markData && markData.marks !== undefined && markData.marks !== null && markData.marks !== '') {
-                      enteredMarks++
-                    }
-                  })
-                })
-
-                const completion = Math.round((enteredMarks / totalPossible) * 100)
-
-                if (completion === 0) {
-                  pending++
-                } else if (completion === 100) {
-                  completed++
-                } else {
-                  ongoing++
-                }
-              } else {
-                pending++
-              }
-            } catch (error) {
-              logger.error(`Error calculating stats for tutor ${tutor.id}:`, error)
+          for (const tutor of examPeerTutors) {
+            const summary = summaryMap.get(tutor.id)
+            if (!summary) {
+              pending++
+            } else if (summary.completion_percentage === 100) {
+              completed++
+            } else if (summary.completion_percentage > 0) {
+              ongoing++
+            } else {
               pending++
             }
           }
 
           stats[exam.id] = {
-            total: peerTutor.length,
+            total: examPeerTutors.length,
             completed,
             pending,
             ongoing,
@@ -193,7 +155,7 @@ function FacultyExamsContent() {
     }
 
     calculateStats()
-  }, [exams])
+  }, [exams, allpeerTutor])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)

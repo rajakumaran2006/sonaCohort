@@ -23,11 +23,10 @@ import {
 import { Heatmap, Card, CardContent, StudentPerformanceChart } from '@/components/ui'
 import ExamTutorDetailSkeleton from '@/components/skeletons/ExamTutorDetailSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Button } from '@/components/ui'
+
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
-import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui'
 import { Input } from '@/components/ui'
-import { Edit, Save, Plus, Filter, RotateCw } from 'lucide-react'
+import { Edit, Save, Filter, RotateCw } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
@@ -54,8 +53,6 @@ function PeerTutorsExamDetailsContent() {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [marksData, setMarksData] = useState<Record<string, Record<string, Record<string, number | string>>>>({})
-  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false)
-  const [newSubjectName, setNewSubjectName] = useState('')
   const [showFilterDropdown, setShowFilterDropdown] = useState(false)
   const [sortBy, setSortBy] = useState<'name' | 'avg'>('name')
   const filterRef = useRef<HTMLDivElement>(null)
@@ -297,26 +294,6 @@ function PeerTutorsExamDetailsContent() {
     }
   }, [isEditing, students, examSubjects])
 
-  const handleAddSubject = async () => {
-    if (!newSubjectName.trim() || !examId) return
-
-    const subject = await ExamSubjectService.addExamSubject({
-      exam_id: examId,
-      subject_name: newSubjectName.trim(),
-      is_custom: true,
-      created_by: null, // Faculty created
-    })
-
-    if (subject) {
-      setNewSubjectName('')
-      setShowAddSubjectModal(false)
-      queryClient.invalidateQueries({ queryKey: ['exam-subjects', examId] })
-      refetchSubjects()
-    } else {
-      alert('Failed to add subject')
-    }
-  }
-
   // Excel export function - respects filter/sort order
   const handleExportToExcel = async () => {
     if (!exam || !peertutors || !students || !examSubjects || students.length === 0 || examSubjects.length === 0) return
@@ -362,16 +339,12 @@ function PeerTutorsExamDetailsContent() {
         }
       })
 
-      // Add data rows using sortedStudents (respects current filter/sort)
+      // Add data rows
       sortedStudents.forEach(student => {
         const row = [student.name]
         subjects.forEach(subject => {
-          if (!isSubjectRelevant(subject, student)) {
-            row.push('N/A')
-          } else {
-            const markValue = marksByStudentSubject[student.id]?.[subject.id] || ''
-            row.push(markValue)
-          }
+          const markValue = marksByStudentSubject[student.id]?.[subject.id] || ''
+          row.push(markValue)
         })
         exportData.push(row)
       })
@@ -394,31 +367,15 @@ function PeerTutorsExamDetailsContent() {
 
   const markField = 'marks'
 
-  // Helper to check if a subject is relevant for a student
-  const isSubjectRelevant = useCallback((subject: any, student: any) => {
-    if (!subject || !student) return false
-    // Custom subjects or subjects without class_id are relevant to all
-    if (subject.is_custom || !subject.class_id) return true
-    
-    // If it has class details, match year and section
-    if (subject.classes) {
-      return subject.classes.year === student.year && subject.classes.section === student.section
-    }
-    
-    return true // Fallback
-  }, [])
+  // Calculate average marks for each student (as percentage properly based on max marks)
+  const calculateStudentAverage = useCallback((student: { id: string }): number => {
+    if (!examSubjects || examSubjects.length === 0 || !exam) return 0
 
-  // Calculate average marks for each student
-  const calculateStudentAverage = useCallback((student: any): number => {
-    if (!examSubjects || examSubjects.length === 0) return 0
-
+    const maxMarks = Number(exam.max_marks) || 100
     let totalMarks = 0
     let count = 0
 
     examSubjects.forEach(subject => {
-      // Only include relevant subjects in average
-      if (!isSubjectRelevant(subject, student)) return
-
       const markValue = marksData[student.id]?.[subject.id]?.[markField]
       if (markValue) {
         // Handle "40/100" format or just "40"
@@ -426,13 +383,13 @@ function PeerTutorsExamDetailsContent() {
         const numericValue = parseFloat(markStr.split('/')[0])
         if (!isNaN(numericValue)) {
           totalMarks += numericValue
+          count++
         }
       }
-      count++ // Increment count for all relevant subjects (even if no marks yet)
     })
 
-    return count > 0 ? totalMarks / count : 0
-  }, [examSubjects, marksData, isSubjectRelevant])
+    return count > 0 ? (totalMarks / (count * maxMarks)) * 100 : 0
+  }, [examSubjects, marksData, exam])
 
   // Get sorted students
   const sortedStudents = useMemo(() => {
@@ -469,20 +426,18 @@ function PeerTutorsExamDetailsContent() {
   const processedMarks = useMemo(() => {
     if (!students || !examSubjects || !marksData || !exam) return []
     
-    // Filter out irrelevant marks before processing analytics
+    // Process all marks
     const studentSubjectsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
     
     students.forEach(student => {
       studentSubjectsMarks[student.id] = {}
       examSubjects.forEach(subject => {
-        if (isSubjectRelevant(subject, student)) {
-          studentSubjectsMarks[student.id][subject.id] = marksData[student.id]?.[subject.id] || { 'marks': '' }
-        }
+        studentSubjectsMarks[student.id][subject.id] = marksData[student.id]?.[subject.id] || { 'marks': '' }
       })
     })
 
     return preprocessMarks(studentSubjectsMarks, students, examSubjects, exam.max_marks || 100)
-  }, [students, examSubjects, marksData, exam, isSubjectRelevant])
+  }, [students, examSubjects, marksData, exam])
 
   const studentPerformance = useMemo(() => {
     return calculateStudentPerformance(processedMarks)
@@ -664,7 +619,6 @@ function PeerTutorsExamDetailsContent() {
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em]">Peer Tutor Performance</p>
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900 tracking-tight mb-4">{peertutors.name}</h3>
@@ -783,14 +737,6 @@ function PeerTutorsExamDetailsContent() {
                       </div>
                     )}
 
-                    <button
-                      onClick={() => setShowAddSubjectModal(true)}
-                      className="p-2 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-all"
-                      title="Add Subject"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-
                     <ExportButton onClick={handleExportToExcel} />
                   </div>
                 </div>
@@ -830,12 +776,9 @@ function PeerTutorsExamDetailsContent() {
                               </div>
                             </TableCell>
                             {examSubjects.map((subject) => {
-                              const isRelevant = isSubjectRelevant(subject, student)
                               return (
                                 <TableCell key={subject.id} className="text-center py-2 px-2">
-                                  {!isRelevant ? (
-                                    <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">N/A</span>
-                                  ) : isEditing ? (
+                                  {isEditing ? (
                                     <Input
                                       type="text"
                                       value={marksData[student.id]?.[subject.id]?.[markField] || ''}
@@ -917,9 +860,8 @@ function PeerTutorsExamDetailsContent() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {/* Attention Required Card */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-5 border-b border-gray-100 bg-red-50/30">
+                    <div className="px-6 py-5 border-b border-gray-100">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
                         <h4 className="text-xs font-bold text-red-700 uppercase tracking-wider">Critical Attention</h4>
                       </div>
                     </div>
@@ -945,9 +887,8 @@ function PeerTutorsExamDetailsContent() {
 
                   {/* High Performers Card */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-5 border-b border-gray-100 bg-green-50/30">
+                    <div className="px-6 py-5 border-b border-gray-100">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
                         <h4 className="text-xs font-bold text-green-700 uppercase tracking-wider">Top Performers</h4>
                       </div>
                     </div>
@@ -967,9 +908,8 @@ function PeerTutorsExamDetailsContent() {
 
                   {/* General Insights Card */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-5 border-b border-gray-100 bg-blue-50/30">
+                    <div className="px-6 py-5 border-b border-gray-100">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                         <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wider">Performance Insights</h4>
                       </div>
                     </div>
@@ -990,41 +930,6 @@ function PeerTutorsExamDetailsContent() {
           </div>
         </main>
       </div>
-
-      {/* Add Subject Modal */}
-      <Modal isOpen={showAddSubjectModal} onClose={() => setShowAddSubjectModal(false)} size="md">
-        <ModalHeader onClose={() => setShowAddSubjectModal(false)}>
-          <ModalTitle>Add New Subject</ModalTitle>
-        </ModalHeader>
-        <ModalBody>
-          <Input
-            label="Subject Name"
-            type="text"
-            value={newSubjectName}
-            onChange={(e) => setNewSubjectName(e.target.value)}
-            placeholder="Enter subject name"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleAddSubject()
-              }
-            }}
-            autoFocus
-          />
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => setShowAddSubjectModal(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleAddSubject}
-            disabled={!newSubjectName.trim()}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Subject
-          </Button>
-        </ModalFooter>
-      </Modal>
     </div>
   )
 }

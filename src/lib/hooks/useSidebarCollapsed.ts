@@ -1,74 +1,69 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 /**
- * Custom hook to manage sidebar collapsed state with localStorage persistence
- * Reads from localStorage synchronously during initialization to prevent flash
+ * Custom hook to manage sidebar collapsed state with localStorage persistence.
+ * Uses lazy state initialization to read localStorage synchronously,
+ * preventing the expand→collapse flash on navigation.
  */
 export function useSidebarCollapsed() {
-  // Initialize state with false to match server-side rendering
-  // Initialize state to false (expanded) to match server-side rendering and avoid hydration mismatch
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  // Lazy initializer: reads localStorage synchronously on first render.
+  // This runs only on the client (after hydration), so the initial server
+  // render still uses false. The key insight is that useState's initializer
+  // runs once per mount, avoiding the two-render flash of useEffect.
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sidebar-collapsed')
+        if (saved !== null) {
+          return JSON.parse(saved)
+        }
+      } catch {
+        // Ignore parse error
+      }
+    }
+    return false
+  })
 
-  const [isInitialized, setIsInitialized] = useState(false)
-
-  // Sync with localStorage on mount
+  // Update localStorage whenever isCollapsed changes
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed))
+    }
+  }, [isCollapsed])
+
+  // Listen for sidebar toggle events from other components
+  const handleSidebarToggle = useCallback((event: Event) => {
+    // Check if it's a custom event with detail
+    const customEvent = event as CustomEvent
+    if (customEvent.detail && typeof customEvent.detail.isCollapsed === 'boolean') {
+      setIsCollapsed(customEvent.detail.isCollapsed)
+      return
+    }
+
+    // Handle storage event or fallback
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sidebar-collapsed')
       if (saved !== null) {
         try {
           setIsCollapsed(JSON.parse(saved))
         } catch {
-          // Ignore parse error
+          // Ignore parse errors
         }
       }
-      setIsInitialized(true)
     }
   }, [])
 
-  // Update localStorage when state changes
   useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized) {
-      localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed))
-    }
-  }, [isCollapsed, isInitialized])
-
-  // Listen for sidebar toggle events from other components
-  useEffect(() => {
-    const handleSidebarToggle = (event: Event) => {
-      // Check if it's a custom event with detail
-      const customEvent = event as CustomEvent
-      if (customEvent.detail && typeof customEvent.detail.isCollapsed === 'boolean') {
-        setIsCollapsed(customEvent.detail.isCollapsed)
-        return
-      }
-
-      // Handle storage event or fallback
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('sidebar-collapsed')
-        if (saved !== null) {
-          try {
-            setIsCollapsed(JSON.parse(saved))
-          } catch {
-            // Ignore parse errors
-          }
-        }
-      }
-    }
-
-    // Listen for custom events
     window.addEventListener('sidebar-toggle', handleSidebarToggle)
-    
-    // Listen for storage changes (for multi-tab sync)
     window.addEventListener('storage', handleSidebarToggle)
 
     return () => {
       window.removeEventListener('sidebar-toggle', handleSidebarToggle)
       window.removeEventListener('storage', handleSidebarToggle)
     }
-  }, [])
+  }, [handleSidebarToggle])
 
   return [isCollapsed, setIsCollapsed] as const
 }

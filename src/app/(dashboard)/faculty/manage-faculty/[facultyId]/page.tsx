@@ -22,6 +22,7 @@ interface PeerTutorStats {
   completedClasses: number
   pendingClasses: number
   upcomingClasses: number
+  additionalClasses: number
 }
 
 interface SubjectAssignment {
@@ -191,7 +192,8 @@ export default function FacultyDetailsPage() {
           totalClasses: 0,
           completedClasses: 0,
           pendingClasses: 0,
-          upcomingClasses: 0
+          upcomingClasses: 0,
+          additionalClasses: 0
         }
       }
 
@@ -218,6 +220,13 @@ export default function FacultyDetailsPage() {
         }
       })
 
+      // Fetch additional classes count for this peer tutor and subject
+      const { data: additionalClassesData } = await supabase
+        .from('additional_classes')
+        .select('id')
+        .eq('peer_tutor_id', peerTutor.id)
+        .eq('subject_name', subjectName)
+
       return {
         id: peerTutor.id,
         name: peerTutor.name,
@@ -225,7 +234,8 @@ export default function FacultyDetailsPage() {
         totalClasses: subjectClasses.length,
         completedClasses,
         pendingClasses,
-        upcomingClasses
+        upcomingClasses,
+        additionalClasses: additionalClassesData?.length || 0
       }
     } catch (error) {
       logger.error('Error calculating peer tutor stats:', error)
@@ -236,13 +246,14 @@ export default function FacultyDetailsPage() {
         totalClasses: 0,
         completedClasses: 0,
         pendingClasses: 0,
-        upcomingClasses: 0
+        upcomingClasses: 0,
+        additionalClasses: 0
       }
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
       <FacultySidebar
         isOpen={isSidebarOpen}
@@ -252,7 +263,7 @@ export default function FacultyDetailsPage() {
       {/* Main Content */}
       <div
         className={cn(
-          "flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out",
+          "transition-all duration-300 min-h-screen flex flex-col overflow-hidden w-full lg:w-auto",
           isSidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
         )}
       >
@@ -274,7 +285,8 @@ export default function FacultyDetailsPage() {
         />
 
         {/* Main Content */}
-        <main className="flex-1 p-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 overflow-y-auto">
+          <div className={cn("max-w-full mx-auto py-8", isSidebarCollapsed ? "px-4 sm:px-6 lg:pr-8 lg:pl-6" : "px-4 sm:px-6 lg:px-8")}>
           {/* Profile Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-8 mb-8 shadow-sm">
             <div className="flex items-start gap-6">
@@ -341,12 +353,9 @@ export default function FacultyDetailsPage() {
                     {/* Assignment Header */}
                     <div className="px-6 py-5 bg-white border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center gap-4">
-                        <div className="p-2.5 bg-blue-600 rounded-lg text-white shadow-sm shadow-blue-200/50">
-                          <BookOpen className="w-5 h-5" />
-                        </div>
                         <div>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Subject</p>
-                          <h3 className="text-lg font-bold text-gray-900 tracking-tight">
+                          <h3 className="text-lg font-bold text-gray-900 tracking-tight uppercase">
                             {assignment.subject}
                           </h3>
                           <div className="flex items-center gap-2 text-xs text-gray-500 mt-1 font-medium">
@@ -374,6 +383,7 @@ export default function FacultyDetailsPage() {
                               <tr className="border-b border-gray-50 bg-white">
                                 <th className="pl-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Peer Tutor</th>
                                 <th className="px-4 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Total Classes</th>
+                                <th className="px-4 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Additional Classes</th>
                                 <th className="px-4 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Completed</th>
                                 <th className="px-4 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Pending</th>
                                 <th className="pr-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Upcoming</th>
@@ -383,8 +393,8 @@ export default function FacultyDetailsPage() {
                               {assignment.peerTutors.map((pt) => (
                                 <tr key={pt.id} className="group hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
                                   <td className="py-4 pl-6">
-                                    <Link href={`/faculty/peer-tutor/${pt.id}`} className="flex items-center gap-3 group/link">
-                                      <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold border border-gray-200 group-hover/link:border-blue-200 group-hover/link:bg-blue-50 transition-colors">
+                                    <Link href={`/faculty/manage-faculty/${encodeURIComponent(facultyEmail)}/peer-tutor/${pt.id}?subject=${encodeURIComponent(assignment.subject)}&dept=${encodeURIComponent(assignment.dept)}&year=${encodeURIComponent(assignment.year)}&section=${encodeURIComponent(assignment.section)}`} className="flex items-center gap-3 group/link">
+                                      <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold border border-gray-800 group-hover/link:border-blue-400 transition-colors">
                                         {pt.name[0]}
                                       </div>
                                       <div>
@@ -396,6 +406,11 @@ export default function FacultyDetailsPage() {
                                   <td className="py-4 px-4 text-center">
                                     <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-gray-600 text-white uppercase tracking-wide border border-gray-600">
                                       {pt.totalClasses}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-4 text-center">
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-purple-600 text-white uppercase tracking-wide border border-purple-600">
+                                      {pt.additionalClasses}
                                     </span>
                                   </td>
                                   <td className="py-4 px-4 text-center">
@@ -424,6 +439,7 @@ export default function FacultyDetailsPage() {
                 ))}
               </div>
             )}
+          </div>
           </div>
         </main>
       </div>

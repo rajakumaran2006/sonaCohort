@@ -8,7 +8,7 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService, FacultySummary } from '@/lib/services/facultyService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Plus, User, Mail, School, Eye, Pencil, Trash2 } from 'lucide-react'
+import { Plus, User, Mail, Eye, Pencil, Trash2 } from 'lucide-react'
 import { SearchIcon } from '@/components/icons/SearchIcon'
 import Image from 'next/image'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
@@ -166,7 +166,7 @@ function FacultyManageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
       <FacultySidebar
         isOpen={isSidebarOpen}
@@ -176,7 +176,7 @@ function FacultyManageContent() {
       {/* Main Content */}
       <div
         className={cn(
-          "flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out",
+          "transition-all duration-300 min-h-screen flex flex-col overflow-hidden w-full lg:w-auto",
           isSidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
         )}
       >
@@ -185,11 +185,13 @@ function FacultyManageContent() {
           tagline="MANAGE FACULTY MEMBERS AND THEIR CLASS ASSIGNMENTS"
           onRefresh={handleManualRefresh}
           isRefreshing={isRefreshing}
+          onToggleSidebar={() => setIsSidebarOpen(true)}
+          isSidebarCollapsed={isSidebarCollapsed}
         />
 
         {/* Content Body */}
-        <main className="flex-1 p-8">
-          <div className="max-w-7xl mx-auto">
+        <main className="flex-1 overflow-y-auto">
+          <div className={cn("max-w-full mx-auto py-8", isSidebarCollapsed ? "px-4 sm:px-6 lg:pr-8 lg:pl-6" : "px-4 sm:px-6 lg:px-8")}>
             {/* Search and Actions Bar */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
               <div className="relative group flex-1 max-w-2xl">
@@ -269,6 +271,7 @@ function FacultyManageContent() {
                         )}
                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Faculty Details</th>
                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Assigned Classes</th>
+                        <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Additional Classes</th>
                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subjects</th>
                         {!isDeleteMode && (
                           <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Actions</th>
@@ -303,9 +306,43 @@ function FacultyManageContent() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <School className="w-4 h-4 text-gray-400" />
-                              <span>{f.totalClasses || 0} Classes Assigned</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(() => {
+                                const uniqueClasses = new Map<string, string>()
+                                f.assignments.forEach(a => {
+                                  const key = `${a.year}-${a.section}`
+                                  if (!uniqueClasses.has(key)) {
+                                    uniqueClasses.set(key, `Year ${a.year} - ${a.section}`)
+                                  }
+                                })
+                                return Array.from(uniqueClasses.values()).map((label, idx) => (
+                                  <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-lg bg-gray-900 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                    {label}
+                                  </span>
+                                ))
+                              })()}
+                              {(!f.assignments || f.assignments.length === 0) && (
+                                <span className="text-gray-400 text-sm italic">No classes</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col gap-1">
+                              {(() => {
+                                const classDetails = f.assignments.map(a => ({
+                                  year: a.year,
+                                  section: a.section,
+                                  subject: a.subject_name
+                                }))
+                                return classDetails.map((c, idx) => (
+                                  <span key={idx} className="text-xs text-gray-600">
+                                    Year {c.year} - {c.section}: <span className="font-semibold text-gray-900">{c.subject}</span>
+                                  </span>
+                                ))
+                              })()}
+                              {(!f.assignments || f.assignments.length === 0) && (
+                                <span className="text-gray-400 text-sm italic">—</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">

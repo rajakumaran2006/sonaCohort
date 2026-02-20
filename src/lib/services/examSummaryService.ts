@@ -24,10 +24,13 @@ export class ExamSummaryService {
       const supabase = createClient()
       
       // 1. Fetch necessary data for calculation
-      const examSubjects = await ExamSubjectService.getExamSubjects(examId)
       const students = await AssignmentService.getStudentsBypeertutors(peerTutorId)
       const marks = await ExamMarksService.getExamMarksBypeertutorsAndExam(peerTutorId, examId)
       
+      // Use getExamSubjectsForPeerTutor to only get subjects allocated to this peer tutor's section
+      // This is the same function the peer tutor mark-entry page uses
+      const examSubjects = await ExamSubjectService.getExamSubjectsForPeerTutor(examId, peerTutorId)
+
       // Get exam details for max marks
       const { data: exam } = await supabase
         .from('exams')
@@ -37,39 +40,45 @@ export class ExamSummaryService {
         
       const maxMarks = exam?.max_marks || 100
 
-      // 2. Perform Calculations (Logic from page.tsx)
+      // 2. Perform Calculations
       const allStudentsMarks: Record<string, Record<string, Record<string, number | string>>> = {}
 
       students.forEach(student => {
         allStudentsMarks[student.id] = {}
         marks.forEach(mark => {
           if (mark.student_id === student.id && mark.exam_subject_id) {
-            if (!allStudentsMarks[student.id][mark.exam_subject_id]) {
-              allStudentsMarks[student.id][mark.exam_subject_id] = {}
-            }
-            if (mark.marks) {
-              Object.assign(allStudentsMarks[student.id][mark.exam_subject_id], mark.marks)
+            const subject = examSubjects.find(s => s.id === mark.exam_subject_id)
+            if (subject) {
+              if (!allStudentsMarks[student.id][mark.exam_subject_id]) {
+                allStudentsMarks[student.id][mark.exam_subject_id] = {}
+              }
+              if (mark.marks) {
+                Object.assign(allStudentsMarks[student.id][mark.exam_subject_id], mark.marks)
+              }
             }
           }
         })
       })
 
-      const ascendScore = calculatepeertutorsAscendScore(allStudentsMarks, maxMarks)
-
-      // Calculate completion percentage
+      // Calculate completion percentage - only count subjects allocated to this peer tutor
       let enteredMarks = 0
-      const totalPossible = students.length * examSubjects.length
+      let totalPossible = 0
 
-      if (totalPossible > 0) {
-        students.forEach(student => {
-          examSubjects.forEach(subject => {
-            const markData = allStudentsMarks[student.id]?.[subject.id]
-            if (markData && markData.marks !== undefined && markData.marks !== null && markData.marks !== '') {
-              enteredMarks++
-            }
-          })
+      const relevantSubjectCounts: Record<string, number> = {}
+
+      students.forEach(student => {
+        const count = examSubjects.length
+        totalPossible += count
+        examSubjects.forEach(subject => {
+          const markData = allStudentsMarks[student.id]?.[subject.id]
+          if (markData && markData.marks !== undefined && markData.marks !== null && markData.marks !== '') {
+            enteredMarks++
+          }
         })
-      }
+        relevantSubjectCounts[student.id] = count
+      })
+
+      const ascendScore = calculatepeertutorsAscendScore(allStudentsMarks, maxMarks, relevantSubjectCounts)
 
       const completionPercentage = totalPossible > 0 
         ? Math.round((enteredMarks / totalPossible) * 100) 
