@@ -20,6 +20,7 @@ import { FeedbackAnalyticsService } from '@/lib/services/feedbackAnalyticsServic
 import { ReportService, peertutorsReportData, ClassAttendanceReport } from '@/lib/services/reportService'
 import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
+import { AttendanceService } from '@/lib/services/attendanceService'
 import { ExamSummaryService, ExamPeerTutorSummary } from '@/lib/services/examSummaryService'
 import RenumerationModal from '@/components/forms/modals/RenumerationModal'
 import RenumerationDetailsModal from '@/components/forms/modals/RenumerationDetailsModal'
@@ -66,6 +67,17 @@ interface peertutorsWithStats extends peertutors {
   additionalClassesCount: number
 }
 
+interface StudentWithStats extends StudentWithpeertutors {
+  classStats: {
+    totalClasses: number
+    completedClasses: number
+    pendingClasses?: number
+    upcomingClasses?: number
+    overdueClasses?: number
+  }
+  additionalClassesCount: number
+}
+
 interface SubmissionWithClasses extends peertutorsRenumeration {
   classesCompleted?: number
 }
@@ -96,6 +108,8 @@ function FacultypeertutorsContent() {
   const [peerTutorWithStats, setpeerTutorWithStats] = useState<peertutorsWithStats[]>([])
   const [students, setStudents] = useState<StudentWithpeertutors[]>([])
   const [filteredStudents, setFilteredStudents] = useState<StudentWithpeertutors[]>([])
+  const [studentWithStats, setStudentWithStats] = useState<StudentWithStats[]>([])
+  const [leaderboardTabType, setLeaderboardTabType] = useState<'peer' | 'student'>('peer')
   const [loading, setLoading] = useState(true)
   const [isManualRefresh, setIsManualRefresh] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -485,6 +499,44 @@ function FacultypeertutorsContent() {
 
     loadpeerTutortats()
   }, [filteredpeerTutor])
+
+  // Load student statistics when filtered students change
+  useEffect(() => {
+    const loadStudentStats = async () => {
+      if (filteredStudents.length === 0) {
+        setStudentWithStats([])
+        return
+      }
+
+      setStatsLoading(true)
+      try {
+        const studentsWithStats = await Promise.all(
+          filteredStudents.map(async (student) => {
+            const classStats = await AttendanceService.getStudentClassStats(student.id)
+            const additionalClassesCount = await AdditionalClassService.getStudentAdditionalClassesCount(student.id)
+
+            return {
+              ...student,
+              classStats,
+              additionalClassesCount
+            }
+          })
+        )
+        setStudentWithStats(studentsWithStats)
+      } catch (error) {
+        logger.error('Error loading student stats:', error)
+        setStudentWithStats(filteredStudents.map(student => ({
+          ...student,
+          classStats: { totalClasses: 0, completedClasses: 0 },
+          additionalClassesCount: 0
+        })))
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    loadStudentStats()
+  }, [filteredStudents])
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -3341,35 +3393,42 @@ function FacultypeertutorsContent() {
                 {/* Leaderboard Logic */}
                 {(() => {
                   // 1. Filter by Year (if selected)
-                  let displayTutors = [...peerTutorWithStats]; // Use stats version
+                  // Decide which list to use based on leaderboardTabType
+                  const baseList = leaderboardTabType === 'peer' ? peerTutorWithStats : studentWithStats;
+                  let displayList = [...baseList];
                   if (leaderboardFilterYear !== 'all') {
-                    displayTutors = displayTutors.filter(t => t.year === leaderboardFilterYear)
+                    displayList = displayList.filter(item => item.year === leaderboardFilterYear)
                   }
 
                   // 2. Score Calculation (uses configurable weights, out of 100)
-                  const rankedTutors = displayTutors.map(t => {
-                    // Gather exam summaries for this tutor
-                    const tutorExamSummaries = Object.entries(examSummariesMap).flatMap(
+                  const rankedList = displayList.map(item => {
+                    // Gather exam summaries for this item (tutor or student)
+                    const examSummaries = Object.entries(examSummariesMap).flatMap(
                       ([examId, summaries]) => summaries
-                        .filter(s => s.peer_tutor_id === t.id)
+                        // Note: For students, we might not have exam summaries structured the same way, but keeping the format
+                        .filter(s => s.peer_tutor_id === item.id)
                         .map(s => ({ exam_id: examId, peer_tutor_id: s.peer_tutor_id, ascend_score: s.ascend_score }))
                     )
                     return {
-                      ...t,
-                      score: LeaderboardConfigService.calculateScore(t, scoringConfig, tutorExamSummaries)
+                      ...item,
+                      // Ensure type cast so calculateScore understands it.
+                      score: LeaderboardConfigService.calculateScore({
+                        classStats: item.classStats,
+                        additionalClassesCount: item.additionalClassesCount
+                      }, scoringConfig, examSummaries)
                     }
                   });
 
                   // 3. Sort by Score DESC
-                  rankedTutors.sort((a, b) => {
+                  rankedList.sort((a, b) => {
                     if (b.score !== a.score) return b.score - a.score;
                     return a.name.localeCompare(b.name);
                   })
 
-                  const top1 = rankedTutors[0];
-                  const top2 = rankedTutors[1];
-                  const top3 = rankedTutors[2];
-                  const rest = rankedTutors.slice(3);
+                  const top1 = rankedList[0];
+                  const top2 = rankedList[1];
+                  const top3 = rankedList[2];
+                  const rest = rankedList.slice(3);
 
                   // Helper to format year and section
                   const formatLeaderboardDetails = (year: string, section: string) => {
@@ -3398,7 +3457,27 @@ function FacultypeertutorsContent() {
                   return (
                     <>
                       {/* Podium Section */}
-                      {rankedTutors.length > 0 && (
+                      {/* Leaderboard Type Toggle */}
+                      <div className="flex border-b border-gray-200 mb-6">
+                        <button
+                          onClick={() => setLeaderboardTabType('peer')}
+                          className={`py-3 px-6 text-sm font-semibold border-b-2 transition-colors ${leaderboardTabType === 'peer' 
+                            ? 'border-blue-600 text-blue-600' 
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                        >
+                          Peer Tutors
+                        </button>
+                        <button
+                          onClick={() => setLeaderboardTabType('student')}
+                          className={`py-3 px-6 text-sm font-semibold border-b-2 transition-colors ${leaderboardTabType === 'student' 
+                            ? 'border-blue-600 text-blue-600' 
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                        >
+                          Students
+                        </button>
+                      </div>
+
+                      {rankedList.length > 0 && (
                         <div className="relative bg-white shadow-xl shadow-blue-900/5 rounded-3xl p-6 md:p-10 border border-gray-100 mb-8 overflow-hidden">
                           {/* Background Decor */}
                           <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
@@ -3413,7 +3492,7 @@ function FacultypeertutorsContent() {
                                 <Trophy className="w-6 h-6 text-white" />
                               </div>
                               <div>
-                                <h3 className="text-xl font-black text-gray-800 uppercase tracking-wide">Top Performers</h3>
+                                <h3 className="text-xl font-black text-gray-800 uppercase tracking-wide">Top {leaderboardTabType === 'peer' ? 'Performers' : 'Students'}</h3>
                                 <p className="text-xs text-gray-500 font-medium tracking-wide uppercase">Recognizing Excellence</p>
                               </div>
                             </div>
@@ -3565,11 +3644,11 @@ function FacultypeertutorsContent() {
 
 
                       {
-                        rankedTutors.length === 0 && !loading && (
+                        rankedList.length === 0 && !loading && (
                           <div className="text-center py-20 bg-white rounded-lg border border-gray-200 shadow-sm">
                             <Trophy className="mx-auto h-16 w-16 text-gray-300 mb-4" />
                             <h3 className="text-lg font-medium text-gray-900">No Data Available</h3>
-                            <p className="text-gray-500">No peer tutors found for the selected criteria.</p>
+                            <p className="text-gray-500">No {leaderboardTabType === 'peer' ? 'peer tutors' : 'students'} found for the selected criteria.</p>
                           </div>
                         )
                       }
@@ -3590,7 +3669,7 @@ function FacultypeertutorsContent() {
                                 <thead className="bg-white">
                                   <tr>
                                     <th className="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-20">Rank</th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Peer Tutor</th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">{leaderboardTabType === 'peer' ? 'Peer Tutor' : 'Student'}</th>
                                     <th className="px-6 py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">Score</th>
                                     <th className="px-6 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Year & Section</th>
                                   </tr>
@@ -3610,7 +3689,7 @@ function FacultypeertutorsContent() {
                                           </div>
                                           <div>
                                             <div className="text-sm font-bold text-gray-800 group-hover:text-blue-700 transition-colors">{tutor.name}</div>
-                                            <div className="text-xs text-gray-500">{tutor.email}</div>
+                                            <div className="text-xs text-gray-500">{tutor.email || 'N/A'}</div>
                                           </div>
                                         </div>
                                       </td>

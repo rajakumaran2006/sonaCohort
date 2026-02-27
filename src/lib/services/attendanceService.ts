@@ -1043,4 +1043,34 @@ export class AttendanceService {
       return []
     }
   }
+
+  /**
+   * Get class stats (total vs completed classes) for a specific student
+   */
+  static async getStudentClassStats(studentId: string): Promise<{
+    totalClasses: number
+    completedClasses: number
+  }> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('status')
+        .eq('student_id', studentId)
+
+      if (error) {
+        logger.error('Error getting student class stats:', error)
+        return { totalClasses: 0, completedClasses: 0 }
+      }
+
+      const totalClasses = data?.length || 0
+      const completedClasses = (data || []).filter(r => r.status === 'present').length
+
+      return { totalClasses, completedClasses }
+    } catch (error) {
+      logger.error('Error in getStudentClassStats:', error)
+      return { totalClasses: 0, completedClasses: 0 }
+    }
+  }
 }

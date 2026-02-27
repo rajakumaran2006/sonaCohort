@@ -622,7 +622,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
                 onClick={() => setIsModalOpen(true)}
                 className="h-12 px-8 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 shadow-sm"
               >
-                <Users className="w-4 h-4" />
+                <Plus className="w-4 h-4" />
                 ADD
               </button>
 
@@ -4015,7 +4015,7 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
                   onClick={() => setShowAddModal(true)}
                   className="h-10 px-5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm"
                 >
-                  <Trash2 className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
+                  <Plus className="w-5 h-5 text-white group-hover:text-red-100 transition-colors" />
                   <span>ADD</span>
                 </button>
               )}

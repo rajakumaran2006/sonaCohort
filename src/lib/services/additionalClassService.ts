@@ -392,6 +392,31 @@ export class AdditionalClassService {
       return false
     }
   }
+
+  /**
+   * Get count of additional classes attended by a specific student
+   */
+  static async getStudentAdditionalClassesCount(studentId: string): Promise<number> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('additional_class_attendance')
+        .select('id')
+        .eq('student_id', studentId)
+        .eq('status', 'present')
+
+      if (error) {
+        logger.error('Error getting student additional classes count:', error)
+        return 0
+      }
+
+      return data?.length || 0
+    } catch (error) {
+      logger.error('Error in getStudentAdditionalClassesCount:', error)
+      return 0
+    }
+  }
 }
 
 function createLink(link: string): string {
