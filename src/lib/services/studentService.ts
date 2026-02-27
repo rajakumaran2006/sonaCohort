@@ -317,8 +317,7 @@ export class StudentService {
       
       logger.info(`Starting student removal for: ${id}`)
       
-      // 1. Delete all records linked to this student across all FK tables
-      // Order: exam marks → exam allocations → attendance → additional attendance → student
+      // 1. Delete exam-related records (these don't need to be preserved)
 
       // Delete exam marks first (no other table depends on it)
       const { error: examMarksError } = await supabase
@@ -340,27 +339,30 @@ export class StudentService {
         logger.warn('Error deleting exam allocations (or records not found):', examAllocError)
       }
 
-      // Delete attendance records
-      const { error: attendanceError } = await supabase
-        .from('attendance')
-        .delete()
-        .eq('student_id', id)
+      // 2. Snapshot student name into attendance records before deletion
+      // The DB FK is SET NULL, so student_id will become null — but we preserve the name
+      const { data: studentData } = await supabase
+        .from('peer_students')
+        .select('name')
+        .eq('id', id)
+        .single()
 
-      if (attendanceError) {
-        logger.warn('Error deleting student attendance (or records not found):', attendanceError)
+      if (studentData) {
+        // Snapshot name into attendance records that don't already have student_name
+        await supabase
+          .from('attendance')
+          .update({ student_name: studentData.name })
+          .eq('student_id', id)
+          .is('student_name', null)
+
+        await supabase
+          .from('additional_class_attendance')
+          .update({ student_name: studentData.name })
+          .eq('student_id', id)
+          .is('student_name', null)
       }
 
-      // 1.5 Delete additional class attendance records
-      const { error: additionalAttendanceError } = await supabase
-        .from('additional_class_attendance')
-        .delete()
-        .eq('student_id', id)
-
-      if (additionalAttendanceError) {
-         logger.warn('Error deleting additional class attendance:', additionalAttendanceError)
-      }
-
-      // 2. Delete the student record
+      // 3. Delete the student record (FK SET NULL will auto-nullify student_id in attendance)
       const { error } = await supabase
         .from('peer_students')
         .delete()

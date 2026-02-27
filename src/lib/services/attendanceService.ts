@@ -7,7 +7,8 @@ export interface Attendance {
   class_id?: string
   scheduled_class_id?: string
   additional_class_id?: string
-  student_id: string
+  student_id: string | null
+  student_name?: string | null
   peer_tutor_id: string
   status: 'present' | 'absent'
   created_at: string
@@ -128,6 +129,7 @@ export class AttendanceService {
         .from('attendance')
         .select(`
           student_id,
+          student_name,
           status,
           scheduled_class_id
         `)
@@ -162,29 +164,73 @@ export class AttendanceService {
         status: attendanceMap.has(student.id) ? attendanceMap.get(student.id) : 'absent' // Default to absent if no record
       }))
 
+      // Also include attendance records for removed students (student_id is NULL but student_name is preserved)
+      if (attendanceData) {
+        const removedStudentRecords = attendanceData.filter(record => record.student_id === null && record.student_name)
+        for (const record of removedStudentRecords) {
+          result.push({
+            student_id: '',
+            student_name: `${record.student_name || 'Removed Student'} (Removed)`,
+            student_email: '',
+            status: record.status
+          })
+        }
+
+        // Also include unassigned students (exist in DB but no longer assigned to this tutor)
+        const assignedIds = new Set(assignedStudents.map(s => s.id))
+        const unassignedIds = new Set<string>()
+        for (const record of attendanceData) {
+          if (record.student_id && !assignedIds.has(record.student_id)) {
+            unassignedIds.add(record.student_id)
+          }
+        }
+
+        if (unassignedIds.size > 0) {
+          const { data: unassignedStudentInfo } = await supabase
+            .from('peer_students')
+            .select('id, name, email')
+            .in('id', Array.from(unassignedIds))
+
+          for (const student of (unassignedStudentInfo || [])) {
+            const status = attendanceMap.get(student.id) || 'absent'
+            result.push({
+              student_id: student.id,
+              student_name: `${student.name} (Unassigned)`,
+              student_email: student.email || '',
+              status
+            })
+          }
+        }
+      }
+
       // If no assigned students found but we have attendance data, try to get student info directly from attendance records
       if (result.length === 0 && attendanceData.length > 0) {
-        // logger.info('No assigned students found, trying direct approach from attendance records...')
-        
-        // Get student info for each attendance record
-        const studentIds = attendanceData.map(record => record.student_id)
-        const { data: studentInfo, error: studentInfoError } = await supabase
-          .from('peer_students')
-          .select('id, name, email')
-          .in('id', studentIds)
+        // Get student info for each attendance record that has a student_id
+        const studentIds = attendanceData.filter(r => r.student_id).map(record => record.student_id)
+        const { data: studentInfo, error: studentInfoError } = studentIds.length > 0
+          ? await supabase.from('peer_students').select('id, name, email').in('id', studentIds)
+          : { data: [], error: null }
 
         if (studentInfoError) {
           logger.error('Error getting student info:', studentInfoError)
         } else {
-          // logger.info('Student info from attendance records:', studentInfo)
-          
           result = attendanceData.map(record => {
-            const student = studentInfo?.find(s => s.id === record.student_id)
-            return {
-              student_id: record.student_id,
-              student_name: student?.name || 'Unknown',
-              student_email: student?.email || 'Unknown',
-              status: record.status
+            if (record.student_id) {
+              const student = studentInfo?.find(s => s.id === record.student_id)
+              return {
+                student_id: record.student_id,
+                student_name: student?.name || record.student_name || 'Unknown',
+                student_email: student?.email || '',
+                status: record.status
+              }
+            } else {
+              // Removed student — use stored student_name
+              return {
+                student_id: '',
+                student_name: record.student_name || 'Removed Student',
+                student_email: '',
+                status: record.status
+              }
             }
           })
         }
@@ -269,12 +315,15 @@ export class AttendanceService {
         return []
       }
 
-      return data.map(item => ({
-        student_id: item.student_id,
-        student_name: (Array.isArray(item.peer_students) ? item.peer_students[0] : item.peer_students)?.name || 'Unknown',
-        student_email: (Array.isArray(item.peer_students) ? item.peer_students[0] : item.peer_students)?.email || 'Unknown',
-        status: item.status
-      }))
+      return data.map(item => {
+        const peerStudent = Array.isArray(item.peer_students) ? item.peer_students[0] : item.peer_students
+        return {
+          student_id: item.student_id || '',
+          student_name: peerStudent?.name || (item as Record<string, unknown>).student_name as string || 'Removed Student',
+          student_email: peerStudent?.email || '',
+          status: item.status
+        }
+      })
     } catch (error) {
       logger.error('Error in getAttendanceByClass:', error)
       return []
@@ -326,11 +375,25 @@ export class AttendanceService {
       
       // logger.info('Scheduled class found:', scheduledClass)
       
+      // Look up student names for the records
+      const studentIds = validRecords.map(r => r.student_id).filter(Boolean)
+      const studentNameMap = new Map<string, string>()
+      if (studentIds.length > 0) {
+        const { data: studentData } = await supabase
+          .from('peer_students')
+          .select('id, name')
+          .in('id', studentIds)
+        if (studentData) {
+          studentData.forEach(s => studentNameMap.set(s.id, s.name))
+        }
+      }
+
       // Prepare attendance data for insert with both scheduled_class_id and class_id
       const attendanceData = validRecords.map(record => ({
         scheduled_class_id: scheduledClassId,
         class_id: scheduledClass.class_id,
         student_id: record.student_id,
+        student_name: studentNameMap.get(record.student_id) || record.student_name || null,
         peer_tutor_id: peertutorsId,
         status: record.status
       }))
@@ -420,11 +483,25 @@ export class AttendanceService {
         }
       }
 
+      // Look up student names for the records
+      const studentIds2 = validRecords.map(r => r.student_id).filter(Boolean)
+      const studentNameMap2 = new Map<string, string>()
+      if (studentIds2.length > 0) {
+        const { data: studentData2 } = await supabase
+          .from('peer_students')
+          .select('id, name')
+          .in('id', studentIds2)
+        if (studentData2) {
+          studentData2.forEach(s => studentNameMap2.set(s.id, s.name))
+        }
+      }
+
       // Prepare attendance data for insert with both scheduled_class_id and class_id
       const attendanceData = validRecords.map(record => ({
         scheduled_class_id: resolvedScheduledClassId,
         class_id: resolvedClassId,
         student_id: record.student_id,
+        student_name: studentNameMap2.get(record.student_id) || record.student_name || null,
         peer_tutor_id: peertutorsId,
         status: record.status
       }))

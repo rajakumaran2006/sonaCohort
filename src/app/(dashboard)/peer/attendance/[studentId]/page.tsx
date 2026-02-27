@@ -33,7 +33,7 @@ interface StudentAttendanceRecord {
   id: string
   class_id?: string
   scheduled_class_id?: string
-  student_id: string
+  student_id: string | null
   status: 'present' | 'absent'
   created_at: string
   updated_at: string

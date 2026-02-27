@@ -436,7 +436,8 @@ export class ReportService {
       }
 
       interface AttendanceRecord {
-        student_id: string;
+        student_id: string | null;
+        student_name?: string | null;
         student: {
           name: string;
           email: string;
@@ -445,8 +446,8 @@ export class ReportService {
       }
 
       const records = ((attendanceData as unknown as AttendanceRecord[]) || []).map((record) => ({
-        student_id: record.student_id,
-        student_name: record.student?.name || 'Unknown',
+        student_id: record.student_id || '',
+        student_name: record.student?.name || record.student_name || 'Removed Student',
         student_email: record.student?.email || '',
         status: (['present', 'p'].includes((record.status || '').toLowerCase()) ? 'present' : 'absent') as 'present' | 'absent'
       }))
@@ -821,7 +822,7 @@ export class ReportService {
         is_additional: false // logic for additional classes needs to be clarified, likely checking strict match with 'additional_classes' table or flag
       }))
 
-      // Build Rows
+      // Build Rows — include both currently assigned students AND removed students with attendance history
       const rows = (students || []).map(student => {
         const studentAttendance: Record<string, 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown'> = {}
         let presentCount = 0
@@ -834,20 +835,18 @@ export class ReportService {
           let status: 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown' = 'unknown'
           
           if (record) {
-             if (record.status === 'P') status = 'present'
-             else if (record.status === 'A') status = 'absent'
-             else if (record.status === 'OD') status = 'on_duty'
+             const s = (record.status || '').toLowerCase()
+             if (s === 'present' || s === 'p') status = 'present'
+             else if (s === 'absent' || s === 'a') status = 'absent'
+             else if (s === 'on_duty' || s === 'od') status = 'on_duty'
           } else {
              // Check if class is future
              if (new Date(col.date) > new Date()) {
                  status = 'upcoming'
              } else {
-                 status = 'absent' // Assume absent if past and no record? Or unknown. Let's use absent for stricter reporting or unknown.
-                 // Actually, if attendance wasn't taken, it should be unknown.
-                 // Check class completion status?
                  const cls = classes.find(c => c.id === col.id)
                  if (cls && !cls.attendance_completed) {
-                     status = 'upcoming' // Or 'pending'
+                     status = 'upcoming'
                  }
              }
           }
@@ -873,6 +872,93 @@ export class ReportService {
         }
       })
 
+      // Also include unassigned students (still exist in DB but no longer assigned to this tutor)
+      // AND removed students (student_id is NULL but student_name is preserved)
+      const existingStudentIds = new Set((students || []).map(s => s.id))
+      
+      // Find student_ids in attendance that are NOT in the currently assigned list
+      const unassignedStudentIds = new Set<string>()
+      for (const a of (attendance || [])) {
+        if (a.student_id && !existingStudentIds.has(a.student_id)) {
+          unassignedStudentIds.add(a.student_id)
+        }
+      }
+
+      // Fetch info for unassigned students
+      if (unassignedStudentIds.size > 0) {
+        const { data: unassignedStudents } = await supabase
+          .from('peer_students')
+          .select('id, name')
+          .in('id', Array.from(unassignedStudentIds))
+
+        for (const student of (unassignedStudents || [])) {
+          const studentAttendance: Record<string, 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown'> = {}
+          let presentCount = 0
+          let totalScorable = 0
+
+          columns.forEach(col => {
+            const record = attendance?.find(a => a.scheduled_class_id === col.id && a.student_id === student.id)
+            let status: 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown' = 'unknown'
+            if (record) {
+              const s = (record.status || '').toLowerCase()
+              if (s === 'present' || s === 'p') status = 'present'
+              else if (s === 'absent' || s === 'a') status = 'absent'
+              else if (s === 'on_duty' || s === 'od') status = 'on_duty'
+            }
+            studentAttendance[col.id] = status
+            if (status === 'present' || status === 'on_duty') presentCount++
+            if (status === 'present' || status === 'absent' || status === 'on_duty') totalScorable++
+          })
+
+          rows.push({
+            student_id: student.id,
+            student_name: `${student.name} (Unassigned)`,
+            attendance: studentAttendance,
+            stats: {
+              present: presentCount,
+              percentage: totalScorable > 0 ? Math.round((presentCount / totalScorable) * 100) : 0
+            }
+          })
+        }
+      }
+
+      // Handle removed students (student_id is NULL but student_name is preserved in attendance)
+      const removedStudentRecords = (attendance || []).filter(
+        a => a.student_id === null && a.student_name
+      )
+      const removedStudentNames = new Set(removedStudentRecords.map(r => r.student_name as string))
+      for (const removedName of removedStudentNames) {
+        const studentAttendance: Record<string, 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown'> = {}
+        let presentCount = 0
+        let totalScorable = 0
+
+        columns.forEach(col => {
+          const record = removedStudentRecords.find(
+            a => a.scheduled_class_id === col.id && a.student_name === removedName
+          )
+          let status: 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown' = 'unknown'
+          if (record) {
+            const s = (record.status || '').toLowerCase()
+            if (s === 'present' || s === 'p') status = 'present'
+            else if (s === 'absent' || s === 'a') status = 'absent'
+            else if (s === 'on_duty' || s === 'od') status = 'on_duty'
+          }
+          studentAttendance[col.id] = status
+          if (status === 'present' || status === 'on_duty') presentCount++
+          if (status === 'present' || status === 'absent' || status === 'on_duty') totalScorable++
+        })
+
+        rows.push({
+          student_id: '',
+          student_name: `${removedName} (Removed)`,
+          attendance: studentAttendance,
+          stats: {
+            present: presentCount,
+            percentage: totalScorable > 0 ? Math.round((presentCount / totalScorable) * 100) : 0
+          }
+        })
+      }
+
       return {
         subject_name: subjectName,
         columns,
@@ -893,7 +979,7 @@ export class ReportService {
     try {
       const supabase = createClient()
 
-      // Get all distinct subjects for this peer tutor via their classes
+      // Get all distinct subjects for this peer tutor via their scheduled classes
       const { data: classes, error: classesError } = await supabase
         .from('scheduled_classes')
         .select('class:classes!inner(subject_name)')
@@ -904,23 +990,106 @@ export class ReportService {
         return []
       }
 
-      // Extract unique subject names
+      // Extract unique subject names from scheduled classes
       interface ClassJoin { class: { subject_name: string } | null }
-      const subjectNames = [
-        ...new Set(
-          (classes as unknown as ClassJoin[])
-            .map(c => c.class?.subject_name)
-            .filter((name): name is string => !!name)
-        )
-      ]
+      const subjectNamesSet = new Set(
+        (classes as unknown as ClassJoin[])
+          .map(c => c.class?.subject_name)
+          .filter((name): name is string => !!name)
+      )
+
+      // Also get additional classes for this peer tutor to find more subjects
+      const { data: additionalClasses, error: acError } = await supabase
+        .from('additional_classes')
+        .select('id, subject_name, class_date, start_time, end_time')
+        .eq('peer_tutor_id', peerTutorId)
+        .order('class_date', { ascending: true })
+
+      if (!acError && additionalClasses) {
+        for (const ac of additionalClasses) {
+          if (ac.subject_name) subjectNamesSet.add(ac.subject_name)
+        }
+      }
+
+      const subjectNames = [...subjectNamesSet]
 
       // Build a FullClassReport for each subject
       const reports: FullClassReport[] = []
       for (const subjectName of subjectNames) {
         const report = await this.getSubjectFullClassReport(peerTutorId, subjectName)
-        if (report) {
-          reports.push(report)
+        if (!report) continue
+
+        // Now merge additional classes for this subject
+        const subjectAdditionalClasses = (additionalClasses || []).filter(
+          ac => ac.subject_name === subjectName
+        )
+
+        if (subjectAdditionalClasses.length > 0) {
+          // Get attendance records for these additional classes
+          const acIds = subjectAdditionalClasses.map(ac => ac.id)
+          const { data: acAttendance, error: acaError } = await supabase
+            .from('additional_class_attendance')
+            .select('*')
+            .in('additional_class_id', acIds)
+
+          if (acaError) {
+            logger.error('Error getting additional class attendance:', acaError)
+          }
+
+          // Add additional class columns
+          for (const ac of subjectAdditionalClasses) {
+            const colId = `ac_${ac.id}`
+            report.columns.push({
+              id: colId,
+              date: ac.class_date,
+              time: ac.start_time && ac.end_time
+                ? `${ac.start_time} - ${ac.end_time}`
+                : ac.start_time || '',
+              is_additional: true
+            })
+
+            // Add attendance status for each student row
+            for (const row of report.rows) {
+              const record = (acAttendance || []).find(
+                a => a.additional_class_id === ac.id && a.student_id === row.student_id
+              )
+
+              let status: 'present' | 'absent' | 'on_duty' | 'upcoming' | 'unknown' = 'unknown'
+              if (record) {
+                const s = (record.status || '').toLowerCase()
+                if (s === 'present' || s === 'p') status = 'present'
+                else if (s === 'absent' || s === 'a') status = 'absent'
+                else if (s === 'on_duty' || s === 'od') status = 'on_duty'
+              }
+
+              row.attendance[colId] = status
+
+              // Update stats
+              if (status === 'present' || status === 'on_duty') {
+                row.stats.present++
+              }
+            }
+          }
+
+          // Sort all columns by date
+          report.columns.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+          // Recalculate percentages after adding additional class data
+          for (const row of report.rows) {
+            let totalScorable = 0
+            for (const col of report.columns) {
+              const s = row.attendance[col.id]
+              if (s === 'present' || s === 'absent' || s === 'on_duty') {
+                totalScorable++
+              }
+            }
+            row.stats.percentage = totalScorable > 0
+              ? Math.round((row.stats.present / totalScorable) * 100)
+              : 0
+          }
         }
+
+        reports.push(report)
       }
 
       return reports
@@ -962,7 +1131,7 @@ export class ReportService {
       // Get additional classes
       const { data: additionalClasses, error: acError } = await supabase
         .from('additional_classes')
-        .select('id, subject_name, class_date, start_time, end_time, topics')
+        .select('id, subject_name, class_date, start_time, end_time, topic')
         .eq('peer_tutor_id', peerTutorId)
         .order('class_date', { ascending: true })
 
@@ -1012,9 +1181,9 @@ export class ReportService {
         class_date: string
         start_time: string | null
         end_time: string | null
-        topics: string | null
+        topic: string | null
       }
-
+      
       for (const cls of (additionalClasses as unknown as AdditionalClassData[]) || []) {
         const subjectName = cls.subject_name || 'Unknown Subject'
         if (!subjectMap.has(subjectName)) {
@@ -1029,7 +1198,7 @@ export class ReportService {
           id: cls.id,
           date: cls.class_date,
           hour,
-          topic: cls.topics || '',
+          topic: cls.topic || '',
           is_additional: true
         })
       }
