@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import SettingsSkeleton from '@/components/skeletons/SettingsSkeleton'
 import { toast } from 'sonner'
+import ChangePassword from '@/components/profile/ChangePassword'
 
 // Types for recipients
 interface Recipient {
@@ -680,7 +681,10 @@ function SettingsContent() {
             </div>
           </div>
 
-
+          {/* Change Password Section */}
+          <div className="mb-8">
+            <ChangePassword />
+          </div>
 
           {/* Class Configuration Section */}
           <div className="mb-6">

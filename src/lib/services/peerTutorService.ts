@@ -210,8 +210,9 @@ export class peertutorservice {
       const { data, error } = await supabase
         .from('peer_tutors')
         .select('id')
-        .eq('email', email)
-        .single()
+        .ilike('email', email)
+        .limit(1)
+        .maybeSingle()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
         logger.error('Error checking if student is peer tutor:', error)
@@ -235,8 +236,9 @@ export class peertutorservice {
       const { data, error } = await supabase
         .from('peer_tutors')
         .select('*')
-        .eq('email', email)
-        .single()
+        .ilike('email', email)
+        .limit(1)
+        .maybeSingle()
 
       if (error) {
         if (error.code !== 'PGRST116') { // PGRST116 = no rows returned

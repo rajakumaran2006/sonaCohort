@@ -82,6 +82,30 @@ interface SubmissionWithClasses extends peertutorsRenumeration {
   classesCompleted?: number
 }
 
+interface RankedItem {
+  id: string;
+  name: string;
+  email: string;
+  year: string;
+  section: string;
+  classStats: {
+    totalClasses: number;
+    completedClasses: number;
+    pendingClasses?: number;
+    upcomingClasses?: number;
+    overdueClasses?: number;
+  };
+  additionalClassesCount: number;
+  score: {
+    finalScore: number;
+    breakdown: {
+      scheduledWeighted: number;
+      additionalWeighted: number;
+      examWeighted: number;
+    };
+  };
+}
+
 
 function FacultypeertutorsContent() {
   const router = useRouter()
@@ -3416,12 +3440,12 @@ function FacultypeertutorsContent() {
                         classStats: item.classStats,
                         additionalClassesCount: item.additionalClassesCount
                       }, scoringConfig, examSummaries)
-                    }
+                    } as RankedItem;
                   });
 
                   // 3. Sort by Score DESC
                   rankedList.sort((a, b) => {
-                    if (b.score !== a.score) return b.score - a.score;
+                    if (b.score.finalScore !== a.score.finalScore) return b.score.finalScore - a.score.finalScore;
                     return a.name.localeCompare(b.name);
                   })
 
@@ -3465,7 +3489,7 @@ function FacultypeertutorsContent() {
                             ? 'border-blue-600 text-blue-600' 
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                         >
-                          Peer Tutors
+                          PEER TUTORS
                         </button>
                         <button
                           onClick={() => setLeaderboardTabType('student')}
@@ -3473,7 +3497,7 @@ function FacultypeertutorsContent() {
                             ? 'border-blue-600 text-blue-600' 
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                         >
-                          Students
+                          STUDENTS
                         </button>
                       </div>
 
@@ -3555,11 +3579,19 @@ function FacultypeertutorsContent() {
                                       </div>
                                     </div>
 
-                                    <div className="w-full relative z-10 text-center">
+                                    <div className="w-full relative z-10 text-center group/tooltip cursor-help">
                                       <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Total Score</div>
                                       <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl px-4 py-3 shadow-lg shadow-orange-500/20 flex items-center justify-center gap-3 transform transition-transform duration-300 hover:scale-[1.02]">
-                                        <div className="text-2xl font-black">{top1.score}</div>
+                                        <div className="text-2xl font-black">{top1.score.finalScore}</div>
                                         <Trophy className="w-5 h-5 text-yellow-100 opacity-80" />
+                                      </div>
+                                      {/* Tooltip */}
+                                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-50 pointer-events-none shadow-xl border border-gray-700">
+                                        <div className="font-bold border-b border-gray-700 pb-1 mb-2 text-left">Score Breakdown</div>
+                                        <div className="flex justify-between mb-1"><span>Scheduled:</span> <span>{top1.score.breakdown.scheduledWeighted} pts</span></div>
+                                        <div className="flex justify-between mb-1"><span>Additional:</span> <span>{top1.score.breakdown.additionalWeighted} pts</span></div>
+                                        <div className="flex justify-between"><span>Exams:</span> <span>{top1.score.breakdown.examWeighted} pts</span></div>
+                                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
                                       </div>
                                     </div>
                                   </div>
@@ -3594,9 +3626,17 @@ function FacultypeertutorsContent() {
                                         <div className="text-[10px] uppercase font-bold text-slate-400 mt-2 tracking-wider">{formatLeaderboardDetails(top2.year, top2.section)}</div>
                                       </div>
 
-                                      <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 flex flex-col items-center mt-2 w-full">
+                                      <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 flex flex-col items-center mt-2 w-full relative group/tooltip cursor-help">
                                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Score</span>
-                                        <span className="text-lg font-black text-slate-600 leading-none">{top2.score}</span>
+                                        <span className="text-lg font-black text-slate-600 leading-none">{top2.score.finalScore}</span>
+                                        {/* Tooltip */}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-50 pointer-events-none shadow-xl border border-gray-700">
+                                          <div className="font-bold border-b border-gray-700 pb-1 mb-2 text-left">Score Breakdown</div>
+                                          <div className="flex justify-between mb-1"><span>Scheduled:</span> <span>{top2.score.breakdown.scheduledWeighted} pts</span></div>
+                                          <div className="flex justify-between mb-1"><span>Additional:</span> <span>{top2.score.breakdown.additionalWeighted} pts</span></div>
+                                          <div className="flex justify-between"><span>Exams:</span> <span>{top2.score.breakdown.examWeighted} pts</span></div>
+                                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
+                                        </div>
                                       </div>
                                     </div>
                                   </motion.div>
@@ -3629,9 +3669,17 @@ function FacultypeertutorsContent() {
                                         <div className="text-[10px] uppercase font-bold text-orange-400 mt-2 tracking-wider">{formatLeaderboardDetails(top3.year, top3.section)}</div>
                                       </div>
 
-                                      <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 flex flex-col items-center mt-2 w-full">
+                                      <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 flex flex-col items-center mt-2 w-full relative group/tooltip cursor-help">
                                         <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider mb-0.5">Score</span>
-                                        <span className="text-lg font-black text-orange-600 leading-none">{top3.score}</span>
+                                        <span className="text-lg font-black text-orange-600 leading-none">{top3.score.finalScore}</span>
+                                        {/* Tooltip */}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-50 pointer-events-none shadow-xl border border-gray-700">
+                                          <div className="font-bold border-b border-gray-700 pb-1 mb-2 text-left">Score Breakdown</div>
+                                          <div className="flex justify-between mb-1"><span>Scheduled:</span> <span>{top3.score.breakdown.scheduledWeighted} pts</span></div>
+                                          <div className="flex justify-between mb-1"><span>Additional:</span> <span>{top3.score.breakdown.additionalWeighted} pts</span></div>
+                                          <div className="flex justify-between"><span>Exams:</span> <span>{top3.score.breakdown.examWeighted} pts</span></div>
+                                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
+                                        </div>
                                       </div>
                                     </div>
                                   </motion.div>
@@ -3694,9 +3742,17 @@ function FacultypeertutorsContent() {
                                         </div>
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                                        <div className="inline-flex flex-col items-center justify-center">
-                                          <span className="text-sm font-black text-gray-700">{tutor.score}</span>
+                                        <div className="inline-flex flex-col items-center justify-center relative group/tooltip cursor-help">
+                                          <span className="text-sm font-black text-gray-700">{tutor.score.finalScore}</span>
                                           <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">pts</span>
+                                          {/* Tooltip */}
+                                          <div className="absolute bottom-full right-full translate-x-12 mb-2 w-48 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-50 shadow-xl border border-gray-700 pointer-events-none">
+                                            <div className="font-bold border-b border-gray-700 pb-1 mb-2 text-left">Score Breakdown</div>
+                                            <div className="flex justify-between mb-1"><span>Scheduled:</span> <span>{tutor.score.breakdown.scheduledWeighted} pts</span></div>
+                                            <div className="flex justify-between mb-1"><span>Additional:</span> <span>{tutor.score.breakdown.additionalWeighted} pts</span></div>
+                                            <div className="flex justify-between"><span>Exams:</span> <span>{tutor.score.breakdown.examWeighted} pts</span></div>
+                                            <div className="absolute -bottom-1 left-[70%] -translate-x-[70%] w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
+                                          </div>
                                         </div>
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">

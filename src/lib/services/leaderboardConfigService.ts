@@ -142,23 +142,40 @@ export class LeaderboardConfigService {
    * @param tutor - tutor class stats and additional class count
    * @param config - scoring config with weights
    * @param examSummaries - optional array of exam summaries for this tutor
+   * @returns an object containing the final score and its breakdown
    */
   static calculateScore(
     tutor: TutorScoreInput,
     config: LeaderboardScoringConfig,
     examSummaries?: ExamSummaryForScoring[]
-  ): number {
+  ): {
+    finalScore: number,
+    breakdown: {
+      scheduledScore: number,
+      scheduledWeighted: number,
+      additionalScore: number,
+      additionalWeighted: number,
+      examScore: number,
+      examWeighted: number
+    }
+  } {
     // 1. Scheduled Classes Score (0-100): completion percentage
     const completed = tutor.classStats?.completedClasses || 0
     const total = tutor.classStats?.totalClasses || 0
-    const scheduledScore = total > 0 ? (completed / total) * 100 : 0
+    const scheduledScoreRaw = total > 0 ? (completed / total) * 100 : 0
+    const scheduledScore = Math.round(scheduledScoreRaw * 10) / 10
+    const scheduledWeightedRaw = (scheduledScore * config.scheduled_classes_weight) / 100
+    const scheduledWeighted = Math.round(scheduledWeightedRaw * 10) / 10
 
     // 2. Additional Classes Score (0-100): capped at 100, multiplier of 10
     const additionalCount = tutor.additionalClassesCount || 0
-    const additionalScore = Math.min(additionalCount * 10, 100)
+    const additionalScoreRaw = Math.min(additionalCount * 10, 100)
+    const additionalScore = Math.round(additionalScoreRaw * 10) / 10
+    const additionalWeightedRaw = (additionalScore * config.additional_classes_weight) / 100
+    const additionalWeighted = Math.round(additionalWeightedRaw * 10) / 10
 
     // 3. Exam Score (0-100): weighted average of included exams' ascend scores
-    let examScore = 0
+    let examScoreRaw = 0
     if (config.exam_weight > 0 && config.exam_config.length > 0 && examSummaries) {
       const includedExams = config.exam_config.filter(e => e.included)
       if (includedExams.length > 0) {
@@ -169,17 +186,28 @@ export class LeaderboardConfigService {
           const normalizedScore = summary ? (summary.ascend_score / 10) * 100 : 0
           weightedSum += normalizedScore * (examCfg.weight / 100)
         }
-        examScore = weightedSum
+        examScoreRaw = weightedSum
       }
     }
+    const examScore = Math.round(examScoreRaw * 10) / 10
+    const examWeightedRaw = (examScore * config.exam_weight) / 100
+    const examWeighted = Math.round(examWeightedRaw * 10) / 10
 
     // Final score out of 100
-    const finalScore =
-      (scheduledScore * config.scheduled_classes_weight / 100) +
-      (additionalScore * config.additional_classes_weight / 100) +
-      (examScore * config.exam_weight / 100)
+    const finalScoreRaw = scheduledWeighted + additionalWeighted + examWeighted
+    const finalScore = Math.round(finalScoreRaw * 10) / 10
 
-    return Math.round(finalScore * 10) / 10
+    return {
+      finalScore,
+      breakdown: {
+        scheduledScore,
+        scheduledWeighted,
+        additionalScore,
+        additionalWeighted,
+        examScore,
+        examWeighted
+      }
+    }
   }
 
   /**

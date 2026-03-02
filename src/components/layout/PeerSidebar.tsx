@@ -201,7 +201,11 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
         <div className="border-t border-[#1a3d2e] bg-[#0c2219]/50 flex-shrink-0 p-4 relative backdrop-blur-sm mt-auto">
           <div className={`flex items-center w-full rounded-xl ${showCollapsed ? 'lg:justify-center lg:flex-col lg:gap-4 justify-between' : 'justify-between'}`}>
             {/* Profile Info */}
-            <div className={`flex items-center ${showCollapsed ? 'lg:justify-center gap-3 flex-1 min-w-0' : 'gap-3 flex-1 min-w-0 transition-colors'}`}>
+            <Link 
+              href="/peer/profile"
+              className={`flex items-center ${showCollapsed ? 'lg:justify-center gap-3 flex-1 min-w-0' : 'gap-3 flex-1 min-w-0'} hover:bg-white/5 rounded-lg p-2 transition-colors`}
+              title="Profile"
+            >
               <div className="flex-shrink-0 relative group cursor-pointer">
                 <div className="h-9 w-9 rounded-lg bg-[#1a3d2e] flex items-center justify-center overflow-hidden ring-1 ring-white/10 group-hover:ring-[#bef264]/50 transition-all">
                   <User className="h-5 w-5 text-gray-300" />
@@ -211,12 +215,12 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
               <div className={`flex-1 min-w-0 ${showCollapsed ? 'lg:hidden' : ''}`}>
                 <p className="text-xs font-bold text-white truncate uppercase tracking-wide">
                   {peertutors?.name || user?.user_metadata?.full_name || 'Peer Tutor'}
-                </p>
+                 </p>
                 <p className="text-[10px] text-[#bef264] font-bold uppercase tracking-wider truncate opacity-80">
                   Tutor
                 </p>
               </div>
-            </div>
+            </Link>
             
             {/* Sign Out Icon - Always visible on mobile */}
             <button

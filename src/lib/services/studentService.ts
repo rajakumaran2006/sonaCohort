@@ -166,8 +166,9 @@ export class StudentService {
       const { data, error } = await supabase
         .from('peer_students')
         .select('id')
-        .eq('email', email)
-        .single()
+        .ilike('email', email)
+        .limit(1)
+        .maybeSingle()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
         logger.error('Error checking if student exists:', error)
@@ -191,9 +192,10 @@ export class StudentService {
       const { data, error } = await supabase
         .from('peer_students')
         .select('id')
-        .eq('email', email)
+        .ilike('email', email)
         .eq('peer_tutor', false)
-        .single()
+        .limit(1)
+        .maybeSingle()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
         logger.error('Error checking if email is student:', error)
@@ -217,9 +219,10 @@ export class StudentService {
       const { data, error } = await supabase
         .from('peer_students')
         .select('*')
-        .eq('email', email)
+        .ilike('email', email)
         .eq('peer_tutor', false)
-        .single()
+        .limit(1)
+        .maybeSingle()
 
       if (error) {
         if (error.code !== 'PGRST116') {
@@ -231,6 +234,40 @@ export class StudentService {
       return data as Student
     } catch (error) {
       logger.error('Error in getStudentByEmail:', error)
+      return null
+    }
+  }
+
+  /**
+   * Get student with peer tutor details by email
+   */
+  static async getStudentWithPeerTutorByEmail(email: string): Promise<StudentWithpeertutors | null> {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('peer_students')
+        .select(`
+          *,
+          assigned_peer_tutor:assigned_peer_tutor_id (
+            id,
+            name,
+            email
+          )
+        `)
+        .ilike('email', email)
+        .eq('peer_tutor', false)
+        .limit(1)
+        .maybeSingle()
+
+      if (error) {
+        logger.error('Error getting student with peer tutor by email:', error)
+        return null
+      }
+
+      return data as StudentWithpeertutors
+    } catch (error) {
+      logger.error('Error in getStudentWithPeerTutorByEmail:', error)
       return null
     }
   }

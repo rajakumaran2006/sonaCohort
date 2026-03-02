@@ -17,8 +17,9 @@ export class peertutorsAuthService {
       const { data, error } = await supabase
         .from('peer_tutors')
         .select('id')
-        .eq('email', email)
-        .single()
+        .ilike('email', email)
+        .limit(1)
+        .maybeSingle()
 
       if (error) {
         if (error.code === 'PGRST116') {
@@ -62,8 +63,9 @@ export class peertutorsAuthService {
       const { data, error } = await supabase
         .from('peer_tutors')
         .select('*')
-        .eq('email', email)
-        .single()
+        .ilike('email', email)
+        .limit(1)
+        .maybeSingle()
 
       if (error) {
         if (error.code === 'PGRST116') {

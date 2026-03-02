@@ -41,14 +41,16 @@ interface StudentAttendanceRecord {
     id: string
     subject_name: string
     created_at: string
-    dept: string
-    year: string
-    section: string
+    dept?: string | null
+    year?: string | null
+    section?: string | null
+    topics?: string | null
   } | null
   scheduled_classes?: {
     id: string
     scheduled_date: string
     class_id: string
+    topics?: string | null
   } | null
 }
 

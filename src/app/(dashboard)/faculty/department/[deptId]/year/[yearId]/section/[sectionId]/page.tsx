@@ -34,7 +34,7 @@ import { isManualStudent } from '@/lib/utils/manualStudentUtils'
 
 
 import { createClient } from '@/lib/supabase/client'
-import { Users, MoreHorizontal, ArrowUpRight, Plus, Trash2, Upload, X, Eye, ChevronDown, ChevronUp } from 'lucide-react'
+import { MoreHorizontal, ArrowUpRight, Plus, Trash2, Upload, X, Eye, ChevronDown, ChevronUp } from 'lucide-react'
 import { SearchIcon } from '@/components/icons/SearchIcon'
 import { toast } from 'sonner'
 import { logger } from '@/lib/logger'

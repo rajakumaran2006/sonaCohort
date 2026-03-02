@@ -16,9 +16,10 @@ export class StudentAuthService {
       const { data, error } = await supabase
         .from('peer_students')
         .select('*')
-        .eq('email', email)
+        .ilike('email', email)
         .eq('peer_tutor', false)
-        .single()
+        .limit(1)
+        .maybeSingle()
 
       if (error) {
         if (error.code === 'PGRST116') { // No rows returned

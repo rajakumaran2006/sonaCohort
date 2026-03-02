@@ -144,8 +144,9 @@ export default function Sidebar({ isOpen, onClose, onToggleCollapse }: SidebarPr
         <div className="border-t border-gray-800 flex-shrink-0 p-4">
           <div className={`flex items-center w-full rounded-lg p-2 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
             {/* Profile Info */}
-            <div 
-              className={`flex items-center ${isCollapsed ? '' : 'gap-3 flex-1 min-w-0'} rounded-lg p-2 transition-colors`}
+            <Link 
+              href="/admin/profile"
+              className={`flex items-center ${isCollapsed ? '' : 'gap-3 flex-1 min-w-0'} rounded-lg p-2 hover:bg-white/5 transition-colors`}
               title={isCollapsed ? 'Profile' : undefined}
             >
               <div className="flex-shrink-0 relative">
@@ -164,7 +165,7 @@ export default function Sidebar({ isOpen, onClose, onToggleCollapse }: SidebarPr
                   </p>
                 </div>
               )}
-            </div>
+            </Link>
             
             {/* Sign Out Icon */}
             {!isCollapsed && (

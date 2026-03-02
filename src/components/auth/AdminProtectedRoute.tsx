@@ -14,7 +14,7 @@ interface AdminProtectedRouteProps {
 }
 
 export default function AdminProtectedRoute({ children }: AdminProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, session, loading } = useAuth()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -50,35 +50,46 @@ export default function AdminProtectedRoute({ children }: AdminProtectedRoutePro
 
 
 
-  // Keep session alive for admins
+  // Keep session alive for admins — but ONLY if they logged in with Microsoft OAuth.
+  // Manual (password) logins don't have a Microsoft provider_token, so calling
+  // ensureSessionValid() would incorrectly trigger session expiry and sign them out.
   useEffect(() => {
-    if (isAdmin) {
-      // Check immediately
-      const validateSession = async () => {
-        try {
-          const isValid = await MicrosoftGraphService.ensureSessionValid()
-          if (isValid) {
-            logger.info('AdminProtectedRoute: Session validated successfully')
-          } else {
-            logger.warn('AdminProtectedRoute: Session validation failed')
-          }
-        } catch (error) {
-          logger.error('AdminProtectedRoute: Session validation error:', error)
-        }
-      }
+    if (!isAdmin) return
 
-      validateSession()
-
-      // Check periodically (every 14 minutes - token usually expires in 1 hour, so this is safe)
-      // Microsoft tokens often have short lifetimes (e.g. 1 hour), so refreshing before that is good.
-      const intervalId = setInterval(() => {
-        logger.info('AdminProtectedRoute: Running periodic session validation')
-        validateSession()
-      }, 14 * 60 * 1000)
-
-      return () => clearInterval(intervalId)
+    // Check if user logged in via Microsoft by looking for provider_token in session
+    const isMicrosoftLogin = !!session?.provider_token || 
+      user?.app_metadata?.provider === 'azure' ||
+      user?.app_metadata?.providers?.includes('azure')
+    
+    if (!isMicrosoftLogin) {
+      logger.info('AdminProtectedRoute: Skipping Microsoft session validation for non-Microsoft login')
+      return
     }
-  }, [isAdmin])
+
+    // Check immediately
+    const validateSession = async () => {
+      try {
+        const isValid = await MicrosoftGraphService.ensureSessionValid()
+        if (isValid) {
+          logger.info('AdminProtectedRoute: Session validated successfully')
+        } else {
+          logger.warn('AdminProtectedRoute: Session validation failed')
+        }
+      } catch (error) {
+        logger.error('AdminProtectedRoute: Session validation error:', error)
+      }
+    }
+
+    validateSession()
+
+    // Check periodically (every 14 minutes - token usually expires in 1 hour)
+    const intervalId = setInterval(() => {
+      logger.info('AdminProtectedRoute: Running periodic session validation')
+      validateSession()
+    }, 14 * 60 * 1000)
+
+    return () => clearInterval(intervalId)
+  }, [isAdmin, session?.provider_token, user?.app_metadata])
 
   // Handle redirects based on query state
   if (!loading && !isVerifying) {

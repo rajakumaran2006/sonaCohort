@@ -19,7 +19,10 @@ export class AdminService {
    */
   static async isAdmin(email: string, supabaseClient?: SupabaseClient): Promise<boolean> {
     try {
-      logger.info('AdminService: Checking admin status for:', email)
+      const normalizedEmail = email?.trim().toLowerCase()
+      if (!normalizedEmail) return false
+
+      logger.info('AdminService: Checking admin status for:', normalizedEmail)
       
       // First, check if it's a known admin email (fastest check)
       const knownAdminEmails = [
@@ -27,8 +30,8 @@ export class AdminService {
         'admin@sonatech.ac.in',
       ]
       
-      if (knownAdminEmails.includes(email.toLowerCase())) {
-        logger.info('AdminService: User is in known admin list:', email)
+      if (knownAdminEmails.includes(normalizedEmail)) {
+        logger.info('AdminService: User is in known admin list:', normalizedEmail)
         return true
       }
       
@@ -39,20 +42,21 @@ export class AdminService {
         const { data, error } = await supabase
           .from('admin_users')
           .select('id')
-          .eq('email', email)
+          .ilike('email', normalizedEmail)
+          .limit(1)
           .maybeSingle()
 
         if (error) {
-          logger.info('AdminService: Database error, using known admin list:', error.message)
-          return false // Don't fall back to known list here since we already checked
+          logger.info('AdminService: Database error:', error.message)
+          return false
         }
 
         if (data) {
-          logger.info('AdminService: Admin found in database for:', email)
+          logger.info('AdminService: Admin found in database for:', normalizedEmail)
           return true
         }
 
-        logger.info('AdminService: No admin record found in database for:', email)
+        logger.info('AdminService: No admin record found in database for:', normalizedEmail)
         return false
       } catch (dbError) {
         logger.info('AdminService: Database check failed:', dbError)

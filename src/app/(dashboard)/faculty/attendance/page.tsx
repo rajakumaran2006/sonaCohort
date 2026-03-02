@@ -483,7 +483,7 @@ function FacultyAttendanceContent() {
         peertutors.completedClasses - peertutors.additionalClasses,
         peertutors.additionalClasses,
         peertutors.totalClasses,
-        peertutors.totalClasses > 0 ? Math.round((peertutors.completedClasses / peertutors.totalClasses) * 100) : 0
+        peertutors.totalClasses > 0 ? Math.min(100, Math.round((peertutors.completedClasses / peertutors.totalClasses) * 100)) : 0
       ].join(','))
     ].join('\n')
 
@@ -887,7 +887,7 @@ function FacultyAttendanceContent() {
                                       <TableCell className="text-center py-4">
                                         <div className="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100">
                                           <span className="text-xs font-bold text-gray-900">
-                                            {peertutors.totalClasses > 0 ? Math.round((peertutors.completedClasses / peertutors.totalClasses) * 100) : 0}%
+                                            {peertutors.totalClasses > 0 ? Math.min(100, Math.round((peertutors.completedClasses / peertutors.totalClasses) * 100)) : 0}%
                                           </span>
                                         </div>
                                       </TableCell>

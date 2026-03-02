@@ -40,15 +40,17 @@ export interface AttendanceHistoryRecord extends Attendance {
     id: string
     subject_name: string
     created_at: string
-    dept: string
-    year: string
-    section: string
+    dept?: string | null
+    year?: string | null
+    section?: string | null
+    topics?: string | null
   } | null
   
   scheduled_classes?: {
     id: string
     scheduled_date: string
     class_id: string
+    topics?: string | null
   } | null
   
   peer_students?: {
@@ -995,11 +997,12 @@ export class AttendanceService {
   /**
    * Get attendance history for a specific student
    */
-  static async getStudentAttendanceHistory(studentId: string, peertutorsId: string): Promise<AttendanceHistoryRecord[]> {
+  static async getStudentAttendanceHistory(studentId: string, peertutorsId?: string): Promise<AttendanceHistoryRecord[]> {
     try {
       const supabase = createClient()
       
-      const { data, error } = await supabase
+      // 1. Fetch regular attendance records
+      let regularQuery = supabase
         .from('attendance')
         .select(`
           id,
@@ -1021,23 +1024,82 @@ export class AttendanceService {
           scheduled_classes (
             id,
             scheduled_date,
-            class_id
+            class_id,
+            topics
           )
         `)
         .eq('student_id', studentId)
-        .eq('peer_tutor_id', peertutorsId)
-        .order('created_at', { ascending: false })
+        
+      if (peertutorsId) {
+        regularQuery = regularQuery.eq('peer_tutor_id', peertutorsId)
+      }
+      
+      const { data: regularData, error: regularError } = await regularQuery.order('created_at', { ascending: false })
 
-      if (error) {
-        logger.error('Error getting student attendance history:', error)
-        return []
+      if (regularError) {
+        logger.error('Error getting student regular attendance history:', regularError)
       }
 
-      return (data || []).map(record => ({
+      // 2. Fetch additional class attendance records
+      let additionalQuery = supabase
+        .from('additional_class_attendance')
+        .select(`
+          id,
+          additional_class_id,
+          student_id,
+          peer_tutor_id,
+          status,
+          created_at,
+          updated_at,
+          additional_classes (
+            id,
+            subject_name,
+            topic,
+            class_date
+          )
+        `)
+        .eq('student_id', studentId)
+
+      if (peertutorsId) {
+        additionalQuery = additionalQuery.eq('peer_tutor_id', peertutorsId)
+      }
+
+      const { data: additionalData, error: additionalError } = await additionalQuery.order('created_at', { ascending: false })
+
+      if (additionalError) {
+        logger.error('Error getting student additional attendance history:', additionalError)
+      }
+
+      // 3. Map and merge data
+      const mappedRegular = (regularData || []).map(record => ({
         ...record,
         classes: Array.isArray(record.classes) ? record.classes[0] : record.classes,
         scheduled_classes: Array.isArray(record.scheduled_classes) ? record.scheduled_classes[0] : record.scheduled_classes
       }))
+
+      const mappedAdditional = (additionalData || []).map(record => {
+        const additionalClass = Array.isArray(record.additional_classes) ? record.additional_classes[0] : record.additional_classes
+        return {
+          id: record.id,
+          student_id: record.student_id,
+          peer_tutor_id: record.peer_tutor_id,
+          status: record.status as 'present' | 'absent',
+          created_at: record.created_at,
+          updated_at: record.updated_at,
+          classes: {
+            id: additionalClass?.id || '',
+            subject_name: additionalClass?.subject_name || 'Additional Class',
+            topics: additionalClass?.topic || '',
+            created_at: additionalClass?.class_date || record.created_at,
+          },
+          // Set scheduled_classes to null to trigger "Additional Session" badge in UI if it relies on its absence
+          scheduled_classes: null 
+        }
+      })
+
+      // Combine and sort by date
+      const combined = [...mappedRegular, ...mappedAdditional]
+      return combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     } catch (error) {
       logger.error('Error in getStudentAttendanceHistory:', error)
       return []

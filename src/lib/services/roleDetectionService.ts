@@ -27,7 +27,8 @@ export class RoleDetectionService {
     const roles: UserRole[] = []
     const dashboardPaths: Partial<Record<UserRole, string>> = {}
 
-    if (!email || email.trim() === '') {
+    const normalizedEmail = email?.trim()?.toLowerCase()
+    if (!normalizedEmail) {
       // console.log('No email provided for role detection')
       return { roles, dashboardPaths: dashboardPaths as Record<UserRole, string> }
     }
@@ -35,7 +36,7 @@ export class RoleDetectionService {
     try {
       // Check Faculty (first priority)
       try {
-        const department = await FacultyService.verifyFacultyAccess(email, supabaseClient)
+        const department = await FacultyService.verifyFacultyAccess(normalizedEmail, supabaseClient)
         if (department) {
           roles.push('faculty')
           dashboardPaths.faculty = '/faculty/dashboard'
@@ -48,7 +49,7 @@ export class RoleDetectionService {
       // If not added as department faculty, check individual faculty
       if (!roles.includes('faculty')) {
         try {
-           const isIndividual = await FacultyService.isFacultyMember(email, supabaseClient)
+           const isIndividual = await FacultyService.isFacultyMember(normalizedEmail, supabaseClient)
            if (isIndividual) {
              roles.push('faculty')
              dashboardPaths.faculty = '/faculty-portal/dashboard'
@@ -60,7 +61,7 @@ export class RoleDetectionService {
 
       // Check Admin (second priority)
       try {
-        const isAdmin = await AdminService.isAdmin(email, supabaseClient)
+        const isAdmin = await AdminService.isAdmin(normalizedEmail, supabaseClient)
         if (isAdmin) {
           roles.push('admin')
           dashboardPaths.admin = '/admin/dashboard'
@@ -78,8 +79,9 @@ export class RoleDetectionService {
           const { data: peerTutor, error } = await client
              .from('peer_tutors')
              .select('faculty_id')
-             .eq('email', email)
-             .single()
+             .ilike('email', normalizedEmail)
+             .limit(1)
+             .maybeSingle()
           
             if (peerTutor && !error) {
               roles.push('peer')
@@ -88,7 +90,7 @@ export class RoleDetectionService {
             }
         } else {
           // Fallback if no client provided (unlikely in auth flow)
-          const ispeertutors = await peertutorservice.isAlreadypeertutors(email)
+          const ispeertutors = await peertutorservice.isAlreadypeertutors(normalizedEmail)
           if (ispeertutors) {
             roles.push('peer')
             dashboardPaths.peer = '/peer/dashboard'
@@ -101,22 +103,32 @@ export class RoleDetectionService {
 
       // Check Student (fourth priority)
       try {
-        const student = await StudentService.getStudentByEmail(email)
-        if (student) {
-          // Check if student is assigned to a peer tutor
-          if (student.assigned_peer_tutor_id) {
+        const client = supabaseClient
+        if (client) {
+          const { data: student, error } = await client
+            .from('peer_students')
+            .select('id, email, name, assigned_peer_tutor_id')
+            .ilike('email', normalizedEmail)
+            .limit(1)
+            .maybeSingle()
+          
+          if (student && !error) {
             roles.push('student')
             dashboardPaths.student = '/student/dashboard'
-            // console.log('User has student role available')
-          } else {
-            // console.log('User is student but not assigned to any peer tutor')
+          }
+        } else {
+          // Fallback to client-side service
+          const student = await StudentService.getStudentByEmail(normalizedEmail)
+          if (student) {
+            roles.push('student')
+            dashboardPaths.student = '/student/dashboard'
           }
         }
       } catch {
         // console.log('Student check failed:', error)
       }
 
-      // console.log(`Role detection complete for ${email}:`, roles)
+      // console.log(`Role detection complete for ${normalizedEmail}:`, roles)
       return { 
         roles, 
         dashboardPaths: dashboardPaths as Record<UserRole, string> 

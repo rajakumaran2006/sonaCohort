@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     // Verify the user is authenticated
     const { data: { user } } = await supabase.auth.getUser()
     
-    if (!user || user.email !== email) {
+    if (!user || user.email?.toLowerCase() !== email.toLowerCase()) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

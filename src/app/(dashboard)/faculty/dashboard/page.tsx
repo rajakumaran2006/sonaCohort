@@ -10,7 +10,7 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { cn } from '@/lib/utils'
 import { FacultyService } from '@/lib/services/facultyService'
-import { ScheduledClassService } from '@/lib/services/scheduledClassService'
+import { ScheduledClassService, ScheduledClass } from '@/lib/services/scheduledClassService'
 import { AdditionalClassService, AdditionalClass } from '@/lib/services/additionalClassService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
@@ -18,6 +18,7 @@ import { FeedbackService } from '@/lib/services/feedbackService'
 import { RenumerationService } from '@/lib/services/renumerationService'
 import { Card } from '@/components/ui'
 import { FacultyDashboardSkeleton } from '@/components/skeletons/FacultyDashboardSkeleton'
+import WaterflowClasses from '@/components/ui/WaterflowClasses'
 import {
   BarChart, Bar, XAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -64,6 +65,11 @@ interface DashboardStats {
   attendanceRate: number
   weeklyActivity: { day: string; classes: number }[]
   yearStats: { year: string; count: number; percentage: number }[]
+  pendingClassesData: {
+    all: { year: string; pending: number; total: number }[];
+    week: { year: string; pending: number; total: number }[];
+    month: { year: string; pending: number; total: number }[];
+  }
   attendanceBreakdown: { name: string; value: number; color: string }[]
   recentClasses: RecentClass[]
   currentWeekTotal: number
@@ -85,6 +91,7 @@ const initialStats: DashboardStats = {
   attendanceRate: 0,
   weeklyActivity: [],
   yearStats: [],
+  pendingClassesData: { all: [], week: [], month: [] },
   attendanceBreakdown: [],
   recentClasses: [],
   currentWeekTotal: 0,
@@ -339,6 +346,58 @@ function FacultyDashboardContent() {
         },
       ]
 
+      const computePendingForTimeframe = (classes: ScheduledClass[]) => {
+        const timeframeYearCounts: Record<string, { allocated: number; completed: number }> = {
+          '1': { allocated: 0, completed: 0 },
+          '2': { allocated: 0, completed: 0 },
+          '3': { allocated: 0, completed: 0 },
+          '4': { allocated: 0, completed: 0 }
+        }
+        classes.forEach(cls => {
+          const yStr = cls.year?.toString() || ''
+          let normalizedYear = ''
+          if (yStr.includes('1')) normalizedYear = '1'
+          else if (yStr.includes('2')) normalizedYear = '2'
+          else if (yStr.includes('3')) normalizedYear = '3'
+          else if (yStr.includes('4')) normalizedYear = '4'
+
+          if (normalizedYear && timeframeYearCounts[normalizedYear] !== undefined) {
+            timeframeYearCounts[normalizedYear].allocated++
+            if (cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)) {
+              timeframeYearCounts[normalizedYear].completed++
+            }
+          }
+        })
+        return [
+          { year: '1', pending: Math.max(0, timeframeYearCounts['1'].allocated - timeframeYearCounts['1'].completed), total: timeframeYearCounts['1'].allocated },
+          { year: '2', pending: Math.max(0, timeframeYearCounts['2'].allocated - timeframeYearCounts['2'].completed), total: timeframeYearCounts['2'].allocated },
+          { year: '3', pending: Math.max(0, timeframeYearCounts['3'].allocated - timeframeYearCounts['3'].completed), total: timeframeYearCounts['3'].allocated },
+          { year: '4', pending: Math.max(0, timeframeYearCounts['4'].allocated - timeframeYearCounts['4'].completed), total: timeframeYearCounts['4'].allocated },
+        ]
+      }
+
+      const pendingClassesAll = computePendingForTimeframe(allClasses)
+
+      const weekClasses = allClasses.filter(c => {
+        const t = new Date(c.scheduled_date).getTime()
+        const endWeek = new Date(startOfThisWeek)
+        endWeek.setDate(endWeek.getDate() + 7)
+        return t >= startOfThisWeek.getTime() && t < endWeek.getTime()
+      })
+      const pendingClassesWeek = computePendingForTimeframe(weekClasses)
+
+      const monthClasses = allClasses.filter(c => {
+        const d = new Date(c.scheduled_date)
+        return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
+      })
+      const pendingClassesMonth = computePendingForTimeframe(monthClasses)
+
+      const pendingClassesData = {
+        all: pendingClassesAll,
+        week: pendingClassesWeek,
+        month: pendingClassesMonth
+      }
+
       // Recent Classes - group by year and date, showing combined completion percentage
       const todayDate = new Date()
       todayDate.setHours(0, 0, 0, 0)
@@ -412,6 +471,7 @@ function FacultyDashboardContent() {
         currentWeekTotal,
         weeklyChange,
         yearStats,
+        pendingClassesData,
         weeklyActivity,
         attendanceBreakdown,
         recentClasses,
@@ -617,7 +677,7 @@ function FacultyDashboardContent() {
 
 
                   {/* Weekly Activity */}
-                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7">
+                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7 flex flex-col">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                       <div>
                         <h4 className="text-[10px] sm:text-sm font-black text-gray-400 uppercase tracking-widest leading-none mb-2">Weekly Activity</h4>
@@ -634,7 +694,7 @@ function FacultyDashboardContent() {
                         <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-tight">Classes Taken</span>
                       </div>
                     </div>
-                    <div className="w-full h-[160px] sm:h-[180px]">
+                    <div className="w-full h-[80px] sm:h-[90px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={stats.weeklyActivity} barSize={window.innerWidth < 640 ? 10 : 16}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
@@ -646,8 +706,12 @@ function FacultyDashboardContent() {
                     </div>
                   </Card>
 
-                  {/* Spacer for alignment */}
-                  <div className="flex-1 min-h-[1px]"></div>
+                  {/* Pending Classes Waterflow */}
+                  <div className="flex-1 w-full">
+                    <WaterflowClasses data={stats.pendingClassesData} />
+                  </div>
+
+                  {/* Spacer removed for flex bottom alignment */}
                 </div>
 
                 {/* --- MIDDLE COLUMN --- */}
@@ -737,12 +801,12 @@ function FacultyDashboardContent() {
                   </Card>
 
                   {/* Additional Classes by Year */}
-                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7">
+                  <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7 flex-1 flex flex-col">
                     <div className="flex flex-row items-center justify-between mb-8">
                       <h4 className="text-[10px] sm:text-sm font-black text-gray-400 uppercase tracking-widest">Additional Classes</h4>
                       <span className="text-[9px] sm:text-[10px] font-bold text-black-400 bg-gray-50 px-2 py-0.5 rounded-full uppercase">By Year</span>
                     </div>
-                    <div className="w-full h-[160px]">
+                    <div className="w-full flex-1 min-h-[160px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={stats.additionalClassesByYear} barSize={20}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
@@ -765,8 +829,7 @@ function FacultyDashboardContent() {
                     </div>
                   </Card>
 
-                  {/* Spacer for alignment */}
-                  <div className="flex-1 min-h-[1px]"></div>
+                  {/* Spacer removed for flex bottom alignment */}
                 </div>
 
 
@@ -891,7 +954,7 @@ function FacultyDashboardContent() {
                   </Card>
 
                   {/* Today's Classes Scrollable List */}
-                  <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 flex flex-col overflow-hidden max-h-[380px]">
+                  <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 flex-1 flex flex-col overflow-hidden">
                     <div className="flex flex-row items-center justify-between mb-6 border-b border-gray-50 pb-4">
                       <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Today&apos;s Timeline</h4>
                       <span className="bg-gray-100 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-sm">
@@ -932,8 +995,7 @@ function FacultyDashboardContent() {
                     </div>
                   </Card>
 
-                  {/* Spacer for alignment */}
-                  <div className="flex-1 min-h-[1px]"></div>
+                  {/* Spacer removed for flex bottom alignment */}
                 </div>
               </div>
             </main>

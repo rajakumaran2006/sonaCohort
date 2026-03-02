@@ -12,6 +12,7 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   signInWithMicrosoft: () => Promise<void>
+  signInWithPassword: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   userMode: UserMode
   setUserMode: (mode: UserMode) => void
@@ -118,6 +119,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const signInWithPassword = async (email: string, password: string) => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) throw error
+    } catch (error) {
+      logger.error('Error signing in with password:', error)
+      throw error
+    }
+  }
+
   const signOut = async () => {
     try {
       const supabase = createClient()
@@ -160,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     loading,
     signInWithMicrosoft,
+    signInWithPassword,
     signOut,
     userMode,
     setUserMode,
