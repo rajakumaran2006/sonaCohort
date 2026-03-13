@@ -665,7 +665,7 @@ function FacultyExamsContent() {
                             const total = stats.total
                             const progress = total > 0 ? Math.round((stats.completed / total) * 100) : 0
                             const status = total === 0 ? 'Pending' : (progress === 100 ? 'Completed' : (progress > 0 ? 'Ongoing' : 'Pending'))
-                            const statusColor = status === 'Completed' ? 'bg-green-100 text-green-700' : (status === 'Ongoing' ? 'bg-blue-100 text-blue-700' : 'bg-red-600 text-white')
+                            const statusColor = status === 'Completed' ? 'bg-green-100 text-green-700' : (status === 'Ongoing' ? 'bg-blue-500 text-white' : 'bg-red-600 text-white')
 
                             return (
                               <TableRow

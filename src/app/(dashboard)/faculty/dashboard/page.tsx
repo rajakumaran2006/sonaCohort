@@ -720,7 +720,6 @@ function FacultyDashboardContent() {
                   <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7 overflow-hidden relative">
                     <div className="flex flex-row items-center justify-between mb-6 sm:mb-8 relative z-10">
                       <h4 className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-widest">Year Overview</h4>
-                      <MoreHorizontal className="w-5 h-5 text-gray-400 cursor-pointer" />
                     </div>
                     <div className="space-y-6 sm:space-y-8 mt-2 relative z-10">
                       {stats.yearStats.map((yearStat) => (
