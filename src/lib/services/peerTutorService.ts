@@ -387,10 +387,9 @@ export class peertutorservice {
     try {
       const supabase = createClient()
 
-      // logger.info(`Starting peer tutor removal for: ${id}`)
       const deletedRecords: string[] = []
 
-      // 1. Check if there are any students assigned to this peer tutor
+      // 1. Unassign students (set assigned_peer_tutor_id to null) - keep student data intact
       const { data: assignedStudents, error: checkError } = await supabase
         .from('peer_students')
         .select('id, name')
@@ -401,7 +400,6 @@ export class peertutorservice {
         return { success: false, message: 'Failed to check assigned students' }
       }
 
-      // 2. Unassign students (set assigned_peer_tutor_id to null) - keep student data and attendance intact
       if (assignedStudents && assignedStudents.length > 0) {
         const { error: unassignError } = await supabase
           .from('peer_students')
@@ -418,7 +416,35 @@ export class peertutorservice {
         deletedRecords.push(`${assignedStudents.length} students unassigned`)
       }
 
-      // 3. Delete scheduled classes for this peer tutor
+      // 2. Delete attendance records (must be before scheduled_classes due to FK)
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (attendanceError) {
+        logger.error('Error deleting attendance records:', attendanceError)
+        return { success: false, message: `Failed to delete attendance records: ${attendanceError.message}` }
+      } else if (attendanceData && attendanceData.length > 0) {
+        deletedRecords.push(`${attendanceData.length} attendance records`)
+      }
+
+      // 3. Delete additional class attendance records (must be before additional_classes due to FK)
+      const { data: addlAttendanceData, error: addlAttendanceError } = await supabase
+        .from('additional_class_attendance')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (addlAttendanceError) {
+        logger.error('Error deleting additional class attendance:', addlAttendanceError)
+        return { success: false, message: `Failed to delete additional class attendance: ${addlAttendanceError.message}` }
+      } else if (addlAttendanceData && addlAttendanceData.length > 0) {
+        deletedRecords.push(`${addlAttendanceData.length} additional class attendance records`)
+      }
+
+      // 4. Delete scheduled classes
       const { data: scheduledClassesData, error: scheduledClassesError } = await supabase
         .from('scheduled_classes')
         .delete()
@@ -432,7 +458,7 @@ export class peertutorservice {
         deletedRecords.push(`${scheduledClassesData.length} scheduled classes`)
       }
 
-      // 4. Delete additional classes
+      // 5. Delete additional classes
       const { data: additionalClassesData, error: additionalClassesError } = await supabase
         .from('additional_classes')
         .delete()
@@ -446,7 +472,60 @@ export class peertutorservice {
         deletedRecords.push(`${additionalClassesData.length} additional classes`)
       }
 
-      // 5. Delete renumeration records
+      // 6. Delete exam marks
+      const { data: examMarksData, error: examMarksError } = await supabase
+        .from('exam_marks')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (examMarksError) {
+        logger.error('Error deleting exam marks:', examMarksError)
+        return { success: false, message: `Failed to delete exam marks: ${examMarksError.message}` }
+      } else if (examMarksData && examMarksData.length > 0) {
+        deletedRecords.push(`${examMarksData.length} exam marks`)
+      }
+
+      // 7. Delete exam peer tutor summary records
+      const { data: examSummaryData, error: examSummaryError } = await supabase
+        .from('exam_peer_tutor_summary')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (examSummaryError) {
+        logger.error('Error deleting exam peer tutor summary:', examSummaryError)
+        return { success: false, message: `Failed to delete exam summary: ${examSummaryError.message}` }
+      } else if (examSummaryData && examSummaryData.length > 0) {
+        deletedRecords.push(`${examSummaryData.length} exam summary records`)
+      }
+
+      // 8. Nullify exam_subjects.created_by (preserve exam structure, just unlink tutor)
+      const { error: examSubjectsError } = await supabase
+        .from('exam_subjects')
+        .update({ created_by: null })
+        .eq('created_by', id)
+
+      if (examSubjectsError) {
+        logger.error('Error unlinking exam subjects:', examSubjectsError)
+        return { success: false, message: `Failed to unlink exam subjects: ${examSubjectsError.message}` }
+      }
+
+      // 9. Delete class completion records
+      const { data: classCompletionData, error: classCompletionError } = await supabase
+        .from('class_completion')
+        .delete()
+        .eq('peer_tutor_id', id)
+        .select()
+
+      if (classCompletionError) {
+        logger.error('Error deleting class completion records:', classCompletionError)
+        return { success: false, message: `Failed to delete class completion records: ${classCompletionError.message}` }
+      } else if (classCompletionData && classCompletionData.length > 0) {
+        deletedRecords.push(`${classCompletionData.length} class completion records`)
+      }
+
+      // 10. Delete renumeration records
       const { data: renumerationData, error: renumerationError } = await supabase
         .from('peer_tutor_renumerations')
         .delete()
@@ -460,38 +539,7 @@ export class peertutorservice {
         deletedRecords.push(`${renumerationData.length} renumeration records`)
       }
 
-      // 6. Delete class assignments (old table if exists)
-      const { data: classAssignmentsData, error: classAssignmentsError } = await supabase
-        .from('peer_tutor_class_assignments')
-        .delete()
-        .eq('peer_tutor_id', id)
-        .select()
-
-      if (classAssignmentsError) {
-        // Only log warning if it's likely just table missing. 
-        // We don't want to stop deletion for a legacy/optional table error.
-        logger.warn('Error deleting class assignments (table might not exist or other error):', classAssignmentsError)
-      } else if (classAssignmentsData && Array.isArray(classAssignmentsData) && classAssignmentsData.length > 0) {
-        deletedRecords.push(`${classAssignmentsData.length} class assignments`)
-      }
-
-      // 7. Delete attendance records linked to this peer tutor
-      // Note: Student attendance (attendance records with student_id) will remain intact
-      // Only peer tutor's own attendance records are deleted
-      const { data: attendanceData, error: attendanceError } = await supabase
-        .from('attendance')
-        .delete()
-        .eq('peer_tutor_id', id)
-        .select()
-
-      if (attendanceError) {
-        logger.error('Error deleting peer tutor attendance records:', attendanceError)
-        return { success: false, message: `Failed to delete attendance records: ${attendanceError.message}` }
-      } else if (attendanceData && attendanceData.length > 0) {
-        deletedRecords.push(`${attendanceData.length} peer tutor attendance records`)
-      }
-
-      // 8. Finally, delete the peer tutor record
+      // 11. Finally, delete the peer tutor record
       const { error: deleteError } = await supabase
         .from('peer_tutors')
         .delete()
@@ -511,7 +559,6 @@ export class peertutorservice {
         message += `. ${deletedRecords.join(', ')}`
       }
 
-      // logger.info(`Peer tutor removal completed for ${id}:`, deletedRecords)
       return { success: true, message }
     } catch (error) {
       logger.error('Error in removepeertutors:', error)
