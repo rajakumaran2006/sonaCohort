@@ -26,12 +26,13 @@ interface ClassDetailsModalProps {
   classItem: Class | null
   userEmail: string
   availableSubjects?: { id: string, subject_name: string }[]
+  onSuccess?: () => void
 }
 
 const getInitials = (name: string): string => name.split(' ').map(word => word.charAt(0)).join('').toUpperCase().slice(0, 2)
 
 
-export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmail, availableSubjects }: ClassDetailsModalProps) {
+export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmail, availableSubjects, onSuccess }: ClassDetailsModalProps) {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
   const [topics, setTopics] = useState<string>('')
   const [startTime, setStartTime] = useState<string>('')
@@ -279,6 +280,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
             
             // Auto-close after 2 seconds
             setTimeout(() => {
+                onSuccess?.()
                 onClose()
             }, 2000)
         } else {
@@ -450,6 +452,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
         
         // Auto-close after 2 seconds
         setTimeout(() => {
+            onSuccess?.()
             onClose()
         }, 2000)
 

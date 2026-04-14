@@ -78,8 +78,17 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo - Bold and Uppercase */}
-            <div className="flex items-center">
-              <span className="text-2xl font-black text-gray-900 uppercase tracking-tight">sonaCohort</span>
+            <div className="flex items-center gap-2">
+              <Image 
+                src="/peers.png" 
+                alt="SONACOHORT Logo" 
+                width={32} 
+                height={32}
+                className="object-contain"
+              />
+              <span className="text-xl font-black text-gray-900 uppercase tracking-tight">
+                SONA<span className="text-[#84cc16]">COHORT</span>
+              </span>
             </div>
 
             {/* Desktop Menu */}
@@ -87,7 +96,7 @@ export default function Home() {
               <button
                 onClick={() => scrollToSection('home')}
                 className={`text-sm font-medium transition-colors ${
-                  activeSection === 'home' ? 'text-blue-600' : 'text-gray-700 hover:text-blue-600'
+                  activeSection === 'home' ? 'text-[#1C2434]' : 'text-gray-700 hover:text-[#1C2434]'
                 }`}
               >
                 Home
@@ -95,7 +104,7 @@ export default function Home() {
               <button
                 onClick={() => scrollToSection('about')}
                 className={`text-sm font-medium transition-colors ${
-                  activeSection === 'about' ? 'text-blue-600' : 'text-gray-700 hover:text-blue-600'
+                  activeSection === 'about' ? 'text-[#1C2434]' : 'text-gray-700 hover:text-[#1C2434]'
                 }`}
               >
                 About
@@ -103,14 +112,14 @@ export default function Home() {
               <button
                 onClick={() => scrollToSection('contact')}
                 className={`text-sm font-medium transition-colors ${
-                  activeSection === 'contact' ? 'text-blue-600' : 'text-gray-700 hover:text-blue-600'
+                  activeSection === 'contact' ? 'text-[#1C2434]' : 'text-gray-700 hover:text-[#1C2434]'
                 }`}
               >
                 Contact
               </button>
               <a
                 href="/login"
-                className="inline-flex items-center justify-center px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md"
+                className="inline-flex items-center justify-center px-6 py-2 bg-[#1C2434] hover:bg-[#0F172A] text-white font-medium rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md"
               >
                 Login
               </a>
@@ -119,7 +128,7 @@ export default function Home() {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-100 transition-colors"
+              className="md:hidden p-2 rounded-md text-gray-700 hover:text-[#1C2434] hover:bg-gray-100 transition-colors"
               aria-label="Toggle menu"
             >
               {isMobileMenuOpen ? (
@@ -144,7 +153,7 @@ export default function Home() {
                     setIsMobileMenuOpen(false)
                   }}
                   className={`px-4 py-2 text-left font-medium rounded-md transition-colors ${
-                    activeSection === 'home' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                    activeSection === 'home' ? 'bg-gray-100 text-[#1C2434]' : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   Home
@@ -155,7 +164,7 @@ export default function Home() {
                     setIsMobileMenuOpen(false)
                   }}
                   className={`px-4 py-2 text-left font-medium rounded-md transition-colors ${
-                    activeSection === 'about' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                    activeSection === 'about' ? 'bg-gray-100 text-[#1C2434]' : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   About
@@ -166,14 +175,14 @@ export default function Home() {
                     setIsMobileMenuOpen(false)
                   }}
                   className={`px-4 py-2 text-left font-medium rounded-md transition-colors ${
-                    activeSection === 'contact' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                    activeSection === 'contact' ? 'bg-gray-100 text-[#1C2434]' : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   Contact
                 </button>
                 <a
                   href="/login"
-                  className="mx-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors text-center"
+                  className="mx-4 px-4 py-2 bg-[#1C2434] hover:bg-[#0F172A] text-white font-medium rounded-md transition-colors text-center"
                 >
                   Login
                 </a>
@@ -201,7 +210,7 @@ export default function Home() {
               <div className="flex items-center gap-4">
                 <a
                   href="/login"
-                  className="inline-flex items-center justify-center px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
+                  className="inline-flex items-center justify-center px-8 py-3.5 bg-[#1C2434] hover:bg-[#0F172A] text-white font-medium rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
                 >
                   Login
                 </a>
@@ -275,7 +284,7 @@ export default function Home() {
                     </div>
                     <h4 className="font-semibold text-gray-900 text-sm">Ms. P. Kruthika</h4>
                     <p className="text-xs text-gray-600">Assistant Professor</p>
-                    <p className="text-xs text-blue-600 mt-1">Information Technology</p>
+                    <p className="text-xs text-[#1C2434] mt-1 font-bold">Information Technology</p>
                   </div>
 
                 </div>
@@ -284,7 +293,7 @@ export default function Home() {
               <div className="flex items-center gap-4">
                 <a
                   href="/login"
-                  className="inline-flex items-center justify-center px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
+                  className="inline-flex items-center justify-center px-8 py-3.5 bg-[#1C2434] hover:bg-[#0F172A] text-white font-medium rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
                 >
                   Login
                 </a>
@@ -328,7 +337,7 @@ export default function Home() {
                     <input
                       type="text"
                       id="firstName"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C2434] focus:border-transparent bg-gray-50"
                       placeholder=""
                     />
                   </div>
@@ -339,7 +348,7 @@ export default function Home() {
                   <input
                     type="text"
                       id="lastName"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C2434] focus:border-transparent bg-gray-50"
                       placeholder=""
                     />
                   </div>
@@ -351,7 +360,7 @@ export default function Home() {
                   <input
                     type="email"
                     id="email"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C2434] focus:border-transparent bg-gray-50"
                     placeholder=""
                   />
                 </div>
@@ -362,13 +371,13 @@ export default function Home() {
                   <textarea
                     id="message"
                     rows={5}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C2434] focus:border-transparent bg-gray-50"
                     placeholder=""
                   ></textarea>
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-lg font-medium transition-colors duration-200"
+                  className="w-full bg-[#1C2434] hover:bg-[#0F172A] text-white px-6 py-3.5 rounded-lg font-medium transition-colors duration-200"
                 >
                   Send Message
                 </button>
@@ -400,8 +409,17 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             {/* Logo - Bold and Uppercase */}
-            <div className="flex items-center">
-              <span className="text-2xl font-black text-gray-900 uppercase tracking-tight">sonaCohort</span>
+            <div className="flex items-center gap-2">
+              <Image 
+                src="/peers.png" 
+                alt="SONACOHORT Logo" 
+                width={32} 
+                height={32}
+                className="object-contain"
+              />
+              <span className="text-xl font-black text-gray-900 uppercase tracking-tight">
+                SONA<span className="text-[#84cc16]">COHORT</span>
+              </span>
             </div>
             
             <p className="text-sm text-gray-600">
@@ -409,17 +427,17 @@ export default function Home() {
             </p>
             
             <div className="flex items-center space-x-6">
-              <a href="#" className="text-gray-400 hover:text-blue-600 transition-colors" aria-label="Twitter">
+              <a href="#" className="text-gray-400 hover:text-[#1C2434] transition-colors" aria-label="Twitter">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M23 3a10.9 10.9 0 01-3.14 1.53 4.48 4.48 0 00-7.86 3v1A10.66 10.66 0 013 4s-4 9 5 13a11.64 11.64 0 01-7 2c9 5 20 0 20-11.5a4.5 4.5 0 00-.08-.83A7.72 7.72 0 0023 3z" />
                 </svg>
               </a>
-              <a href="#" className="text-gray-400 hover:text-blue-600 transition-colors" aria-label="GitHub">
+              <a href="#" className="text-gray-400 hover:text-[#1C2434] transition-colors" aria-label="GitHub">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
                 </svg>
               </a>
-              <a href="#" className="text-gray-400 hover:text-blue-600 transition-colors" aria-label="Instagram">
+              <a href="#" className="text-gray-400 hover:text-[#1C2434] transition-colors" aria-label="Instagram">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073z" />
                   <path d="M12 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zm0 10.162a4 4 0 110-8 4 4 0 010 8zm7.845-10.405a1.44 1.44 0 11-2.88 0 1.44 1.44 0 012.88 0z" />

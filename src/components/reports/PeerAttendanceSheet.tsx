@@ -6,12 +6,14 @@ import autoTable from 'jspdf-autotable'
 import ExportButton from '@/components/ui/ExportButton'
 import { toast } from 'sonner'
 import { logger } from '@/lib/logger'
+import { SheetHeaderInfo } from './PeerTopicSheet'
 
 interface PeerAttendanceSheetProps {
   peertutorId: string
+  headerInfo?: SheetHeaderInfo
 }
 
-export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheetProps) {
+export default function PeerAttendanceSheet({ peertutorId, headerInfo }: PeerAttendanceSheetProps) {
   const { data: attendanceData, isLoading } = useCachedData({
     queryKey: ['peer-attendance-sheet', peertutorId],
     queryFn: async () => {
@@ -19,6 +21,21 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
     },
     enabled: !!peertutorId
   })
+
+  // Build subtitle lines for the sheet header
+  const buildHeaderLines = () => {
+    const lines: string[] = []
+    if (headerInfo?.collegeName) lines.push(headerInfo.collegeName)
+    if (headerInfo?.dept) lines.push(`DEPT OF ${headerInfo.dept}`)
+    lines.push('PEER TUTORING ATTENDANCE SHEET')
+    if (headerInfo?.academicYear || headerInfo?.semesterType) {
+      const semLabel = headerInfo.semesterType
+        ? `${headerInfo.semesterType.charAt(0).toUpperCase() + headerInfo.semesterType.toUpperCase().slice(1)} SEMESTER`
+        : ''
+      lines.push([headerInfo.academicYear, semLabel].filter(Boolean).join(' - '))
+    }
+    return lines
+  }
 
   const handleExport = () => {
     if (!attendanceData || attendanceData.length === 0) {
@@ -30,16 +47,70 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
       const doc = new jsPDF('l', 'mm', 'a4') // Landscape mode for wider tables
       const pageHeight = doc.internal.pageSize.height
       const pageWidth = doc.internal.pageSize.width
-      let finalY = 20
+      let finalY = 10
+
+      // ── HEADER ──────────────────────────────────────────────────
+      const headerLines = buildHeaderLines()
+      // College name (largest)
+      if (headerLines[0]) {
+        doc.setFontSize(14)
+        doc.setFont('helvetica', 'bold')
+        doc.text(headerLines[0], pageWidth / 2, finalY + 10, { align: 'center' })
+        finalY += 10
+      }
+      // Dept
+      if (headerLines[1]) {
+        doc.setFontSize(11)
+        doc.setFont('helvetica', 'normal')
+        doc.text(headerLines[1], pageWidth / 2, finalY + 7, { align: 'center' })
+        finalY += 7
+      }
+      // Sheet name
+      if (headerLines[2]) {
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text(headerLines[2], pageWidth / 2, finalY + 7, { align: 'center' })
+        finalY += 7
+      }
+      // Academic year
+      if (headerLines[3]) {
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'normal')
+        doc.text(headerLines[3], pageWidth / 2, finalY + 6, { align: 'center' })
+        finalY += 6
+      }
+
+      // Peer tutor info (left side)
+      const tutorLines: string[] = []
+      if (headerInfo?.tutorName) tutorLines.push(`PEER TUTOR: ${headerInfo.tutorName}`)
+      if (headerInfo?.tutorYear) tutorLines.push(`YEAR: ${headerInfo.tutorYear}`)
+      if (headerInfo?.tutorSection) tutorLines.push(`SECTION: ${headerInfo.tutorSection}`)
+
+      if (tutorLines.length > 0) {
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'normal')
+        let tutY = 12
+        tutorLines.forEach(line => {
+          doc.text(line, 14, tutY)
+          tutY += 5
+        })
+      }
+
+      // Divider line
+      finalY += 4
+      doc.setDrawColor(0)
+      doc.setLineWidth(0.3)
+      doc.line(14, finalY, pageWidth - 14, finalY)
+      finalY += 5
+      // ────────────────────────────────────────────────────────────
 
       attendanceData.forEach((subject, index) => {
         // Check space
-        // Header (10) + Table Header (10) + Row (10) = 30
         if (finalY + 30 > pageHeight) {
           doc.addPage()
           finalY = 20
         } else if (index > 0) {
-          finalY += 5 // Reduced spacing between subjects (was 10)
+          finalY += 5
         }
 
         doc.setFontSize(14)
@@ -94,7 +165,7 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
             halign: 'center'
           },
           columnStyles: {
-            1: { halign: 'left' } // Name column align left
+            1: { halign: 'left' }
           },
           styles: {
             font: 'helvetica',
@@ -103,10 +174,8 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
           margin: { top: 20, bottom: 20, left: 14, right: 14 }
         })
 
-        // Update finalY
-        finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 2 // Minimized spacing (was 5)
+        finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 2
 
-        // Add Signature space
         if (finalY + 15 > pageHeight) {
           doc.addPage()
           finalY = 20
@@ -116,11 +185,11 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
         doc.setFont('helvetica', 'bold')
         doc.text('SIGNATURE OF FACULTY:', 14, finalY + 6)
 
-        finalY += 10 // Reduced buffer (was 15)
+        finalY += 10
       })
 
       // Add Borders
-      const pageCount = (doc.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages()
+      const pageCount = doc.getNumberOfPages()
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i)
         doc.setDrawColor(0)
@@ -153,10 +222,58 @@ export default function PeerAttendanceSheet({ peertutorId }: PeerAttendanceSheet
     )
   }
 
+  const headerLines = buildHeaderLines()
+
   return (
     <div className="bg-white p-8 shadow-sm border border-gray-200 rounded-none print:shadow-none print:border-none relative">
       <div className="absolute top-6 right-6 print:hidden">
         <ExportButton onClick={handleExport} />
+      </div>
+
+      {/* Sheet Header */}
+      <div className="mb-8 border-b-2 border-gray-800 pb-4">
+        {/* Top row: tutor info (left) + sheet title (center) */}
+        <div className="flex items-start justify-between">
+          {/* Left: Peer Tutor Info */}
+          <div className="text-left space-y-0.5">
+            {headerInfo?.tutorName && (
+              <p className="text-sm font-bold text-gray-900 uppercase">
+                Peer Tutor: <span className="font-normal">{headerInfo.tutorName}</span>
+              </p>
+            )}
+            {headerInfo?.tutorYear && (
+              <p className="text-sm font-bold text-gray-900 uppercase">
+                Year: <span className="font-normal">{headerInfo.tutorYear}</span>
+              </p>
+            )}
+            {headerInfo?.tutorSection && (
+              <p className="text-sm font-bold text-gray-900 uppercase">
+                Section: <span className="font-normal">{headerInfo.tutorSection}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Center: Sheet Header */}
+          <div className="flex-1 text-center px-4">
+            {headerLines[0] && (
+              <h2 className="text-lg font-black text-gray-900 uppercase tracking-wide leading-tight">
+                {headerLines[0]}
+              </h2>
+            )}
+            {headerLines[1] && (
+              <p className="text-sm font-semibold text-gray-700 mt-0.5">{headerLines[1]}</p>
+            )}
+            {headerLines[2] && (
+              <p className="text-base font-bold text-gray-900 mt-1 uppercase">{headerLines[2]}</p>
+            )}
+            {headerLines[3] && (
+              <p className="text-xs text-gray-600 mt-0.5">{headerLines[3]}</p>
+            )}
+          </div>
+
+          {/* Right: empty spacer to balance layout */}
+          <div className="w-32" />
+        </div>
       </div>
 
       {attendanceData.map((subject, index) => (

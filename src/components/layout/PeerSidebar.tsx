@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useState, useMemo } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -61,6 +62,20 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
     staleTime: 10 * 60 * 1000, // 10 minutes - cache for a long time
     refetchOnWindowFocus: false,
     refetchOnMount: false, // Don't refetch on mount if data exists
+  })
+
+  // Fetch college name from superadmin
+  const { data: collegeName } = useQuery({
+    queryKey: ['superadmin-college-name'],
+    queryFn: async () => {
+      const { data } = await createClient()
+        .from('superadmin')
+        .select('college_name')
+        .not('college_name', 'is', null)
+        .limit(1)
+      return data?.[0]?.college_name || ''
+    },
+    staleTime: 60 * 60 * 1000, // 1 hour
   })
 
   // Memoize navigation to prevent recreation on every render
@@ -217,7 +232,7 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
                   {peertutors?.name || user?.user_metadata?.full_name || 'Peer Tutor'}
                  </p>
                 <p className="text-[10px] text-[#bef264] font-bold uppercase tracking-wider truncate opacity-80">
-                  Tutor
+                  Tutor {collegeName && <span className="text-gray-500 mx-1">·</span>} {collegeName}
                 </p>
               </div>
             </Link>

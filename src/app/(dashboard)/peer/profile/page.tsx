@@ -35,6 +35,7 @@ function PeerProfileContent() {
   const [profile, setProfile] = useState<PeerTutorProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isSidebarCollapsed] = useSidebarCollapsed()
+  const [collegeName, setCollegeName] = useState<string>('')
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -47,6 +48,16 @@ function PeerProfileContent() {
           .ilike('email', user.email)
           .single()
         setProfile(tutor as PeerTutorProfile)
+
+        // Fetch college name from superadmin table
+        const { data: admins } = await supabase
+          .from('superadmin')
+          .select('college_name')
+          .not('college_name', 'is', null)
+          .limit(1)
+        if (admins && admins.length > 0 && admins[0].college_name) {
+          setCollegeName(admins[0].college_name)
+        }
       } catch (error) {
         logger.error('Error fetching profile:', error)
       } finally {
@@ -95,6 +106,7 @@ function PeerProfileContent() {
               department={profile.dept}
               year={profile.year}
               section={profile.section}
+              collegeName={collegeName || undefined}
             />
 
             <div className="mt-6">

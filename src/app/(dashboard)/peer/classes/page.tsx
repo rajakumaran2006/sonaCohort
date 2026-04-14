@@ -16,6 +16,7 @@ import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { peertutors } from '@/lib/services/peerTutorService'
 import { ReportService, ClassAttendanceReport } from '@/lib/services/reportService'
 import { AdditionalClassService } from '@/lib/services/additionalClassService'
+import { FacultyService } from '@/lib/services/facultyService'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import FilterDropdown from '@/components/ui/FilterDropdown'
@@ -45,7 +46,7 @@ export default function PeerClassesPage() {
 }
 
 interface ClassWithStatus extends Class {
-  completionStatus?: 'completed' | 'pending' | 'not_started' | 'upcoming'
+  completionStatus?: 'completed' | 'pending' | 'not_started' | 'upcoming' | 'today'
   isEditable: boolean
   scheduled_date?: string
   scheduled_class_id?: string
@@ -72,9 +73,11 @@ function PeerClassesContent() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   
   // Filter states
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterSubject, setFilterSubject] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [subTab, setSubTab] = useState<'upcoming' | 'pending' | 'completed'>('upcoming')
+  const [filterSubject, setFilterSubject] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   // Use custom hook for sidebar collapsed state
   const [isSidebarCollapsed] = useSidebarCollapsed()
@@ -132,6 +135,38 @@ function PeerClassesContent() {
     staleTime: 5 * 60 * 1000,
   })
 
+  // Fetch all departments to find the right incharge info
+  const { data: allDepts } = useCachedData({
+    queryKey: ['all-departments'],
+    queryFn: async () => await FacultyService.getAllDepartments(),
+    initialData: [],
+    staleTime: 10 * 60 * 1000,
+  })
+
+  // Match the department info locally for better reliability
+  const deptInfo = useMemo(() => {
+    if (!tutorInfoData || !allDepts?.length) return null
+    
+    // 1. Try to match by faculty_id (if it points to a department id)
+    if (tutorInfoData.faculty_id) {
+      const match = allDepts.find(d => d.id === tutorInfoData.faculty_id)
+      if (match) return match
+    }
+    
+    // 2. Fallback: match by department name (normalized)
+    if (tutorInfoData.dept) {
+      const normalizedTutorDept = tutorInfoData.dept.trim().toLowerCase()
+      const match = allDepts.find(d => 
+        d.name.trim().toLowerCase() === normalizedTutorDept ||
+        normalizedTutorDept.includes(d.name.trim().toLowerCase()) ||
+        d.name.trim().toLowerCase().includes(normalizedTutorDept)
+      )
+      if (match) return match
+    }
+    
+    return null
+  }, [tutorInfoData, allDepts])
+
   const loading = tutorLoading || scheduledLoading || studentsLoading || additionalLoading
 
   // Process scheduled classes data using useMemo to prevent infinite loops
@@ -150,7 +185,7 @@ function PeerClassesContent() {
       const isFuture = scheduledDate.getTime() > today.getTime()
       const isPast = scheduledDate.getTime() < today.getTime()
       
-      let completionStatus: 'completed' | 'pending' | 'not_started' | 'upcoming' = 'not_started'
+      let completionStatus: 'completed' | 'pending' | 'not_started' | 'upcoming' | 'today' = 'not_started'
       
       if (completion === 'completed') {
         completionStatus = 'completed'
@@ -159,7 +194,7 @@ function PeerClassesContent() {
       } else if (isPast) {
         completionStatus = 'pending'
       } else if (isEditable) {
-        completionStatus = 'pending'
+        completionStatus = 'today'
       }
       
       return {
@@ -199,6 +234,25 @@ function PeerClassesContent() {
   const filteredClasses = useMemo(() => {
     let filtered = classes
 
+    // Apply sub-tab filter
+    filtered = filtered.filter(item => {
+      if (subTab === 'upcoming') {
+        // Show today's uncompleted classes AND actual future classes in UPCOMING tab
+        return item.completionStatus === 'upcoming' || item.completionStatus === 'today' || (item.isEditable && item.completionStatus !== 'completed');
+      }
+      return item.completionStatus === subTab;
+    });
+
+    // Apply date range filters
+    if (fromDate) {
+      filtered = filtered.filter(item => new Date(item.scheduled_date) >= new Date(fromDate))
+    }
+    if (toDate) {
+      const end = new Date(toDate)
+      end.setHours(23, 59, 59, 999) // include the end date
+      filtered = filtered.filter(item => new Date(item.scheduled_date) <= end)
+    }
+
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(classItem =>
@@ -209,19 +263,13 @@ function PeerClassesContent() {
       )
     }
 
-    // Apply filters
-    if (filterStatus) filtered = filtered.filter(classItem => classItem.completionStatus === filterStatus)
+    // Apply subject filter
     if (filterSubject) filtered = filtered.filter(classItem => classItem.subject_name === filterSubject)
 
     return filtered
-  }, [classes, searchTerm, filterStatus, filterSubject])
+  }, [classes, searchTerm, subTab, filterSubject, fromDate, toDate])
 
   // Get unique values for filter dropdowns
-  const getStatusOptions = () => [
-    { label: 'Pending', value: 'pending' },
-    { label: 'Completed', value: 'completed' },
-    { label: 'Upcoming', value: 'upcoming' }
-  ]
   const getUniqueSubjects = () => [...new Set(classes.map(c => c.subject_name))].sort().map(s => ({ label: s, value: s }))
 
   const handleClassClick = (classItem: ClassWithStatus) => {
@@ -266,27 +314,160 @@ function PeerClassesContent() {
   
   const handleExportData = () => {
      if (filteredClasses.length === 0) {
-        toast.warning('No responses to export. Please adjust your filters.')
+        toast.warning('No data to export. Please adjust your filters.')
         return
      }
      
-     const exportData = filteredClasses.map(c => ({
-        'Subject': c.subject_name,
-        'Date': c.scheduled_date,
-        'Department': c.dept, 
-        'Year': c.year,
-        'Section': c.section,
-        'Status': c.completionStatus || 'N/A'
-     }))
+     const filtersApplied = !!(searchTerm || filterSubject || fromDate || toDate)
+     
+     const metadata = [
+       ['PEER TUTOR CLASS REPORT'],
+       ['Export Date:', new Date().toLocaleDateString(), 'Export Time:', new Date().toLocaleTimeString()],
+       ['Dept:', tutorInfoData?.dept || 'N/A', 'Year:', tutorInfoData?.year || 'N/A', 'Section:', tutorInfoData?.section || 'N/A'],
+       ['Filter Applied:', filtersApplied ? 'YES' : 'NO', 'Filters:', [
+         searchTerm ? `Search: ${searchTerm}` : '',
+         filterSubject ? `Subject: ${filterSubject}` : '',
+         fromDate ? `From: ${fromDate}` : '',
+         toDate ? `To: ${toDate}` : ''
+       ].filter(Boolean).join(', ') || 'None'],
+       ['Incharge:', deptInfo?.faculty_name || 'N/A', 'Tutor:', tutorInfoData?.name || 'N/A', 'Assigned Students:', (assignedStudents || []).length],
+       [''],
+       ['SUBJECT', 'DATE', 'DEPARTMENT', 'YEAR', 'SECTION', 'STATUS']
+     ]
+     
+     const exportData = filteredClasses.map(c => [
+        c.subject_name,
+        c.scheduled_date,
+        c.dept, 
+        c.year,
+        c.section,
+        c.completionStatus || 'N/A'
+     ])
      
      try {
-       const ws = XLSX.utils.json_to_sheet(exportData)
+       const ws = XLSX.utils.aoa_to_sheet([...metadata, ...exportData])
+       
+       // Fix column widths
+       ws['!cols'] = [
+         { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 15 }
+       ]
+
        const wb = XLSX.utils.book_new()
-       XLSX.utils.book_append_sheet(wb, ws, "Classes")
-       XLSX.writeFile(wb, `Classes_Export_${new Date().toISOString().split('T')[0]}.xlsx`)
+       XLSX.utils.book_append_sheet(wb, ws, subTab.toUpperCase())
+       XLSX.writeFile(wb, `${subTab.toUpperCase()}_Classes_Export_${new Date().toISOString().split('T')[0]}.xlsx`)
+       toast.success(`Successfully exported ${subTab} classes`)
      } catch {
        toast.error('Error exporting to Excel. Please try again.')
      }
+  }
+
+  const handleExportAllData = () => {
+    if (classes.length === 0) {
+       toast.warning('No data available to export.')
+       return
+    }
+    
+    try {
+      const wb = XLSX.utils.book_new()
+      
+      const upcoming = classes.filter(c => c.completionStatus === 'upcoming' || (c.isEditable && c.completionStatus !== 'completed'))
+      const pending = classes.filter(c => c.completionStatus === 'pending')
+      const completed = classes.filter(c => c.completionStatus === 'completed')
+
+      const createSheetData = (data: ClassWithStatus[], title: string) => {
+        const metadata = [
+          [`PEER TUTOR ${title.toUpperCase()} REPORT`],
+          ['Export Date:', new Date().toLocaleDateString(), 'Export Time:', new Date().toLocaleTimeString()],
+          ['Dept:', tutorInfoData?.dept || 'N/A', 'Year:', tutorInfoData?.year || 'N/A', 'Section:', tutorInfoData?.section || 'N/A'],
+          ['Filter Applied:', 'NO', 'Filters:', 'None'],
+          ['Incharge:', deptInfo?.faculty_name || 'N/A', 'Tutor:', tutorInfoData?.name || 'N/A', 'Assigned Students:', (assignedStudents || []).length],
+          [''],
+          ['SUBJECT', 'DATE', 'DEPARTMENT', 'YEAR', 'SECTION', 'STATUS']
+        ]
+        
+        const rows = data.map(c => [
+           c.subject_name,
+           c.scheduled_date,
+           c.dept, 
+           c.year,
+           c.section,
+           c.completionStatus || 'N/A'
+        ])
+        
+        const ws = XLSX.utils.aoa_to_sheet([...metadata, ...rows])
+        ws['!cols'] = [
+          { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 15 }
+        ]
+        return ws
+      }
+
+      if (upcoming.length > 0) XLSX.utils.book_append_sheet(wb, createSheetData(upcoming, "Upcoming"), "Upcoming")
+      if (pending.length > 0) XLSX.utils.book_append_sheet(wb, createSheetData(pending, "Pending"), "Pending")
+      if (completed.length > 0) XLSX.utils.book_append_sheet(wb, createSheetData(completed, "Completed"), "Completed")
+
+      XLSX.writeFile(wb, `All_Classes_Export_${new Date().toISOString().split('T')[0]}.xlsx`)
+      toast.success('Successfully exported all classes')
+    } catch {
+      toast.error('Error exporting all data to Excel.')
+    }
+  }
+
+  const handleExportSingleAttendance = async (classItem: ClassWithStatus) => {
+    try {
+      if (!tutorInfoData || !classItem.scheduled_class_id) return
+      
+      const report = await ReportService.getClassAttendanceReport(classItem.scheduled_class_id)
+      if (!report) {
+         toast.error("Failed to fetch class attendance report.")
+         return
+      }
+      
+      const file = await ReportService.generateSingleAttendanceSheet(report, classItem, tutorInfoData.dept || 'UNKNOWN')
+      const url = URL.createObjectURL(file)
+      
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      toast.success('Attendance Sheet exported successfully!')
+    } catch (error) {
+      logger.error('Error exporting attendance sheet:', error)
+      toast.error('Failed to export Attendance Sheet.')
+    }
+  }
+
+  const handleExportSingleTopic = async (classItem: ClassWithStatus) => {
+    try {
+      if (!tutorInfoData || !classItem.scheduled_class_id) return
+      
+      const report = await ReportService.getClassAttendanceReport(classItem.scheduled_class_id)
+      if (!report) {
+         toast.error("Failed to fetch class topic report.")
+         return
+      }
+      
+      const file = await ReportService.generateSingleTopicSheet(report, classItem, tutorInfoData.dept || 'UNKNOWN')
+      const url = URL.createObjectURL(file)
+      
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      toast.success('Topic Sheet exported successfully!')
+    } catch (error) {
+      logger.error('Error exporting topic sheet:', error)
+      toast.error('Failed to export Topic Sheet.')
+    }
   }
 
   const loadClassDetails = async (classItem: ClassWithStatus) => {
@@ -488,29 +669,90 @@ function PeerClassesContent() {
 
                 {/* Filters & Table Section */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  <div className="p-5 border-b border-gray-100 bg-gray-50/30">
-                        <div className="flex flex-col lg:flex-row xl:flex-row gap-4 justify-between items-start lg:items-center">
-                        <div className="relative w-full lg:max-w-sm">
+                  <div className="p-5 border-b border-gray-100 bg-gray-50/50">
+                    <div className="flex flex-col space-y-4">
+                      {/* Sub-navbar & Export All */}
+                      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-gray-100 pb-4">
+                        <nav className="flex space-x-1 p-1 bg-gray-100/50 rounded-xl" aria-label="Status Tabs">
+                           {[
+                             { 
+                               id: 'upcoming', 
+                               label: 'UPCOMING', 
+                               count: classes.filter(c => c.completionStatus === 'upcoming' || c.completionStatus === 'today' || (c.isEditable && c.completionStatus !== 'completed')).length 
+                             },
+                             { 
+                               id: 'pending', 
+                               label: 'PENDING', 
+                               count: classes.filter(c => c.completionStatus === 'pending').length 
+                             },
+                             { 
+                               id: 'completed', 
+                               label: 'COMPLETED', 
+                               count: classes.filter(c => c.completionStatus === 'completed').length 
+                             }
+                           ].map((tab) => (
+                             <button
+                               key={tab.id}
+                               onClick={() => setSubTab(tab.id as 'upcoming' | 'pending' | 'completed')}
+                               className={`px-3 py-2 rounded-lg text-[10px] font-bold transition-all duration-200 uppercase tracking-widest flex items-center gap-2 ${
+                                 subTab === tab.id
+                                   ? 'bg-black text-white shadow-md'
+                                   : 'text-gray-500 hover:text-gray-900 hover:bg-white'
+                               }`}
+                             >
+                               {tab.label}
+                               <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black ${
+                                 subTab === tab.id ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-500'
+                               }`}>
+                                 {tab.count}
+                               </span>
+                             </button>
+                           ))}
+                        </nav>
+                        
+                        <div className="flex items-center gap-3">
+                          <ExportButton 
+                            text="Export All" 
+                            onClick={handleExportAllData} 
+                            disabled={classes.length === 0}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center pt-2">
+                        <div className="relative w-full lg:max-w-xs">
                            <input
                              type="text"
                              value={searchTerm}
                              onChange={(e) => setSearchTerm(e.target.value)}
-                             placeholder="Search classes, subjects..."
-                             className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 focus:border-blue-400 rounded-xl text-sm transition-all outline-none shadow-sm"
+                             placeholder="Search..."
+                             className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 focus:border-blue-400 rounded-xl text-xs transition-all outline-none shadow-sm"
                            />
-                           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                         </div>
                         
                         <div className="flex flex-wrap gap-3 w-full lg:w-auto">
-                           <div className="w-full sm:w-auto sm:min-w-[140px]">
-                             <FilterDropdown
-                                value={filterStatus}
-                                onChange={setFilterStatus}
-                                options={getStatusOptions()}
-                                placeholder="Status"
+                           {/* Date range filters */}
+                           <div className="flex flex-row items-center gap-2 w-full sm:w-auto bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm">
+                             <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                             <input
+                               type="date"
+                               value={fromDate}
+                               onChange={(e) => setFromDate(e.target.value)}
+                               className="text-[10px] font-bold text-gray-600 focus:outline-none bg-transparent uppercase tracking-tighter"
+                               placeholder="From"
+                             />
+                             <span className="text-gray-300 mx-1">|</span>
+                             <input
+                               type="date"
+                               value={toDate}
+                               onChange={(e) => setToDate(e.target.value)}
+                               className="text-[10px] font-bold text-gray-600 focus:outline-none bg-transparent uppercase tracking-tighter"
+                               placeholder="To"
                              />
                            </div>
-                           <div className="w-full sm:w-auto sm:min-w-[160px]">
+
+                           <div className="w-full sm:w-auto sm:min-w-[140px]">
                              <FilterDropdown
                                 value={filterSubject}
                                 onChange={setFilterSubject}
@@ -524,20 +766,22 @@ function PeerClassesContent() {
                                <ExportButton onClick={handleExportData} disabled={filteredClasses.length === 0} />
                              </div>
                              
-                             {(filterStatus || filterSubject || searchTerm) && (
+                             {(filterSubject || searchTerm || fromDate || toDate) && (
                                 <button 
                                   onClick={() => {
-                                     setFilterStatus('')
                                      setFilterSubject('')
                                      setSearchTerm('')
+                                     setFromDate('')
+                                     setToDate('')
                                   }}
-                                  className="px-4 py-2.5 text-xs font-bold text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors uppercase tracking-wider h-[42px]"
+                                  className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors uppercase tracking-wider"
                                 >
                                    Clear
                                 </button>
                              )}
                            </div>
                         </div>
+                      </div>
                     </div>
                   </div>
 
@@ -550,8 +794,11 @@ function PeerClassesContent() {
                           <div className="p-4 border-b border-gray-100">
                             <div className="flex items-start justify-between gap-3 mb-3">
                               <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-bold text-gray-900 uppercase mb-1 leading-tight">
+                                <h3 className="text-sm font-bold text-gray-900 uppercase mb-1 leading-tight flex items-center gap-2">
                                   {classItem.subject_name}
+                                  {classItem.isEditable && (
+                                    <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white text-[8px] font-black tracking-widest animate-pulse">TODAY</span>
+                                  )}
                                 </h3>
                                 <div className="flex items-center gap-2 text-[10px] text-gray-500">
                                   <span className="font-semibold">{classItem.dept}</span>
@@ -611,9 +858,21 @@ function PeerClassesContent() {
                             )}
                           </div>
 
-                          {/* Expanded Details */}
+                           {/* Expanded Details */}
                           {expandedRows.has(classItem.scheduled_class_id) && (
                             <div className="mt-4 bg-gray-50 rounded-xl border border-gray-200 p-4">
+                               {/* Mobile Class Details Actions */}
+                               <div className="flex flex-col gap-2 mb-4">
+                                 <button onClick={(e) => { e.stopPropagation(); handleExportSingleTopic(classItem); }} className="w-full py-2 bg-white hover:bg-gray-100 text-gray-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border border-gray-200 shadow-sm flex items-center justify-center gap-2">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                    Topic Sheet
+                                 </button>
+                                 <button onClick={(e) => { e.stopPropagation(); handleExportSingleAttendance(classItem); }} className="w-full py-2 bg-white hover:bg-gray-100 text-gray-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border border-gray-200 shadow-sm flex items-center justify-center gap-2">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                    Attendance Sheet
+                                 </button>
+                               </div>
+
                                {/* Mobile Class Details */}
                                <div className="mb-6 space-y-4">
                                   <div>
@@ -659,8 +918,8 @@ function PeerClassesContent() {
                                            </div>
                                            <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded flex-shrink-0 ${
                                               record.status === 'present' 
-                                                 ? 'bg-green-400 text-black' 
-                                                 : 'bg-red-400 text-black'
+                                                 ? 'bg-green-600 text-white'
+                                                 : 'bg-red-600 text-white'
                                            }`}>
                                               {String(record.status)}
                                            </span>
@@ -725,7 +984,9 @@ function PeerClassesContent() {
                                    className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer"
                                  >
                                     <TableCell className="py-3 sm:py-4 pl-4 sm:pl-6">
-                                       <p className="text-xs font-bold text-gray-900 uppercase leading-tight hover:underline">{classItem.subject_name}</p>
+                                       <div className="flex items-center gap-2">
+                                          <p className="text-xs font-bold text-gray-900 uppercase leading-tight hover:underline">{classItem.subject_name}</p>
+                                       </div>
                                     </TableCell>
                                     <TableCell className="py-3 sm:py-4 text-center">
                                        <p className="text-xs font-bold uppercase text-gray-900">
@@ -794,7 +1055,19 @@ function PeerClassesContent() {
                                        <TableCell colSpan={6} className="px-6 py-6">
                                           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                                              {/* Class Details Header */}
-                                             <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-4">Class Details</p>
+                                             <div className="flex justify-between items-center mb-4">
+                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Class Details</p>
+                                                <div className="flex items-center gap-3">
+                                                   <button onClick={(e) => { e.stopPropagation(); handleExportSingleTopic(classItem); }} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg uppercase tracking-wider transition-colors shadow-sm">
+                                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                                      Topic Sheet
+                                                   </button>
+                                                   <button onClick={(e) => { e.stopPropagation(); handleExportSingleAttendance(classItem); }} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg uppercase tracking-wider transition-colors shadow-sm">
+                                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                                      Attendance Sheet
+                                                   </button>
+                                                </div>
+                                             </div>
                                              
                                              {/* Topics Covered Section */}
                                              <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -858,8 +1131,8 @@ function PeerClassesContent() {
                                                             </div>
                                                             <span className={`text-[9px] font-bold uppercase px-2.5 py-1 rounded flex-shrink-0 ${
                                                                record.status === 'present' 
-                                                                  ? 'bg-green-400 text-black' 
-                                                                  : 'bg-red-400 text-black'
+                                                                  ? 'bg-green-600 text-white'
+                                                                  : 'bg-red-600 text-white'
                                                             }`}>
                                                                {String(record.status)}
                                                             </span>
@@ -919,6 +1192,7 @@ function PeerClassesContent() {
                 peertutorsInfo={peertutorsInfo} 
                 assignedStudents={assignedStudents || []}
                 scheduledClasses={classes}
+                deptInfo={deptInfo}
               />
             )}  </div>
         </main>
@@ -929,6 +1203,7 @@ function PeerClassesContent() {
         onClose={handleCloseModal}
         classItem={selectedClass}
         userEmail={user?.email || ''}
+        onSuccess={handleRefresh}
         availableSubjects={classes
           .reduce((acc, curr) => {
             if (!acc.some(item => item.subject_name === curr.subject_name)) {
@@ -947,6 +1222,7 @@ function StatusBadge({ status }: { status: string }) {
       completed: "bg-green-500 text-white",
       pending: "bg-amber-500 text-white",
       upcoming: "bg-blue-500 text-white", 
+      today: "bg-blue-600 text-white",
       not_started: "bg-gray-500 text-white"
    }
    
@@ -954,6 +1230,7 @@ function StatusBadge({ status }: { status: string }) {
       completed: "Completed",
       pending: "Pending",
       upcoming: "Upcoming",
+      today: "Today",
       not_started: "Not Started"
    }
 

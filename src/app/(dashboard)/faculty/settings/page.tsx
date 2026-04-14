@@ -34,6 +34,7 @@ interface Superadmin {
   id: string
   name: string
   email: string
+  college_name?: string
 }
 
 export default function SettingsPage() {
@@ -99,6 +100,11 @@ function SettingsContent() {
   // Class Settings
   const [isClassLinkMandatory, setIsClassLinkMandatory] = useState(true)
 
+  // Academic Year Settings
+  const [academicYear, setAcademicYear] = useState<string>('')
+  const [semesterType, setSemesterType] = useState<'odd' | 'even' | ''>('')
+  const [savingAcademicYear, setSavingAcademicYear] = useState(false)
+
   // Email Automation Settings
   const [enableDailyReminders, setEnableDailyReminders] = useState(false)
   const [enablePendingReminders, setEnablePendingReminders] = useState(false)
@@ -138,6 +144,9 @@ function SettingsContent() {
     fetchSuperadmins()
   }, [])
 
+  // Derived: college name from first superadmin
+  const collegeName = superadmins.find(s => s.college_name)?.college_name || ''
+
   const loadData = useCallback(async () => {
     try {
       if (!user?.email) return
@@ -158,6 +167,8 @@ function SettingsContent() {
         if (facultyDept.morning_reminder_message) setMorningMessage(facultyDept.morning_reminder_message)
         if (facultyDept.pending_warning_message) setPendingMessage(facultyDept.pending_warning_message)
         setEmailLastSent(facultyDept.last_daily_reminder_date || null)
+        setAcademicYear(facultyDept.academic_year || '')
+        setSemesterType((facultyDept.semester_type as 'odd' | 'even') || '')
       }
 
       // Get all peer tutors for this department
@@ -617,6 +628,15 @@ function SettingsContent() {
 
               {/* Profile Info */}
               <div className="flex-1 text-center md:text-left">
+                {/* College Name Badge */}
+                {collegeName && (
+                  <div className="flex items-center justify-center md:justify-start gap-2 mb-3">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white rounded-xl text-xs font-bold">
+                      <GraduationCap className="w-3.5 h-3.5 text-gray-300" />
+                      {collegeName}
+                    </div>
+                  </div>
+                )}
                 <h2 className="text-3xl font-black text-gray-900 mb-2">
                   {userName}
                 </h2>
@@ -684,6 +704,87 @@ function SettingsContent() {
           {/* Change Password Section */}
           <div className="mb-8">
             <ChangePassword />
+          </div>
+
+          {/* Academic Year Settings */}
+          <div className="mb-6">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-6 px-2 flex items-center gap-2">
+              <GraduationCap className="w-4 h-4" />
+              Academic Year Settings
+            </h3>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <p className="text-xs text-gray-500 mb-4">
+              Set the academic year and semester type. This will appear on all report headers (Attendance Sheet, Topic Sheet).
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+              <div className="flex-1">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Academic Year</label>
+                <input
+                  type="text"
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  placeholder="e.g. 2024-25"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400 transition-all"
+                />
+              </div>
+              <div className="w-full sm:w-56">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Semester Type</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSemesterType('odd')}
+                    className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition-all border ${
+                      semesterType === 'odd'
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    Odd Sem
+                  </button>
+                  <button
+                    onClick={() => setSemesterType('even')}
+                    className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition-all border ${
+                      semesterType === 'even'
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    Even Sem
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!facultyId) return
+                  setSavingAcademicYear(true)
+                  try {
+                    const success = await FacultyService.updateFacultySettings(facultyId, {
+                      academic_year: academicYear || undefined,
+                      semester_type: semesterType as 'odd' | 'even' | undefined
+                    })
+                    if (success) toast.success('Academic year saved!')
+                    else toast.error('Failed to save')
+                  } catch (e) {
+                    logger.error('Error saving academic year:', e)
+                    toast.error('Error saving')
+                  } finally {
+                    setSavingAcademicYear(false)
+                  }
+                }}
+                disabled={savingAcademicYear}
+                className="px-6 py-2.5 bg-black text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition-all disabled:opacity-50 whitespace-nowrap"
+              >
+                {savingAcademicYear ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            {(academicYear || semesterType) && (
+              <div className="mt-4 flex items-center gap-2">
+                <div className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
+                  {[academicYear, semesterType ? `${semesterType.charAt(0).toUpperCase() + semesterType.slice(1)} Semester` : ''].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Class Configuration Section */}

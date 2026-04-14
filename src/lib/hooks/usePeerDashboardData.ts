@@ -10,6 +10,9 @@ import { FeedbackService } from '@/lib/services/feedbackService'
 import { Student } from '@/lib/services/studentService'
 // unused imports removed
 import { logger } from '@/lib/logger'
+import { calculateAscendScore } from '@/lib/utils/ascendScore'
+import { ExamMarksService, ExamMark } from '@/lib/services/examMarksService'
+import { ExamService } from '@/lib/services/examService'
 
 // 1. Peer Tutor Info Hook
 export function usePeerTutorInfo(email: string | null | undefined) {
@@ -434,5 +437,141 @@ export function usePeerLeaderboard(peertutorsInfo: { id?: string, dept?: string,
     },
     enabled: !!peertutorsInfo?.dept && !!peertutorsInfo?.year && !!peertutorsInfo?.id,
     staleTime: 5 * 60 * 1000
+  })
+}
+
+// 10. Assigned Students Performance & Leaderboard Hook
+export function useAssignedStudentsPerformance(students: Student[] | undefined, peertutorsInfo: { id: string, dept: string } | null | undefined) {
+  const { data: scoringConfig } = useLeaderboardConfig(peertutorsInfo?.dept)
+
+  return useQuery({
+    queryKey: ['assignedStudentsPerformance', peertutorsInfo?.id, students?.length, scoringConfig],
+    queryFn: async () => {
+      if (!students || !peertutorsInfo?.id || !scoringConfig) return []
+
+      const includedExams = (scoringConfig.exam_config || []).filter((e: { included: boolean }) => (e as { included: boolean }).included)
+      
+      // Fetch data for all exams and all students in parallel
+      const examDataMap: Record<string, { max_marks: number; subjects: string[]; marks: ExamMark[] }> = {}
+      
+      if (scoringConfig.exam_weight > 0 && includedExams.length > 0) {
+        await Promise.all(
+          includedExams.map(async (examCfg: { exam_id: string }) => {
+            const [exam, marks] = await Promise.all([
+              ExamService.getExamById(examCfg.exam_id),
+              ExamMarksService.getExamMarksBypeertutorsAndExam(peertutorsInfo.id, examCfg.exam_id)
+            ])
+                       if (exam) {
+              examDataMap[examCfg.exam_id] = {
+                max_marks: exam.max_marks || 100,
+                subjects: [], // We'll populate this from marks if needed, or fetch separately
+                marks: marks || []
+              }
+            }
+          })
+        )
+      }
+
+      const studentsWithPerformance = await Promise.all(
+        students.map(async (student) => {
+          try {
+            // 1. Attendance Stats
+            const attendanceRecords = await AttendanceService.getStudentAttendanceHistory(student.id, peertutorsInfo.id)
+            const presentCount = attendanceRecords.filter(record => record.status === 'present').length
+            const absentCount = attendanceRecords.filter(record => record.status === 'absent').length
+            const totalClasses = presentCount + absentCount
+            const attendancePercentage = totalClasses > 0 ? Math.round((presentCount / totalClasses) * 100) : 0
+            let totalExamScore = 0
+
+            if (scoringConfig.exam_weight > 0 && includedExams.length > 0) {
+              for (const examCfg of includedExams) {
+                const examData = examDataMap[examCfg.exam_id]
+                if (!examData) continue
+
+                // Filter marks for this student
+                const studentMarks = examData.marks.filter(m => m.student_id === student.id)
+                
+                if (studentMarks.length > 0) {
+                  // Format for calculateAscendScore: { [examSubjectId]: { marks: string } }
+                  const marksData: Record<string, Record<string, number | string>> = {}
+                  studentMarks.forEach(m => {
+                    if (m.exam_subject_id) {
+                      marksData[m.exam_subject_id] = m.marks || { marks: '0' }
+                    }
+                  })
+
+                  const studentAscend = calculateAscendScore(marksData, examData.max_marks)
+                  // Normalize to 0-100 (ascend is 1-10)
+                  const normalizedScore = (studentAscend / 10) * 100
+                  totalExamScore += normalizedScore * (examCfg.weight / 100)
+                }
+              }
+            }
+
+            // 3. Final Weighted Score
+            // For students, we'll use:
+            // - Attendance Rate (as replacement for scheduled_classes_weight)
+            // - Exam Score
+            const scheduledScore = attendancePercentage
+            const finalScore = 
+              (scheduledScore * scoringConfig.scheduled_classes_weight / 100) +
+              (totalExamScore * scoringConfig.exam_weight / 100)
+
+            return {
+              ...student,
+              classesPresent: presentCount,
+              classesAbsent: absentCount,
+              attendancePercentage,
+              score: Math.round(finalScore * 10) / 10,
+              rank: 0 // Will be assigned after sorting
+            }
+          } catch (error) {
+            logger.error(`Error calculating performance for student ${student.id}:`, error)
+            return {
+              ...student,
+              classesPresent: 0,
+              classesAbsent: 0,
+              attendancePercentage: 0,
+              score: 0,
+              rank: 0
+            }
+          }
+        })
+      )
+
+      // Sort by score DESC and assign ranks
+      studentsWithPerformance.sort((a, b) => b.score - a.score)
+      studentsWithPerformance.forEach((s, idx) => { s.rank = idx + 1 })
+
+      return studentsWithPerformance
+    },
+    enabled: !!peertutorsInfo?.id && !!peertutorsInfo?.dept && !!students && students.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function usePeerTutorSubjects(peertutorsInfo: { id?: string; dept?: string; year?: string; section?: string } | null | undefined) {
+  return useQuery({
+    queryKey: ['peerSubjects', peertutorsInfo?.id],
+    queryFn: async () => {
+      if (!peertutorsInfo?.id || !peertutorsInfo?.dept || !peertutorsInfo?.year || !peertutorsInfo?.section) return []
+      const schedules = await ScheduledClassService.getScheduledClassesByDate(
+        peertutorsInfo.dept,
+        peertutorsInfo.year,
+        peertutorsInfo.section,
+        peertutorsInfo.id
+      )
+      
+      const uniqueSubjects = (schedules || []).reduce((acc, curr) => {
+        if (curr.class && !acc.some(item => item.subject_name === curr.class.subject_name)) {
+          acc.push({ id: curr.class.id || '', subject_name: curr.class.subject_name })
+        }
+        return acc
+      }, [] as { id: string, subject_name: string }[])
+
+      return uniqueSubjects
+    },
+    enabled: !!peertutorsInfo?.id,
+    staleTime: 5 * 60 * 1000,
   })
 }

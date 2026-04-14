@@ -1,13 +1,12 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { BookOpen, User, Mail, Calendar, Clock, Loader2, ArrowLeft } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { BookOpen, Mail, Clock, Loader2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { peertutorservice, peertutors } from '@/lib/services/peerTutorService'
-import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
-import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
+import { ScheduledClassService } from '@/lib/services/scheduledClassService'
+import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import PageHeader from '@/components/layout/PageHeader'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
@@ -28,7 +27,7 @@ export default function PeerTutorClassesPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const facultyEmail = decodeURIComponent(params.facultyId as string)
+  // const facultyEmail = decodeURIComponent(params.facultyId as string) // Unused variable removed
   const peerTutorId = params.peerTutorId as string
   const subjectName = searchParams.get('subject') || ''
   const dept = searchParams.get('dept') || ''
@@ -43,15 +42,7 @@ export default function PeerTutorClassesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
-  useEffect(() => {
-    if (peerTutorId && subjectName && dept && year && section) {
-      loadData()
-    } else {
-      setLoading(false)
-    }
-  }, [peerTutorId, subjectName, dept, year, section])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true)
 
@@ -139,7 +130,15 @@ export default function PeerTutorClassesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [peerTutorId, subjectName, dept, year, section])
+
+  useEffect(() => {
+    if (peerTutorId && subjectName && dept && year && section) {
+      loadData()
+    } else {
+      setLoading(false)
+    }
+  }, [peerTutorId, subjectName, dept, year, section, loadData])
 
   const formatTime = (time: string | null) => {
     if (!time) return 'N/A'

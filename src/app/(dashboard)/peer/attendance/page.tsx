@@ -425,8 +425,8 @@ function PeerAttendanceContent(): ReactNode {
                           <span
                             className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
                               record.status === 'present'
-                                ? 'bg-green-400 text-black border-black'
-                                : 'bg-red-400 text-black border-black'
+                                ? 'bg-green-600 text-white border-black'
+                                : 'bg-red-600 text-white border-black'
                             }`}>
                             <svg className="w-3 h-3 mr-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               {record.status === 'present' ? (
@@ -474,17 +474,17 @@ function PeerAttendanceContent(): ReactNode {
                 <div className="hidden md:block overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                        <TableHead className="py-4 pl-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                      <TableRow className="bg-gray-50/50 hover:bg-gray-50/50 border-b border-gray-100">
+                        <TableHead className="py-5 pl-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">
                           Student
                         </TableHead>
-                        <TableHead className="py-4 px-2 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                        <TableHead className="py-5 px-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">
                           Class
                         </TableHead>
-                        <TableHead className="py-4 px-2 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                        <TableHead className="py-5 px-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">
                           Date
                         </TableHead>
-                        <TableHead className="py-4 pr-6 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                        <TableHead className="py-5 pr-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">
                           Status
                         </TableHead>
                       </TableRow>
@@ -502,15 +502,15 @@ function PeerAttendanceContent(): ReactNode {
                               className="flex items-center text-left group/btn w-full"
                               disabled={!record.peer_students?.id}
                             >
-                              <div className="mr-3 transition-transform group-hover/btn:scale-105 flex-shrink-0">
-                                <div className="w-8 h-8 rounded-lg bg-[#2c3e50] flex items-center justify-center shadow-sm">
-                                  <span className="text-white text-xs font-bold">
+                              <div className="mr-4 transition-transform group-hover/btn:scale-105 flex-shrink-0">
+                                <div className="w-10 h-10 rounded-lg bg-gray-900 flex items-center justify-center shadow-sm">
+                                  <span className="text-white text-xs font-black uppercase">
                                     {record.peer_students?.name ? record.peer_students.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'N/A'}
                                   </span>
                                 </div>
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="text-xs font-bold text-gray-900 group-hover/btn:text-blue-600 transition-colors truncate">
+                                <div className="text-xs font-black text-gray-900 uppercase tracking-tight group-hover/btn:text-blue-600 transition-colors truncate">
                                   {record.peer_students?.name || 'Unknown Student'}
                                 </div>
                                 <div className="text-[10px] text-gray-400 font-medium truncate">
@@ -521,7 +521,7 @@ function PeerAttendanceContent(): ReactNode {
                           </TableCell>
                           <TableCell className="py-4 px-2 text-center">
                             {record.classes ? (
-                              <div className="text-xs font-bold uppercase text-gray-900">
+                              <div className="text-[10px] font-black uppercase text-gray-900 tracking-wider">
                                 {record.classes.subject_name}
                               </div>
                             ) : (
@@ -529,7 +529,7 @@ function PeerAttendanceContent(): ReactNode {
                             )}
                           </TableCell>
                           <TableCell className="py-4 px-2 uppercase text-center">
-                            <div className="text-xs font-bold text-gray-900 whitespace-nowrap">
+                            <div className="text-[10px] font-black text-gray-900 uppercase tracking-wider whitespace-nowrap">
                               {record.scheduled_classes?.scheduled_date
                                 ? new Date(record.scheduled_classes.scheduled_date).toLocaleDateString('en-GB', {
                                     day: '2-digit',
@@ -548,10 +548,10 @@ function PeerAttendanceContent(): ReactNode {
                           </TableCell>
                           <TableCell className="py-4 pr-6 text-right">
                             <span
-                              className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border whitespace-nowrap ${
+                              className={`inline-flex items-center justify-center px-4 py-1.5 rounded-[4px] text-[10px] font-black uppercase tracking-wider min-w-[100px] shadow-sm transform transition-all hover:scale-105 ${
                                 record.status === 'present'
-                                  ? 'bg-green-400 text-black border-green-100'
-                                  : 'bg-red-400 text-black border-red-100'
+                                  ? 'bg-green-600  text-white shadow-[0_0_15px_rgba(0,255,163,0.15)]'
+                                  : 'bg-red-600 text-white shadow-[0_0_15px_rgba(255,77,77,0.15)]'
                               }`}>
                               {record.status === 'present' ? 'Present' : 'Absent'}
                             </span>

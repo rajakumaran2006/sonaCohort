@@ -3,6 +3,8 @@
 import React, { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import Image from 'next/image'
 import { LayoutGrid, BookOpen, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -27,6 +29,20 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
       return saved ? JSON.parse(saved) : initialCollapsed
     }
     return initialCollapsed
+  })
+
+  // Fetch college name from superadmin
+  const { data: collegeName } = useQuery({
+    queryKey: ['superadmin-college-name'],
+    queryFn: async () => {
+      const { data } = await createClient()
+        .from('superadmin')
+        .select('college_name')
+        .not('college_name', 'is', null)
+        .limit(1)
+      return data?.[0]?.college_name || ''
+    },
+    staleTime: 60 * 60 * 1000, // 1 hour
   })
 
   // Update localStorage when collapse state changes
@@ -182,6 +198,9 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
               <div className={`flex flex-col min-w-0 mr-2 ${showCollapsed ? 'lg:hidden' : ''}`}>
                 <p className="text-xs font-bold text-white truncate uppercase tracking-wide">
                   {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Student'}
+                </p>
+                <p className="text-[10px] text-[#bef264] font-bold uppercase tracking-wider truncate opacity-80">
+                  Student {collegeName && <span className="text-gray-500 mx-1">·</span>} {collegeName}
                 </p>
               </div>
             </Link>

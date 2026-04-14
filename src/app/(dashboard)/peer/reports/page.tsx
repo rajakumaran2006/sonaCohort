@@ -15,6 +15,11 @@ import PeerTopicSheet from '@/components/reports/PeerTopicSheet'
 import PeerAttendanceSheet from '@/components/reports/PeerAttendanceSheet'
 import ExportButton from '@/components/ui/ExportButton'
 import { toast } from 'sonner'
+import { FacultyService } from '@/lib/services/facultyService'
+import { AssignmentService } from '@/lib/services/assignmentService'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { createClient } from '@/lib/supabase/client'
 
 export default function PeerReportsPage() {
   return (
@@ -59,6 +64,69 @@ function PeerReportsContent() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
+  // Fetch all departments to find the right incharge info
+  const { data: allDepts = [] } = useQuery({
+    queryKey: ['all-departments'],
+    queryFn: async () => await FacultyService.getAllDepartments(),
+    staleTime: 10 * 60 * 1000,
+  })
+
+  // Fetch assigned students for the count
+  const { data: assignedStudents = [] } = useQuery({
+    queryKey: ['assigned-students', tutorInfoData?.id],
+    queryFn: async () => {
+      if (!tutorInfoData?.id) return []
+      return await AssignmentService.getStudentsBypeertutors(tutorInfoData.id)
+    },
+    enabled: !!tutorInfoData?.id,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Match the department info locally
+  const deptInfo = useMemo(() => {
+    if (!tutorInfoData || !allDepts?.length) return null
+    
+    if (tutorInfoData.faculty_id) {
+      const match = allDepts.find(d => d.id === tutorInfoData.faculty_id)
+      if (match) return match
+    }
+    
+    if (tutorInfoData.dept) {
+      const normalizedTutorDept = tutorInfoData.dept.trim().toLowerCase()
+      const match = allDepts.find(d => 
+        d.name.trim().toLowerCase() === normalizedTutorDept ||
+        normalizedTutorDept.includes(d.name.trim().toLowerCase()) ||
+        d.name.trim().toLowerCase().includes(normalizedTutorDept)
+      )
+      if (match) return match
+    }
+    
+    return null
+  }, [tutorInfoData, allDepts])
+
+  // Fetch college name from superadmin
+  const { data: superadmins = [] } = useQuery({
+    queryKey: ['superadmin-college'],
+    queryFn: async () => {
+      const supabase = createClient()
+      const { data } = await supabase.from('superadmin').select('college_name').not('college_name', 'is', null).limit(1)
+      return data || []
+    },
+    staleTime: 10 * 60 * 1000,
+  })
+  const collegeName = superadmins[0]?.college_name || ''
+
+  // Sheet header info
+  const sheetHeaderInfo = useMemo(() => ({
+    collegeName,
+    dept: tutorInfoData?.dept || '',
+    academicYear: deptInfo?.academic_year || '',
+    semesterType: deptInfo?.semester_type || '',
+    tutorName: tutorInfoData?.name || '',
+    tutorYear: tutorInfoData?.year || '',
+    tutorSection: tutorInfoData?.section || '',
+  }), [collegeName, tutorInfoData, deptInfo])
+
   const loading = tutorLoading || reportLoading
   const peertutorsInfo = tutorInfoData
 
@@ -85,37 +153,32 @@ function PeerReportsContent() {
       // Create workbook
       const workbook = XLSX.utils.book_new()
 
-      // Prepare data for export
-      const data: (string | number)[][] = []
+      const metadata = [
+        ['PEER TUTOR SUBJECT PERFORMANCE REPORT'],
+        ['Export Date:', new Date().toLocaleDateString(), 'Export Time:', new Date().toLocaleTimeString()],
+        ['Dept:', peertutorsInfo?.dept || 'N/A', 'Year:', peertutorsInfo?.year || 'N/A', 'Section:', peertutorsInfo?.section || 'N/A'],
+        ['Filter Applied:', 'NO', 'Filters:', 'None'],
+        ['Incharge:', deptInfo?.faculty_name || 'N/A', 'Tutor:', peertutorsInfo?.name || 'N/A', 'Assigned Students:', assignedStudents.length],
+        [''],
+        ['Subject Name', 'Scheduled Classes', 'Completed Classes', 'Additional Classes', 'Pending Classes', 'Total Classes Taken', 'Completion Rate (%)']
+      ]
 
-      // Add header row
-      data.push([
-        'Subject Name',
-        'Scheduled Classes',
-        'Completed Classes',
-        'Additional Classes',
-        'Pending Classes',
-        'Total Classes Taken',
-        'Completion Rate (%)'
-      ])
-
-      // Add data for each subject
-      for (const subject of reportData.subjects) {
+      const exportData = reportData.subjects.map((subject) => {
         const totalTaken = subject.completed_classes + (subject.additional_classes || 0)
         const completionRate = subject.total_classes > 0 
           ? Math.round((totalTaken / subject.total_classes) * 100)
           : 0
 
-        data.push([
-          subject.subject_name,
+        return [
+          subject.subject_name.toUpperCase(),
           subject.total_classes,
-          subject.completed_classes > 0 ? subject.completed_classes : '',
-          (subject.additional_classes || 0) > 0 ? (subject.additional_classes || 0) : '',
+          subject.completed_classes,
+          subject.additional_classes || 0,
           subject.pending_classes,
-          totalTaken > 0 ? totalTaken : '',
-          totalTaken > 0 ? completionRate : ''
-        ])
-      }
+          totalTaken,
+          `${completionRate}%`
+        ]
+      })
 
       // Add summary row
       const totalScheduled = reportData.subjects.reduce((sum, s) => sum + s.total_classes, 0)
@@ -125,19 +188,19 @@ function PeerReportsContent() {
       const grandTotalTaken = totalCompleted + totalAdditional
       const overallRate = totalScheduled > 0 ? Math.round((grandTotalTaken / totalScheduled) * 100) : 0
 
-      data.push([]) // Empty row before summary
-      data.push([
-        'TOTAL',
+      // Add empty row before totals
+      exportData.push([])
+      exportData.push([
+        'TOTALS',
         totalScheduled,
-        totalCompleted > 0 ? totalCompleted : '',
-        totalAdditional > 0 ? totalAdditional : '',
+        totalCompleted,
+        totalAdditional,
         totalPending,
-        grandTotalTaken > 0 ? grandTotalTaken : '',
-        grandTotalTaken > 0 ? overallRate : ''
+        grandTotalTaken,
+        `${overallRate}%`
       ])
 
-      // Create worksheet
-      const worksheet = XLSX.utils.aoa_to_sheet(data)
+      const worksheet = XLSX.utils.aoa_to_sheet([...metadata, ...exportData])
 
       // Set column widths
       worksheet['!cols'] = [
@@ -497,9 +560,9 @@ function PeerReportsContent() {
                     </div>
                   </div>
                 ) : activeTab === 'topic-sheet' ? (
-                  peertutorsInfo && <PeerTopicSheet peertutorId={peertutorsInfo.id} />
+                  peertutorsInfo && <PeerTopicSheet peertutorId={peertutorsInfo.id} headerInfo={sheetHeaderInfo} />
                 ) : activeTab === 'attendance-sheet' ? (
-                  peertutorsInfo && <PeerAttendanceSheet peertutorId={peertutorsInfo.id} />
+                  peertutorsInfo && <PeerAttendanceSheet peertutorId={peertutorsInfo.id} headerInfo={sheetHeaderInfo} />
                 ) : (
                   <div className="text-center py-12">
                     <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">

@@ -24,7 +24,6 @@ import {
   PieChart, Pie, Cell
 } from 'recharts'
 import {
-  MoreHorizontal,
   ArrowUpRight,
   ArrowDownRight,
   ChevronRight,

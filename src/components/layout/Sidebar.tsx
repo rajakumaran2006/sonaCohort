@@ -3,6 +3,8 @@
 import React, { useState } from 'react'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import { LayoutGrid, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -21,6 +23,20 @@ export default function Sidebar({ isOpen, onClose, onToggleCollapse }: SidebarPr
   const pathname = usePathname()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isCollapsed, setIsCollapsed] = useSidebarCollapsed()
+
+  // Fetch college name from superadmin
+  const { data: collegeName } = useQuery({
+    queryKey: ['superadmin-college-name'],
+    queryFn: async () => {
+      const { data } = await createClient()
+        .from('superadmin')
+        .select('college_name')
+        .not('college_name', 'is', null)
+        .limit(1)
+      return data?.[0]?.college_name || ''
+    },
+    staleTime: 60 * 60 * 1000, // 1 hour
+  })
 
   const handleToggleCollapse = () => {
     const nextCollapsed = !isCollapsed
@@ -161,7 +177,7 @@ export default function Sidebar({ isOpen, onClose, onToggleCollapse }: SidebarPr
                     {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Admin'}
                   </p>
                   <p className="text-xs text-gray-400 truncate">
-                    Admin
+                    Admin {collegeName && <span className="text-gray-500 mx-1">·</span>} {collegeName}
                   </p>
                 </div>
               )}

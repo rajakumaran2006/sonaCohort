@@ -4,6 +4,12 @@ import { peertutors, peertutorservice } from '@/lib/services/peerTutorService'
 import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
+import { Attendance } from '@/lib/services/attendanceService'
+
+interface ClassData {
+  year: string
+  section: string
+}
 
 // Define types for mapping report
 export interface PeerTutorWithStudents {
@@ -402,7 +408,7 @@ export class ReportService {
   /**
    * Get attendance report for a specific scheduled class
    */
-  static async getClassAttendanceReport(scheduledClassId: string): Promise<ClassAttendanceReport | null> {
+  static async getClassAttendanceReport(scheduledClassId: string, peerTutorId?: string): Promise<ClassAttendanceReport | null> {
     try {
       const supabase = createClient()
       
@@ -411,7 +417,8 @@ export class ReportService {
         .from('scheduled_classes')
         .select(`
           *,
-          class:classes(subject_name)
+          class:classes(subject_name),
+          peer_tutor:peer_tutors(id, name, email)
         `)
         .eq('id', scheduledClassId)
         .single()
@@ -422,13 +429,19 @@ export class ReportService {
       }
 
       // Get attendance records with student details
-      const { data: attendanceData, error: attendanceError } = await supabase
+      let query = supabase
         .from('attendance')
         .select(`
           *,
           student:peer_students(id, name, email)
         `)
         .eq('scheduled_class_id', scheduledClassId)
+
+      if (peerTutorId) {
+        query = query.eq('peer_tutor_id', peerTutorId)
+      }
+
+      const { data: attendanceData, error: attendanceError } = await query
 
       if (attendanceError) {
         logger.error('Error getting attendance records:', attendanceError)
@@ -464,12 +477,117 @@ export class ReportService {
         end_time: classData.end_time,
         present_count: presentCount,
         absent_count: absentCount,
-        attendance_records: records
+        attendance_records: records,
+        peer_tutor_name: classData.peer_tutor?.name || 'Unknown'
       }
     } catch (error) {
       logger.error('Error in getClassAttendanceReport:', error)
       return null
     }
+  }
+
+  /**
+   * Generate a formal Attendance Sheet for a single class
+   */
+  static async generateSingleAttendanceSheet(report: ClassAttendanceReport, classData: ClassData, dept: string): Promise<File> {
+    const wb = XLSX.utils.book_new()
+    
+    const headerInfo = {
+        collegeName: 'SONA COLLEGE OF TECHNOLOGY (Autonomous)',
+        department: `DEPARTMENT OF ${dept.toUpperCase()}`,
+        documentTitle: 'PEER TUTORING - ATTENDANCE SHEET',
+        academicYear: `ACADEMIC YEAR ${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+        date: new Date(report.scheduled_date).toLocaleDateString('en-GB').replace(/\//g, '.')
+    }
+
+    const data: (string | number | undefined | null)[][] = [
+        [headerInfo.collegeName],
+        [headerInfo.department],
+        [headerInfo.documentTitle],
+        [headerInfo.academicYear],
+        [],
+        [`Subject: ${report.subject_name}`, '', '', `Date: ${headerInfo.date}`],
+        [`Year/Sec: ${classData.year}/${classData.section}`, '', '', `Time: ${report.start_time || ''} - ${report.end_time || ''}`],
+        [`Peer Tutor: ${report.peer_tutor_name || 'N/A'}`, '', '', ''],
+        [],
+        ['S NO', 'ROLL NO / NAME', 'EMAIL', 'STATUS']
+    ]
+
+    report.attendance_records.forEach((record, index) => {
+        data.push([
+            index + 1,
+            record.student_name,
+            record.student_email,
+            record.status.toUpperCase()
+        ])
+    })
+
+    data.push([], [])
+    data.push(['Signature of Peer Tutor', '', '', 'Signature of Faculty In-charge'])
+
+    const merges = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 3 } },
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } }
+    ]
+
+    this.appendSheet(wb, data, 'Attendance Sheet', merges)
+    return this.workbookToFile(wb, `Attendance_Sheet_${report.subject_name}_${headerInfo.date}.xlsx`)
+  }
+
+  /**
+   * Generate a formal Topic Sheet for a single class
+   */
+  static async generateSingleTopicSheet(report: ClassAttendanceReport, classData: ClassData, dept: string): Promise<File> {
+    const wb = XLSX.utils.book_new()
+    
+    const headerInfo = {
+        collegeName: 'SONA COLLEGE OF TECHNOLOGY (Autonomous)',
+        department: `DEPARTMENT OF ${dept.toUpperCase()}`,
+        documentTitle: 'PEER TUTORING - TOPIC COVERED SHEET',
+        academicYear: `ACADEMIC YEAR ${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+        date: new Date(report.scheduled_date).toLocaleDateString('en-GB').replace(/\//g, '.')
+    }
+
+    const data: (string | number | undefined | null)[][] = [
+        [headerInfo.collegeName],
+        [headerInfo.department],
+        [headerInfo.documentTitle],
+        [headerInfo.academicYear],
+        [],
+        [`Subject: ${report.subject_name}`, '', '', `Date: ${headerInfo.date}`],
+        [`Year/Sec: ${classData.year}/${classData.section}`, '', '', `Time: ${report.start_time || ''} - ${report.end_time || ''}`],
+        [`Peer Tutor: ${report.peer_tutor_name || 'N/A'}`, '', '', ''],
+        [],
+        ['S NO', 'TOPICS COVERED', '', '']
+    ]
+
+    // Split topics by newline or comma if they exist
+    const topicsList = report.topics ? report.topics.split(/[\n,]+/).map(t => t.trim()).filter(t => t.length > 0) : ['N/A']
+    
+    topicsList.forEach((topic, index) => {
+        data.push([
+            index + 1,
+            topic,
+            '',
+            ''
+        ])
+    })
+
+    data.push([], [])
+    data.push(['Signature of Peer Tutor', '', '', 'Signature of Faculty In-charge'])
+
+    const merges = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 3 } },
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } },
+        // Merge topics content cells if needed, but simple is better for now
+    ]
+
+    this.appendSheet(wb, data, 'Topic Sheet', merges)
+    return this.workbookToFile(wb, `Topic_Sheet_${report.subject_name}_${headerInfo.date}.xlsx`)
   }
 
   /**
@@ -774,7 +892,7 @@ export class ReportService {
       const supabase = createClient()
       
       // Get all scheduled classes for this subject
-      const { data: classes, error: classesError } = await supabase
+      const { data: classesData, error: classesError } = await supabase
         .from('scheduled_classes')
         .select('*, class:classes!inner(subject_name)')
         .eq('peer_tutor_id', peerTutorId)
@@ -786,9 +904,11 @@ export class ReportService {
         return null
       }
 
-      if (!classes || classes.length === 0) {
-        return { subject_name: subjectName, columns: [], rows: [] }
-      }
+      const classes = (classesData || []).filter(cls => 
+        cls.completion_status === 'completed' || (cls.attendance_completed && cls.topics_completed)
+      )
+
+      // We don't return early here if classes is empty, because there might be additional classes to add later.
 
       // Get all students for this peer tutor
       const { data: students, error: studentsError } = await supabase
@@ -804,14 +924,19 @@ export class ReportService {
 
       // Get all attendance records for these classes
       const classIds = classes.map(c => c.id)
-      const { data: attendance, error: attendanceError } = await supabase
-        .from('attendance')
-        .select('*')
-        .in('scheduled_class_id', classIds)
+      let attendance: Attendance[] = []
+      
+      if (classIds.length > 0) {
+        const { data: attendanceData, error: attendanceError } = await supabase
+          .from('attendance')
+          .select('*')
+          .in('scheduled_class_id', classIds)
 
-      if (attendanceError) {
-        logger.error('Error getting attendance:', attendanceError)
-        return null
+        if (attendanceError) {
+          logger.error('Error getting attendance:', attendanceError)
+          return null
+        }
+        attendance = attendanceData || []
       }
 
       // Build Columns
@@ -1156,6 +1281,9 @@ export class ReportService {
 
       // Process scheduled classes
       for (const cls of (scheduledClasses as unknown as ScWithSubject[]) || []) {
+        const isCompleted = cls.completion_status === 'completed' || cls.topics_completed
+        if (!isCompleted) continue
+
         const subjectName = cls.class?.subject_name || 'Unknown Subject'
         if (!subjectMap.has(subjectName)) {
           subjectMap.set(subjectName, [])
@@ -1227,6 +1355,7 @@ export interface ClassAttendanceReport {
   link?: string
   start_time?: string
   end_time?: string
+  peer_tutor_name?: string
   attendance_records: {
     student_id: string
     student_name: string

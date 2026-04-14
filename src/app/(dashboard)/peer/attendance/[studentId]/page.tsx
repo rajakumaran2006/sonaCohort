@@ -335,8 +335,8 @@ function StudentAttendanceContent() {
                         </div>
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                           record.status === 'present' 
-                            ? 'bg-green-400 text-black' 
-                            : 'bg-red-400 text-black'
+                            ? 'bg-green-600 text-white' 
+                            : 'bg-red-600 text-white'
                         }`}>
                           {record.status}
                         </span>
@@ -419,8 +419,8 @@ function StudentAttendanceContent() {
                         <TableCell className="py-4 text-center">
                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                               record.status === 'present' 
-                                ? 'bg-green-400 text-black border border-green-100' 
-                                : 'bg-red-400 text-black border border-red-100'
+                                ? 'bg-green-600 text-white border border-green-100' 
+                                : 'bg-red-600 text-white border border-red-100'
                             }`}>
                               {record.status}
                            </span>

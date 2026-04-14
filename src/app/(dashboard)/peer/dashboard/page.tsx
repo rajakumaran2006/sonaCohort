@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
@@ -12,23 +12,32 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 
 import PeerRenumerationModal from '@/components/forms/modals/PeerRenumerationModal'
 import PeerLeaderboard from '@/components/dashboard/PeerLeaderboard'
+import ClassDetailsModal from '@/components/features/classes/ClassDetailsModal'
+import { Class } from '@/lib/services/classService'
+import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { Card } from '@/components/ui'
 import { 
   ChevronRight,
-  MoreHorizontal
+  MoreHorizontal,
+  CheckCircle,
 } from 'lucide-react'
+import { peertutors } from '@/lib/services/peerTutorService'
+import { AdditionalClassService } from '@/lib/services/additionalClassService'
+import AdditionalClassModal from '@/components/forms/modals/AdditionalClassModal'
 import ExportButton from '@/components/ui/ExportButton'
 import * as XLSX from 'xlsx'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
+import { FacultyService } from '@/lib/services/facultyService'
 import { 
   usePeerTutorInfo, 
   useAssignedStudents, 
   useRenumerations, 
   useClassStats, 
-  useStudentAttendanceStats,
   useActiveFeedbackForms,
   usePendingClassAlert,
-  usePeerLeaderboard
+  usePeerLeaderboard,
+  useAssignedStudentsPerformance,
+  usePeerTutorSubjects
 } from '@/lib/hooks/usePeerDashboardData'
 import { peertutorsRenumeration } from '@/lib/services/renumerationService'
 import EmailAssignmentModal from '@/components/forms/modals/EmailAssignmentModal'
@@ -52,6 +61,15 @@ function PeerDashboardContent() {
   const [selectedRenumeration, setSelectedRenumeration] = useState<peertutorsRenumeration | null>(null)
   const [selectedStudentForEmail, setSelectedStudentForEmail] = useState<Student | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  interface TodayClass extends Class {
+    type: 'scheduled' | 'additional'
+    isEditable?: boolean
+  }
+
+  const [todayClasses, setTodayClasses] = useState<TodayClass[]>([])
+  const [selectedTodayClass, setSelectedTodayClass] = useState<TodayClass | null>(null)
+  const [isTodayClassModalOpen, setIsTodayClassModalOpen] = useState(false)
+  const [isAddAdditionalClassModalOpen, setIsAddAdditionalClassModalOpen] = useState(false)
 
   // Use custom hook for sidebar collapsed state
   const [isSidebarCollapsed] = useSidebarCollapsed()
@@ -68,7 +86,7 @@ function PeerDashboardContent() {
   const classesTaken = classStats?.completedClasses ?? 0
   const totalClassesAllocated = classStats?.totalClasses ?? 0
   
-  const { data: studentsWithAttendance = [] } = useStudentAttendanceStats(assignedStudents, peertutorsInfo?.id)
+  const { data: studentsWithAttendance = [] } = useAssignedStudentsPerformance(assignedStudents, peertutorsInfo as { id: string, dept: string } | null)
 
   const { data: alertData } = usePendingClassAlert(peertutorsInfo)
   const showPendingAlert = alertData?.showPendingAlert ?? false
@@ -77,6 +95,83 @@ function PeerDashboardContent() {
   const { data: _activeFeedbackForms = [] } = useActiveFeedbackForms(peertutorsInfo?.id)
   // Always use undefined to default to user's own year - peer tutors can only see their year's leaderboard
   const { data: leaderboardData, isLoading: isLeaderboardLoading } = usePeerLeaderboard(peertutorsInfo, undefined)
+
+  const { data: availableSubjects = [] } = usePeerTutorSubjects(peertutorsInfo)
+
+  // Fetch all departments to find the right incharge info
+  const { data: allDepts = [] } = useQuery({
+    queryKey: ['all-departments'],
+    queryFn: async () => await FacultyService.getAllDepartments(),
+    staleTime: 10 * 60 * 1000,
+  })
+
+  // Match the department info locally for better reliability
+  const deptInfo = useMemo(() => {
+    if (!peertutorsInfo || !allDepts?.length) return null
+    
+    if (peertutorsInfo.faculty_id) {
+      const match = allDepts.find(d => d.id === peertutorsInfo.faculty_id)
+      if (match) return match
+    }
+    
+    if (peertutorsInfo.dept) {
+      const normalizedTutorDept = peertutorsInfo.dept.trim().toLowerCase()
+      const match = allDepts.find(d => 
+        d.name.trim().toLowerCase() === normalizedTutorDept ||
+        normalizedTutorDept.includes(d.name.trim().toLowerCase()) ||
+        d.name.trim().toLowerCase().includes(normalizedTutorDept)
+      )
+      if (match) return match
+    }
+    
+  }, [peertutorsInfo, allDepts])
+
+  const checkTodayClass = useCallback(async () => {
+    if (!peertutorsInfo?.id || !peertutorsInfo?.dept || !peertutorsInfo?.year || !peertutorsInfo?.section) return
+    
+    const todayStr = new Date().toISOString().split('T')[0]
+    
+    // Fetch scheduled classes
+    const schedules = await ScheduledClassService.getScheduledClassesByDate(
+      peertutorsInfo.dept,
+      peertutorsInfo.year,
+      peertutorsInfo.section,
+      peertutorsInfo.id
+    )
+    const matchingSchedules = schedules.filter(s => s.scheduled_date === todayStr && s.completion_status !== 'completed')
+    const mappedSchedules = matchingSchedules.map(today => ({
+      ...today.class,
+      id: today.class_id,
+      scheduled_class_id: today.id,
+      faculty_id: today.faculty_id,
+      class_date: today.scheduled_date,
+      isEditable: true,
+      type: 'scheduled' as const
+    }))
+
+    // Fetch additional classes
+    const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsInfo.id)
+    const matchingAdditional = additionalClasses.filter(c => c.class_date === todayStr)
+    const mappedAdditional = matchingAdditional.map(c => ({
+      ...c,
+      dept: peertutorsInfo.dept,
+      year: peertutorsInfo.year,
+      section: peertutorsInfo.section,
+      faculty_id: peertutorsInfo?.faculty_id || '',
+      subject_name: c.subject_name,
+      class_date: c.class_date,
+      type: 'additional' as const
+    } as TodayClass))
+
+    setTodayClasses([...mappedSchedules, ...mappedAdditional])
+  }, [peertutorsInfo])
+
+  // Fetch today's class on mount and when tutor info changes
+  useEffect(() => {
+    checkTodayClass()
+  }, [checkTodayClass])
+
+  // getInitials was unused and removed
 
   // Combined Loading State
   // We can be a bit selective about what blocks the UI or show skeletons. 
@@ -91,18 +186,36 @@ function PeerDashboardContent() {
       return
     }
 
-    const exportData = studentsWithAttendance.map((student: { name: string; email: string | null; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number }) => ({
-      'Student Name': student.name,
-      'Email': student.email || '',
-      'Department': student.dept,
-      'Year': student.year,
-      'Section': student.section,
-      'Classes Present': student.classesPresent,
-      'Classes Absent': student.classesAbsent,
-      'Attendance Percentage': `${student.attendancePercentage}%`
-    }))
+    const metadata = [
+      ['PEER TUTOR ASSIGNED STUDENTS PERFORMANCE REPORT'],
+      ['Export Date:', new Date().toLocaleDateString(), 'Export Time:', new Date().toLocaleTimeString()],
+      ['Dept:', peertutorsInfo?.dept || 'N/A', 'Year:', peertutorsInfo?.year || 'N/A', 'Section:', peertutorsInfo?.section || 'N/A'],
+      ['Filter Applied:', 'NO', 'Filters:', 'None'],
+      ['Incharge:', deptInfo?.faculty_name || 'N/A', 'Tutor:', peertutorsInfo?.name || 'N/A', 'Assigned Students:', assignedStudents.length],
+      [''],
+      ['Rank', 'Student Name', 'Email', 'Department', 'Year', 'Section', 'Present', 'Absent', 'Percentage', 'Score']
+    ]
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData)
+    const exportData = studentsWithAttendance.map((student) => [
+      student.rank,
+      student.name,
+      student.email || '',
+      student.dept,
+      student.year,
+      student.section,
+      student.classesPresent,
+      student.classesAbsent,
+      `${student.attendancePercentage}%`,
+      student.score
+    ])
+
+    const worksheet = XLSX.utils.aoa_to_sheet([...metadata, ...exportData])
+    
+    // Fix column widths
+    worksheet['!cols'] = [
+      { wch: 8 }, { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 10 }
+    ]
+
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Assigned Students')
     const filename = `assigned-students-${new Date().toISOString().split('T')[0]}.xlsx`
@@ -117,9 +230,10 @@ function PeerDashboardContent() {
             queryClient.invalidateQueries({ queryKey: ['assignedStudents'] }),
             queryClient.invalidateQueries({ queryKey: ['renumerations'] }),
             queryClient.invalidateQueries({ queryKey: ['classStats'] }),
-            queryClient.invalidateQueries({ queryKey: ['studentAttendance'] }),
-            queryClient.invalidateQueries({ queryKey: ['activeFeedbackForms'] }),
-            queryClient.invalidateQueries({ queryKey: ['pendingClassAlert'] })
+            queryClient.invalidateQueries({ queryKey: ['assignedStudentsPerformance'] }),
+            queryClient.invalidateQueries({ queryKey: [ 'activeFeedbackForms' ] }),
+            queryClient.invalidateQueries({ queryKey: [ 'pendingClassAlert' ] }),
+            checkTodayClass()
         ])
     } finally {
       setTimeout(() => setIsRefreshing(false), 500)
@@ -230,14 +344,67 @@ function PeerDashboardContent() {
                     <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl -ml-20 -mb-20 transition-all duration-700"></div>
                   </div>
 
-                  {/* Assigned Students List */}
+                  {/* Today's Classes Quick Access */}
+                  <div className="flex flex-col gap-3 mb-2">
+                     
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-h-[80px]">
+                        {todayClasses.length === 0 ? (
+                          <div className="col-span-1 sm:col-span-2 bg-white border-2 border-dashed border-gray-200 rounded-[2rem] p-8 flex flex-col items-center justify-center text-center opacity-70 gap-3 shadow-sm">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No Class Scheduled For Today</p>
+                          </div>
+                        ) : (
+                          todayClasses.map((cl, idx) => (
+                            <div 
+                              key={cl.id || idx}
+                              onClick={() => {
+                                if (cl.type === 'scheduled') {
+                                  setSelectedTodayClass(cl)
+                                  setIsTodayClassModalOpen(true)
+                                } else {
+                                  toast.info(`Additional Class: ${cl.subject_name}`)
+                                }
+                              }}
+                              className={`col-span-1 sm:col-span-2 bg-white border-2 border-dashed rounded-[2rem] p-5 flex items-center justify-between cursor-pointer hover:border-gray-900 transition-all group shadow-sm bg-gradient-to-r from-white to-gray-50/30 ${
+                                cl.type === 'additional' ? 'border-purple-200' : 'border-gray-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform ${
+                                  cl.type === 'additional' ? 'bg-purple-600' : 'bg-gray-900'
+                                }`}>
+                                  <CheckCircle className="text-white w-5 h-5" />
+                                </div>
+                                <div className="min-w-0 pr-2">
+                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">
+                                    {cl.type === 'scheduled' ? 'Live Now' : 'Additional'}
+                                  </p>
+                                  <h4 className="text-[13px] font-bold text-gray-900 uppercase tracking-tight truncate max-w-[200px] sm:max-w-[350px]">{cl.subject_name}</h4>
+                                </div>
+                              </div>
+                              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-colors ${
+                                cl.type === 'additional' 
+                                  ? 'bg-purple-50 text-purple-700 group-hover:bg-purple-600 group-hover:text-white' 
+                                  : 'bg-gray-50 text-gray-900 group-hover:bg-gray-900 group-hover:text-white'
+                              }`}>
+                                {cl.type === 'scheduled' ? 'Launch' : 'View'} <ChevronRight size={12} />
+                              </div>
+                            </div>
+                          ))
+                        )}
+                     </div>
+                  </div>
+
+                  {/* Students Leaderboard */}
                   <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 overflow-hidden flex flex-col flex-1">
                     <div className="flex flex-row items-center justify-between mb-8 border-b border-gray-50 pb-4">
-                      <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none max-w-[150px] sm:max-w-none">Assigned Students</h4>
+                      <div>
+                        <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Assigned Students</h4>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-wider italic">View student progress & performance</p>
+                      </div>
                       
                       <div className="flex items-center gap-3">
                          <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest">
-                            {assignedStudents.length}
+                            {assignedStudents.length} Students
                          </span>
                          {studentsWithAttendance.length > 0 && (
                            <ExportButton 
@@ -250,67 +417,78 @@ function PeerDashboardContent() {
                     
                     {studentsWithAttendance.length === 0 ? (
                        <div className="py-20 flex flex-col items-center justify-center text-center">
-           <div className="w-16 h-16  rounded-full flex items-center justify-center mb-4">
-                  <Image src="/icons/student.png" alt="student" width={64} height={64} />
-               </div>
+                          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4">
+                             <Image src="/icons/student.png" alt="student" width={64} height={64} />
+                          </div>
                           <p className="text-xs font-black text-gray-900 uppercase tracking-widest mb-1">No Students Assigned</p>
                           <p className="text-[10px] text-gray-400 max-w-[200px] font-medium leading-relaxed">Students allocated to you will appear here.</p>
                        </div>
                     ) : (
-                       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 max-h-[500px]">
-                          {studentsWithAttendance.map((student: { id: string; name: string; email: string | null; dept: string; year: string; section: string; classesPresent: number; classesAbsent: number; attendancePercentage: number; is_manual_entry?: boolean }) => (
+                       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2.5 max-h-[500px]">
+                           {studentsWithAttendance.map((student, index: number) => (
                              <div 
                                key={student.id} 
                                onClick={() => router.push(`/peer/attendance/${student.id}`)}
-                               className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-white transition-all duration-300 group cursor-pointer gap-3 sm:gap-0"
+                               className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-3xl border border-transparent bg-white hover:bg-gray-50/80 hover:border-gray-100 transition-all duration-300 group cursor-pointer gap-3 sm:gap-0"
                              >
                                 <div className="flex items-center gap-4 w-full sm:w-auto">
-                                   <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#1C2434] text-white flex items-center justify-center text-[10px] sm:text-xs font-bold shadow-md shadow-gray-200 group-hover:scale-105 transition-transform duration-300 flex-shrink-0">
-                                      {student.name.substring(0, 2).toUpperCase()}
+                                   <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center text-[10px] font-black text-white shadow-sm shrink-0">
+                                      {index + 1}
                                    </div>
+
+                                   
                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <h5 className="text-xs sm:text-[13px] font-bold text-gray-900 leading-tight group-hover:text-blue-600 transition-colors truncate">
+                                      <div className="flex items-center gap-2 mb-0.5">
+                                        <h5 className={`text-[13px] font-black leading-tight truncate ${
+                                          student.rank <= 3 ? 'text-gray-900' : 'text-gray-700'
+                                        }`}>
                                           {student.name}
                                         </h5>
                                         {student.is_manual_entry && (
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 border border-yellow-200 whitespace-nowrap">
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-white/50 text-gray-500 border border-gray-100 uppercase tracking-tighter">
                                             Manual
                                           </span>
                                         )}
                                       </div>
                                       
-                                      <div className="flex flex-wrap items-center gap-2 text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-                                         <span>{student.dept}</span>
-                                         <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                                         <span>Yr {student.year}</span>
-                                         <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                      <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-tight">
                                          {student.is_manual_entry ? (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    setSelectedStudentForEmail(student as unknown as Student)
-                                                }}
-                                                className="text-blue-600 hover:text-blue-800 font-bold hover:underline"
-                                            >
-                                                + ASSIGN EMAIL
-                                            </button>
+                                             <button
+                                                 onClick={(e) => {
+                                                     e.stopPropagation()
+                                                     setSelectedStudentForEmail(student as unknown as Student)
+                                                 }}
+                                                 className="text-blue-600 hover:text-blue-800 font-bold hover:underline"
+                                             >
+                                                 + ASSIGN EMAIL
+                                             </button>
                                          ) : (
-                                            <span className="truncate max-w-[120px] sm:max-w-none">{student.email}</span>
+                                             <span className="truncate max-w-[150px]">{student.email || 'No email assigned'}</span>
                                          )}
+                                         <span className="w-1 h-1 rounded-full bg-gray-200"></span>
+                                         <span>Section {student.section}</span>
                                       </div>
                                    </div>
                                 </div>
-                                <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 sm:gap-1 pl-[56px] sm:pl-0">
-                                   <div className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider border ${
-                                      student.attendancePercentage >= 75 ? 'bg-gray-100 text-black border-black' : 
-                                      student.attendancePercentage >= 60 ? 'bg-gray-100 text-black border-black' : 'bg-gray-100 text-black border-black'
-                                   }`}>
-                                      {student.attendancePercentage}% Attendance
+
+                                <div className="flex items-center gap-6 sm:gap-8 ml-[54px] sm:ml-0">
+                                   <div className="flex flex-col items-center sm:items-end">
+                                      <span className="text-base sm:text-lg font-black tracking-tighter text-gray-900">
+                                        {(student.score || 0).toFixed(1)}
+                                      </span>
+                                      <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-[-2px]">Score</span>
                                    </div>
-                                   <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                                       {student.classesPresent} / {student.classesPresent + student.classesAbsent} Classes
-                                   </span>
+
+                                   <div className="flex flex-col items-center sm:items-end">
+                                      <span className="text-xs sm:text-sm font-black text-gray-600 tracking-tight">
+                                        {student.attendancePercentage}%
+                                      </span>
+                                      <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-[-2px]">Attendance</span>
+                                   </div>
+                                   
+                                   <div className="hidden sm:block">
+                                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600 transition-colors" />
+                                   </div>
                                 </div>
                              </div>
                           ))}
@@ -322,9 +500,7 @@ function PeerDashboardContent() {
                 {/* --- RIGHT COLUMN --- */}
                 <div className="lg:col-span-4 flex flex-col gap-6">
                   
-                  {/* Performance Chart */}
                   {/* Class Progress Card */}
-
                   <Card className="rounded-[2rem] shadow-sm border-none bg-white p-7 relative overflow-hidden group hover:shadow-md transition-shadow duration-300">
                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3 sm:gap-0">
                        <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none">Class Progress</h4>
@@ -353,19 +529,13 @@ function PeerDashboardContent() {
 
                         {/* Interactive Progress Bar */}
                         <div className="relative h-3 w-full bg-gray-100 rounded-full overflow-hidden cursor-pointer group/bar">
-                           {/* Background track stripes */}
                            <div className="absolute inset-0 opacity-30 bg-[linear-gradient(45deg,rgba(0,0,0,0.02)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.02)_50%,rgba(0,0,0,0.02)_75%,transparent_75%,transparent)] bg-[length:10px_10px]"></div>
-                           
-                           {/* Active Bar */}
                            <div 
                               className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full relative transition-all duration-1000 ease-out group-hover/bar:brightness-110"
                               style={{ width: `${completionPercentage}%` }}
                            >
-                              {/* Shimmer effect */}
                               <div className="absolute inset-0 bg-white/30 skew-x-12 -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
                            </div>
-
-                           {/* Tooltip on Hover */}
                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-900 text-white text-[10px] font-bold rounded-lg opacity-0 group-hover/bar:opacity-100 transition-all duration-200 transform translate-y-2 group-hover/bar:translate-y-0 pointer-events-none whitespace-nowrap shadow-xl z-10">
                               {totalClassesAllocated - classesTaken} classes remaining
                               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[4px] border-4 border-transparent border-t-gray-900"></div>
@@ -374,7 +544,7 @@ function PeerDashboardContent() {
 
                         <div className="mt-5 flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                            <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
-                              You&apos;re doing great! Complete <strong className="text-gray-900">{totalClassesAllocated - classesTaken} more</strong> classes to reach your target for this semester.
+                               You&apos;re doing great! Complete <strong className="text-gray-900">{totalClassesAllocated - classesTaken} more</strong> classes to reach your target for this semester.
                            </p>
                         </div>
                      </div>
@@ -469,7 +639,6 @@ function PeerDashboardContent() {
             setSelectedRenumeration(null)
           }}
           onSuccess={() => {
-            // Refetch renumerations when a form is submitted
             queryClient.invalidateQueries({ queryKey: ['renumerations'] })
           }}
         />
@@ -483,6 +652,33 @@ function PeerDashboardContent() {
             handleRefresh()
             setSelectedStudentForEmail(null)
           }}
+        />
+      )}
+
+      {selectedTodayClass && (
+        <ClassDetailsModal
+          isOpen={isTodayClassModalOpen}
+          onClose={() => {
+            setIsTodayClassModalOpen(false)
+            setSelectedTodayClass(null)
+          }}
+          classItem={selectedTodayClass}
+          userEmail={user?.email || ''}
+          onSuccess={handleRefresh}
+          availableSubjects={availableSubjects}
+        />
+      )}
+
+      {peertutorsInfo && (
+        <AdditionalClassModal
+          isOpen={isAddAdditionalClassModalOpen}
+          onClose={() => setIsAddAdditionalClassModalOpen(false)}
+          onSuccess={() => {
+            handleRefresh()
+            checkTodayClass()
+          }}
+          peertutorsInfo={peertutorsInfo as peertutors}
+          assignedStudents={assignedStudents}
         />
       )}
     </div>

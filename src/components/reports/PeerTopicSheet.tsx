@@ -7,11 +7,22 @@ import ExportButton from '@/components/ui/ExportButton'
 import { toast } from 'sonner'
 import { logger } from '@/lib/logger'
 
-interface PeerTopicSheetProps {
-  peertutorId: string
+export interface SheetHeaderInfo {
+  collegeName?: string
+  dept?: string
+  academicYear?: string
+  semesterType?: string
+  tutorName?: string
+  tutorYear?: string
+  tutorSection?: string
 }
 
-export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
+interface PeerTopicSheetProps {
+  peertutorId: string
+  headerInfo?: SheetHeaderInfo
+}
+
+export default function PeerTopicSheet({ peertutorId, headerInfo }: PeerTopicSheetProps) {
   const { data: topicData, isLoading } = useCachedData({
     queryKey: ['peer-topic-sheet', peertutorId],
     queryFn: async () => {
@@ -30,17 +41,13 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
   // Format time helper (24h -> 12h AM/PM)
   const formatTime = (timeStr: string): string => {
     if (!timeStr) return ''
-    // Handle ranges like "09:30 - 10:30"
     if (timeStr.includes(' - ')) {
       const [start, end] = timeStr.split(' - ')
       return `${formatTime(start)} - ${formatTime(end)}`
     }
-
-    // Check if valid time format HH:MM
     if (!timeStr.match(/^\d{1,2}:\d{2}$/) && !timeStr.match(/^\d{1,2}:\d{2}:\d{2}$/)) {
       return timeStr
     }
-
     try {
       const [hours, minutes] = timeStr.split(':')
       const h = parseInt(hours, 10)
@@ -50,6 +57,21 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
     } catch {
       return timeStr
     }
+  }
+
+  // Build subtitle lines for the sheet header
+  const buildHeaderLines = () => {
+    const lines: string[] = []
+    if (headerInfo?.collegeName) lines.push(headerInfo.collegeName)
+    if (headerInfo?.dept) lines.push(`DEPT OF ${headerInfo.dept}`)
+    lines.push('PEER TUTORING TOPIC SHEET')
+    if (headerInfo?.academicYear || headerInfo?.semesterType) {
+      const semLabel = headerInfo.semesterType
+        ? `${headerInfo.semesterType.charAt(0).toUpperCase() + headerInfo.semesterType.toUpperCase().slice(1)} SEMESTER`
+        : ''
+      lines.push([headerInfo.academicYear, semLabel].filter(Boolean).join(' - '))
+    }
+    return lines
   }
 
   const handleExport = () => {
@@ -62,24 +84,75 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
       const doc = new jsPDF()
       const pageHeight = doc.internal.pageSize.height
       const pageWidth = doc.internal.pageSize.width
-      let finalY = 20
+      let finalY = 10
+
+      // ── HEADER ──────────────────────────────────────────────────
+      const headerLines = buildHeaderLines()
+      // College name (largest)
+      if (headerLines[0]) {
+        doc.setFontSize(14)
+        doc.setFont('helvetica', 'bold')
+        doc.text(headerLines[0], pageWidth / 2, finalY + 10, { align: 'center' })
+        finalY += 10
+      }
+      // Dept
+      if (headerLines[1]) {
+        doc.setFontSize(11)
+        doc.setFont('helvetica', 'normal')
+        doc.text(headerLines[1], pageWidth / 2, finalY + 7, { align: 'center' })
+        finalY += 7
+      }
+      // Sheet name
+      if (headerLines[2]) {
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text(headerLines[2], pageWidth / 2, finalY + 7, { align: 'center' })
+        finalY += 7
+      }
+      // Academic year
+      if (headerLines[3]) {
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'normal')
+        doc.text(headerLines[3], pageWidth / 2, finalY + 6, { align: 'center' })
+        finalY += 6
+      }
+
+      // Peer tutor info (left side)
+      const tutorLines: string[] = []
+      if (headerInfo?.tutorName) tutorLines.push(`PEER TUTOR: ${headerInfo.tutorName}`)
+      if (headerInfo?.tutorYear) tutorLines.push(`YEAR: ${headerInfo.tutorYear}`)
+      if (headerInfo?.tutorSection) tutorLines.push(`SECTION: ${headerInfo.tutorSection}`)
+
+      if (tutorLines.length > 0) {
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'normal')
+        let tutY = 12
+        tutorLines.forEach(line => {
+          doc.text(line, 14, tutY)
+          tutY += 5
+        })
+      }
+
+      // Divider line
+      finalY += 4
+      doc.setDrawColor(0)
+      doc.setLineWidth(0.3)
+      doc.line(14, finalY, pageWidth - 14, finalY)
+      finalY += 5
+      // ────────────────────────────────────────────────────────────
 
       topicData.forEach((subject, index) => {
-        // Calculate estimated height needed for header and at least one row
-        // Header (10) + Table Header (10) + Row (10) + Spacing (5) approx 35
         if (finalY + 35 > pageHeight) {
           doc.addPage()
           finalY = 20
         } else if (index > 0) {
-          finalY += 5 // Reduced spacing between subjects (was 10)
+          finalY += 5
         }
 
-        // Title
-        doc.setFontSize(14)
+        doc.setFontSize(13)
         doc.setFont('helvetica', 'bold')
         doc.text(`SUBJECT NAME ${index + 1}: ${subject.subject_name}`, 14, finalY)
 
-        // Prepare table data
         const tableBody = subject.classes.map((cls, idx) => [
           idx + 1,
           `${formatDate(cls.date)}${cls.is_additional ? ' (A)' : ''}`,
@@ -87,7 +160,6 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
           cls.topic
         ])
 
-        // Generate table
         autoTable(doc, {
           startY: finalY + 5,
           head: [['S.NO', 'DATE', 'HOUR', 'TOPIC DETAILS']],
@@ -120,12 +192,8 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
           margin: { top: 20, bottom: 20, left: 14, right: 14 }
         })
 
-        // Update finalY to the end of the table
-        // We need to cast doc to any to access lastAutoTable
-        finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 2 // Minimized spacing (was 5)
+        finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 2
 
-        // Add Signature space
-        // Check if there is space for signature (approx 15 units)
         if (finalY + 15 > pageHeight) {
           doc.addPage()
           finalY = 20
@@ -133,19 +201,16 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
 
         doc.setFontSize(10)
         doc.setFont('helvetica', 'bold')
-        // Draw signature much closer to table
         doc.text('SIGNATURE OF FACULTY:', 14, finalY + 6)
-
-        finalY += 10 // Reduced buffer after signature for next subject (was 15)
+        finalY += 10
       })
 
       // Add Borders to all pages
       const pageCount = doc.getNumberOfPages()
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i)
-        doc.setDrawColor(0) // Black
+        doc.setDrawColor(0)
         doc.setLineWidth(0.5)
-        // Draw rect with 5mm margin
         doc.rect(5, 5, pageWidth - 10, pageHeight - 10)
       }
 
@@ -174,10 +239,59 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
     )
   }
 
+  // Build header lines for UI
+  const headerLines = buildHeaderLines()
+
   return (
     <div className="bg-white p-8 shadow-sm border border-gray-200 rounded-none print:shadow-none print:border-none relative">
       <div className="absolute top-6 right-6 print:hidden">
         <ExportButton onClick={handleExport} />
+      </div>
+
+      {/* Sheet Header */}
+      <div className="mb-8 border-b-2 border-gray-800 pb-4">
+        {/* Top row: tutor info (left) + sheet title (center) */}
+        <div className="flex items-start justify-between">
+          {/* Left: Peer Tutor Info */}
+          <div className="text-left space-y-0.5">
+            {headerInfo?.tutorName && (
+              <p className="text-sm font-bold text-gray-900 uppercase">
+                Peer Tutor: <span className="font-normal">{headerInfo.tutorName}</span>
+              </p>
+            )}
+            {headerInfo?.tutorYear && (
+              <p className="text-sm font-bold text-gray-900 uppercase">
+                Year: <span className="font-normal">{headerInfo.tutorYear}</span>
+              </p>
+            )}
+            {headerInfo?.tutorSection && (
+              <p className="text-sm font-bold text-gray-900 uppercase">
+                Section: <span className="font-normal">{headerInfo.tutorSection}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Center: Sheet Header */}
+          <div className="flex-1 text-center px-4">
+            {headerLines[0] && (
+              <h2 className="text-lg font-black text-gray-900 uppercase tracking-wide leading-tight">
+                {headerLines[0]}
+              </h2>
+            )}
+            {headerLines[1] && (
+              <p className="text-sm font-semibold text-gray-700 mt-0.5">{headerLines[1]}</p>
+            )}
+            {headerLines[2] && (
+              <p className="text-base font-bold text-gray-900 mt-1 uppercase">{headerLines[2]}</p>
+            )}
+            {headerLines[3] && (
+              <p className="text-xs text-gray-600 mt-0.5">{headerLines[3]}</p>
+            )}
+          </div>
+
+          {/* Right: empty spacer to balance layout */}
+          <div className="w-32" />
+        </div>
       </div>
 
       {topicData.map((subject, index) => (
@@ -246,7 +360,7 @@ export default function PeerTopicSheet({ peertutorId }: PeerTopicSheetProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-sm text-gray-500 font-medium uppercase text-xs tracking-wider">Topic Covered</p>
+                    <p className="text-gray-500 font-medium uppercase text-xs tracking-wider">Topic Covered</p>
                     <p className="text-sm text-gray-900 leading-relaxed font-medium">
                       {cls.topic}
                     </p>

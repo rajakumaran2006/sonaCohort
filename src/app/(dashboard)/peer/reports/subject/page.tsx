@@ -14,6 +14,11 @@ import { ArrowLeft, Calendar, Eye } from 'lucide-react'
 import ExportButton from '@/components/ui/ExportButton'
 import { logger } from '@/lib/logger'
 import * as XLSX from 'xlsx'
+import { useQuery } from '@tanstack/react-query'
+import { FacultyService } from '@/lib/services/facultyService'
+import { AssignmentService } from '@/lib/services/assignmentService'
+import { useMemo } from 'react'
+// toast import removed
 
 export default function PeerSubjectDetailsPage() {
    return (
@@ -83,6 +88,57 @@ function PeerSubjectDetailsContent() {
          loadSubjectData()
       }
    }, [tutorId, subjectId, subjectNameParam, user?.email, loadSubjectData])
+
+   // Fetch all departments for incharge info
+   const { data: allDepts = [] } = useQuery({
+      queryKey: ['all-departments'],
+      queryFn: async () => await FacultyService.getAllDepartments(),
+      staleTime: 10 * 60 * 1000,
+   })
+
+   // Fetch assigned students for the count
+   const { data: assignedStudents = [] } = useQuery({
+      queryKey: ['assigned-students', tutorId],
+      queryFn: async () => {
+         if (!tutorId) return []
+         return await AssignmentService.getStudentsBypeertutors(tutorId)
+      },
+      enabled: !!tutorId,
+      staleTime: 5 * 60 * 1000,
+   })
+
+   // Get current tutor info for dept mapping
+   const { data: tutorInfoData } = useQuery({
+      queryKey: ['peer-tutor-info-direct', tutorId],
+      queryFn: async () => {
+         if (!tutorId) return null
+         return await peertutorsAuthService.getpeertutorsByEmail(user?.email || '')
+      },
+      enabled: !!tutorId && !!user?.email,
+      staleTime: 10 * 60 * 1000,
+   })
+
+   // Match the department info locally
+   const deptInfo = useMemo(() => {
+     if (!tutorInfoData || !allDepts?.length) return null
+     
+     if (tutorInfoData.faculty_id) {
+       const match = allDepts.find(d => d.id === tutorInfoData.faculty_id)
+       if (match) return match
+     }
+     
+     if (tutorInfoData.dept) {
+       const normalizedTutorDept = tutorInfoData.dept.trim().toLowerCase()
+       const match = allDepts.find(d => 
+         d.name.trim().toLowerCase() === normalizedTutorDept ||
+         normalizedTutorDept.includes(d.name.trim().toLowerCase()) ||
+         d.name.trim().toLowerCase().includes(normalizedTutorDept)
+       )
+       if (match) return match
+     }
+     
+     return null
+   }, [tutorInfoData, allDepts])
 
    const handleClassClick = async (scheduledClass: ScheduledClassWithDetails) => {
       const status = getCompletionStatus(scheduledClass).status
@@ -207,24 +263,38 @@ function PeerSubjectDetailsContent() {
                                     {fullReport.rows.length > 0 && (
                                        <ExportButton
                                           onClick={() => {
-                                             const data = fullReport.rows.map((row, index) => {
-                                                const rowData: Record<string, string | number> = {
-                                                   'S.No': index + 1,
-                                                   'Student Name': row.student_name,
-                                                }
+                                             const metadata = [
+                                                [`PEER TUTOR ATTENDANCE REPORT - ${fullReport.subject_name.toUpperCase()}`],
+                                                ['Export Date:', new Date().toLocaleDateString(), 'Export Time:', new Date().toLocaleTimeString()],
+                                                ['Dept:', tutorInfoData?.dept || 'N/A', 'Year:', tutorInfoData?.year || 'N/A', 'Section:', tutorInfoData?.section || 'N/A'],
+                                                ['Filter Applied:', 'NO', 'Filters:', 'None'],
+                                                ['Incharge:', deptInfo?.faculty_name || 'N/A', 'Tutor:', tutorInfoData?.name || 'N/A', 'Assigned Students:', (assignedStudents || []).length],
+                                                [''],
+                                             ]
+
+                                             const tableHeaders = ['S.No', 'Student Name']
+                                             fullReport.columns.forEach(col => {
+                                                tableHeaders.push(new Date(col.date).toLocaleDateString())
+                                             })
+                                             tableHeaders.push('Present Days', 'Percentage')
+
+                                             const exportData = fullReport.rows.map((row, index) => {
+                                                const rowData: (string | number)[] = [
+                                                   index + 1,
+                                                   row.student_name,
+                                                ]
 
                                                 fullReport.columns.forEach(col => {
-                                                   const dateStr = new Date(col.date).toLocaleDateString()
                                                    const status = row.attendance[col.id]
-                                                   rowData[`${dateStr}`] = status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : status === 'upcoming' ? 'U' : '-'
+                                                   rowData.push(status === 'present' ? 'P' : status === 'absent' ? 'A' : status === 'on_duty' ? 'OD' : status === 'upcoming' ? 'U' : '-')
                                                 })
 
-                                                rowData['Present Days'] = row.stats.present
-                                                rowData['Percentage'] = `${row.stats.percentage}%`
+                                                rowData.push(row.stats.present)
+                                                rowData.push(`${row.stats.percentage}%`)
                                                 return rowData
                                              })
 
-                                             const ws = XLSX.utils.json_to_sheet(data)
+                                             const ws = XLSX.utils.aoa_to_sheet([...metadata, tableHeaders, ...exportData])
                                              const wb = XLSX.utils.book_new()
                                              XLSX.utils.book_append_sheet(wb, ws, "Attendance")
                                              XLSX.writeFile(wb, `${fullReport.subject_name}_Attendance.xlsx`)
@@ -566,37 +636,43 @@ function PeerSubjectDetailsContent() {
                      {/* Student List */}
                      <div>
                         <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-4">Detailed Attendance Log</h4>
-                        <div className="border border-gray-200 rounded-2xl overflow-hidden">
-                           <table className="w-full">
-                              <thead className="bg-gray-50 border-b border-gray-200">
-                                 <tr>
-                                    <th className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Student</th>
-                                    <th className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
-                                    <th className="px-6 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                                 </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100 bg-white">
-                                 {selectedClass.attendance_records.map((record) => (
-                                    <tr key={record.student_id} className="hover:bg-gray-50/50">
-                                       <td className="px-6 py-3.5 text-sm font-bold text-gray-900">
-                                          {record.student_name}
-                                       </td>
-                                       <td className="px-6 py-3.5 text-xs font-medium text-gray-500">
-                                          {record.student_email}
-                                       </td>
-                                       <td className="px-6 py-3.5 text-center">
-                                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${record.status === 'present'
-                                             ? 'bg-emerald-500 text-black border-emerald-100'
-                                             : 'bg-red-500 text-black border-red-100'
-                                             }`}>
-                                             {record.status === 'present' ? 'Present' : 'Absent'}
-                                          </span>
-                                       </td>
-                                    </tr>
-                                 ))}
-                              </tbody>
-                           </table>
-                        </div>
+                            <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                               <table className="w-full">
+                                  <thead className="bg-gray-50/50">
+                                     <tr className="border-b border-gray-100">
+                                        <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-[40%]">Student</th>
+                                        <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-[35%]">Email</th>
+                                        <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-[25%]">Status</th>
+                                     </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-50">
+                                     {selectedClass.attendance_records.map((record) => (
+                                        <tr key={record.student_id} className="hover:bg-gray-50/50 transition-colors group">
+                                           <td className="px-6 py-4">
+                                              <div className="flex items-center gap-3">
+                                                 <div className="w-9 h-9 rounded-lg bg-gray-900 flex items-center justify-center text-[10px] font-black text-white shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform">
+                                                    {record.student_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                                                 </div>
+                                                 <p className="text-[11px] font-black text-gray-900 uppercase tracking-tight truncate">{record.student_name}</p>
+                                              </div>
+                                           </td>
+                                           <td className="px-6 py-4">
+                                              <p className="text-[11px] font-medium text-gray-500 truncate">{record.student_email}</p>
+                                           </td>
+                                           <td className="px-6 py-4 text-center">
+                                              <span className={`inline-flex items-center justify-center px-4 py-1.5 rounded-[4px] text-[10px] font-black uppercase tracking-[0.1em] min-w-[90px] ${
+                                                 record.status === 'present'
+                                                    ? 'bg-[#00FFA3] text-black shadow-[0_0_15px_rgba(0,255,163,0.15)]'
+                                                    : 'bg-[#FF4D4D] text-white shadow-[0_0_15px_rgba(255,77,77,0.15)]'
+                                                 }`}>
+                                                 {record.status}
+                                              </span>
+                                           </td>
+                                        </tr>
+                                     ))}
+                                  </tbody>
+                               </table>
+                            </div>
                      </div>
                   </div>
                </div>

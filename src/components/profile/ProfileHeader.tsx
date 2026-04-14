@@ -1,6 +1,6 @@
 'use client'
 
-import { Building2, AtSign, CalendarDays, Users } from 'lucide-react'
+import { Building2, AtSign, CalendarDays, Users, School } from 'lucide-react'
 
 interface ProfileHeaderProps {
   name: string
@@ -9,6 +9,7 @@ interface ProfileHeaderProps {
   department?: string
   year?: string
   section?: string
+  collegeName?: string
 }
 
 export default function ProfileHeader({
@@ -18,6 +19,7 @@ export default function ProfileHeader({
   department,
   year,
   section,
+  collegeName,
 }: ProfileHeaderProps) {
   
   const getInitials = (name: string) => {
@@ -36,6 +38,14 @@ export default function ProfileHeader({
       <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-[40px] -ml-10 -mb-10 pointer-events-none"></div>
       
       <div className="relative z-10">
+        {/* College Name Banner */}
+        {collegeName && (
+          <div className="flex items-center gap-2 mb-5 px-4 py-2.5 bg-gray-900 text-white rounded-2xl w-fit">
+            <School className="w-4 h-4 flex-shrink-0 text-gray-300" />
+            <span className="text-xs font-bold tracking-wide">{collegeName}</span>
+          </div>
+        )}
+
         {/* Top section: Avatar + Name */}
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 mb-6">
           <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-[#1C2434] to-[#2D3748] flex items-center justify-center text-2xl sm:text-3xl font-black text-white shadow-xl flex-shrink-0">
@@ -45,7 +55,7 @@ export default function ProfileHeader({
           <div className="text-center sm:text-left flex-1 min-w-0">
             <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight leading-tight mb-1 truncate">{name}</h1>
             
-            <span className="inline-block px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase tracking-widest mb-2">
+            <span className="inline-block px-2.5 py-1 rounded-full bg-emerald-600 text-white border border-emerald-200 text-[10px] font-bold uppercase tracking-widest mb-2">
               {role}
             </span>
             

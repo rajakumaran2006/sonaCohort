@@ -19,6 +19,8 @@ export interface FacultyDepartment {
   morning_reminder_message?: string
   pending_warning_message?: string
   last_daily_reminder_date?: string
+  academic_year?: string
+  semester_type?: 'odd' | 'even' | null
 }
 export interface FacultyAllocation {
   id: string

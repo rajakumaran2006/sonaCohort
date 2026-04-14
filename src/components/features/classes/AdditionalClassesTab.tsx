@@ -9,7 +9,8 @@ import { FacultyService } from '@/lib/services/facultyService'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 import DatePicker from '@/components/ui/DatePicker'
 import * as XLSX from 'xlsx'
-import { Plus, Trash2, ChevronDown, CheckCircle, XCircle, User, FileText, Clock } from 'lucide-react'
+import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
+import { Plus, Trash2, ChevronDown, CheckCircle, XCircle, User, FileText, Clock, Search, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { logger } from '@/lib/logger'
 import { isValidUrl } from '@/lib/utils/validators'
@@ -49,6 +50,8 @@ interface peertutorsInfo {
   name: string
   faculty_id?: string
   dept?: string
+  year?: string
+  section?: string
 }
 
 interface Student {
@@ -61,9 +64,13 @@ interface AdditionalClassesTabProps {
   peertutorsInfo: peertutorsInfo
   assignedStudents: Student[]
   scheduledClasses?: { scheduled_date?: string }[]
+  deptInfo: {
+    faculty_name?: string
+    name: string
+  } | null
 }
 
-export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents }: AdditionalClassesTabProps) {
+export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents, deptInfo }: AdditionalClassesTabProps) {
   // const { user } = useAuth() // keeping user if it might be needed, or remove if truly unused. The error said 'user' is assigned but never used.
 
   const [additionalClasses, setAdditionalClasses] = useState<AdditionalClassWithAttendance[]>([])
@@ -88,7 +95,13 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
   const [isDeleting, setIsDeleting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [initialClassState, setInitialClassState] = useState<typeof newClass | null>(null)
-  const [isLinkMandatory, setIsLinkMandatory] = useState(true) // Default to true for safety
+  const [isLinkMandatory, setIsLinkMandatory] = useState(true)
+
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterSubject, setFilterSubject] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   const disabledDates = React.useMemo(() => {
     // We want to allow additional classes on any day, even if there are existing classes
@@ -399,81 +412,93 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
     }
   }
 
+  // Filter classes
+  const filteredAdditionalClasses = React.useMemo(() => {
+    let filtered = additionalClasses
+
+    // Apply date range filters
+    if (fromDate) {
+      filtered = filtered.filter(item => new Date(item.class_date) >= new Date(fromDate))
+    }
+    if (toDate) {
+      const end = new Date(toDate)
+      end.setHours(23, 59, 59, 999)
+      filtered = filtered.filter(item => new Date(item.class_date) <= end)
+    }
+
+    // Apply search filter (Subject or Topic)
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(item =>
+        item.subject_name.toLowerCase().includes(term) ||
+        item.topic.toLowerCase().includes(term)
+      )
+    }
+
+    // Apply subject filter
+    if (filterSubject) {
+      filtered = filtered.filter(item => item.subject_name === filterSubject)
+    }
+
+    return filtered
+  }, [additionalClasses, searchTerm, filterSubject, fromDate, toDate])
+
+  const getUniqueSubjects = () => [...new Set(additionalClasses.map(c => c.subject_name))].sort().map(s => ({ label: s, value: s }))
+
   const handleExportToExcel = () => {
-    if (additionalClasses.length === 0) return
+    if (filteredAdditionalClasses.length === 0) {
+      toast.warning('No data to export. Please adjust your filters.')
+      return
+    }
 
     try {
-      const groupedBySubject = additionalClasses.reduce((acc, classItem) => {
-        if (!acc[classItem.subject_name]) {
-          acc[classItem.subject_name] = []
-        }
-        acc[classItem.subject_name].push(classItem)
-        return acc
-      }, {} as Record<string, AdditionalClassWithAttendance[]>)
+      const filtersApplied = !!(searchTerm || filterSubject || fromDate || toDate)
 
-      const exportData: unknown[][] = []
-      let totalClassesOverall = 0
-      let totalPresentCountOverall = 0
-      let totalStudentCountOverall = 0
+      const metadata = [
+        ['PEER TUTOR ADDITIONAL CLASS REPORT'],
+        ['Export Date:', new Date().toLocaleDateString(), 'Export Time:', new Date().toLocaleTimeString()],
+        ['Dept:', peertutorsInfo?.dept || 'N/A', 'Year:', peertutorsInfo?.year || 'N/A', 'Section:', peertutorsInfo?.section || 'N/A'],
+        ['Filter Applied:', filtersApplied ? 'YES' : 'NO', 'Filters:', [
+          searchTerm ? `Search: ${searchTerm}` : '',
+          filterSubject ? `Subject: ${filterSubject}` : '',
+          fromDate ? `From: ${fromDate}` : '',
+          toDate ? `To: ${toDate}` : ''
+        ].filter(Boolean).join(', ') || 'None'],
+        ['Incharge:', deptInfo?.faculty_name || 'N/A', 'Tutor:', peertutorsInfo?.name || 'N/A', 'Assigned Students:', (assignedStudents || []).length],
+        [''],
+        ['SUBJECT', 'DATE', 'TOPIC', 'TIME', 'PRESENT', 'ABSENT', 'TOTAL']
+      ]
 
-      exportData.push(['Peer Tutor Name', peertutorsInfo?.name || 'N/A'])
-      exportData.push([])
-
-      Object.keys(groupedBySubject).forEach((subject) => {
-        const classes = groupedBySubject[subject]
+      const exportData = filteredAdditionalClasses.map(classItem => {
+        const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
+        const absentCount = classItem.attendance_records.filter(r => r.status === 'absent').length
+        const totalCount = classItem.attendance_records.length
         
-        exportData.push(['Subject', subject])
-        exportData.push(['Date', 'Topic', 'Students Present', 'Students Absent', 'Total Students'])
-        
-        let subjectTotalClasses = 0
-        let subjectTotalPresent = 0
-        let subjectTotalStudents = 0
-
-        classes.forEach((classItem) => {
-          const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
-          const absentCount = classItem.attendance_records.filter(r => r.status === 'absent').length
-          const totalCount = classItem.attendance_records.length
-
-          exportData.push([
-            parseLocalDate(classItem.class_date).toLocaleDateString('en-GB'),
-            classItem.topic,
-            presentCount,
-            absentCount,
-            totalCount
-          ])
-
-          subjectTotalClasses++
-          subjectTotalPresent += presentCount
-          subjectTotalStudents += totalCount
-        })
-
-        exportData.push([])
-        exportData.push(['Total Classes Taken', subjectTotalClasses])
-        exportData.push(['Total Students Present', subjectTotalPresent])
-        exportData.push([])
-
-        totalClassesOverall += subjectTotalClasses
-        totalPresentCountOverall += subjectTotalPresent
-        totalStudentCountOverall += subjectTotalStudents
+        return [
+          classItem.subject_name,
+          parseLocalDate(classItem.class_date).toLocaleDateString('en-GB'),
+          classItem.topic,
+          classItem.start_time ? `${formatTime(classItem.start_time)} - ${formatTime(classItem.end_time)}` : '--:--',
+          presentCount,
+          absentCount,
+          totalCount
+        ]
       })
 
-      exportData.push([])
-      exportData.push(['OVERALL SUMMARY'])
-      exportData.push(['Total Classes Taken (All Subjects)', totalClassesOverall])
-      exportData.push(['Total Students Present Count', totalPresentCountOverall])
+      const ws = XLSX.utils.aoa_to_sheet([...metadata, ...exportData])
       
-      const attendancePercentage = totalStudentCountOverall > 0 
-        ? ((totalPresentCountOverall / totalStudentCountOverall) * 100).toFixed(2)
-        : '0.00'
-      exportData.push(['Student Attendance Percentage', `${attendancePercentage}%`])
+      // Fix column widths
+      ws['!cols'] = [
+        { wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 10 }, { wch: 10 }, { wch: 10 }
+      ]
 
-      const workbook = XLSX.utils.book_new()
-      const worksheet = XLSX.utils.aoa_to_sheet(exportData)
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Additional Classes Report')
-      const fileName = `Additional_Classes_${peertutorsInfo?.name?.replace(/\s+/g, '_') || 'Report'}_${new Date().toISOString().split('T')[0]}.xlsx`
-      XLSX.writeFile(workbook, fileName)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Additional Classes')
+      XLSX.writeFile(wb, `Additional_Classes_Export_${new Date().toISOString().split('T')[0]}.xlsx`)
+      toast.success('Successfully exported additional classes')
     } catch (error) {
       logger.error('Error exporting to Excel:', error)
+      toast.error('Error exporting to Excel. Please try again.')
     }
   }
 
@@ -488,57 +513,138 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
   return (
     <div className="space-y-6">
       
-      {/* Top Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 uppercase tracking-tight">Additional Classes</h2>
-          <p className="text-xs font-medium text-gray-500 mt-1">Manage extra sessions and attendance</p>
-        </div>
-        <div className="flex items-center gap-3">
-            {assignedStudents.length > 0 && (
-            <>
-               <button
-                  onClick={toggleDeleteMode}
-                  title={deleteMode ? "Cancel Delete Mode" : "Delete Classes"}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm ${
-                     deleteMode 
-                        ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' 
-                        : 'bg-red-600 hover:bg-red-700 text-white'
-                  }`}
-               >
-                  {deleteMode ? (
-                     <>
-                        <span className="text-lg leading-none">&times;</span>
-                        <span>Cancel</span>
-                     </>
-                  ) : (
-                     <>
-                        <Trash2 size={14} strokeWidth={2.5} />
-                        <span>Delete</span>
-                     </>
-                  )}
-               </button>
+      {/* Unified Header, Filters & Table Container */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Header & Filters */}
+        <div className="p-5 border-b border-gray-100 bg-gray-50/50">
+          <div className="flex flex-col space-y-4">
+            {/* Title & Static Actions */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 uppercase tracking-tight">Additional Classes</h2>
+                <p className="text-xs font-medium text-gray-500 mt-1">Manage extra sessions and attendance</p>
+              </div>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                {assignedStudents.length > 0 && (
+                  <>
+                    <button
+                      onClick={toggleDeleteMode}
+                      title={deleteMode ? "Cancel Delete Mode" : "Delete Classes"}
+                      className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm ${
+                        deleteMode 
+                          ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' 
+                          : 'bg-red-600 hover:bg-red-700 text-white'
+                      }`}
+                    >
+                      {deleteMode ? (
+                        <>
+                          <span className="text-lg leading-none">&times;</span>
+                          <span>Cancel</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 size={14} strokeWidth={2.5} />
+                          <span>Delete</span>
+                        </>
+                      )}
+                    </button>
 
-               {deleteMode && selectedClasses.size > 0 && (
-                  <button
-                     onClick={handleDeleteClick}
-                     className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+                    {deleteMode && selectedClasses.size > 0 && (
+                      <button
+                        onClick={handleDeleteClick}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+                      >
+                        Delete ({selectedClasses.size})
+                      </button>
+                    )}
+
+                    {!deleteMode && (
+                      <button
+                        onClick={handleAddClass}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+                      >
+                        <Plus size={14} strokeWidth={3} />
+                        <span>Add Class</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Filters Row */}
+            <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center pt-2">
+              <div className="relative w-full lg:max-w-xs">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search subject or topic..."
+                  className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 focus:border-blue-400 rounded-xl text-xs transition-all outline-none shadow-sm"
+                />
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+              </div>
+
+              <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+                {/* Date range filters */}
+                <div className="flex flex-row items-center gap-2 w-full sm:w-auto bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm">
+                  <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="text-[10px] font-bold text-gray-600 focus:outline-none bg-transparent uppercase tracking-tighter"
+                    placeholder="From"
+                  />
+                  <span className="text-gray-300 mx-1">|</span>
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="text-[10px] font-bold text-gray-600 focus:outline-none bg-transparent uppercase tracking-tighter"
+                    placeholder="To"
+                  />
+                </div>
+
+                {/* Subject Filter */}
+                <div className="relative w-full sm:w-auto sm:min-w-[140px]">
+                  <select
+                    value={filterSubject}
+                    onChange={(e) => setFilterSubject(e.target.value)}
+                    className="w-full appearance-none pl-4 pr-10 py-2 bg-white border border-gray-200 focus:border-blue-400 rounded-xl text-xs font-bold text-gray-600 outline-none shadow-sm uppercase tracking-wider"
                   >
-                     Delete ({selectedClasses.size})
-                  </button>
-               )}
+                    <option value="">Subject</option>
+                    {getUniqueSubjects().map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" size={14} />
+                </div>
 
-               <button
-                  onClick={handleAddClass}
-                  className="flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
-               >
-                  <Plus size={14} strokeWidth={3} />
-                  <span>Add Class</span>
-               </button>
-            </>
-            )}
+                <div className="w-full sm:w-auto flex flex-row gap-2">
+                  <div className="flex-1 sm:flex-none">
+                    <ExportButton onClick={handleExportToExcel} disabled={filteredAdditionalClasses.length === 0} />
+                  </div>
+                  
+                  {(filterSubject || searchTerm || fromDate || toDate) && (
+                    <button 
+                      onClick={() => {
+                        setFilterSubject('')
+                        setSearchTerm('')
+                        setFromDate('')
+                        setToDate('')
+                      }}
+                      className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors uppercase tracking-wider"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+        {/* ↓ Table / empty state rendered directly inside this same card — no gap ↓ */}
    
       {/* Add Class Form */}
       {showAddForm && (
@@ -704,13 +810,13 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
         </div>
       )}
 
-      {/* Main List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-         {additionalClasses.length > 0 ? (
+      {/* Main List — sits flush below the filter header inside the same card */}
+      <div>
+         {filteredAdditionalClasses.length > 0 ? (
             <>
                {/* Mobile Card View */}
                <div className="md:hidden divide-y divide-gray-100">
-                  {additionalClasses.map((classItem) => {
+                  {filteredAdditionalClasses.map((classItem) => {
                      const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
                      const totalCount = classItem.attendance_records.length
                      const isExpanded = expandedRows.has(classItem.id)
@@ -767,14 +873,22 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
                                  <div className="mb-6 space-y-4">
                                     <div>
                                        <h4 className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2">Topic</h4>
-                                       <p className="text-xs text-gray-700 bg-white p-2 rounded border border-gray-100">{classItem.topic}</p>
+                                       <p className="text-xs text-gray-700 bg-white p-2 rounded border border-gray-100">
+                                          {classItem.topic.split(' ').slice(0, 3).join(' ')}{classItem.topic.split(' ').length > 3 ? '...' : ''}
+                                       </p>
                                     </div>
                                     <div className="space-y-4">
                                        {(classItem.start_time || classItem.end_time) && (
                                           <div>
                                              <h4 className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2">Time</h4>
                                              <p className="text-xs text-gray-700 bg-white p-2 rounded border border-gray-100 inline-block">
-                                                {formatTime(classItem.start_time || undefined)} - {formatTime(classItem.end_time || undefined)}
+                                                {(() => {
+                                                   if (!classItem.start_time || !classItem.end_time) return '-- MINS';
+                                                   const [startH, startM] = classItem.start_time.split(':').map(Number);
+                                                   const [endH, endM] = classItem.end_time.split(':').map(Number);
+                                                   const diffMins = (endH * 60 + endM) - (startH * 60 + startM);
+                                                   return `${diffMins} MINS`;
+                                                })()}
                                              </p>
                                           </div>
                                        )}
@@ -808,8 +922,8 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
                                              </div>
                                              <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded flex-shrink-0 ${
                                                 record.status === 'present' 
-                                                   ? 'bg-green-400 text-black' 
-                                                   : 'bg-red-400 text-black'
+                                                   ? 'bg-green-600 text-white'
+                                                   : 'bg-red-600 text-white'
                                              }`}>
                                                 {record.status}
                                              </span>
@@ -828,35 +942,22 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
 
                {/* Desktop Table View */}
                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full">
-                     <thead className="bg-gray-50">
-                        <tr className="border-b border-gray-200">
-                           <th colSpan={deleteMode ? 7 : 6} className="px-6 py-4">
-                              <div className="flex items-center justify-between">
-                                 <div className="flex items-center gap-3">
-                                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">History ({additionalClasses.length})</h3>
-                                 </div>
-                                 <div className="flex items-center gap-3">
-                                    {!deleteMode && additionalClasses.length > 0 && (
-                                       <ExportButton onClick={handleExportToExcel} />
-                                    )}
-                                    
-                                  </div>
-                               </div>
-                           </th>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                           {deleteMode && <th className="px-6 py-3 w-10"></th>}
-                           <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject</th>
-                           <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Topic</th>
-                           <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
-                           <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Time</th>
-                           <th className="px-6 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Attendance</th>
-                           <th className="px-6 py-3 w-10"></th>
-                        </tr>
-                     </thead>
-                     <tbody className="divide-y divide-gray-50">
-                        {additionalClasses.map((classItem) => {
+                  <Table>
+                     <TableHeader>
+                        <TableRow className="bg-white hover:bg-white border-b border-gray-100">
+                           {deleteMode ? (
+                               <TableHead className="py-4 pl-6 w-10"><span className="sr-only">Select</span></TableHead>
+                           ) : null}
+                           <TableHead className={`py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap ${!deleteMode ? 'pl-6' : 'px-2'}`}>Subject</TableHead>
+                           <TableHead className="py-4 px-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">Topic</TableHead>
+                           <TableHead className="py-4 px-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">Date</TableHead>
+                           <TableHead className="py-4 px-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">Time</TableHead>
+                           <TableHead className="py-4 px-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">Attendance</TableHead>
+                           <TableHead className="py-4 pr-6 w-10"><span className="sr-only">Actions</span></TableHead>
+                        </TableRow>
+                     </TableHeader>
+                     <TableBody>
+                        {filteredAdditionalClasses.map((classItem) => {
                            const presentCount = classItem.attendance_records.filter(r => r.status === 'present').length
                            const totalCount = classItem.attendance_records.length
                            const isExpanded = expandedRows.has(classItem.id)
@@ -864,41 +965,49 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
 
                            return (
                               <React.Fragment key={classItem.id}>
-                                 <tr className={`hover:bg-gray-50/80 transition-colors group ${isSelected ? 'bg-blue-50/30' : ''}`}>
+                                 <TableRow className={`hover:bg-gray-50/80 transition-colors group ${isSelected ? 'bg-blue-50/30' : ''}`}>
                                     {deleteMode && (
-                                       <td className="px-6 py-4 text-center">
+                                       <TableCell className="py-4 pl-6 text-center">
                                           <input
                                              type="checkbox"
                                              checked={isSelected}
                                              onChange={() => toggleClassSelection(classItem.id)}
                                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
                                           />
-                                       </td>
+                                       </TableCell>
                                     )}
-                                    <td className="px-6 py-4 text-left">
-                                       <p className="text-sm font-bold text-gray-900">{classItem.subject_name}</p>
-                                    </td>
-                                    <td className="px-6 py-4 text-left">
-                                       <p className="text-sm font-medium text-gray-600">{classItem.topic}</p>
-                                    </td>
-                                    <td className="px-6 py-4 text-left">
-                                       <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
-                                          {parseLocalDate(classItem.class_date).toLocaleDateString()}
+                                    <TableCell className={`py-5 text-left ${!deleteMode ? 'pl-6' : 'px-2'}`}>
+                                       <p className="text-sm font-black text-gray-900 uppercase tracking-tight">{classItem.subject_name}</p>
+                                    </TableCell>
+                                    <TableCell className="py-5 px-2 text-left">
+                                       <p className="text-sm font-medium text-gray-500 leading-tight max-w-[200px]" title={classItem.topic}>
+                                          {classItem.topic.split(' ').slice(0, 3).join(' ')}{classItem.topic.split(' ').length > 3 ? '...' : ''}
+                                       </p>
+                                    </TableCell>
+                                    <TableCell className="py-5 px-2 text-left">
+                                       <span className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                                          {parseLocalDate(classItem.class_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-left">
-                                       <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md whitespace-nowrap">
-                                          {classItem.start_time ? `${formatTime(classItem.start_time)} - ${formatTime(classItem.end_time)}` : '--:--'}
+                                    </TableCell>
+                                    <TableCell className="py-5 px-2 text-left">
+                                       <span className="text-xs font-black text-gray-900 uppercase tracking-wider whitespace-nowrap">
+                                          {(() => {
+                                             if (!classItem.start_time || !classItem.end_time) return '-- MINS';
+                                             const [startH, startM] = classItem.start_time.split(':').map(Number);
+                                             const [endH, endM] = classItem.end_time.split(':').map(Number);
+                                             const diffMins = (endH * 60 + endM) - (startH * 60 + startM);
+                                             return `${diffMins} MINS`;
+                                          })()}
                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                       <div className="flex items-center justify-center text-xs font-bold text-gray-700">
-                                          <span className="text-green-600">{presentCount}</span>
-                                          <span className="text-gray-400 mx-1">/</span>
-                                          <span className="text-gray-900">{totalCount}</span>
+                                    </TableCell>
+                                    <TableCell className="py-5 px-2 text-center">
+                                       <div className="inline-flex items-center justify-center px-2 py-1 bg-gray-50 rounded-lg border border-gray-100">
+                                          <span className="text-xs font-black text-emerald-600">{presentCount}</span>
+                                          <span className="text-[10px] font-bold text-gray-300 mx-1">/</span>
+                                          <span className="text-xs font-black text-gray-900">{totalCount}</span>
                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
+                                    </TableCell>
+                                    <TableCell className="py-4 pr-6">
                                        <div className="flex items-center justify-end gap-2">
                                           <button
                                              onClick={() => handleEditClass(classItem)}
@@ -917,100 +1026,139 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
                                              <ChevronDown size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                                           </button>
                                        </div>
-                                    </td>
-                                 </tr>
-                                  {isExpanded && (
-                                     <tr className="bg-gray-50/30">
-                                        <td colSpan={deleteMode ? 7 : 6} className="px-6 py-6">
-                                           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                                              {/* Class Details Header */}
-                                              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-4">Class Details</p>
-                                              
-                                              {/* Topics Covered Section */}
-                                              <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                 <div className="md:col-span-1 flex flex-col">
-                                                    <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Topics Covered</h4>
-                                                    <div className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-lg border border-gray-100 flex-grow">
-                                                       {classItem.topic}
-                                                    </div>
-                                                 </div>
-                                                 <div className="md:col-span-1 flex flex-col gap-4">
-                                                    {(classItem.start_time || classItem.end_time) && (
-                                                       <div>
-                                                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Time</h4>
-                                                          <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 w-full">
-                                                             <div className="flex items-center gap-2">
-                                                                <Clock className="w-4 h-4 text-gray-400" />
-                                                                {formatTime(classItem.start_time)} - {formatTime(classItem.end_time)}
-                                                             </div>
-                                                          </div>
-                                                       </div>
-                                                    )}
-                                                    <div className="flex-1 flex flex-col">
-                                                       <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Link</h4>
-                                                       <div className="flex-grow">
-                                                          {classItem.link ? (
-                                                             <a href={classItem.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:underline bg-gray-50 p-3 rounded-lg border border-gray-100 w-full break-all h-full">
-                                                                <span className="truncate">{classItem.link}</span>
-                                                             </a>
-                                                          ) : (
-                                                             <div className="text-sm text-gray-400 italic bg-gray-50 p-3 rounded-lg border border-gray-100 w-full h-full flex items-center">
-                                                                No link provided
-                                                             </div>
-                                                          )}
-                                                       </div>
-                                                    </div>
-                                                 </div>
-                                              </div>
-                                              
-                                              {/* Attendance List Section */}
-                                              {classItem.attendance_records.length > 0 ? (
-                                                 <div>
-                                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                                                       <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Attendance List</h4>
-                                                       <div className="flex gap-4">
-                                                          <div className="flex items-center gap-2">
-                                                             <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Present ({classItem.attendance_records.filter(r => r.status === 'present').length})</span>
-                                                          </div>
-                                                          <div className="flex items-center gap-2">
-                                                             <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                                                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Absent ({classItem.attendance_records.filter(r => r.status === 'absent').length})</span>
-                                                          </div>
-                                                       </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                       {classItem.attendance_records.map((record) => (
-                                                          <div key={record.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50">
-                                                             <div className="overflow-hidden min-w-0 flex-1 mr-2">
-                                                                <p className="text-xs font-bold text-gray-900 truncate">{record.student_name}</p>
-                                                                <p className="text-[10px] text-gray-400 truncate">{record.student_email}</p>
-                                                             </div>
-                                                             <span className={`text-[9px] font-bold uppercase px-2.5 py-1 rounded flex-shrink-0 ${
-                                                                record.status === 'present' 
-                                                                   ? 'bg-green-400 text-black' 
-                                                                   : 'bg-red-400 text-black'
-                                                             }`}>
-                                                                {record.status}
-                                                             </span>
-                                                          </div>
-                                                       ))}
-                                                    </div>
-                                                 </div>
-                                              ) : (
-                                                 <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No attendance records found</p>
-                                                 </div>
-                                              )}
-                                           </div>
-                                        </td>
-                                     </tr>
-                                  )}
+                                    </TableCell>
+                                 </TableRow>
+                                   {isExpanded && (
+                                      <TableRow className="bg-gray-50/30">
+                                         <TableCell colSpan={deleteMode ? 7 : 6} className="p-0">
+                                            <div className="bg-white border-y border-gray-200 p-6 shadow-inner">
+                                               {/* Class Details Header */}
+                                               <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-4">Class Details</p>
+                                               
+                                               {/* Topics Covered Section */}
+                                               <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                  <div className="md:col-span-1 flex flex-col">
+                                                     <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Topics Covered</h4>
+                                                     <div className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-lg border border-gray-100 flex-grow">
+                                                        {classItem.topic}
+                                                     </div>
+                                                  </div>
+                                                  <div className="md:col-span-1 flex flex-col gap-4">
+                                                     {(classItem.start_time || classItem.end_time) && (
+                                                        <div>
+                                                           <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Time</h4>
+                                                           <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 w-full">
+                                                              <div className="flex items-center gap-2">
+                                                                 <Clock className="w-4 h-4 text-gray-400" />
+                                                                 {formatTime(classItem.start_time)} - {formatTime(classItem.end_time)}
+                                                              </div>
+                                                           </div>
+                                                        </div>
+                                                     )}
+                                                     <div className="flex-1 flex flex-col">
+                                                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-2">Link</h4>
+                                                        <div className="flex-grow">
+                                                           {classItem.link ? (
+                                                              <a href={classItem.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:underline bg-gray-50 p-3 rounded-lg border border-gray-100 w-full break-all h-full">
+                                                                 <span className="truncate">{classItem.link}</span>
+                                                              </a>
+                                                           ) : (
+                                                              <div className="text-sm text-gray-400 italic bg-gray-50 p-3 rounded-lg border border-gray-100 w-full h-full flex items-center">
+                                                                 No link provided
+                                                              </div>
+                                                           )}
+                                                        </div>
+                                                     </div>
+                                                  </div>
+                                               </div>
+                                               
+                                               {/* Attendance List Section */}
+                                               {classItem.attendance_records.length > 0 ? (
+                                                  <div>
+                                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                                                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Attendance List</h4>
+                                                        <div className="flex gap-4">
+                                                           <div className="flex items-center gap-2">
+                                                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Present ({classItem.attendance_records.filter(r => r.status === 'present').length})</span>
+                                                           </div>
+                                                           <div className="flex items-center gap-2">
+                                                              <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Absent ({classItem.attendance_records.filter(r => r.status === 'absent').length})</span>
+                                                           </div>
+                                                        </div>
+                                                     </div>
+                                                      <div className="overflow-hidden border border-gray-200 rounded-xl shadow-sm">
+                                                         <Table>
+                                                            <TableHeader>
+                                                               <TableRow className="bg-gray-50/50 hover:bg-gray-50/50 border-b border-gray-100">
+                                                                  <TableHead className="py-5 pl-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">Student</TableHead>
+                                                                  <TableHead className="py-5 px-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">Class</TableHead>
+                                                                  <TableHead className="py-5 px-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">Date</TableHead>
+                                                                  <TableHead className="py-5 pr-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">Status</TableHead>
+                                                               </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                               {classItem.attendance_records.map((record) => (
+                                                                  <TableRow key={record.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                                                                     <TableCell className="py-4 pl-6">
+                                                                        <div className="flex items-center text-left w-full h-full">
+                                                                           <div className="mr-4 flex-shrink-0">
+                                                                              <div className="w-10 h-10 rounded-lg bg-gray-900 flex items-center justify-center shadow-sm">
+                                                                                 <span className="text-white text-xs font-black uppercase">
+                                                                                    {record.student_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                                                                                 </span>
+                                                                              </div>
+                                                                           </div>
+                                                                           <div className="min-w-0 flex-1">
+                                                                              <div className="text-xs font-black text-gray-900 uppercase tracking-tight truncate">
+                                                                                 {record.student_name}
+                                                                              </div>
+                                                                              <div className="text-[10px] text-gray-400 font-medium truncate">
+                                                                                 {record.student_email}
+                                                                              </div>
+                                                                           </div>
+                                                                        </div>
+                                                                     </TableCell>
+                                                                     <TableCell className="py-4 px-2 text-center">
+                                                                        <div className="text-[10px] font-black uppercase text-gray-900 tracking-wider">
+                                                                           {classItem.subject_name}
+                                                                        </div>
+                                                                     </TableCell>
+                                                                     <TableCell className="py-4 px-2 uppercase text-center">
+                                                                        <div className="text-[10px] font-black text-gray-900 uppercase tracking-wider whitespace-nowrap">
+                                                                           {parseLocalDate(classItem.class_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                        </div>
+                                                                     </TableCell>
+                                                                     <TableCell className="py-4 pr-6 text-right">
+                                                                        <span className={`inline-flex items-center justify-center px-4 py-1.5 rounded-[4px] text-[10px] font-black uppercase tracking-wider min-w-[100px] shadow-sm transform transition-all hover:scale-105 ${
+                                                                           record.status === 'present' 
+                                                                              ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(0,255,163,0.15)]' 
+                                                                              : 'bg-red-600 text-white shadow-[0_0_15px_rgba(255,77,77,0.15)]'
+                                                                        }`}>
+                                                                           {record.status === 'present' ? 'Present' : 'Absent'}
+                                                                        </span>
+                                                                     </TableCell>
+                                                                  </TableRow>
+                                                               ))}
+                                                            </TableBody>
+                                                         </Table>
+                                                      </div>
+                                                  </div>
+                                               ) : (
+                                                  <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No attendance records found</p>
+                                                  </div>
+                                               )}
+                                            </div>
+                                         </TableCell>
+                                      </TableRow>
+                                   )}
                               </React.Fragment>
                            )
                         })}
-                     </tbody>
-                  </table>
+                     </TableBody>
+                  </Table>
                </div>
             </>
          ) : (
@@ -1027,6 +1175,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
             </div>
          )}
       </div>
+      </div>{/* end unified card */}
 
       <DeleteConfirmationModal
         isOpen={showDeleteModal}
@@ -1034,7 +1183,7 @@ export default function AdditionalClassesTab({ peertutorsInfo, assignedStudents 
         onConfirm={confirmDelete}
         title="Delete Selected Classes"
         itemsToDelete={Array.from(selectedClasses).map(classId => {
-          const item = additionalClasses.find(c => c.id === classId)
+          const item = filteredAdditionalClasses.find(c => c.id === classId)
           return {
              name: item?.subject_name || 'Unknown Subject',
              email: item?.topic || 'Unknown Topic',

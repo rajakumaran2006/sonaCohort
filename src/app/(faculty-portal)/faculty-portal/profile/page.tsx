@@ -1,7 +1,6 @@
 'use client'
 
 import { useAuth } from '@/lib/auth/AuthContext'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
@@ -11,7 +10,6 @@ import { BookOpen, User, Users, Calendar } from 'lucide-react'
 
 export default function FacultyPortalProfile() {
   const { user } = useAuth()
-  const router = useRouter()
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data: assignments, isLoading, refetch } = useQuery({
