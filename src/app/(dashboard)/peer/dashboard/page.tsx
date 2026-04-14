@@ -687,10 +687,10 @@ function PeerDashboardContent() {
 
 function StatusBadge({ status }: { status: string }) {
    const styles = {
-      pending: "bg-amber-50 text-amber-600 border-amber-100",
-      submitted: "bg-blue-50 text-blue-600 border-blue-100",
-      approved: "bg-emerald-50 text-emerald-600 border-emerald-100",
-      rejected: "bg-red-50 text-red-600 border-red-100",
+      pending: "bg-amber-600 text-white border-amber-100",
+      submitted: "bg-blue-600 text-white border-blue-100",
+      approved: "bg-emerald-600 text-white border-emerald-100",
+      rejected: "bg-red-600 text-white border-red-100",
    }
    
    const label = status === 'submitted' ? 'Reviewing' : status

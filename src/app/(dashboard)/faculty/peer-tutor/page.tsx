@@ -1110,10 +1110,19 @@ function FacultypeertutorsContent() {
       return true
     })
     .sort((a, b) => {
-      if (!sortDescByName) return 0
+      // Completed first: if a is completed and b is not, a comes first
+      const aCompleted = !!a.submitted_at;
+      const bCompleted = !!b.submitted_at;
+      if (aCompleted !== bCompleted) return aCompleted ? -1 : 1;
+
+      // Fallback to name sort
       const an = (a.peer_tutor?.name || '').toLowerCase()
       const bn = (b.peer_tutor?.name || '').toLowerCase()
-      return bn.localeCompare(an)
+      
+      if (sortDescByName) {
+        return bn.localeCompare(an)
+      }
+      return an.localeCompare(bn)
     })
 
   // Close popup on outside click
@@ -1146,60 +1155,55 @@ function FacultypeertutorsContent() {
   // Export submissions to Excel/CSV
   const exportToExcel = async () => {
     if (!selectedTemplate) return
-    const exportRows = filteredAndSortedSubmissions
-    if (exportRows.length === 0) return
+    
+    // Only show completed student responses as requested
+    const completedRows = (submissionsWithClasses || []).filter(s => !!s.submitted_at)
+    
+    if (completedRows.length === 0) {
+      toast.info('No completed submissions to export')
+      return
+    }
 
     try {
-      // Prepare CSV data
-      const headers = [
-        'Peer Tutor Name',
-        'Email',
-        'Status',
-        'Submitted Date',
-        ...selectedTemplate.fields.map(field => field.field_name)
-      ]
+      const exportData = completedRows.map(submission => {
+        // Only keep Name, Year, Section and dynamic fields as requested
+        const data: any = {
+          'Name': submission.peer_tutor?.name || 'Unknown',
+          'Year': submission.peer_tutor?.year || '',
+          'Section': submission.peer_tutor?.section || '',
+        }
 
-      const csvData = exportRows.map(submission => {
-        const statusLabel = (submission.status === 'submitted' || submission.status === 'approved') ? 'Completed' : 'Pending'
-        const row = [
-          submission.peer_tutor?.name || 'Unknown',
-          submission.peer_tutor?.email || 'No email',
-          statusLabel,
-          submission.submitted_at ? new Date(submission.submitted_at).toLocaleDateString() : 'Not submitted'
-        ]
-
-        // Add renumeration field responses
+        // Add dynamic renumeration field responses
         selectedTemplate.fields.forEach(field => {
-          const value = submission.field_responses?.[field.id] || ''
-          row.push(String(value))
+          // Check both ID and Field Name just in case, but primary is Field Name based on the modal
+          data[field.field_name] = submission.field_responses?.[field.field_name] || submission.field_responses?.[field.id] || ''
         })
 
-        return row
+        return data
       })
 
-      // Convert to CSV
-      const csvContent = [
-        headers.join(','),
-        ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n')
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      
+      // Auto-size columns (rough approximation)
+      const maxWidth = 50
+      const colWidths = Object.keys(exportData[0] || {}).map(key => ({
+        wch: Math.min(maxWidth, Math.max(key.length, 15))
+      }))
+      ws['!cols'] = colWidths
 
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      const suffix = [
-        filterYear && `Year-${filterYear}`,
-        filterSection && `Section-${filterSection}`,
-        filterStatus && `Status-${filterStatus === 'pending' ? 'Pending' : 'Completed'}`
-      ].filter(Boolean).join('_')
-      link.setAttribute('download', `${selectedTemplate.name}_submissions${suffix ? '_' + suffix : ''}_${new Date().toISOString().split('T')[0]}.csv`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      document.body.removeChild(link)
+      // Create workbook
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Completed Submissions')
+
+      const fileName = `${selectedTemplate.name}_Completed_Submissions_${new Date().toISOString().split('T')[0]}.xlsx`
+      
+      // Write and download
+      XLSX.writeFile(wb, fileName)
+      toast.success('COMPLETED SUBMISSIONS EXPORTED')
     } catch (error) {
       logger.error('Error exporting to Excel:', error)
-      alert('Error exporting data. Please try again.')
+      toast.error('FAILED TO EXPORT DATA. PLEASE TRY AGAIN.')
     }
   }
 
@@ -4215,7 +4219,7 @@ function FacultypeertutorsContent() {
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-white">
                             <tr>
-                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Peer Tutor</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Peer Tutor</th>
                               <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
                               <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Submitted</th>
                               <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Actions</th>
@@ -4244,7 +4248,7 @@ function FacultypeertutorsContent() {
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-white">
                             <tr>
-                              <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                                 Peer Tutor
                               </th>
                               <th className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">

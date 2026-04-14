@@ -329,9 +329,9 @@ function PeerTutorsProfileContent() {
                             <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{renumeration.template?.description || 'No description'}</p>
                           </div>
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${renumeration.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                            renumeration.status === 'submitted' ? 'bg-blue-100 text-blue-700' :
-                              renumeration.status === 'approved' ? 'bg-green-100 text-green-700' :
-                                'bg-red-100 text-red-700'
+                            renumeration.status === 'submitted' ? 'bg-blue-600 text-white' :
+                              renumeration.status === 'approved' ? 'bg-green-600 text-white' :
+                                'bg-red-600 text-white'
                             }`}>
                             {renumeration.status || 'Unknown'}
                           </span>

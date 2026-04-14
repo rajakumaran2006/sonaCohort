@@ -218,10 +218,10 @@ export default function PeerRenumerationModal({
               <div>
                 <span className="text-sm font-medium text-gray-700">Status:</span>
                 <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded uppercase text-xs font-medium ${
-                  renumeration.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  renumeration.status === 'submitted' ? 'bg-blue-100 text-blue-800' :
-                  renumeration.status === 'approved' ? 'bg-green-100 text-green-800' :
-                  'bg-red-100 text-red-800'
+                  renumeration.status === 'pending' ? 'bg-yellow-600 text-white' :
+                  renumeration.status === 'submitted' ? 'bg-blue-600 text-white' :
+                  renumeration.status === 'approved' ? 'bg-green-600 text-white' :
+                  'bg-red-600 text-white'
                 }`}>
                   {renumeration.status === 'submitted' 
                     ? 'Completed' 
@@ -257,6 +257,9 @@ export default function PeerRenumerationModal({
               <div key={field.id}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {field.field_name}
+                  <span className="ml-1.5 inline-flex items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    ({field.field_type === 'dropdown' ? 'Select' : field.field_type.charAt(0).toUpperCase() + field.field_type.slice(1)})
+                  </span>
                   {field.is_mandatory && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 {renderField(field)}
