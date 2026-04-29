@@ -13,7 +13,6 @@ import {
 import FeedbackSubmissionModal from '@/components/forms/feedback/FeedbackSubmissionModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import PageHeader from '@/components/layout/PageHeader'
-import PeerLeaderboard from '@/components/dashboard/PeerLeaderboard'
 import { Button, EmptyState } from '@/components/ui'
 import { AlertCircle, CalendarDays, Clock, Video, BookOpen } from 'lucide-react'
 

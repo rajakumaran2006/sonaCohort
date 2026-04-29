@@ -45,7 +45,6 @@ export function useStudentAttendanceData(studentId: string | undefined) {
 // departments.id by matching the student's dept name.
 export function useStudentLeaderboard(
   studentInfo: StudentWithpeertutors | null | undefined,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _selectedYear?: string
 ) {
   const studentYear = studentInfo?.year?.toString()

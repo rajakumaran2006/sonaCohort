@@ -723,7 +723,7 @@ export class FeedbackAnalyticsService {
    * @returns A map of peer_tutor_id → average star rating (0-5)
    */
   static async getAvgFeedbackRatingsByPeerTutor(
-    department: string
+    _department: string
   ): Promise<Record<string, number>> {
     try {
       const supabase = createClient()
