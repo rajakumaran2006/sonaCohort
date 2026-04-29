@@ -6,17 +6,20 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { logger } from '@/lib/logger'
 import { StudentService, StudentWithpeertutors } from '@/lib/services/studentService'
 import { FeedbackService, FeedbackForm } from '@/lib/services/feedbackService'
-import { useStudentAttendanceData } from '@/lib/hooks/useStudentDashboardData'
-import { useStudentLeaderboard } from '@/lib/hooks/useStudentDashboardData'
+import {
+  useStudentAttendanceData,
+  useStudentUpcomingClasses
+} from '@/lib/hooks/useStudentDashboardData'
 import FeedbackSubmissionModal from '@/components/forms/feedback/FeedbackSubmissionModal'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import PageHeader from '@/components/layout/PageHeader'
 import PeerLeaderboard from '@/components/dashboard/PeerLeaderboard'
-import { Button, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, StatusBadge } from '@/components/ui'
-import { CalendarCheck, BookOpen, AlertCircle } from 'lucide-react'
+import { Button, EmptyState } from '@/components/ui'
+import { AlertCircle, CalendarDays, Clock, Video, BookOpen } from 'lucide-react'
 
 interface FeedbackFormWithStatus extends FeedbackForm {
   isSubmitted: boolean
+  isClosed: boolean
 }
 
 export default function StudentDashboard() {
@@ -37,12 +40,12 @@ export default function StudentDashboard() {
     if (!user?.email) return
 
     try {
-      const allStudents = await StudentService.getAllStudentsWithpeerTutor()
-      const currentStudent = allStudents.find(s => s.email === user?.email)
+      // Use direct email lookup (covered by peer_students_self_read RLS policy)
+      const currentStudent = await StudentService.getStudentWithPeerTutorByEmail(user.email)
       
       if (currentStudent) {
         setStudent(currentStudent)
-        const forms = await FeedbackService.getActiveFeedbackForms()
+        const forms = await FeedbackService.getAllFeedbackForms()
         const formsWithStatus = await Promise.all(
           forms.map(async (form) => {
             const isSubmitted = await FeedbackService.hasStudentSubmittedFeedback(
@@ -51,7 +54,8 @@ export default function StudentDashboard() {
             )
             return {
               ...form,
-              isSubmitted
+              isSubmitted,
+              isClosed: !form.is_active
             }
           })
         )
@@ -68,34 +72,45 @@ export default function StudentDashboard() {
     loadStudentData()
   }, [loadStudentData])
 
-  // Fetch Attendance and Leaderboard stats via custom hook
+  // Fetch Attendance and Upcoming Classes via custom hooks
   const { data: attendanceData, refetch: refetchAttendance } = useStudentAttendanceData(student?.id)
-  const { data: leaderboardData, isLoading: leaderboardLoading, refetch: refetchLeaderboard } = useStudentLeaderboard(student, undefined)
+  const { data: upcomingData, isLoading: upcomingLoading, refetch: refetchUpcoming } = useStudentUpcomingClasses(
+    student?.dept,
+    student?.year?.toString(),
+    student?.section
+  )
+  // Only show genuinely upcoming classes — no past fallback
+  const upcomingClasses = upcomingData?.isPast ? [] : (upcomingData?.classes ?? [])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await Promise.all([
-      loadStudentData(),
-      refetchAttendance(),
-      refetchLeaderboard()
-    ])
+    await Promise.all([loadStudentData(), refetchAttendance(), refetchUpcoming()])
     setTimeout(() => setIsRefreshing(false), 500)
   }
 
   const handleSubmitFeedback = (form: FeedbackFormWithStatus) => {
-    if (!form.isSubmitted) {
+    if (!form.isSubmitted && !form.isClosed) {
       setSelectedFeedbackForm(form)
       setShowFeedbackModal(true)
     }
   }
 
+  // Called when user dismisses the modal WITHOUT submitting — keep selectedFeedbackForm
+  // so that clicking "Submit Feedback" again immediately re-opens with fresh state.
+  const handleModalClose = () => {
+    setShowFeedbackModal(false)
+    // Don't null selectedFeedbackForm — modal's own useEffect resets answers on next open
+  }
+
+  // Called only after a successful DB save
   const handleFeedbackSubmitted = async () => {
     if (!student) return
-    const forms = await FeedbackService.getActiveFeedbackForms()
+    // Refresh status from DB
+    const forms = await FeedbackService.getAllFeedbackForms()
     const formsWithStatus = await Promise.all(
       forms.map(async (form) => {
         const isSubmitted = await FeedbackService.hasStudentSubmittedFeedback(form.id, student.id)
-        return { ...form, isSubmitted }
+        return { ...form, isSubmitted, isClosed: !form.is_active }
       })
     )
     setFeedbackForms(formsWithStatus)
@@ -105,10 +120,16 @@ export default function StudentDashboard() {
 
   if (loading) {
     return (
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen bg-[#F8F9FA] flex items-center justify-center`}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Loading</span>
+      <div className={`${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen bg-[#F8F9FA] p-4 sm:p-6`}>
+        <div className="max-w-[1600px] mx-auto w-full space-y-6 animate-pulse">
+           <div className="h-20 bg-gray-200 rounded-lg w-1/3 mb-6"></div>
+           <div className="h-64 bg-gray-200 rounded-[2rem] w-full"></div>
+           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
+             <div className="h-32 bg-gray-200 rounded-[2rem]"></div>
+             <div className="h-32 bg-gray-200 rounded-[2rem]"></div>
+             <div className="h-32 bg-gray-200 rounded-[2rem]"></div>
+           </div>
+           <div className="h-64 bg-gray-200 rounded-[2rem] w-full mt-6"></div>
         </div>
       </div>
     )
@@ -129,7 +150,7 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA]">
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
+      <div className={`${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex flex-col w-full lg:w-auto`}>
         <PageHeader
           title="STUDENT DASHBOARD"
           tagline="Your Learning & Progress Overview"
@@ -140,9 +161,9 @@ export default function StudentDashboard() {
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-gray-50/50">
           <div className="max-w-[1600px] mx-auto w-full space-y-6">
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
-              {/* --- LEFT COLUMN --- */}
+              {/* --- LEFT COLUMN (wider now, no leaderboard) --- */}
               <div className="lg:col-span-8 flex flex-col gap-6">
                 
                 {/* Hero Card */}
@@ -204,17 +225,11 @@ export default function StudentDashboard() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="bg-white overflow-hidden shadow-sm rounded-[2rem] border border-gray-100 p-6 flex flex-col justify-center relative group hover:shadow-md transition-shadow">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <BookOpen className="w-16 h-16" />
-                    </div>
                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Classes</div>
                     <div className="text-3xl font-black text-gray-900">{attendanceData?.total || 0}</div>
                   </div>
 
                   <div className="bg-white overflow-hidden shadow-sm rounded-[2rem] border border-gray-100 p-6 flex flex-col justify-center relative group hover:shadow-md transition-shadow">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <CalendarCheck className="w-16 h-16" />
-                    </div>
                     <div className="text-[10px] font-black text-green-500 uppercase tracking-widest mb-2">Attended</div>
                     <div className="text-3xl font-black text-gray-900">{attendanceData?.present || 0}</div>
                   </div>
@@ -236,70 +251,95 @@ export default function StudentDashboard() {
 
                 {/* Feedback Forms */}
                 <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="p-6 border-b border-gray-50 flex justify-between items-center">
-                    <div>
-                      <h2 className="text-lg font-black text-gray-900 tracking-tight uppercase">Feedback Forms</h2>
-                      <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mt-1">
-                        Submit feedback for your sessions
-                      </p>
-                    </div>
+                  <div className="p-6 border-b border-gray-50">
+                    <h2 className="text-lg font-black text-gray-900 tracking-tight uppercase">Feedback Forms</h2>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mt-1">
+                      Submit feedback for your sessions
+                    </p>
                   </div>
-                  <div className="p-6">
+                  <div className="p-4 sm:p-6">
                     {feedbackForms.length === 0 ? (
                       <EmptyState
                         title="No Forms Available"
                         description="There are no pending responses at the moment."
                       />
                     ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                              <TableHead className="py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-tight">Form Name</TableHead>
-                              <TableHead className="py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-tight">Description</TableHead>
-                              <TableHead className="py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-tight">Questions</TableHead>
-                              <TableHead className="py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-tight">Status</TableHead>
-                              <TableHead className="py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-tight text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {feedbackForms.map((form) => (
-                              <TableRow key={form.id}>
-                                <TableCell>
-                                  <div className="text-sm font-bold text-gray-900">{form.name}</div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="text-xs text-gray-500 font-medium break-words">
-                                    {form.description || 'No description'}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="text-xs font-bold text-gray-900">
-                                    {form.questions.length} Qs
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  {form.isSubmitted ? (
-                                    <StatusBadge status="submitted">Submitted</StatusBadge>
-                                  ) : (
-                                    <StatusBadge status="pending">Pending</StatusBadge>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {form.isSubmitted ? (
-                                    <Button size="sm" variant="secondary" disabled className="text-[10px] h-8 tracking-widest uppercase font-bold">
-                                      Finished
-                                    </Button>
-                                  ) : (
-                                    <Button size="sm" onClick={() => handleSubmitFeedback(form)} className="text-[10px] h-8 tracking-widest uppercase font-bold">
-                                      Start
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                      <div className="max-h-[420px] overflow-y-auto pr-1 space-y-3 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                        {feedbackForms.map((form) => (
+                          <div
+                            key={form.id}
+                            className={`rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 transition-all duration-200 ${
+                              form.isClosed
+                                ? 'bg-red-50/40 border-red-100'
+                                : form.isSubmitted
+                                ? 'bg-gray-50 border-gray-100'
+                                : 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-sm'
+                            }`}
+                          >
+                            {/* Left: Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <span className="text-sm font-bold text-gray-900 leading-snug">{form.name}</span>
+
+                                {/* Closed badge — shown whenever is_active is false */}
+                                {form.isClosed && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white uppercase tracking-wider">
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                    Closed
+                                  </span>
+                                )}
+
+                                {/* Submitted badge */}
+                                {form.isSubmitted && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-700 text-white uppercase tracking-wider">
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                    Submitted
+                                  </span>
+                                )}
+
+                                {/* Pending badge — only when open and not submitted */}
+                                {!form.isClosed && !form.isSubmitted && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-700 text-amber-100 uppercase tracking-wider">
+                                    Pending
+                                  </span>
+                                )}
+                              </div>
+                              {form.description && (
+                                <p className="text-xs text-gray-400 font-medium line-clamp-2 mt-0.5">{form.description}</p>
+                              )}
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">
+                                {form.questions.length} Question{form.questions.length !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+
+                            {/* Right: Action */}
+                            <div className="flex-shrink-0 w-full sm:w-auto">
+                              {form.isClosed ? (
+                                /* Closed — cannot submit regardless of submission status */
+                                <button
+                                  disabled
+                                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-red-100 text-red-400 cursor-not-allowed"
+                                >
+                                  {form.isSubmitted ? 'Submitted' : 'Form Closed'}
+                                </button>
+                              ) : form.isSubmitted ? (
+                                <button
+                                  disabled
+                                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-gray-100 text-gray-400 cursor-not-allowed"
+                                >
+                                  Completed
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleSubmitFeedback(form)}
+                                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-gray-900 hover:bg-black text-white transition-colors shadow-sm"
+                                >
+                                  Submit Feedback
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -309,12 +349,101 @@ export default function StudentDashboard() {
 
               {/* --- RIGHT COLUMN --- */}
               <div className="lg:col-span-4 flex flex-col gap-6">
-                {/* Embedded Leaderboard */}
-                <PeerLeaderboard 
-                  data={leaderboardData} 
-                  loading={leaderboardLoading} 
-                  currentUserId={student.id} 
-                />
+
+                {/* Next Three Classes */}
+                <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="px-6 pt-6 pb-4 border-b border-gray-50 flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-gray-400" />
+                    <div>
+                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Upcoming</h3>
+                      <span className="text-base font-black text-gray-900 uppercase tracking-tight">Next Classes</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 space-y-3">
+                    {upcomingLoading ? (
+                      <div className="space-y-3">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="h-16 bg-gray-100 rounded-2xl animate-pulse" />
+                        ))}
+                      </div>
+                    ) : upcomingClasses.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <BookOpen className="w-10 h-10 text-black mb-3" />
+                        <p className="text-sm font-bold text-black uppercase">No Upcoming Classes</p>
+                        <p className="text-xs text-gray-300 mt-1">Check back later for new schedules</p>
+                      </div>
+                    ) : (
+                      upcomingClasses.map((cls, idx) => {
+                        const dateObj = new Date(cls.scheduled_date + 'T00:00:00')
+                        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' })
+                        const dateStr = dateObj.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+                        const isToday = cls.scheduled_date === new Date().toISOString().split('T')[0]
+
+                        return (
+                          <div
+                            key={cls.id}
+                            className={`rounded-2xl p-3.5 flex gap-3 items-start border transition-all ${
+                              idx === 0
+                                ? 'bg-gray-900 border-gray-900'
+                                : 'bg-gray-50 border-gray-100'
+                            }`}
+                          >
+                            {/* Date badge */}
+                            <div className={`flex-shrink-0 flex flex-col items-center justify-center w-10 h-10 rounded-xl text-center ${
+                              idx === 0 ? 'bg-white/10' : 'bg-white border border-gray-200'
+                            }`}>
+                              <span className={`text-[8px] font-black uppercase ${idx === 0 ? 'text-gray-300' : 'text-gray-400'}`}>{dayName}</span>
+                              <span className={`text-base font-black leading-none ${idx === 0 ? 'text-white' : 'text-gray-900'}`}>{dateObj.getDate()}</span>
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-bold truncate ${idx === 0 ? 'text-white' : 'text-gray-900'}`}>
+                                {cls.class?.subject_name || 'Class'}
+                              </p>
+                              {isToday && (
+                                <span className={`inline-block text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md mb-0.5 ${
+                                  idx === 0 ? 'bg-[#bef264]/20 text-[#bef264]' : 'bg-green-100 text-green-700'
+                                }`}>Today</span>
+                              )}
+                              <div className={`flex flex-wrap items-center gap-2 mt-0.5 ${idx === 0 ? 'text-gray-300' : 'text-gray-400'}`}>
+                                {cls.start_time && (
+                                  <span className="flex items-center gap-1 text-[10px] font-bold">
+                                    <Clock className="w-2.5 h-2.5" />
+                                    {cls.start_time}{cls.end_time ? ` – ${cls.end_time}` : ''}
+                                  </span>
+                                )}
+                                {!cls.start_time && (
+                                  <span className="text-[10px] font-bold">{dateStr}</span>
+                                )}
+                                {cls.link && (
+                                  <a
+                                    href={cls.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide ${
+                                      idx === 0 ? 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                    } transition-colors`}
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <Video className="w-2.5 h-2.5" /> Join
+                                  </a>
+                                )}
+                              </div>
+                              {cls.topics && (
+                                <p className={`text-[10px] font-medium mt-0.5 truncate ${idx === 0 ? 'text-gray-400' : 'text-gray-400'}`}>
+                                  {cls.topics}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+
               </div>
             </div>
 
@@ -325,10 +454,7 @@ export default function StudentDashboard() {
       {selectedFeedbackForm && student && (
         <FeedbackSubmissionModal
           isOpen={showFeedbackModal}
-          onClose={() => {
-            setShowFeedbackModal(false)
-            setSelectedFeedbackForm(null)
-          }}
+          onClose={handleModalClose}
           onSuccess={handleFeedbackSubmitted}
           feedbackForm={selectedFeedbackForm}
           studentId={student.id}

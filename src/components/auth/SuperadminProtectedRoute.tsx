@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@/lib/auth/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { logger } from '@/lib/logger'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -14,6 +14,7 @@ interface SuperadminProtectedRouteProps {
 export default function SuperadminProtectedRoute({ children }: SuperadminProtectedRouteProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [, setSidebarOpen] = useState(false)
 
   // Use React Query to cache superadmin verification
@@ -48,13 +49,13 @@ export default function SuperadminProtectedRoute({ children }: SuperadminProtect
   // Handle redirects based on query state
   if (!loading && !isVerifying) {
     if (!user) {
-      router.push('/login')
+      router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`)
       return null
     }
 
     if (error || !isSuperadmin) {
       logger.info('SuperadminProtectedRoute: No superadmin access found for user:', user.email)
-      router.push('/login?error=superadmin_access_denied')
+      router.push(`/login?error=superadmin_access_denied&redirectTo=${encodeURIComponent(pathname)}`)
       return null
     }
   }

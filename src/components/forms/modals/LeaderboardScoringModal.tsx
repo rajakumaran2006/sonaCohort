@@ -16,7 +16,7 @@ interface LeaderboardScoringModalProps {
 }
 
 interface MainCriteria {
-  key: 'scheduled_classes_weight' | 'additional_classes_weight' | 'exam_weight'
+  key: 'scheduled_classes_weight' | 'additional_classes_weight' | 'exam_weight' | 'feedback_weight'
   label: string
   description: string
 }
@@ -37,6 +37,11 @@ const MAIN_CRITERIA: MainCriteria[] = [
     label: 'Exam Performance',
     description: 'Weighted average of selected exam Ascend Scores',
   },
+  {
+    key: 'feedback_weight',
+    label: 'Feedback Rating',
+    description: 'Avg student feedback star rating (0–5) converted to % score',
+  },
 ]
 
 export default function LeaderboardScoringModal({
@@ -51,6 +56,7 @@ export default function LeaderboardScoringModal({
     scheduled_classes_weight: currentConfig.scheduled_classes_weight,
     additional_classes_weight: currentConfig.additional_classes_weight,
     exam_weight: currentConfig.exam_weight,
+    feedback_weight: currentConfig.feedback_weight ?? 0,
   })
   const [examConfig, setExamConfig] = useState<ExamConfigItem[]>(currentConfig.exam_config || [])
   const [allExams, setAllExams] = useState<Exam[]>([])
@@ -65,6 +71,7 @@ export default function LeaderboardScoringModal({
         scheduled_classes_weight: currentConfig.scheduled_classes_weight,
         additional_classes_weight: currentConfig.additional_classes_weight,
         exam_weight: currentConfig.exam_weight,
+        feedback_weight: currentConfig.feedback_weight ?? 0,
       })
       setExamConfig(currentConfig.exam_config || [])
       setError(null)
@@ -95,7 +102,11 @@ export default function LeaderboardScoringModal({
     }
   }, [isOpen, departmentId])
 
-  const mainTotal = weights.scheduled_classes_weight + weights.additional_classes_weight + weights.exam_weight
+  const mainTotal =
+    weights.scheduled_classes_weight +
+    weights.additional_classes_weight +
+    weights.exam_weight +
+    weights.feedback_weight
   const isMainValid = mainTotal === 100
 
   const includedExams = examConfig.filter(e => e.included)
@@ -152,6 +163,7 @@ export default function LeaderboardScoringModal({
       scheduled_classes_weight: defaults.scheduled_classes_weight,
       additional_classes_weight: defaults.additional_classes_weight,
       exam_weight: defaults.exam_weight,
+      feedback_weight: defaults.feedback_weight,
     })
     setExamConfig(prev => prev.map(e => ({ ...e, included: false, weight: 0 })))
     setError(null)
@@ -185,6 +197,8 @@ export default function LeaderboardScoringModal({
     setSaving(false)
   }
 
+  const criteriaShades = ['#374151', '#6b7280', '#9ca3af', '#3b82f6']
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader onClose={onClose}>
@@ -213,12 +227,11 @@ export default function LeaderboardScoringModal({
             {MAIN_CRITERIA.map((c, i) => {
               const w = weights[c.key]
               if (w === 0) return null
-              const shades = ['#374151', '#6b7280', '#9ca3af']
               return (
                 <div
                   key={c.key}
                   className="h-full transition-all duration-300 first:rounded-l-full last:rounded-r-full"
-                  style={{ width: `${w}%`, backgroundColor: shades[i] }}
+                  style={{ width: `${w}%`, backgroundColor: criteriaShades[i] }}
                 />
               )
             })}
@@ -226,12 +239,18 @@ export default function LeaderboardScoringModal({
 
           {/* Main Criteria Sliders */}
           <div className="space-y-3">
-            {MAIN_CRITERIA.map((criteria) => (
+            {MAIN_CRITERIA.map((criteria, i) => (
               <div key={criteria.key} className="p-3 rounded-xl border border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between mb-1">
                   <div>
-                    <span className="text-sm font-bold text-gray-800 uppercase">{criteria.label}</span>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{criteria.description}</p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: criteriaShades[i] }}
+                      />
+                      <span className="text-sm font-bold text-gray-800 uppercase">{criteria.label}</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-0.5 ml-4">{criteria.description}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <input
@@ -253,7 +272,7 @@ export default function LeaderboardScoringModal({
                   value={weights[criteria.key]}
                   onChange={(e) => handleMainSliderChange(criteria.key, parseInt(e.target.value))}
                   className="w-full h-1.5 bg-white rounded-full appearance-none cursor-pointer"
-                  style={{ accentColor: '#374151' }}
+                  style={{ accentColor: criteriaShades[i] }}
                 />
               </div>
             ))}
@@ -267,6 +286,19 @@ export default function LeaderboardScoringModal({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
             Main weights must total 100%. Currently at {mainTotal}%.
+          </div>
+        )}
+
+        {/* Feedback info banner */}
+        {weights.feedback_weight > 0 && (
+          <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-700 font-medium flex items-start gap-2">
+            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>
+              Feedback score is the average of all student feedback star ratings (1–5) for each peer tutor,
+              converted to a percentage. E.g., avg rating 4.0 → 80%.
+            </span>
           </div>
         )}
 

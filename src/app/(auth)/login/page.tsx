@@ -21,6 +21,9 @@ function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false)
   const [localError, setLocalError] = useState('')
 
+  // Get redirectTo from URL params (set by protected routes when user refreshes on a page)
+  const redirectTo = searchParams.get('redirectTo') || ''
+
   // Get error message from URL params
   const errorParam = searchParams.get('error')
   const errorMessage = errorParam === 'no_access'
@@ -39,10 +42,15 @@ function LoginPageContent() {
     try {
       setIsSigningIn(true)
       
+      // Build detect-role URL, carrying redirectTo if present
+      const detectRoleUrl = redirectTo
+        ? `/auth/detect-role?redirectTo=${encodeURIComponent(redirectTo)}`
+        : '/auth/detect-role'
+
       // If the user entered a full email, use it directly
       if (username.includes('@')) {
         await signInWithPassword(username, password)
-        router.push('/auth/detect-role')
+        router.push(detectRoleUrl)
         return
       }
       
@@ -50,7 +58,7 @@ function LoginPageContent() {
       const primaryEmail = `${username}@sonatech.ac.in`
       try {
         await signInWithPassword(primaryEmail, password)
-        router.push('/auth/detect-role')
+        router.push(detectRoleUrl)
         return
       } catch (primaryErr) {
         const error = primaryErr as { code?: string };
@@ -59,7 +67,7 @@ function LoginPageContent() {
           try {
             const altEmail = `${username}@sonacas.edu.in`
             await signInWithPassword(altEmail, password)
-            router.push('/auth/detect-role')
+            router.push(detectRoleUrl)
             return
           } catch {
             // Both domains failed — throw the original error
@@ -86,7 +94,12 @@ function LoginPageContent() {
   }
 
   const handleContinue = () => {
-    router.push('/auth/detect-role')
+    // If there's a redirectTo param, go directly there; otherwise detect role
+    if (redirectTo) {
+      router.push(redirectTo)
+    } else {
+      router.push('/auth/detect-role')
+    }
   }
 
   const handleSwitchAccount = async () => {

@@ -1,12 +1,13 @@
 'use client'
 
 import { useAuth } from '@/lib/auth/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { logger } from '@/lib/logger'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { StudentService } from '@/lib/services/studentService'
 import StudentSidebar from '@/components/layout/StudentSidebar'
+
 
 interface StudentProtectedRouteProps {
   children: React.ReactNode
@@ -15,6 +16,7 @@ interface StudentProtectedRouteProps {
 export default function StudentProtectedRoute({ children }: StudentProtectedRouteProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Use React Query to cache student verification
@@ -34,14 +36,14 @@ export default function StudentProtectedRoute({ children }: StudentProtectedRout
 
   // Handle redirects based on query state
   if (!loading && !isVerifying) {
-      if (!user) {
-        router.push('/login')
+    if (!user) {
+      router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`)
       return null
     }
 
     if (error || !isStudent) {
-          logger.info('StudentProtectedRoute: No student access found for user:', user.email)
-          router.push('/login?error=student_access_denied')
+      logger.info('StudentProtectedRoute: No student access found for user:', user.email)
+      router.push(`/login?error=student_access_denied&redirectTo=${encodeURIComponent(pathname)}`)
       return null
     }
   }
@@ -68,16 +70,6 @@ export default function StudentProtectedRoute({ children }: StudentProtectedRout
               <div className="w-6"></div>
           </div>
         </header>
-
-          {/* Main Content - Loading State */}
-          <main className="flex-1 overflow-auto">
-            <div className="h-full w-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Verifying student access...</p>
-              </div>
-            </div>
-          </main>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { logger } from '@/lib/logger'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -18,6 +18,7 @@ interface PeerProtectedRouteProps {
 export default function PeerProtectedRoute({ children }: PeerProtectedRouteProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isCollapsed] = useSidebarCollapsed()
 
@@ -40,12 +41,12 @@ export default function PeerProtectedRoute({ children }: PeerProtectedRouteProps
   useEffect(() => {
     if (!loading && !isVerifying) {
       if (!user) {
-        router.push('/login')
+        router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`)
       } else if (error || !ispeertutors) {
-        router.push('/login?error=peer_access_denied')
+        router.push(`/login?error=peer_access_denied&redirectTo=${encodeURIComponent(pathname)}`)
       }
     }
-  }, [loading, isVerifying, user, error, ispeertutors, router])
+  }, [loading, isVerifying, user, error, ispeertutors, router, pathname])
 
   if (!loading && !isVerifying) {
     if (!user || error || !ispeertutors) {

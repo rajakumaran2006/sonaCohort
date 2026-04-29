@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@/lib/auth/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { logger } from '@/lib/logger'
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -16,6 +16,7 @@ interface AdminProtectedRouteProps {
 export default function AdminProtectedRoute({ children }: AdminProtectedRouteProps) {
   const { user, session, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Use React Query to cache admin verification
@@ -94,13 +95,13 @@ export default function AdminProtectedRoute({ children }: AdminProtectedRoutePro
   // Handle redirects based on query state
   if (!loading && !isVerifying) {
     if (!user) {
-      router.push('/login')
+      router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`)
       return null
     }
 
     if (error || !isAdmin) {
       logger.info('AdminProtectedRoute: No admin access found for user:', user.email)
-      router.push('/login?error=admin_access_denied')
+      router.push(`/login?error=admin_access_denied&redirectTo=${encodeURIComponent(pathname)}`)
       return null
     }
   }

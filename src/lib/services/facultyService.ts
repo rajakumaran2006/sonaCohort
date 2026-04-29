@@ -174,13 +174,15 @@ export class FacultyService {
    */
   static async getFacultyDepartment(facultyId: string): Promise<FacultyDepartment | null> {
     try {
+      if (!facultyId) return null;
+
       const supabase = createClient()
 
       const { data, error } = await supabase
         .from('departments')
         .select('*')
         .eq('id', facultyId)
-        .single()
+        .maybeSingle()
 
       if (error) {
         logger.error('Error getting faculty department:', JSON.stringify(error, null, 2))

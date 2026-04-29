@@ -15,6 +15,7 @@ interface ScoringConfig {
   scheduled_classes_weight: number;
   additional_classes_weight: number;
   exam_weight: number;
+  feedback_weight: number;
   exam_config: ExamConfig[];
   department: string;
 }
@@ -35,6 +36,7 @@ const createDefaultScoringConfig = (departmentName: string): ScoringConfig => ({
   scheduled_classes_weight: 100,
   additional_classes_weight: 0,
   exam_weight: 0,
+  feedback_weight: 0,
   exam_config: [],
   department: departmentName,
 });

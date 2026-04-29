@@ -193,7 +193,11 @@ export class FeedbackService {
                 const stats = await FeedbackVersioningService.getFormStats(form.id)
                 return {
                   ...form,
-                  questions: form.current_version?.questions || [],
+                  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+                  questions: (form.current_version?.questions || []).map((q: any) => ({
+                    ...q,
+                    id: q.original_question_id || q.id
+                  })),
                   current_version: form.current_version,
                   total_versions: stats.totalVersions
                 } as FeedbackForm
@@ -201,7 +205,11 @@ export class FeedbackService {
                 logger.info('Error getting form stats, using defaults:', statsError)
                 return {
                   ...form,
-                  questions: form.current_version?.questions || [],
+                  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+                  questions: (form.current_version?.questions || []).map((q: any) => ({
+                    ...q,
+                    id: q.original_question_id || q.id
+                  })),
                   current_version: form.current_version,
                   total_versions: 1
                 } as FeedbackForm
@@ -259,6 +267,70 @@ export class FeedbackService {
   }
 
   /**
+   * Get ALL feedback forms for students (active + inactive/closed) with versioning support.
+   * Closed forms are shown as read-only so students can see their submitted status.
+   */
+  static async getAllFeedbackForms(): Promise<FeedbackForm[]> {
+    try {
+      const supabase = createClient()
+
+      // Try versioning schema first
+      try {
+        const { data, error } = await supabase
+          .from('feedback_forms')
+          .select(`
+            *,
+            current_version:feedback_form_versions!inner (
+              *,
+              questions:feedback_question_versions (
+                *
+              )
+            )
+          `)
+          .eq('current_version.is_active', true)
+          .order('created_at', { ascending: false })
+
+        if (!error && data) {
+          return data.map(form => ({
+            ...form,
+            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+            questions: (form.current_version?.questions || []).map((q: any) => ({
+              ...q,
+              id: q.original_question_id || q.id
+            }))
+          })) as FeedbackForm[]
+        }
+      } catch {
+        logger.info('Versioning tables not available, falling back to legacy schema')
+      }
+
+      // Fallback to legacy schema — no is_active filter
+      const { data, error } = await supabase
+        .from('feedback_forms')
+        .select(`
+          *,
+          questions:feedback_questions (
+            *
+          )
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        logger.error('Error getting all feedback forms:', error)
+        return []
+      }
+
+      return (data || []).map(form => ({
+        ...form,
+        questions: form.questions || []
+      })) as FeedbackForm[]
+    } catch (error) {
+      logger.error('Error in getAllFeedbackForms:', error)
+      return []
+    }
+  }
+
+  /**
    * Get active feedback forms for students with versioning support
    */
   static async getActiveFeedbackForms(): Promise<FeedbackForm[]> {
@@ -285,7 +357,11 @@ export class FeedbackService {
         if (!error && data) {
           return data.map(form => ({
             ...form,
-            questions: form.current_version?.questions || []
+            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+            questions: (form.current_version?.questions || []).map((q: any) => ({
+              ...q,
+              id: q.original_question_id || q.id
+            }))
           })) as FeedbackForm[]
         }
       } catch {
@@ -547,12 +623,12 @@ export class FeedbackService {
           // Create the answers with version reference
           const answersWithResponseId = answers.map(answer => {
             // Find the corresponding question version
-            const questionVersion = currentVersion.questions.find(q => q.original_question_id === answer.question_id)
+            const questionVersion = currentVersion.questions.find(q => q.original_question_id === answer.question_id || q.id === answer.question_id)
             
             // Base answer object
             const baseAnswer = {
               feedback_response_id: responseData.id,
-              question_id: answer.question_id,
+              question_id: questionVersion?.original_question_id || answer.question_id,
               question_version_id: questionVersion?.id || answer.question_id
             }
 
@@ -798,7 +874,11 @@ export class FeedbackService {
           logger.info('Found form with versioning schema:', data)
           return {
             ...data,
-            questions: data.current_version?.questions || [],
+            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+            questions: (data.current_version?.questions || []).map((q: any) => ({
+              ...q,
+              id: q.original_question_id || q.id
+            })),
             current_version: data.current_version,
             total_versions: 1 // Default for now
           } as FeedbackForm

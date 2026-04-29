@@ -14,6 +14,7 @@ export interface LeaderboardScoringConfig {
   scheduled_classes_weight: number
   additional_classes_weight: number
   exam_weight: number
+  feedback_weight: number
   exam_config: ExamConfigItem[]
   created_at?: string
   updated_at?: string
@@ -40,6 +41,7 @@ const DEFAULT_CONFIG: Omit<LeaderboardScoringConfig, 'id' | 'department' | 'crea
   scheduled_classes_weight: 100,
   additional_classes_weight: 0,
   exam_weight: 0,
+  feedback_weight: 0,
   exam_config: [],
 }
 
@@ -65,6 +67,7 @@ export class LeaderboardConfigService {
 
       return {
         ...data,
+        feedback_weight: data.feedback_weight ?? 0,
         exam_config: data.exam_config || [],
       } as LeaderboardScoringConfig
     } catch (error) {
@@ -82,11 +85,16 @@ export class LeaderboardConfigService {
       scheduled_classes_weight: number
       additional_classes_weight: number
       exam_weight: number
+      feedback_weight: number
       exam_config: ExamConfigItem[]
     }
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const total = config.scheduled_classes_weight + config.additional_classes_weight + config.exam_weight
+      const total =
+        config.scheduled_classes_weight +
+        config.additional_classes_weight +
+        config.exam_weight +
+        config.feedback_weight
       if (total !== 100) {
         return { success: false, error: `Main weights must sum to 100 (currently ${total})` }
       }
@@ -113,6 +121,7 @@ export class LeaderboardConfigService {
             scheduled_classes_weight: config.scheduled_classes_weight,
             additional_classes_weight: config.additional_classes_weight,
             exam_weight: config.exam_weight,
+            feedback_weight: config.feedback_weight,
             exam_config: config.exam_config,
             updated_at: new Date().toISOString(),
           },
@@ -138,16 +147,18 @@ export class LeaderboardConfigService {
 
   /**
    * Calculate a tutor's leaderboard score (out of 100) based on the config.
-   * 
+   *
    * @param tutor - tutor class stats and additional class count
    * @param config - scoring config with weights
    * @param examSummaries - optional array of exam summaries for this tutor
+   * @param feedbackAvgRating - optional average feedback star rating (0-5) from students
    * @returns an object containing the final score and its breakdown
    */
   static calculateScore(
     tutor: TutorScoreInput,
     config: LeaderboardScoringConfig,
-    examSummaries?: ExamSummaryForScoring[]
+    examSummaries?: ExamSummaryForScoring[],
+    feedbackAvgRating?: number
   ): {
     finalScore: number,
     breakdown: {
@@ -156,7 +167,9 @@ export class LeaderboardConfigService {
       additionalScore: number,
       additionalWeighted: number,
       examScore: number,
-      examWeighted: number
+      examWeighted: number,
+      feedbackScore: number,
+      feedbackWeighted: number,
     }
   } {
     // 1. Scheduled Classes Score (0-100): completion percentage
@@ -193,8 +206,19 @@ export class LeaderboardConfigService {
     const examWeightedRaw = (examScore * config.exam_weight) / 100
     const examWeighted = Math.round(examWeightedRaw * 10) / 10
 
+    // 4. Feedback Score (0-100): avg star rating (0-5) converted to percentage
+    //    feedbackAvgRating is 0-5, so (avg / 5) * 100 = percentage
+    const feedbackWeight = config.feedback_weight ?? 0
+    let feedbackScoreRaw = 0
+    if (feedbackWeight > 0 && feedbackAvgRating !== undefined && feedbackAvgRating !== null) {
+      feedbackScoreRaw = (feedbackAvgRating / 5) * 100
+    }
+    const feedbackScore = Math.round(feedbackScoreRaw * 10) / 10
+    const feedbackWeightedRaw = (feedbackScore * feedbackWeight) / 100
+    const feedbackWeighted = Math.round(feedbackWeightedRaw * 10) / 10
+
     // Final score out of 100
-    const finalScoreRaw = scheduledWeighted + additionalWeighted + examWeighted
+    const finalScoreRaw = scheduledWeighted + additionalWeighted + examWeighted + feedbackWeighted
     const finalScore = Math.round(finalScoreRaw * 10) / 10
 
     return {
@@ -205,7 +229,9 @@ export class LeaderboardConfigService {
         additionalScore,
         additionalWeighted,
         examScore,
-        examWeighted
+        examWeighted,
+        feedbackScore,
+        feedbackWeighted,
       }
     }
   }

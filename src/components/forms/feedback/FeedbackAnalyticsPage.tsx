@@ -268,6 +268,13 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
       filtered = filtered.filter(student => student.section === selectedSection)
     }
     
+    // Sort by peerTutorId so consecutive rows with the same peer tutor are grouped for rowSpan merging
+    filtered = [...filtered].sort((a, b) => {
+      const ta = a.peerTutorId || ''
+      const tb = b.peerTutorId || ''
+      return ta.localeCompare(tb)
+    })
+    
     return filtered
   }
 
@@ -335,7 +342,8 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
       
       doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
-      doc.text(`${student.studentName} - Year: ${student.year}, Section: ${student.section}`, 14, yPos)
+      const peerTutorLabel = student.peerTutorName ? ` | Peer Tutor: ${student.peerTutorName}` : ''
+      doc.text(`${student.studentName} - Year: ${student.year}, Section: ${student.section}${peerTutorLabel}`, 14, yPos)
       yPos += 8
       
       doc.setFontSize(10)
@@ -786,6 +794,9 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
                   <th className="pl-6 py-4 text-left">
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Student</span>
                   </th>
+                  <th className="px-4 py-4 text-left">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Peer Tutor</span>
+                  </th>
                   <th className="px-4 py-4 text-center">
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year / Section</span>
                   </th>
@@ -803,7 +814,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
               <tbody className="divide-y divide-gray-100">
                 {filteredResponses.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-gray-500">
+                    <td colSpan={6} className="py-12 text-center text-gray-500">
                       <p className="text-sm font-medium">No students match the selected filters</p>
                       <button
                         onClick={handleClearFilters}
@@ -813,15 +824,51 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
                       </button>
                     </td>
                   </tr>
-                ) : (
-                  filteredResponses.map((student) => (
-                    <tr key={student.studentId} className="hover:bg-gray-50 transition-colors">
+                ) : (() => {
+                  // Build groups: each consecutive run of same peerTutorId stays together
+                  // We need to compute rowSpan for the peer tutor cell
+                  type GroupEntry = { student: typeof filteredResponses[0]; isFirstInGroup: boolean; groupSize: number }
+                  const entries: GroupEntry[] = []
+                  let i = 0
+                  while (i < filteredResponses.length) {
+                    const currentTutorId = filteredResponses[i].peerTutorId || '__none__'
+                    let j = i
+                    while (j < filteredResponses.length && (filteredResponses[j].peerTutorId || '__none__') === currentTutorId) {
+                      j++
+                    }
+                    const groupSize = j - i
+                    for (let k = i; k < j; k++) {
+                      entries.push({ student: filteredResponses[k], isFirstInGroup: k === i, groupSize })
+                    }
+                    i = j
+                  }
+
+                  return entries.map(({ student, isFirstInGroup, groupSize }, idx) => (
+                    <tr key={`${student.studentId}-${idx}`} className="hover:bg-gray-50 transition-colors">
                       <td className="pl-6 py-4">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{student.studentName}</div>
                           <div className="text-xs text-gray-500">{student.studentEmail}</div>
                         </div>
                       </td>
+                      {isFirstInGroup && (
+                        <td
+                          className="px-4 py-4 text-left align-middle"
+                          rowSpan={groupSize}
+                          style={{ borderBottom: groupSize > 1 ? '2px solid #e5e7eb' : undefined }}
+                        >
+                          {student.peerTutorName ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                                {student.peerTutorName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                              </div>
+                              <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{student.peerTutorName}</span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-400 italic">Not Assigned</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-4 text-center">
                         <span className="text-sm font-medium text-gray-700">
                           {student.year} / {student.section}
@@ -857,7 +904,7 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
                       </td>
                     </tr>
                   ))
-                )}
+                })()}
               </tbody>
             </table>
           </div>

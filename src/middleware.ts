@@ -44,8 +44,11 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/peer");
 
   // If accessing protected route without authenticated user, redirect to login
+  // Preserve the originally requested URL so we can redirect back after login
   if (isProtectedRoute && !user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname + request.nextUrl.search);
+    return NextResponse.redirect(loginUrl);
   }
 
   return response;

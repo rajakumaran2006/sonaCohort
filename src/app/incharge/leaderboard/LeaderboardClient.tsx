@@ -31,6 +31,7 @@ interface LeaderboardScoringConfig {
   scheduled_classes_weight: number
   additional_classes_weight: number
   exam_weight: number
+  feedback_weight: number
   exam_config: ExamConfig[]
 }
 

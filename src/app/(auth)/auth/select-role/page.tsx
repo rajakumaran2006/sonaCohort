@@ -24,6 +24,7 @@ function SelectRoleContent() {
 
   const rolesParam = searchParams.get('roles')
   const pathsParam = searchParams.get('paths')
+  const redirectTo = searchParams.get('redirectTo') || ''
 
   const roles = useMemo(() => 
     rolesParam ? rolesParam.split(',') as UserRole[] : [], 
@@ -62,9 +63,9 @@ function SelectRoleContent() {
       })
 
       // Redirect to the appropriate dashboard
-      // Use dynamic path if available, otherwise fall back to default
+      // Use redirectTo (original page user was on) if available, then dynamic path, then default
       const dashboardPath = dynamicPaths[role] || DEFAULT_DASHBOARD_PATHS[role]
-      router.push(dashboardPath)
+      router.push(redirectTo || dashboardPath)
     } catch (error) {
       logger.error('Error setting role:', error)
       setIsTransitioning(false)

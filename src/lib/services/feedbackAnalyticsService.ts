@@ -46,6 +46,8 @@ export interface StudentResponseAnalytics {
   studentEmail: string
   year: string
   section: string
+  peerTutorName?: string
+  peerTutorId?: string
   submittedAt: string
   completionTime: number
   satisfactionScore?: number
@@ -137,7 +139,8 @@ export class FeedbackAnalyticsService {
           name,
           email,
           year,
-          section
+          section,
+          assigned_peer_tutor_id
         ),
         responses:feedback_answers (
           *,
@@ -177,7 +180,8 @@ export class FeedbackAnalyticsService {
           name,
           email,
           year,
-          section
+          section,
+          assigned_peer_tutor_id
         ),
         responses:feedback_answers (
           *,
@@ -284,8 +288,29 @@ export class FeedbackAnalyticsService {
 
     const questionAnalytics = this.calculateQuestionAnalytics(filteredQuestions, filteredResponses)
 
+    // Build a map of peer tutor id -> name for all peer tutors referenced by students in responses
+    // NOTE: assigned_peer_tutor_id references the 'peer_tutors' table (not peer_students)
+    const peerTutorIds = [...new Set(
+      filteredResponses
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        .map(r => (r.student as any)?.assigned_peer_tutor_id)
+        .filter(Boolean)
+    )]
+
+    const peerTutorMap: Record<string, string> = {}
+    if (peerTutorIds.length > 0) {
+      const { data: tutors, error: tutorErr } = await supabase
+        .from('peer_tutors')
+        .select('id, name')
+        .in('id', peerTutorIds)
+      if (tutorErr) logger.error('Error fetching peer tutors:', tutorErr)
+      ;(tutors || []).forEach((t: { id: string; name: string }) => {
+        peerTutorMap[t.id] = t.name
+      })
+    }
+
     // Calculate student response analytics
-    const studentResponses = this.calculateStudentResponseAnalytics(filteredResponses, questions)
+    const studentResponses = this.calculateStudentResponseAnalytics(filteredResponses, questions, peerTutorMap)
 
     return {
       totalResponses,
@@ -432,7 +457,8 @@ export class FeedbackAnalyticsService {
   private static calculateStudentResponseAnalytics(
     responses: FeedbackResponseWithDetails[],
     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-    questions: any[]
+    questions: any[],
+    peerTutorMap: Record<string, string> = {}
   ): StudentResponseAnalytics[] {
     // Only calculate satisfaction if ALL questions are star_rating
     const allStarRating = questions.length > 0 && questions.every(q => q.question_type === 'star_rating')
@@ -460,12 +486,18 @@ export class FeedbackAnalyticsService {
       // Estimate completion time
       const completionTime = Math.max(1, questions.length * 0.5)
 
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      const assignedPeerTutorId = (response.student as any)?.assigned_peer_tutor_id as string | undefined
+      const peerTutorName = assignedPeerTutorId ? peerTutorMap[assignedPeerTutorId] : undefined
+
       return {
         studentId: response.student_id,
         studentName: response.student?.name || 'Unknown',
         studentEmail: response.student?.email || '',
         year: response.student?.year || '',
         section: response.student?.section || '',
+        peerTutorId: assignedPeerTutorId,
+        peerTutorName,
         submittedAt: response.submitted_at,
         completionTime,
         satisfactionScore,
@@ -679,6 +711,76 @@ export class FeedbackAnalyticsService {
     } catch (error) {
       logger.error('Error in getPendingStudents:', error)
       return []
+    }
+  }
+
+  /**
+   * Get average feedback star rating per peer tutor for a given department.
+   * Aggregates all star_rating answers submitted by students in that department
+   * and groups them by the responding student's assigned peer tutor.
+   *
+   * @param department - the department name
+   * @returns A map of peer_tutor_id → average star rating (0-5)
+   */
+  static async getAvgFeedbackRatingsByPeerTutor(
+    department: string
+  ): Promise<Record<string, number>> {
+    try {
+      const supabase = createClient()
+
+      // 1. Fetch all feedback responses for students in this department,
+      //    joining student info to get assigned_peer_tutor_id
+      const { data: responses, error: respError } = await supabase
+        .from('feedback_responses')
+        .select(`
+          id,
+          student:student_id (
+            id,
+            assigned_peer_tutor_id
+          ),
+          responses:feedback_answers (
+            star_rating
+          )
+        `)
+        .order('submitted_at', { ascending: false })
+
+      if (respError) {
+        logger.error('Error fetching feedback responses for peer tutor ratings:', respError)
+        return {}
+      }
+
+      // 2. Aggregate star ratings by peer tutor
+      const tutorRatings: Record<string, { total: number; count: number }> = {}
+
+      for (const resp of responses || []) {
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        const student = resp.student as any
+        const tutorId: string | null = student?.assigned_peer_tutor_id ?? null
+        if (!tutorId) continue
+
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        const answers = resp.responses as any[]
+        for (const ans of answers || []) {
+          if (ans.star_rating !== null && ans.star_rating !== undefined) {
+            if (!tutorRatings[tutorId]) {
+              tutorRatings[tutorId] = { total: 0, count: 0 }
+            }
+            tutorRatings[tutorId].total += Number(ans.star_rating)
+            tutorRatings[tutorId].count += 1
+          }
+        }
+      }
+
+      // 3. Compute averages
+      const result: Record<string, number> = {}
+      for (const [tutorId, { total, count }] of Object.entries(tutorRatings)) {
+        result[tutorId] = count > 0 ? Math.round((total / count) * 100) / 100 : 0
+      }
+
+      return result
+    } catch (error) {
+      logger.error('Error in getAvgFeedbackRatingsByPeerTutor:', error)
+      return {}
     }
   }
 }

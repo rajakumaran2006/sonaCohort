@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@/lib/auth/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { logger } from '@/lib/logger'
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -14,6 +14,7 @@ interface IndividualFacultyProtectedRouteProps {
 export default function IndividualFacultyProtectedRoute({ children }: IndividualFacultyProtectedRouteProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   
   // Use React Query to check if user is an individual faculty member
   const { data: isFaculty, isLoading: isVerifying } = useQuery({
@@ -31,13 +32,13 @@ export default function IndividualFacultyProtectedRoute({ children }: Individual
   useEffect(() => {
     if (!loading && !isVerifying) {
       if (!user) {
-        router.push('/login')
+        router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`)
       } else if (!isFaculty) {
         logger.info('User is not authorized as faculty:', user.email)
-        router.push('/login?error=no_access')
+        router.push(`/login?error=no_access&redirectTo=${encodeURIComponent(pathname)}`)
       }
     }
-  }, [loading, isVerifying, user, isFaculty, router])
+  }, [loading, isVerifying, user, isFaculty, router, pathname])
 
   if (loading || isVerifying) {
     return (

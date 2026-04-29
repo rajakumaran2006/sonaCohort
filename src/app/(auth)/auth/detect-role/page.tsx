@@ -1,15 +1,19 @@
 'use client'
 
 import { useEffect, useState, Suspense } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { logger } from '@/lib/logger'
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
 
 function DetectRoleContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, loading } = useAuth()
   const [status, setStatus] = useState('Checking authentication...')
+
+  // redirectTo is set by protected routes when a user refreshes on a specific page
+  const redirectTo = searchParams.get('redirectTo') || ''
 
   useEffect(() => {
     const detectRoles = async () => {
@@ -67,14 +71,18 @@ function DetectRoleContent() {
             body: JSON.stringify({ role })
           })
 
-          router.push(dashboardPath)
+          // If a specific page was requested (e.g. user refreshed a subpage),
+          // go there; otherwise fall back to the role's default dashboard
+          router.push(redirectTo || dashboardPath)
           return
         }
 
         // If user has multiple roles, redirect to role selection page
         setStatus('Multiple roles detected, showing selection...')
         const pathsParam = encodeURIComponent(JSON.stringify(dashboardPaths))
-        router.push(`/auth/select-role?roles=${roles.join(',')}&paths=${pathsParam}`)
+        // Also forward the redirectTo so role selection can use it after role is chosen
+        const redirectParam = redirectTo ? `&redirectTo=${encodeURIComponent(redirectTo)}` : ''
+        router.push(`/auth/select-role?roles=${roles.join(',')}&paths=${pathsParam}${redirectParam}`)
 
       } catch (error) {
         logger.error('Error detecting roles:', error)
@@ -84,7 +92,7 @@ function DetectRoleContent() {
     }
 
     detectRoles()
-  }, [user, loading, router])
+  }, [user, loading, router, redirectTo])
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-white">

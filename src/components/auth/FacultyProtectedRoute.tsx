@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@/lib/auth/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { logger } from '@/lib/logger'
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -15,6 +15,7 @@ interface FacultyProtectedRouteProps {
 export default function FacultyProtectedRoute({ children }: FacultyProtectedRouteProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Use React Query to cache faculty verification
@@ -36,13 +37,13 @@ export default function FacultyProtectedRoute({ children }: FacultyProtectedRout
   useEffect(() => {
     if (!loading && !isVerifying) {
       if (!user) {
-        router.push('/login')
+        router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`)
       } else if (error || !department) {
         logger.info('No faculty access found for user:', user.email)
-        router.push('/login?error=faculty_access_denied')
+        router.push(`/login?error=faculty_access_denied&redirectTo=${encodeURIComponent(pathname)}`)
       }
     }
-  }, [loading, isVerifying, user, error, department, router])
+  }, [loading, isVerifying, user, error, department, router, pathname])
 
   if (!loading && !isVerifying) {
     if (!user || error || !department) {

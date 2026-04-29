@@ -102,6 +102,8 @@ interface RankedItem {
       scheduledWeighted: number;
       additionalWeighted: number;
       examWeighted: number;
+      feedbackScore: number;
+      feedbackWeighted: number;
     };
   };
 }
@@ -270,11 +272,13 @@ function FacultypeertutorsContent() {
     scheduled_classes_weight: 100,
     additional_classes_weight: 0,
     exam_weight: 0,
+    feedback_weight: 0,
     exam_config: [],
   })
+  const [feedbackRatingsMap, setFeedbackRatingsMap] = useState<Record<string, number>>({})
   const [examSummariesMap, setExamSummariesMap] = useState<Record<string, ExamPeerTutorSummary[]>>({})
 
-  // Load leaderboard scoring config and exam summaries when department is available
+  // Load leaderboard scoring config, exam summaries, and feedback ratings when department is available
   useEffect(() => {
     const loadScoringConfig = async () => {
       if (!department?.name) return
@@ -293,6 +297,10 @@ function FacultypeertutorsContent() {
         )
         setExamSummariesMap(summariesMap)
       }
+
+      // Always load feedback ratings map (used when feedback_weight > 0)
+      const ratingsMap = await FeedbackAnalyticsService.getAvgFeedbackRatingsByPeerTutor(department.name)
+      setFeedbackRatingsMap(ratingsMap)
     }
     loadScoringConfig()
   }, [department?.name])
@@ -628,14 +636,48 @@ function FacultypeertutorsContent() {
   }
 
   const exportStudents = () => {
-    const exportData = filteredStudents.map(student => ({
-      name: student.name,
-      email: student.email,
-      'Year & Section': `${student.year} - ${student.section}`,
-      'Assigned Peer Tutor': student.assigned_peer_tutor?.name || 'Not assigned'
-    }))
+    // Sort students by peer tutor so same-tutor students are grouped
+    const sorted = [...filteredStudents].sort((a, b) => {
+      const ta = a.assigned_peer_tutor?.name || 'ZZZ'
+      const tb = b.assigned_peer_tutor?.name || 'ZZZ'
+      return ta.localeCompare(tb)
+    })
 
-    const ws = XLSX.utils.json_to_sheet(exportData)
+    // Build row data
+    const rows: (string | number | null)[][] = [
+      ['Peer Tutor', 'Student Name', 'Email', 'Year & Section']
+    ]
+    sorted.forEach(student => {
+      rows.push([
+        student.assigned_peer_tutor?.name || 'Not Assigned',
+        student.name,
+        student.email || '',
+        `${student.year} - ${student.section}`
+      ])
+    })
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+
+    // Merge peer tutor cells for consecutive same-tutor students
+    const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = []
+    let groupStart = 1 // data rows start at row index 1 (0 is header)
+    for (let i = 1; i < rows.length; i++) {
+      const isSame = i < rows.length - 1 && rows[i][0] === rows[i + 1][0]
+      if (!isSame) {
+        // End of a group
+        if (groupStart < i) {
+          merges.push({ s: { r: groupStart, c: 0 }, e: { r: i, c: 0 } })
+        }
+        groupStart = i + 1
+      }
+    }
+    if (merges.length > 0) {
+      ws['!merges'] = merges
+    }
+
+    // Set column widths
+    ws['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 32 }, { wch: 20 }]
+
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Students')
 
@@ -1167,7 +1209,7 @@ function FacultypeertutorsContent() {
     try {
       const exportData = completedRows.map(submission => {
         // Only keep Name, Year, Section and dynamic fields as requested
-        const data: any = {
+        const data: Record<string, unknown> = {
           'Name': submission.peer_tutor?.name || 'Unknown',
           'Year': submission.peer_tutor?.year || '',
           'Section': submission.peer_tutor?.section || '',
@@ -3433,17 +3475,17 @@ function FacultypeertutorsContent() {
                     // Gather exam summaries for this item (tutor or student)
                     const examSummaries = Object.entries(examSummariesMap).flatMap(
                       ([examId, summaries]) => summaries
-                        // Note: For students, we might not have exam summaries structured the same way, but keeping the format
                         .filter(s => s.peer_tutor_id === item.id)
                         .map(s => ({ exam_id: examId, peer_tutor_id: s.peer_tutor_id, ascend_score: s.ascend_score }))
                     )
+                    // Feedback avg rating for this tutor (0-5)
+                    const feedbackAvgRating = feedbackRatingsMap[item.id]
                     return {
                       ...item,
-                      // Ensure type cast so calculateScore understands it.
                       score: LeaderboardConfigService.calculateScore({
                         classStats: item.classStats,
                         additionalClassesCount: item.additionalClassesCount
-                      }, scoringConfig, examSummaries)
+                      }, scoringConfig, examSummaries, feedbackAvgRating)
                     } as RankedItem;
                   });
 
@@ -3594,7 +3636,10 @@ function FacultypeertutorsContent() {
                                         <div className="font-bold border-b border-gray-700 pb-1 mb-2 text-left">Score Breakdown</div>
                                         <div className="flex justify-between mb-1"><span>Scheduled:</span> <span>{top1.score.breakdown.scheduledWeighted} pts</span></div>
                                         <div className="flex justify-between mb-1"><span>Additional:</span> <span>{top1.score.breakdown.additionalWeighted} pts</span></div>
-                                        <div className="flex justify-between"><span>Exams:</span> <span>{top1.score.breakdown.examWeighted} pts</span></div>
+                                        <div className="flex justify-between mb-1"><span>Exams:</span> <span>{top1.score.breakdown.examWeighted} pts</span></div>
+                                        {scoringConfig.feedback_weight > 0 && (
+                                          <div className="flex justify-between border-t border-gray-700 mt-1 pt-1"><span>Feedback:</span> <span>{top1.score.breakdown.feedbackWeighted} pts</span></div>
+                                        )}
                                         <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
                                       </div>
                                     </div>
@@ -3638,7 +3683,10 @@ function FacultypeertutorsContent() {
                                           <div className="font-bold border-b border-gray-700 pb-1 mb-2 text-left">Score Breakdown</div>
                                           <div className="flex justify-between mb-1"><span>Scheduled:</span> <span>{top2.score.breakdown.scheduledWeighted} pts</span></div>
                                           <div className="flex justify-between mb-1"><span>Additional:</span> <span>{top2.score.breakdown.additionalWeighted} pts</span></div>
-                                          <div className="flex justify-between"><span>Exams:</span> <span>{top2.score.breakdown.examWeighted} pts</span></div>
+                                          <div className="flex justify-between mb-1"><span>Exams:</span> <span>{top2.score.breakdown.examWeighted} pts</span></div>
+                                          {scoringConfig.feedback_weight > 0 && (
+                                            <div className="flex justify-between border-t border-gray-700 mt-1 pt-1"><span>Feedback:</span> <span>{top2.score.breakdown.feedbackWeighted} pts</span></div>
+                                          )}
                                           <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
                                         </div>
                                       </div>
@@ -3681,7 +3729,10 @@ function FacultypeertutorsContent() {
                                           <div className="font-bold border-b border-gray-700 pb-1 mb-2 text-left">Score Breakdown</div>
                                           <div className="flex justify-between mb-1"><span>Scheduled:</span> <span>{top3.score.breakdown.scheduledWeighted} pts</span></div>
                                           <div className="flex justify-between mb-1"><span>Additional:</span> <span>{top3.score.breakdown.additionalWeighted} pts</span></div>
-                                          <div className="flex justify-between"><span>Exams:</span> <span>{top3.score.breakdown.examWeighted} pts</span></div>
+                                          <div className="flex justify-between mb-1"><span>Exams:</span> <span>{top3.score.breakdown.examWeighted} pts</span></div>
+                                          {scoringConfig.feedback_weight > 0 && (
+                                            <div className="flex justify-between border-t border-gray-700 mt-1 pt-1"><span>Feedback:</span> <span>{top3.score.breakdown.feedbackWeighted} pts</span></div>
+                                          )}
                                           <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
                                         </div>
                                       </div>
@@ -3754,7 +3805,10 @@ function FacultypeertutorsContent() {
                                             <div className="font-bold border-b border-gray-700 pb-1 mb-2 text-left">Score Breakdown</div>
                                             <div className="flex justify-between mb-1"><span>Scheduled:</span> <span>{tutor.score.breakdown.scheduledWeighted} pts</span></div>
                                             <div className="flex justify-between mb-1"><span>Additional:</span> <span>{tutor.score.breakdown.additionalWeighted} pts</span></div>
-                                            <div className="flex justify-between"><span>Exams:</span> <span>{tutor.score.breakdown.examWeighted} pts</span></div>
+                                            <div className="flex justify-between mb-1"><span>Exams:</span> <span>{tutor.score.breakdown.examWeighted} pts</span></div>
+                                            {scoringConfig.feedback_weight > 0 && (
+                                              <div className="flex justify-between border-t border-gray-700 mt-1 pt-1"><span>Feedback:</span> <span>{tutor.score.breakdown.feedbackWeighted} pts</span></div>
+                                            )}
                                             <div className="absolute -bottom-1 left-[70%] -translate-x-[70%] w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
                                           </div>
                                         </div>
