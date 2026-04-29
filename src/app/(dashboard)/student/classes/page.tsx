@@ -234,103 +234,148 @@ function StudentClassesContent() {
               </div>
             )}
 
-            {/* ── Table ── */}
+            {/* ── Table / Cards ── */}
             {loading ? (
               <ClassesTableSkeleton />
             ) : (
               <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
                 {filteredRecords.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gray-50 border-b border-gray-100">
-                          <TableHead className="py-4 px-6 whitespace-nowrap">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
-                          </TableHead>
-                          <TableHead className="py-4 px-6">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subject &amp; Topic</span>
-                          </TableHead>
-                          <TableHead className="py-4 px-6">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</span>
-                          </TableHead>
-                          <TableHead className="py-4 px-6">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</span>
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredRecords.map((record: AttendanceHistoryRecord) => {
-                          const isAdditional = !record.scheduled_class_id
-                          const isPresent = record.status === 'present'
+                  <>
+                    {/* ── Mobile card list (hidden on md+) ── */}
+                    <div className="md:hidden divide-y divide-gray-100">
+                      {filteredRecords.map((record: AttendanceHistoryRecord) => {
+                        const isAdditional = !record.scheduled_class_id
+                        const isPresent = record.status === 'present'
+                        const subjectName = record.classes?.subject_name || '—'
+                        const topics = isAdditional
+                          ? record.classes?.topics || '—'
+                          : record.scheduled_classes?.topics || record.classes?.topics || '—'
+                        const rawDate = isAdditional
+                          ? record.classes?.created_at || record.created_at
+                          : record.scheduled_classes?.scheduled_date ||
+                            record.classes?.created_at ||
+                            record.created_at
+                        const formattedDate = rawDate
+                          ? format(new Date(rawDate), 'MMM d, yyyy')
+                          : '—'
 
-                          const subjectName = record.classes?.subject_name || '—'
-                          const topics = isAdditional
-                            ? record.classes?.topics || '—'
-                            : record.scheduled_classes?.topics || record.classes?.topics || '—'
-
-                          const rawDate = isAdditional
-                            ? record.classes?.created_at || record.created_at
-                            : record.scheduled_classes?.scheduled_date ||
-                              record.classes?.created_at ||
-                              record.created_at
-
-                          const formattedDate = rawDate
-                            ? format(new Date(rawDate), 'MMM d, yyyy')
-                            : '—'
-
-                          return (
-                            <TableRow
-                              key={record.id}
-                              className="hover:bg-gray-50/60 transition-colors border-b border-gray-50 last:border-0"
-                            >
-                              {/* Date — no icon */}
-                              <TableCell className="px-6 py-4 whitespace-nowrap">
-                                <span className="text-sm font-bold text-gray-900">
-                                  {formattedDate}
-                                </span>
-                              </TableCell>
-
-                              {/* Subject & Topic */}
-                              <TableCell className="px-6 py-4">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-bold text-gray-900 mb-0.5 leading-tight">
-                                    {subjectName}
-                                  </span>
-                                  <span className="text-xs text-gray-500 line-clamp-2">
-                                    {topics}
-                                  </span>
-                                </div>
-                              </TableCell>
-
-                              {/* Type badge — dark bg, white text */}
-                              <TableCell className="px-6 py-4">
+                        return (
+                          <div
+                            key={record.id}
+                            className="px-5 py-4 flex flex-col gap-2 hover:bg-gray-50/60 transition-colors"
+                          >
+                            {/* Date row + badges */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-gray-500">{formattedDate}</span>
+                              <div className="flex items-center gap-2">
                                 <span
-                                  className={`inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider text-white ${
-                                    isAdditional
-                                      ? 'bg-violet-700'
-                                      : 'bg-gray-800'
+                                  className={`inline-flex items-center text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white ${
+                                    isAdditional ? 'bg-violet-700' : 'bg-gray-800'
                                   }`}
                                 >
                                   {isAdditional ? 'Additional' : 'Regular'}
                                 </span>
-                              </TableCell>
-
-                              {/* Status badge — dark bg, white text */}
-                              <TableCell className="px-6 py-4">
                                 <span
-                                  className={`inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider text-white ${
+                                  className={`inline-flex items-center text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white ${
                                     isPresent ? 'bg-emerald-600' : 'bg-red-600'
                                   }`}
                                 >
                                   {isPresent ? 'Attended' : 'Absent'}
                                 </span>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
+                              </div>
+                            </div>
+                            {/* Subject & full topic */}
+                            <div>
+                              <p className="text-sm font-bold text-gray-900 leading-tight">{subjectName}</p>
+                              <p className="text-xs text-gray-500 mt-0.5 leading-snug">{topics}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* ── Desktop table (md+) ── */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 border-b border-gray-100">
+                            <TableHead className="py-4 px-6 whitespace-nowrap">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
+                            </TableHead>
+                            <TableHead className="py-4 px-6">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subject &amp; Topic</span>
+                            </TableHead>
+                            <TableHead className="py-4 px-6">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</span>
+                            </TableHead>
+                            <TableHead className="py-4 px-6">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</span>
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredRecords.map((record: AttendanceHistoryRecord) => {
+                            const isAdditional = !record.scheduled_class_id
+                            const isPresent = record.status === 'present'
+                            const subjectName = record.classes?.subject_name || '—'
+                            const topics = isAdditional
+                              ? record.classes?.topics || '—'
+                              : record.scheduled_classes?.topics || record.classes?.topics || '—'
+                            const rawDate = isAdditional
+                              ? record.classes?.created_at || record.created_at
+                              : record.scheduled_classes?.scheduled_date ||
+                                record.classes?.created_at ||
+                                record.created_at
+                            const formattedDate = rawDate
+                              ? format(new Date(rawDate), 'MMM d, yyyy')
+                              : '—'
+
+                            return (
+                              <TableRow
+                                key={record.id}
+                                className="hover:bg-gray-50/60 transition-colors border-b border-gray-50 last:border-0"
+                              >
+                                {/* Date */}
+                                <TableCell className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-bold text-gray-900">{formattedDate}</span>
+                                </TableCell>
+
+                                {/* Subject & Topic */}
+                                <TableCell className="px-6 py-4">
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-gray-900 mb-0.5 leading-tight">{subjectName}</span>
+                                    <span className="text-xs text-gray-500 line-clamp-2">{topics}</span>
+                                  </div>
+                                </TableCell>
+
+                                {/* Type badge */}
+                                <TableCell className="px-6 py-4">
+                                  <span
+                                    className={`inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider text-white ${
+                                      isAdditional ? 'bg-violet-700' : 'bg-gray-800'
+                                    }`}
+                                  >
+                                    {isAdditional ? 'Additional' : 'Regular'}
+                                  </span>
+                                </TableCell>
+
+                                {/* Status badge */}
+                                <TableCell className="px-6 py-4">
+                                  <span
+                                    className={`inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider text-white ${
+                                      isPresent ? 'bg-emerald-600' : 'bg-red-600'
+                                    }`}
+                                  >
+                                    {isPresent ? 'Attended' : 'Absent'}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
                 ) : (
                   <div className="py-16">
                     <EmptyState

@@ -230,30 +230,38 @@ export class FeedbackAnalyticsService {
       filteredResponses = filteredResponses.filter(r => (r.student?.section || '') === filters.section)
     }
 
-    // Get faculty department to filter student count
-    const facultyDept = await FacultyService.getFacultyDepartment(formData.faculty_id)
-    const departmentName = facultyDept?.name
-
-    if (!departmentName) {
-        logger.warn('Could not determine department for analytics student count')
-        // Fallback or return early? For now let's set totalStudents to 0 to be strict
-    }
+    // peer_students.faculty_id = departments.id (the department UUID)
+    // This is the correct field to scope students to a department.
+    const departmentId = formData.faculty_id
 
     let totalStudentsCount = 0
 
-    if (departmentName) {
-      const studentQuery = supabase
+    if (departmentId) {
+      // Primary: filter peer_students by faculty_id (department UUID)
+      const { count: directCount, error: directErr } = await supabase
         .from('peer_students')
         .select('*', { count: 'exact', head: true })
         .eq('peer_tutor', false)
-        .eq('dept', departmentName)
-      
-      const { count: totalStudents, error: studentCountError } = await studentQuery
+        .eq('faculty_id', departmentId)
 
-      if (studentCountError) {
-        logger.error('Error getting student count:', studentCountError)
+      if (!directErr && (directCount ?? 0) > 0) {
+        totalStudentsCount = directCount || 0
       } else {
-        totalStudentsCount = totalStudents || 0
+        // Fallback: get peer tutors belonging to this faculty_id, then count students assigned to them
+        const { data: tutorRows } = await supabase
+          .from('peer_tutors')
+          .select('id')
+          .eq('faculty_id', departmentId)
+
+        if (tutorRows && tutorRows.length > 0) {
+          const tutorIds = tutorRows.map((t: { id: string }) => t.id)
+          const { count: tutorStudentCount } = await supabase
+            .from('peer_students')
+            .select('*', { count: 'exact', head: true })
+            .eq('peer_tutor', false)
+            .in('assigned_peer_tutor_id', tutorIds)
+          totalStudentsCount = tutorStudentCount || 0
+        }
       }
     }
     const totalResponses = filteredResponses?.length || 0
@@ -639,7 +647,8 @@ export class FeedbackAnalyticsService {
   }
 
   /**
-   * Get students who haven't submitted feedback for a form
+   * Get students who haven't submitted feedback for a form.
+   * Also resolves peer tutor details (name, year, section) for each pending student.
    */
   static async getPendingStudents(formId: string): Promise<{
     id: string
@@ -647,26 +656,39 @@ export class FeedbackAnalyticsService {
     email: string
     year: string
     section: string
-    register_number?: string
+    assignedPeerTutorId?: string
+    peerTutorName?: string
+    peerTutorYear?: string
+    peerTutorSection?: string
   }[]> {
     try {
       const supabase = createClient()
 
-      // Get current user to identify department
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      
-      if (authError || !user) {
-        logger.warn('Authentication required/failed to get pending students', authError)
-        return []
-      }
-      
       let departmentName = ''
-      
-      if (user?.email) {
-        // Get faculty department
-        const facultyDept = await FacultyService.verifyFacultyAccess(user.email, supabase)
-        if (facultyDept) {
+
+      // Primary: resolve department from the form's faculty_id.
+      // This works for both faculty and incharge viewers.
+      const { data: formRow, error: formRowErr } = await supabase
+        .from('feedback_forms')
+        .select('faculty_id')
+        .eq('id', formId)
+        .single()
+
+      if (!formRowErr && formRow?.faculty_id) {
+        const facultyDept = await FacultyService.getFacultyDepartment(formRow.faculty_id)
+        if (facultyDept?.name) {
           departmentName = facultyDept.name
+        }
+      }
+
+      // Fallback: use the currently logged-in user's faculty record
+      if (!departmentName) {
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (!authError && user?.email) {
+          const facultyDept = await FacultyService.verifyFacultyAccess(user.email, supabase)
+          if (facultyDept?.name) {
+            departmentName = facultyDept.name
+          }
         }
       }
 
@@ -674,6 +696,7 @@ export class FeedbackAnalyticsService {
         logger.warn('Could not determine department for pending students. Enforcing strict filtering.')
         return []
       }
+
 
       // Get all students who have submitted feedback for this form
       const { data: submittedResponses, error: responsesError } = await supabase
@@ -688,26 +711,85 @@ export class FeedbackAnalyticsService {
 
       const submittedStudentIds = new Set(submittedResponses?.map(r => r.student_id) || [])
 
-      // Get all students (non peer tutors) strict filter by department
+      // peer_students.faculty_id = departments.id (the correct department scope key)
+      const departmentId = formRow?.faculty_id || ''
+
       const { data: allStudents, error: studentsError } = await supabase
         .from('peer_students')
-        .select('id, name, email, year, section, register_number')
+        .select('id, name, email, year, section, assigned_peer_tutor_id')
         .eq('peer_tutor', false)
-        .eq('dept', departmentName)
-        .order('name', { ascending: true })
+        .eq('faculty_id', departmentId)
+        .order('assigned_peer_tutor_id', { ascending: true })
+
+      // Fallback: if faculty_id filter returns nothing, scope by peer tutors
+      let finalStudents = allStudents || []
+      if (!studentsError && finalStudents.length === 0 && departmentId) {
+        const { data: tutorRows } = await supabase
+          .from('peer_tutors')
+          .select('id')
+          .eq('faculty_id', departmentId)
+
+        if (tutorRows && tutorRows.length > 0) {
+          const tutorIds = tutorRows.map((t: { id: string }) => t.id)
+          const { data: tutorStudents } = await supabase
+            .from('peer_students')
+            .select('id, name, email, year, section, assigned_peer_tutor_id')
+            .eq('peer_tutor', false)
+            .in('assigned_peer_tutor_id', tutorIds)
+            .order('assigned_peer_tutor_id', { ascending: true })
+          if (tutorStudents) finalStudents = tutorStudents
+        }
+      }
 
       if (studentsError) {
-        // Log the error properly
         logger.error('Error getting all students:', JSON.stringify(studentsError))
         return []
       }
 
       // Filter out students who have already submitted
-      const pendingStudents = (allStudents || []).filter(
+      const pendingStudents = finalStudents.filter(
         student => !submittedStudentIds.has(student.id)
       )
 
-      return pendingStudents
+      // Resolve peer tutor details for unique tutor ids
+      const tutorIds = [...new Set(
+        pendingStudents
+          /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+          .map((s: any) => s.assigned_peer_tutor_id)
+          .filter(Boolean)
+      )] as string[]
+
+      const tutorDetailMap: Record<string, { name: string; year: string; section: string }> = {}
+
+      if (tutorIds.length > 0) {
+        const { data: tutors, error: tutorErr } = await supabase
+          .from('peer_tutors')
+          .select('id, name, year, section')
+          .in('id', tutorIds)
+        if (tutorErr) {
+          logger.error('Error fetching peer tutor details for pending export:', tutorErr)
+        }
+        ;(tutors || []).forEach((t: { id: string; name: string; year: string; section: string }) => {
+          tutorDetailMap[t.id] = { name: t.name, year: t.year, section: t.section }
+        })
+      }
+
+      return pendingStudents.map((student) => {
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        const tutorId = (student as any).assigned_peer_tutor_id as string | undefined
+        const tutorInfo = tutorId ? tutorDetailMap[tutorId] : undefined
+        return {
+          id: student.id,
+          name: student.name,
+          email: student.email,
+          year: student.year,
+          section: student.section,
+          assignedPeerTutorId: tutorId,
+          peerTutorName: tutorInfo?.name,
+          peerTutorYear: tutorInfo?.year,
+          peerTutorSection: tutorInfo?.section
+        }
+      })
     } catch (error) {
       logger.error('Error in getPendingStudents:', error)
       return []

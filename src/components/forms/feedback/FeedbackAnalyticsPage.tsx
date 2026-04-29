@@ -7,7 +7,6 @@ import { FeedbackAnalyticsService, ResponseAnalytics, StudentResponseAnalytics }
 import { DepartmentService } from '@/lib/services/departmentService'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import jsPDF from 'jspdf'
-import * as XLSX from 'xlsx'
 import { Star, Users, Clock, Download, Filter, X, UserX } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
@@ -170,7 +169,10 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     email: string
     year: string
     section: string
-    register_number?: string
+    assignedPeerTutorId?: string
+    peerTutorName?: string
+    peerTutorYear?: string
+    peerTutorSection?: string
   }>>([])  
   const [loadingPending, setLoadingPending] = useState(false)
 
@@ -286,28 +288,103 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
     setSelectedQuestionId('')
   }
 
-  const exportPendingStudents = () => {
+  const exportPendingStudents = async () => {
     if (pendingStudents.length === 0) {
       toast.warning('No pending students to export')
       return
     }
 
-    const worksheetData = pendingStudents.map((student, index) => ({
-      'S.No': index + 1,
-      'Name': student.name,
-      'Email': student.email,
-      'Register Number': student.register_number || '-',
-      'Year': student.year,
-      'Section': student.section
-    }))
+    // Dynamically import xlsx only when needed (avoids 108KB bundle in main chunk)
+    const XLSX = await import('xlsx')
 
-    const ws = XLSX.utils.json_to_sheet(worksheetData)
+    // Group students by peer tutor id (preserving order already sorted by assigned_peer_tutor_id)
+    type PendingStudent = typeof pendingStudents[0]
+    type Group = { tutorId: string | undefined; students: PendingStudent[] }
+    const groups: Group[] = []
+    let currentGroup: Group | null = null
+
+    for (const student of pendingStudents) {
+      const tid = student.assignedPeerTutorId || '__none__'
+      if (!currentGroup || (currentGroup.tutorId || '__none__') !== tid) {
+        currentGroup = { tutorId: student.assignedPeerTutorId, students: [] }
+        groups.push(currentGroup)
+      }
+      currentGroup.students.push(student)
+    }
+
+    // Build rows manually for proper merge support
+    // Columns: Peer Tutor Name | Peer Tutor Year/Sec | S.No | Student Name | Reg. No | Year | Section | Email
+    const headers = [
+      'Peer Tutor Name',
+      'Peer Tutor Year / Section',
+      'S.No',
+      'Student Name',
+      'Register Number',
+      'Year',
+      'Section',
+      'Email'
+    ]
+
+    const aoaData: (string | number)[][] = [headers]
+    const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = []
+    let rowIndex = 1 // 0-indexed; row 0 is header
+    let sno = 1
+
+    for (const group of groups) {
+      const tutorName = group.students[0]?.peerTutorName || 'Not Assigned'
+      const tutorYearSec = group.students[0]?.peerTutorYear && group.students[0]?.peerTutorSection
+        ? `${group.students[0].peerTutorYear} / ${group.students[0].peerTutorSection}`
+        : group.students[0]?.peerTutorYear || group.students[0]?.peerTutorSection || '-'
+
+      const groupStart = rowIndex
+
+      for (let k = 0; k < group.students.length; k++) {
+        const s = group.students[k]
+        aoaData.push([
+          k === 0 ? tutorName : '',          // Peer Tutor Name (only first row of group)
+          k === 0 ? tutorYearSec : '',       // Peer Tutor Year/Sec (only first row of group)
+          sno++,
+          s.name,
+          '-',
+          s.year,
+          s.section,
+          s.email
+        ])
+        rowIndex++
+      }
+
+      // Merge peer tutor columns if more than one student in group
+      if (group.students.length > 1) {
+        merges.push({ s: { r: groupStart, c: 0 }, e: { r: rowIndex - 1, c: 0 } }) // Peer Tutor Name
+        merges.push({ s: { r: groupStart, c: 1 }, e: { r: rowIndex - 1, c: 1 } }) // Peer Tutor Year/Sec
+      }
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(aoaData)
+
+    // Apply merges
+    if (merges.length > 0) {
+      ws['!merges'] = merges
+    }
+
+    // Column widths
+    ws['!cols'] = [
+      { wch: 28 }, // Peer Tutor Name
+      { wch: 22 }, // Peer Tutor Year/Sec
+      { wch: 6 },  // S.No
+      { wch: 28 }, // Student Name
+      { wch: 18 }, // Register Number
+      { wch: 10 }, // Year
+      { wch: 10 }, // Section
+      { wch: 32 }, // Email
+    ]
+
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Pending Students')
-    
+
     const fileName = `pending-students-${form.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(wb, fileName)
-    
+
     toast.success(`Exported ${pendingStudents.length} pending students`)
   }
 
@@ -531,11 +608,11 @@ export default function FeedbackAnalyticsPage({ form }: FeedbackAnalyticsPagePro
             <span className="text-xs font-bold text-gray-500">NOT SUBMITTED</span>
             <button
               onClick={exportPendingStudents}
-              disabled={pendingStudents.length === 0 || loadingPending}
+              disabled={loadingPending}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                pendingStudents.length === 0 || loadingPending
+                loadingPending
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                  : 'bg-orange-700 text-white hover:bg-orange-800 cursor-pointer'
               }`}
             >
               <Download className="w-3 h-3" />
