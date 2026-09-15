@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
 import { MicrosoftUser } from '@/lib/types'
+import { getEmailVariants } from '@/lib/utils/emailUtils'
+import { buildDepartmentFilter } from '@/lib/utils/departmentFilter'
 
 export interface peertutors {
   id: string
@@ -72,7 +74,8 @@ export class peertutorservice {
         year,
         section,
         data.id,
-        data.created_at
+        data.created_at,
+        facultyId
       )
 
       if (!assignmentResult) {
@@ -93,20 +96,47 @@ export class peertutorservice {
     try {
       const supabase = createClient()
 
+      let cleanDept = (dept || '').trim()
+      try {
+        cleanDept = decodeURIComponent(cleanDept)
+      } catch {
+        // ignore
+      }
+
+      // If cleanDept is a UUID, lookup the department name
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanDept)
+      if (isUUID) {
+        const { data: deptRow } = await supabase
+          .from('departments')
+          .select('name')
+          .eq('id', cleanDept)
+          .maybeSingle()
+        if (deptRow?.name) {
+          cleanDept = deptRow.name
+        }
+      }
+
       // Sanitize inputs to ensure better matching
       // e.g. "Year 2" -> "2", "Sec B" -> "B", "Section A" -> "A"
       const cleanYear = year?.toString().replace(/year/gi, '').trim() || ''
       const cleanSection = section?.toString().replace(/sec(tion)?\.?/gi, '').trim() || ''
 
-
-
-      const { data, error } = await supabase
+      let query = supabase
         .from('peer_tutors')
         .select('*')
-        .ilike('dept', `%${dept}%`)
-        .ilike('year', `%${cleanYear}%`)
-        .ilike('section', `%${cleanSection}%`)
-        .order('name')
+
+      const deptFilter = buildDepartmentFilter(cleanDept, isUUID ? cleanDept : undefined)
+      if (deptFilter) {
+        query = query.or(deptFilter)
+      }
+      if (cleanYear) {
+        query = query.eq('year', cleanYear)
+      }
+      if (cleanSection) {
+        query = query.eq('section', cleanSection)
+      }
+
+      const { data, error } = await query.order('name')
 
       if (error) {
         logger.error('Error getting peer tutors by section:', error)
@@ -153,15 +183,17 @@ export class peertutorservice {
   /**
    * Get all peer tutors for a specific department
    */
-  static async getpeerTutorByDepartment(dept: string): Promise<peertutors[]> {
+  static async getpeerTutorByDepartment(dept: string, facultyId?: string): Promise<peertutors[]> {
     try {
       const supabase = createClient()
 
-      const { data, error } = await supabase
-        .from('peer_tutors')
-        .select('*')
-        .eq('dept', dept)
-        .order('year, section, name')
+      let query = supabase.from('peer_tutors').select('*')
+      const filter = buildDepartmentFilter(dept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      const { data, error } = await query.order('year, section, name')
 
       if (error) {
         logger.error('Error getting peer tutors by department:', error)
@@ -178,15 +210,21 @@ export class peertutorservice {
   /**
    * Get peer tutors by years (array of years)
    */
-  static async getpeerTutorByYears(years: string[]): Promise<peertutors[]> {
+  static async getpeerTutorByYears(years: string[], dept?: string, facultyId?: string): Promise<peertutors[]> {
     try {
       const supabase = createClient()
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('peer_tutors')
         .select('*')
         .in('year', years)
-        .order('year, section, name')
+
+      const filter = buildDepartmentFilter(dept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      const { data, error } = await query.order('year, section, name')
 
       if (error) {
         logger.error('Error getting peer tutors by years:', error)
@@ -206,20 +244,20 @@ export class peertutorservice {
   static async isAlreadypeertutors(email: string): Promise<boolean> {
     try {
       const supabase = createClient()
+      const variants = getEmailVariants(email)
 
       const { data, error } = await supabase
         .from('peer_tutors')
         .select('id')
-        .ilike('email', email)
+        .in('email', variants)
         .limit(1)
-        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      if (error) {
         logger.error('Error checking if student is peer tutor:', error)
         return false
       }
 
-      return !!data
+      return !!(data && data.length > 0)
     } catch (error) {
       logger.error('Error in isAlreadypeertutors:', error)
       return false
@@ -229,25 +267,29 @@ export class peertutorservice {
   /**
    * Get peer tutor by email with full details
    */
-  static async getPeerTutorByEmail(email: string): Promise<peertutors | null> {
+  static async getPeerTutorByEmail(email: string, deptName?: string, facultyId?: string): Promise<peertutors | null> {
     try {
       const supabase = createClient()
+      const variants = getEmailVariants(email)
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('peer_tutors')
         .select('*')
-        .ilike('email', email)
-        .limit(1)
-        .maybeSingle()
+        .in('email', variants)
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      const { data, error } = await query.limit(1)
 
       if (error) {
-        if (error.code !== 'PGRST116') { // PGRST116 = no rows returned
-          logger.error('Error getting peer tutor by email:', error)
-        }
+        logger.error('Error getting peer tutor by email:', error)
         return null
       }
 
-      return data as peertutors
+      return (data && data.length > 0) ? (data[0] as peertutors) : null
     } catch (error) {
       logger.error('Error in getPeerTutorByEmail:', error)
       return null
@@ -261,22 +303,20 @@ export class peertutorservice {
     try {
       const supabase = createClient()
 
-      // First, check if this email is already a peer tutor ANYWHERE (any dept/year/section)
-      // Only perform email checks if email is provided
+      // Only perform email checks within the same department if email is provided
       if (assignment.email) {
-        const existingPeerTutor = await this.getPeerTutorByEmail(assignment.email)
+        const existingPeerTutor = await this.getPeerTutorByEmail(assignment.email, assignment.dept, assignment.faculty_id)
         
         if (existingPeerTutor) {
           // Check if it's in the SAME section trying to add to
-          if (existingPeerTutor.dept === assignment.dept && 
-              existingPeerTutor.year === assignment.year && 
+          if (existingPeerTutor.year === assignment.year && 
               existingPeerTutor.section === assignment.section) {
             return { 
               success: false, 
               error: `${assignment.name} is already a peer tutor in ${assignment.dept} Year ${assignment.year} Section ${assignment.section}` 
             }
           } else {
-            // Exists in a DIFFERENT section
+            // Exists in a DIFFERENT section of the same department
             return { 
               success: false, 
               error: `${assignment.name} already exists as peer tutor in ${existingPeerTutor.dept} Year ${existingPeerTutor.year} Section ${existingPeerTutor.section}` 
@@ -284,12 +324,21 @@ export class peertutorservice {
           }
         }
 
-        // Also check if this email is already a student
-        const { data: existingStudent, error: studentCheckError } = await supabase
+        // Also check if this email is already a student in this department
+        let studentQuery = supabase
           .from('peer_students')
-          .select('id, name, dept, year, section')
+          .select('id, name, dept, year, section, faculty_id')
           .eq('email', assignment.email)
-          .maybeSingle()
+
+        if (assignment.faculty_id && assignment.dept) {
+          studentQuery = studentQuery.or(`faculty_id.eq.${assignment.faculty_id},dept.eq.${assignment.dept}`)
+        } else if (assignment.faculty_id) {
+          studentQuery = studentQuery.eq('faculty_id', assignment.faculty_id)
+        } else if (assignment.dept) {
+          studentQuery = studentQuery.eq('dept', assignment.dept)
+        }
+
+        const { data: existingStudent, error: studentCheckError } = await studentQuery.maybeSingle()
 
         if (studentCheckError) {
           logger.error('Error checking for existing student:', studentCheckError)
@@ -352,13 +401,14 @@ export class peertutorservice {
       })
 
       // After successfully creating the peer tutor, assign them to future scheduled classes
-      // Pass the peer tutor ID and creation date to correctly filter classes
+      // Pass the peer tutor ID, creation date, and faculty_id to correctly filter classes
       const assignmentResult = await this.assignNewTutorToFutureClasses(
         assignment.dept,
         assignment.year,
         assignment.section,
         insertedData.id,
-        insertedData.created_at
+        insertedData.created_at,
+        assignment.faculty_id
       )
 
       if (!assignmentResult) {
@@ -649,7 +699,8 @@ export class peertutorservice {
     year: string,
     section: string,
     peertutorsId?: string,
-    peertutorsCreatedAt?: string
+    peertutorsCreatedAt?: string,
+    facultyId?: string
   ): Promise<boolean> {
     try {
       const supabase = createClient()
@@ -661,12 +712,18 @@ export class peertutorservice {
         newpeertutors = { id: peertutorsId }
       } else {
         // Get the newly created peer tutor
-        const { data: fetchedpeertutors, error: tutorError } = await supabase
+        let tutorQuery = supabase
           .from('peer_tutors')
           .select('id, created_at')
-          .eq('dept', dept)
           .eq('year', year)
           .eq('section', section)
+
+        const filter = buildDepartmentFilter(dept, facultyId)
+        if (filter) {
+          tutorQuery = tutorQuery.or(filter)
+        }
+
+        const { data: fetchedpeertutors, error: tutorError } = await tutorQuery
           .order('created_at', { ascending: false })
           .limit(1)
           .single()
@@ -690,7 +747,7 @@ export class peertutorservice {
 
       // Get all unique class_id and scheduled_date combinations for future classes
       // from any peer tutor in this section (we want to allocate the new tutor to all future classes)
-      const { data: futureClasses, error: classesError } = await supabase
+      let futureQuery = supabase
         .from('scheduled_classes')
         .select(`
           class_id,
@@ -701,10 +758,18 @@ export class peertutorservice {
           faculty_id,
           topics
         `)
-        .eq('dept', dept)
+
+      const futureFilter = buildDepartmentFilter(dept, facultyId)
+      if (futureFilter) {
+        futureQuery = futureQuery.or(futureFilter)
+      }
+
+      futureQuery = futureQuery
         .eq('year', year)
         .eq('section', section)
         .gte('scheduled_date', allocateFromDateString)
+
+      const { data: futureClasses, error: classesError } = await futureQuery
 
       if (classesError) {
         logger.error('Error getting future scheduled classes:', classesError)

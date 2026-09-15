@@ -429,9 +429,9 @@ export class ClassService {
    * Normalize department name for case-insensitive matching
    */
   private static normalizeDepartment(dept: string): string {
-    // Return as-is but ensure consistent case handling
-    // Database stores in various cases, so we'll use case-insensitive matching
-    return dept.trim()
+    const clean = (dept || '').trim()
+    const base = clean.replace(/\s*\(.*?\)\s*/g, '').trim()
+    return base || clean
   }
 
   /**

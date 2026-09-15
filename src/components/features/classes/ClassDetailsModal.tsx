@@ -71,12 +71,12 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
     setLoading(true)
 
     try {
-      const tutorInfo = await peertutorsAuthService.getpeertutorsByEmail(userEmail)
-      if (!tutorInfo) return
-      setpeertutorsId(tutorInfo.id)
+      const tutorIdToUse = (classItem as { peer_tutor_id?: string })?.peer_tutor_id || (await peertutorsAuthService.getpeertutorsByEmail(userEmail))?.id
+      if (!tutorIdToUse) return
+      setpeertutorsId(tutorIdToUse)
 
       // Fetch Students
-      const students = await AttendanceService.getStudentsForAttendance(tutorInfo.id)
+      const students = await AttendanceService.getStudentsForAttendance(tutorIdToUse)
       
       let currentScheduledClassId = classItem.scheduled_class_id
       let existingAttendance: AttendanceRecord[] = []
@@ -90,7 +90,7 @@ export default function ClassDetailsModal({ isOpen, onClose, classItem, userEmai
             .from('scheduled_classes')
             .select('id, topics, start_time, end_time, link, image_link, completion_status')
             .eq('class_id', selectedClassId || classItem.id)
-            .eq('peer_tutor_id', tutorInfo.id)
+            .eq('peer_tutor_id', tutorIdToUse)
             .eq('scheduled_date', targetDate)
             .maybeSingle()
 

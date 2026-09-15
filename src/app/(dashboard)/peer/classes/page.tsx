@@ -19,6 +19,7 @@ import { AdditionalClassService } from '@/lib/services/additionalClassService'
 import { FacultyService } from '@/lib/services/facultyService'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import ExportButton from '@/components/ui/ExportButton'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
@@ -82,17 +83,8 @@ function PeerClassesContent() {
   // Use custom hook for sidebar collapsed state
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
-  // Fetch peer tutor info with caching
-  const { data: tutorInfoData, isLoading: tutorLoading, refresh: refreshTutor } = useCachedData({
-    queryKey: ['peer-tutor-info', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
-    },
-    enabled: !!user?.email,
-    initialData: null,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  })
+  // Access active department peer tutor allocation
+  const { activePeerTutor: tutorInfoData, isLoading: tutorLoading } = usePeerDepartment()
 
   // Fetch assigned students
   const { data: assignedStudents, isLoading: studentsLoading, refresh: refreshStudents } = useCachedData({
@@ -308,7 +300,7 @@ function PeerClassesContent() {
   }
 
   const handleRefresh = async () => {
-    await Promise.all([refreshTutor(), refreshScheduled(), refreshStudents(), refreshAdditional()])
+    await Promise.all([refreshScheduled(), refreshStudents(), refreshAdditional()])
     setLastRefresh(new Date())
   }
   

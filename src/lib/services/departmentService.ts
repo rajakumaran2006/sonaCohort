@@ -53,7 +53,11 @@ export class DepartmentService {
     }
   }
 
-  static async updateDepartment(id: string, updates: Partial<CreateDepartmentData>): Promise<Department | null> {
+  static async updateDepartment(
+    id: string,
+    updates: Partial<CreateDepartmentData>,
+    oldName?: string
+  ): Promise<Department | null> {
     try {
       const supabase = createClient()
       const { data, error } = await supabase
@@ -66,6 +70,12 @@ export class DepartmentService {
       if (error) {
         logger.error('Error updating department:', error)
         return null
+      }
+
+      // If department name was updated, update dept field in peer_tutors and peer_students
+      if (updates.name && oldName && updates.name !== oldName) {
+        await supabase.from('peer_tutors').update({ dept: updates.name }).eq('faculty_id', id)
+        await supabase.from('peer_students').update({ dept: updates.name }).eq('faculty_id', id)
       }
 
       return data
@@ -81,10 +91,29 @@ export class DepartmentService {
       
       logger.info(`Starting cascade delete for department: ${id}`)
       
-      // 1. Get the department to know its name (needed for fetching related entities by dept name if referenced that way)
-      // However, most services link by IDs or we can query by faculty_id (which is the dept id)
+      // 1. Get the department to know its name
+      const { data: deptData } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+
+      const deptName = deptData?.name
+
+      // 2. Delete faculty allocations for this department
+      if (deptName) {
+        await supabase
+          .from('faculty_allocations')
+          .delete()
+          .or(`faculty_id.eq.${id},dept.eq.${deptName}`)
+      } else {
+        await supabase
+          .from('faculty_allocations')
+          .delete()
+          .eq('faculty_id', id)
+      }
       
-      // 2. Delete all classes associated with this department (faculty_id)
+      // 3. Delete all classes associated with this department
       const classes = await ClassService.getClassesByFaculty(id)
       logger.info(`Found ${classes.length} classes to delete`)
       
@@ -92,23 +121,29 @@ export class DepartmentService {
         const success = await ClassService.deleteClass(cls.id)
         if (!success) {
           logger.error(`Failed to delete class ${cls.id} during department deletion`)
-          // Continue trying to delete others even if one fails
         }
       }
       
-      // 3. Delete Peer Tutors associated with this department
-      // Peer Tutors are linked by 'faculty_id' as well in peer_tutors table
-      const { data: peerTutors, error: ptError } = await supabase
-        .from('peer_tutors')
-        .select('id')
-        .eq('faculty_id', id)
+      // Also delete any remaining scheduled_classes matching department name
+      if (deptName) {
+        await supabase
+          .from('scheduled_classes')
+          .delete()
+          .or(`faculty_id.eq.${id},dept.eq.${deptName}`)
+      }
+
+      // 4. Delete Peer Tutors associated with this department
+      let ptQuery = supabase.from('peer_tutors').select('id')
+      if (deptName) {
+        ptQuery = ptQuery.or(`faculty_id.eq.${id},dept.eq.${deptName}`)
+      } else {
+        ptQuery = ptQuery.eq('faculty_id', id)
+      }
+      const { data: peerTutors, error: ptError } = await ptQuery
       
       if (ptError) {
         logger.error('Error fetching peer tutors for deletion:', ptError)
-        return false
-      }
-      
-      if (peerTutors && peerTutors.length > 0) {
+      } else if (peerTutors && peerTutors.length > 0) {
         logger.info(`Found ${peerTutors.length} peer tutors to delete`)
         for (const pt of peerTutors) {
           const result = await peertutorservice.removepeertutors(pt.id, true)
@@ -118,19 +153,18 @@ export class DepartmentService {
         }
       }
       
-      // 4. Delete Students associated with this department
-      // Students are linked by 'faculty_id' in peer_students table
-      const { data: students, error: stError } = await supabase
-        .from('peer_students')
-        .select('id')
-        .eq('faculty_id', id)
+      // 5. Delete Students associated with this department
+      let stQuery = supabase.from('peer_students').select('id')
+      if (deptName) {
+        stQuery = stQuery.or(`faculty_id.eq.${id},dept.eq.${deptName}`)
+      } else {
+        stQuery = stQuery.eq('faculty_id', id)
+      }
+      const { data: students, error: stError } = await stQuery
         
       if (stError) {
         logger.error('Error fetching students for deletion:', stError)
-        return false
-      }
-      
-      if (students && students.length > 0) {
+      } else if (students && students.length > 0) {
         logger.info(`Found ${students.length} students to delete`)
         for (const st of students) {
           const success = await StudentService.removeStudent(st.id)
@@ -140,7 +174,7 @@ export class DepartmentService {
         }
       }
 
-      // 5. Finally, delete the department itself
+      // 6. Finally, delete the department itself
       const { error } = await supabase
         .from('departments')
         .delete()

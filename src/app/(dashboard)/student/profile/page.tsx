@@ -20,27 +20,20 @@ interface StudentProfile {
   section?: string
 }
 
+import { useStudentDepartment } from '@/lib/contexts/StudentDepartmentContext'
+
 export default function StudentProfilePage() {
   const { user, loading: authLoading } = useAuth()
+  const { activeStudent: profile, isLoading: studentDeptLoading } = useStudentDepartment()
   const router = useRouter()
-  const [profile, setProfile] = useState<StudentProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isSidebarCollapsed] = useSidebarCollapsed()
   const [collegeName, setCollegeName] = useState<string>('')
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user?.email) return
+    const fetchCollegeName = async () => {
       try {
         const supabase = createClient()
-        const { data: student } = await supabase
-          .from('peer_students')
-          .select('*')
-          .ilike('email', user.email)
-          .single()
-        setProfile(student as StudentProfile)
-
-        // Fetch college name from superadmin table
         const { data: admins } = await supabase
           .from('superadmin')
           .select('college_name')
@@ -50,15 +43,15 @@ export default function StudentProfilePage() {
           setCollegeName(admins[0].college_name)
         }
       } catch (error) {
-        logger.error('Error fetching profile:', error)
+        logger.error('Error fetching college name:', error)
       } finally {
         setLoading(false)
       }
     }
-    if (!authLoading) fetchProfile()
-  }, [user, authLoading])
+    fetchCollegeName()
+  }, [])
 
-  if (authLoading || loading) {
+  if (authLoading || studentDeptLoading || loading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA]">
         <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen flex items-center justify-center`}>
@@ -92,7 +85,7 @@ export default function StudentProfilePage() {
           <div className="max-w-[1600px] mx-auto w-full">
             <ProfileHeader
               name={profile.name}
-              email={profile.email}
+              email={profile.email ? profile.email : ''}
               role="Student"
               department={profile.dept}
               year={profile.year}

@@ -16,6 +16,7 @@ interface UserSelectionModalProps {
     onSuccess: () => void
     mode: 'peer-tutor' | 'student'
     dept: string
+    facultyId?: string
     year?: string
     section?: string
     availableYears?: string[]
@@ -31,6 +32,7 @@ export default function UserSelectionModal({
     onSuccess,
     mode,
     dept,
+    facultyId,
     year,
     section,
     availableYears = [],
@@ -209,7 +211,7 @@ export default function UserSelectionModal({
                         dept,
                         year: selectedYear,
                         section: selectedSection,
-                        faculty_id: user.id,
+                        faculty_id: facultyId || user.id,
                         assigned_by: user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Unknown',
                         is_manual_entry: true
                     })
@@ -220,7 +222,7 @@ export default function UserSelectionModal({
                         dept,
                         year: selectedYear,
                         section: selectedSection,
-                        faculty_id: user.id,
+                        faculty_id: facultyId || user.id,
                         peer_tutor: false,
                         is_manual_entry: true
                     })
@@ -251,7 +253,7 @@ export default function UserSelectionModal({
                 const assignments: peertutorsAssignment[] = Array.from(selectedUsers.values()).map(u => ({
                     name: u.displayName || 'Unknown',
                     email: u.mail || u.userPrincipalName,
-                    faculty_id: user.id,
+                    faculty_id: facultyId || user.id,
                     dept,
                     year: selectedYear,
                     section: selectedSection,
@@ -281,7 +283,7 @@ export default function UserSelectionModal({
                     dept,
                     year: selectedYear,
                     section: selectedSection,
-                    faculty_id: user.id,
+                    faculty_id: facultyId || user.id,
                     peer_tutor: false
                 }))
 

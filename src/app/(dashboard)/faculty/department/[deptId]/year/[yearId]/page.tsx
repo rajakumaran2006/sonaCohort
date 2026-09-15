@@ -21,6 +21,7 @@ import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { BackButton } from '@/components/ui/BackButton'
 import { YearSectionGraph } from '@/components/ui/YearSectionGraph'
 import { YearPageSkeleton } from '@/components/skeletons/YearPageSkeleton'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 
 export default function YearPage() {
   return (
@@ -35,6 +36,7 @@ function YearContent() {
   const router = useRouter()
   const params = useParams()
   const { deptId, yearId } = params
+  const { activeDepartment, departments } = useFacultyDepartment()
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [department, setDepartment] = useState<{
@@ -64,19 +66,49 @@ function YearContent() {
 
   const loadData = useCallback(async () => {
     try {
-      let facultyDeptName = 'Computer Science'
-      if (user?.email) {
-        const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
-        if (facultyDept) {
-          facultyDeptName = facultyDept.name
+      let facultyDeptName = ''
+      let resolvedId = deptId as string
+
+      if (deptId) {
+        let decodedParam = deptId as string
+        try {
+          decodedParam = decodeURIComponent(deptId as string)
+        } catch {
+          // ignore
+        }
+        const matched = departments.find(
+          d => d.id === deptId || d.name.toLowerCase() === decodedParam.toLowerCase()
+        )
+        if (matched) {
+          facultyDeptName = matched.name
+          resolvedId = matched.id
+        } else if (activeDepartment?.id === deptId || activeDepartment?.name.toLowerCase() === decodedParam.toLowerCase()) {
+          facultyDeptName = activeDepartment.name
+          resolvedId = activeDepartment.id
         }
       }
 
+      if (!facultyDeptName && activeDepartment?.name) {
+        facultyDeptName = activeDepartment.name
+        resolvedId = activeDepartment.id
+      }
+
+      if (!facultyDeptName && user?.email) {
+        const facultyDept = await FacultyService.verifyFacultyAccess(user.email, undefined, activeDepartment?.id)
+        if (facultyDept) {
+          facultyDeptName = facultyDept.name
+          resolvedId = facultyDept.id
+        }
+      }
+
+      if (!facultyDeptName) {
+        facultyDeptName = 'Computer Science'
+      }
 
       logger.info('Year Page - Loading data for:', { deptId, yearId, facultyDeptName })
 
       setDepartment({
-        id: deptId as string,
+        id: resolvedId,
         name: facultyDeptName,
         faculty_name: user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'
       })
@@ -88,7 +120,7 @@ function YearContent() {
 
       // Load sections and their stats
       const sections = await ClassService.getSectionsForYear(facultyDeptName, yearId as string)
-      const allAdditionalClasses = await AdditionalClassService.getAllAdditionalClassesForDepartment(facultyDeptName)
+      const allAdditionalClasses = await AdditionalClassService.getAllAdditionalClassesForDepartment(facultyDeptName, resolvedId)
       logger.info('Year Page - Data found:', { sections, additionalCount: allAdditionalClasses.length })
 
       // Ensure all standard sections (A, B, C) are included
@@ -98,7 +130,7 @@ function YearContent() {
       const sectionData = await Promise.all(
         uniqueSections.map(async (section) => {
           const tutors = await peertutorservice.getpeerTutorBySection(facultyDeptName, yearId as string, section)
-          const { completed, pending } = await ScheduledClassService.getpeertutorsClassStatus(facultyDeptName, yearId as string, section)
+          const { completed, pending } = await ScheduledClassService.getpeertutorsClassStatus(facultyDeptName, yearId as string, section, undefined, resolvedId)
 
           // Filter pending to only show overdue classes (scheduled date exceeded)
           const now = new Date()

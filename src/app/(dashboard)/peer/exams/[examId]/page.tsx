@@ -23,6 +23,7 @@ import {
 } from '@/lib/utils/examAnalytics'
 import { Card, CardContent, StudentPerformanceChart } from '@/components/ui'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import { ArrowLeft, Edit, Save, X, Plus, Filter, Calendar, Users, Activity, ChevronLeft, Search } from 'lucide-react'
@@ -61,16 +62,8 @@ function PeerExamDetailsContent() {
 
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
-  // Fetch peer tutor info
-  const { data: peertutorsInfo, isLoading: isTutorLoading } = useQuery({
-    queryKey: ['peer-tutor-info', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
-    },
-    enabled: !!user?.email,
-    staleTime: 5 * 60 * 1000,
-  })
+  // Access active peer tutor allocation from context
+  const { activePeerTutor: peertutorsInfo, isLoading: isTutorLoading } = usePeerDepartment()
 
   // Fetch exam details
   const { data: exam, isLoading: isExamLoading } = useQuery({

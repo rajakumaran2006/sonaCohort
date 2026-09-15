@@ -7,7 +7,7 @@ import { FacultyService } from '@/lib/services/facultyService'
 import { peertutorservice } from '@/lib/services/peerTutorService'
 import { StudentService } from '@/lib/services/studentService'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ArrowLeft, Check, Clock, GraduationCap, Link as LinkIcon, Loader2, Mail, Settings, Shield, Users, X, Send, Paperclip, FileText } from 'lucide-react'
+import { ArrowLeft, Check, Clock, GraduationCap, Link as LinkIcon, Loader2, Mail, Settings, Shield, Users, X, Send, Paperclip, FileText, Building2, Trash2 } from 'lucide-react'
 import { ReportService } from '@/lib/services/reportService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
@@ -18,6 +18,8 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
 import SettingsSkeleton from '@/components/skeletons/SettingsSkeleton'
 import { toast } from 'sonner'
 import ChangePassword from '@/components/profile/ChangePassword'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
+import DeleteDepartmentModal from '@/components/forms/modals/DeleteDepartmentModal'
 
 // Types for recipients
 interface Recipient {
@@ -48,6 +50,14 @@ export default function SettingsPage() {
 function SettingsContent() {
   const { user } = useAuth()
   const router = useRouter()
+  const { departments: facultyDepts, refetchDepartments } = useFacultyDepartment()
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean
+    dept: { id: string; name: string; faculty_email?: string; faculty_name?: string } | null
+  }>({
+    isOpen: false,
+    dept: null,
+  })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -698,6 +708,77 @@ function SettingsContent() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Allocated Departments Section */}
+          <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-gray-700" />
+                  Allocated Department Incharge Management
+                </h3>
+                <p className="text-xs font-medium text-gray-400 mt-1">
+                  Manage departments allocated to your incharge profile. Deleting an allocated department requires OTP verification sent to your Sonatech ID and removes all department records and student/tutor access for that department.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {facultyDepts && facultyDepts.length > 0 ? (
+                facultyDepts.map((dept) => (
+                  <div
+                    key={dept.id}
+                    className="p-5 rounded-2xl border border-gray-100 bg-gray-50/70 hover:bg-gray-50 transition-all flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-black text-white rounded-xl font-bold">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900 text-base">{dept.name}</h4>
+                        <p className="text-xs text-gray-500 font-medium">Incharge: {dept.faculty_email || user?.email}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setDeleteModalState({ isOpen: true, dept })}
+                      className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold text-xs flex items-center gap-2 transition-all shadow-sm"
+                      title="Delete Department with OTP"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Dept
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="p-5 rounded-2xl border border-gray-100 bg-gray-50/70 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-black text-white rounded-xl font-bold">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-base">{stats.department || 'Allocated Department'}</h4>
+                      <p className="text-xs text-gray-500 font-medium">Incharge: {user?.email}</p>
+                    </div>
+                  </div>
+
+                  {facultyId && (
+                    <button
+                      onClick={() => setDeleteModalState({
+                        isOpen: true,
+                        dept: { id: facultyId, name: stats.department || 'Department', faculty_email: user?.email || undefined }
+                      })}
+                      className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold text-xs flex items-center gap-2 transition-all shadow-sm"
+                      title="Delete Department with OTP"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Dept
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1355,6 +1436,17 @@ function SettingsContent() {
             </div>
           </div>
         </main>
+
+        {/* Delete Department OTP Verification Modal */}
+        <DeleteDepartmentModal
+          isOpen={deleteModalState.isOpen}
+          department={deleteModalState.dept}
+          onClose={() => setDeleteModalState({ isOpen: false, dept: null })}
+          onSuccess={() => {
+            refetchDepartments()
+            loadData()
+          }}
+        />
       </div>
     </div>
   )

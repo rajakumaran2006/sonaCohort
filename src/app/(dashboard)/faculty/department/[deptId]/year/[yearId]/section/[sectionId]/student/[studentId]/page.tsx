@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import { BackButton } from '@/components/ui/BackButton'
 import { AttendanceService, AttendanceHistoryRecord } from '@/lib/services/attendanceService'
 import { StudentService, Student } from '@/lib/services/studentService'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import { ExternalLink, Check, X, Image as ImageIcon } from 'lucide-react'
 import { logger } from '@/lib/logger'
@@ -19,24 +20,52 @@ export default function StudentClassesPage() {
   const yearId = params.yearId as string
   const sectionId = params.sectionId as string
   const studentId = params.studentId as string
+
+  const { activeDepartment, departments } = useFacultyDepartment()
   
   const [student, setStudent] = useState<Student | null>(null)
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceHistoryRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
+  // Resolve active department name accurately
+  const resolvedDeptName = useMemo(() => {
+    if (deptId) {
+      const decoded = decodeURIComponent(deptId)
+      const matched = departments.find(
+        d => d.id === deptId || d.name.toLowerCase() === decoded.toLowerCase()
+      )
+      if (matched) return matched.name
+      if (activeDepartment?.id === deptId) return activeDepartment.name
+      return decoded
+    }
+    return activeDepartment?.name || ''
+  }, [deptId, departments, activeDepartment])
+
   useEffect(() => {
     const fetchStudentData = async () => {
       setLoading(true)
       try {
-        // Fetch all students in section and find the specific one
-        const studentsInSection = await StudentService.getStudentsBySection(deptId, yearId, sectionId)
-        const found = studentsInSection.find(s => s.id === studentId)
-        if (found) {
-          setStudent(found)
+        // Fetch student directly by id or from section
+        let studentObj: Student | null = null
+        if (studentId) {
+          studentObj = await StudentService.getStudentById(studentId)
+        }
+        if (!studentObj && resolvedDeptName) {
+          const studentsInSection = await StudentService.getStudentsBySection(resolvedDeptName, yearId, sectionId)
+          studentObj = studentsInSection.find(s => s.id === studentId) || null
+        }
+        if (studentObj) {
+          setStudent(studentObj)
         }
 
-        const records = await AttendanceService.getStudentAttendanceHistory(studentId)
+        // Strictly scope attendance records to resolved active department
+        const targetDeptForRecords = resolvedDeptName || studentObj?.dept || undefined
+        const records = await AttendanceService.getStudentAttendanceHistory(
+          studentId,
+          undefined,
+          targetDeptForRecords
+        )
         setAttendanceRecords(records)
       } catch (error) {
         logger.error('Error fetching student class data:', error)
@@ -48,7 +77,7 @@ export default function StudentClassesPage() {
     if (studentId) {
       fetchStudentData()
     }
-  }, [studentId, deptId, yearId, sectionId])
+  }, [studentId, deptId, yearId, sectionId, resolvedDeptName])
 
   const handleBack = () => {
     router.push(`/faculty/department/${deptId}/year/${yearId}/section/${sectionId}?tab=students`)
@@ -167,8 +196,30 @@ export default function StudentClassesPage() {
                               <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Topic</p>
                               <p className="text-sm font-medium text-black">{topic}</p>
                             </div>
-                            <div className="flex gap-2 pt-2">
-                            </div>
+                            {(record.scheduled_classes?.link || record.scheduled_classes?.image_link) && (
+                              <div className="flex gap-2 pt-2">
+                                {record.scheduled_classes?.link && (
+                                  <a
+                                    href={record.scheduled_classes.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" /> Class Link
+                                  </a>
+                                )}
+                                {record.scheduled_classes?.image_link && (
+                                  <a
+                                    href={record.scheduled_classes.image_link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs font-medium text-purple-600 hover:text-purple-800 bg-purple-50 px-2 py-1 rounded"
+                                  >
+                                    <ImageIcon className="w-3.5 h-3.5" /> Image Proof
+                                  </a>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )
@@ -237,12 +288,36 @@ export default function StudentClassesPage() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
                                 <div className="flex items-center justify-center gap-2">
+                                  {record.scheduled_classes?.link ? (
+                                    <a
+                                      href={record.scheduled_classes.link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                                      title="Open Class Link"
+                                    >
+                                      <ExternalLink className="w-4 h-4" />
+                                    </a>
+                                  ) : (
                                     <span className="p-1.5 text-gray-300">
                                       <ExternalLink className="w-4 h-4" />
                                     </span>
+                                  )}
+                                  {record.scheduled_classes?.image_link ? (
+                                    <a
+                                      href={record.scheduled_classes.image_link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded transition-colors"
+                                      title="View Image Proof"
+                                    >
+                                      <ImageIcon className="w-4 h-4" />
+                                    </a>
+                                  ) : (
                                     <span className="p-1.5 text-gray-300">
                                       <ImageIcon className="w-4 h-4" />
                                     </span>
+                                  )}
                                 </div>
                               </td>
                             </tr>

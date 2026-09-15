@@ -12,6 +12,7 @@ import { TableSkeleton } from '@/components/ui/TableSkeleton'
 import { Card } from '@/components/ui'
 import { Users, Search, Download } from 'lucide-react'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 
 export default function AnalyticsPage() {
   return (
@@ -35,15 +36,8 @@ function AnalyticsContent() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
 
-  // Get department
-  const { data: department, isLoading: isDepartmentLoading } = useQuery({
-    queryKey: ['department', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return FacultyService.verifyFacultyAccess(user.email)
-    },
-    enabled: !!user?.email
-  })
+  // Get active department from context
+  const { activeDepartment: department, isLoading: isDepartmentLoading } = useFacultyDepartment()
 
   // Get analytics data
   const { data: analytics, isLoading: isAnalyticsLoading, refetch } = useQuery({

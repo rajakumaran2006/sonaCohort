@@ -5,6 +5,7 @@ import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
 import Sidebar from '@/components/layout/Sidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import CreateDepartmentModal from '@/components/forms/modals/CreateDepartmentModal'
+import EditDepartmentModal from '@/components/forms/modals/EditDepartmentModal'
 import DeleteConfirmationModal from '@/components/forms/modals/DeleteConfirmationModal'
 
 import { DepartmentService } from '@/lib/services/departmentService'
@@ -14,7 +15,7 @@ import { Department } from '@/lib/types'
 import { Button, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import { AdminDashboardSkeleton } from '@/components/skeletons/AdminDashboardSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { Plus, Trash2, Building2, Users, GraduationCap, User } from 'lucide-react'
+import { Plus, Pencil, Trash2, Building2, Users, GraduationCap, User } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
 export default function AdminDashboardPage() {
@@ -36,12 +37,19 @@ function AdminDashboardContent() {
   const [departments, setDepartments] = useState<DepartmentWithCounts[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [departmentToEdit, setDepartmentToEdit] = useState<DepartmentWithCounts | null>(null)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [departmentToDelete, setDepartmentToDelete] = useState<DepartmentWithCounts | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [totalPeerTutors, setTotalPeerTutors] = useState(0)
   const [totalStudents, setTotalStudents] = useState(0)
   const [isCollapsed, setIsCollapsed] = useSidebarCollapsed()
+
+  const handleEditClick = (department: DepartmentWithCounts) => {
+    setDepartmentToEdit(department)
+    setEditModalOpen(true)
+  }
 
   // Listen for sidebar toggle events (from sidebar button)
   useEffect(() => {
@@ -285,13 +293,22 @@ function AdminDashboardContent() {
                                 </div>
                               </TableCell>
                               <TableCell className="text-right py-4 pr-6">
-                                <button
-                                  onClick={() => handleDeleteClick(department)}
-                                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
-                                  title="Delete Department"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => handleEditClick(department)}
+                                    className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all duration-200"
+                                    title="Edit Department / Incharge"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteClick(department)}
+                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                                    title="Delete Department"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -311,6 +328,17 @@ function AdminDashboardContent() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleDepartmentCreated}
+      />
+
+      {/* Edit Department Modal */}
+      <EditDepartmentModal
+        isOpen={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false)
+          setDepartmentToEdit(null)
+        }}
+        onSuccess={loadDepartments}
+        department={departmentToEdit}
       />
 
       {/* Delete Confirmation Modal */}

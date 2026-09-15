@@ -8,6 +8,7 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { FacultyService, FacultySummary } from '@/lib/services/facultyService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 import { Plus, User, Mail, Eye, Pencil, Trash2 } from 'lucide-react'
 import { SearchIcon } from '@/components/icons/SearchIcon'
 import Image from 'next/image'
@@ -31,6 +32,7 @@ export default function FacultyManagePage() {
 function FacultyManageContent() {
   const router = useRouter()
   const { user } = useAuth()
+  const { activeDepartment } = useFacultyDepartment()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
@@ -56,27 +58,25 @@ function FacultyManageContent() {
   const [, setLastRefresh] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Load Data
+  // Load Data based on active department
   useEffect(() => {
     const loadData = async () => {
-      if (!user?.email) return
+      if (!activeDepartment?.name) return
 
       try {
         setLoading(true)
-        const dept = await FacultyService.verifyFacultyAccess(user.email)
-        if (dept) {
-          setDepartmentName(dept.name)
-          const data = await FacultyService.getAllFaculty(dept.name)
-          setFaculty(data)
-        }
-      } catch (e) {
-        logger.error('Error loading faculty page data', e)
+        setDepartmentName(activeDepartment.name)
+        const data = await FacultyService.getAllFaculty(activeDepartment.name)
+        setFaculty(data)
+      } catch (error) {
+        logger.error('Error loading faculty:', error)
       } finally {
         setLoading(false)
       }
     }
+
     loadData()
-  }, [user])
+  }, [activeDepartment])
 
   // Filtered Data
   const filteredFaculty = faculty.filter(f => {

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MicrosoftGraphService } from '../auth/microsoftGraph'
+import { getEmailVariants } from '@/lib/utils/emailUtils'
 export interface FacultyDepartment {
   id: string
   name: string
@@ -74,12 +75,57 @@ export class FacultyService {
     }
   }
   /**
+   * Get all departments managed by an Incharge / Faculty email
+   * @param email Faculty member's email
+   * @param supabaseClient Optional Supabase client instance
+   * @returns Array of FacultyDepartment objects
+   */
+  static async getAllFacultyDepartments(email: string, supabaseClient?: SupabaseClient): Promise<FacultyDepartment[]> {
+    try {
+      if (!email || email.trim() === '') return []
+      const supabase = supabaseClient || createClient()
+      const normalizedEmail = email.trim().toLowerCase()
+      const variants = getEmailVariants(normalizedEmail)
+
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .in('faculty_email', variants)
+        .order('name', { ascending: true })
+
+      if (!error && data && data.length > 0) {
+        return data as FacultyDepartment[]
+      }
+
+      // Fallback: search substring matches if exact in didn't match (e.g. whitespace variations)
+      const { data: candidates, error: fallbackError } = await supabase
+        .from('departments')
+        .select('*')
+        .ilike('faculty_email', `%${normalizedEmail}%`)
+
+      if (fallbackError || !candidates) return []
+
+      const matches = (candidates as FacultyDepartment[]).filter(c => {
+        const stored = (c.faculty_email || '').toLowerCase().replace(/\s+/g, '').trim()
+        const incoming = normalizedEmail.replace(/\s+/g, '').trim()
+        return stored === incoming || variants.some(v => v.replace(/\s+/g, '') === stored)
+      })
+
+      return matches
+    } catch (error) {
+      logger.error('Error in getAllFacultyDepartments:', error)
+      return []
+    }
+  }
+
+  /**
    * Verify if a faculty member's email matches a department record
    * @param email Faculty member's email from Microsoft authentication
    * @param supabaseClient Optional Supabase client instance (for server-side usage)
+   * @param preferredDeptId Optional preferred department ID to select if user has multiple
    * @returns Department information if verified, null otherwise
    */
-  static async verifyFacultyAccess(email: string, supabaseClient?: SupabaseClient): Promise<FacultyDepartment | null> {
+  static async verifyFacultyAccess(email: string, supabaseClient?: SupabaseClient, preferredDeptId?: string): Promise<FacultyDepartment | null> {
     try {
       if (!email || email.trim() === '') {
         logger.info('No email provided for faculty verification')
@@ -88,6 +134,7 @@ export class FacultyService {
 
       const supabase = supabaseClient || createClient()
       const normalizedEmail = email.trim().toLowerCase()
+      const variants = getEmailVariants(normalizedEmail)
 
       // First, check if the departments table exists and is accessible
       try {
@@ -98,66 +145,58 @@ export class FacultyService {
 
         if (error) {
           logger.info('Departments table not accessible:', error.message)
-          logger.info('Full error object:', error)
           return null
         }
-
-        logger.info('Departments table is accessible, proceeding with faculty verification')
       } catch (tableError) {
         logger.info('Departments table check failed:', tableError)
         return null
       }
 
-      // Query the departments table to find a match (case-insensitive, trimmed)
+      // Query matching departments ordered by created_at.
+      // Notice: Do NOT use maybeSingle() because faculty can be assigned to multiple departments!
       const { data, error } = await supabase
         .from('departments')
         .select('*')
-        .ilike('faculty_email', normalizedEmail)
-        .maybeSingle() // Use maybeSingle to avoid errors when no record found
+        .in('faculty_email', variants)
+        .order('created_at', { ascending: true })
 
       if (error) {
         logger.error('Error verifying faculty access:', error)
-        // Log the error details for debugging
-        logger.error('Error details:', {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint
-        })
         return null
       }
 
-      if (data) {
-        logger.info('Faculty access verified for department:', data.name, 'for email:', normalizedEmail)
-        return data as FacultyDepartment
+      if (data && data.length > 0) {
+        if (preferredDeptId) {
+          const matched = (data as FacultyDepartment[]).find(d => d.id === preferredDeptId)
+          if (matched) return matched
+        }
+        logger.info('Faculty access verified for department:', data[0].name, 'for email:', normalizedEmail)
+        return data[0] as FacultyDepartment
       }
-
-      logger.info('No department found for email (normalized):', normalizedEmail)
 
       // Fallback: fetch potential matches and compare after trimming/lowercasing
       const { data: candidates, error: fallbackError } = await supabase
         .from('departments')
-        .select('id, name, faculty_email')
+        .select('*')
         .ilike('faculty_email', `%${normalizedEmail}%`)
 
-      if (fallbackError) {
-        logger.info('Fallback email search failed:', fallbackError)
+      if (fallbackError || !candidates || candidates.length === 0) {
         return null
       }
 
-      if (candidates && candidates.length > 0) {
-        const match = (candidates as Array<{ id: string; name: string; faculty_email: string }>).find(c => {
-          const stored = (c.faculty_email || '').toLowerCase().replace(/\s+/g, '').trim()
-          const incoming = normalizedEmail.replace(/\s+/g, '').trim()
-          return stored === incoming
-        })
+      const matches = (candidates as FacultyDepartment[]).filter(c => {
+        const stored = (c.faculty_email || '').toLowerCase().replace(/\s+/g, '').trim()
+        const incoming = normalizedEmail.replace(/\s+/g, '').trim()
+        return stored === incoming || variants.some(v => v.replace(/\s+/g, '') === stored)
+      })
 
-        if (match) {
-          logger.info('Faculty access verified via fallback for department:', match.name, 'stored email:', match.faculty_email)
-          return match as unknown as FacultyDepartment
+      if (matches && matches.length > 0) {
+        if (preferredDeptId) {
+          const matched = matches.find(d => d.id === preferredDeptId)
+          if (matched) return matched
         }
-
-        logger.info('Fallback search found candidates but none matched after normalization:', candidates.map(c => c.faculty_email))
+        logger.info('Faculty access verified via fallback for department:', matches[0].name)
+        return matches[0]
       }
 
       return null

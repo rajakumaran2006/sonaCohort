@@ -7,8 +7,11 @@ import { createClient } from '@/lib/supabase/client'
 import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import Image from 'next/image'
-import { LayoutGrid, BookOpen, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutGrid, BookOpen, User, LogOut, ChevronLeft, ChevronRight, Building2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
+import { useStudentDepartment } from '@/lib/contexts/StudentDepartmentContext'
+
+import RoleSwitcher from '@/components/layout/RoleSwitcher'
 
 interface StudentSidebarProps {
   isOpen: boolean
@@ -19,6 +22,7 @@ interface StudentSidebarProps {
 
 export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCollapsed = false, onToggleCollapse }: StudentSidebarProps) {
   const { user, signOut } = useAuth()
+  const { activeStudent: student, allocations, selectDepartment } = useStudentDepartment()
   const router = useRouter()
   const pathname = usePathname()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -104,7 +108,7 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
         data-sidebar-collapsed={isCollapsed}
       >
         {/* Logo Header */}
-        <div className={`flex items-center h-28 flex-shrink-0 ${showCollapsed ? 'lg:px-4 lg:justify-center pl-6 pr-6' : 'pl-6 pr-6'} pt-8 mb-10 transition-all`}>
+        <div className={`flex flex-col flex-shrink-0 ${showCollapsed ? 'lg:px-4 lg:justify-center pl-6 pr-6' : 'pl-6 pr-6'} pt-8 mb-6 transition-all`}>
           <div className={`flex items-center gap-4 ${showCollapsed ? 'lg:justify-center w-full' : 'w-full'}`}>
             <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-2 ${showCollapsed ? 'lg:w-14 lg:h-14 w-16 h-16' : 'w-16 h-16'}`}>
               <Image 
@@ -125,6 +129,35 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
               </span>
             </div>
           </div>
+
+          {/* Department Switcher */}
+          {!showCollapsed && allocations.length > 1 && (
+            <div className="mt-4 px-1">
+              <label className="text-[10px] font-extrabold uppercase tracking-widest text-[#bef264] block mb-1.5 flex items-center gap-1.5">
+                <Building2 className="w-3 h-3" /> Select Department
+              </label>
+              <select
+                value={student?.id || ''}
+                onChange={(e) => selectDepartment(e.target.value)}
+                className="w-full bg-[#163a2b] border border-[#bef264]/30 text-white font-semibold text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-[#bef264] transition-all cursor-pointer"
+              >
+                {allocations.map((alloc) => (
+                  <option key={alloc.id} value={alloc.id} className="bg-[#0f291e] text-white">
+                    {alloc.dept} (Yr {alloc.year} - Sec {alloc.section})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {!showCollapsed && allocations.length === 1 && student && (
+            <div className="mt-4 px-1">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-[#bef264]/10 text-[#bef264] border border-[#bef264]/20">
+                <Building2 className="w-3 h-3" />
+                {student.dept} (Sec {student.section})
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -179,6 +212,9 @@ export default function StudentSidebar({ isOpen, onClose, isCollapsed: initialCo
           </button>
         </div>
         </nav>
+
+        {/* Role Switcher Section */}
+        <RoleSwitcher currentRole="student" isCollapsed={showCollapsed} />
 
         {/* Profile Section */}
         <div className="border-t border-[#1a3d2e] bg-[#0c2219]/50 flex-shrink-0 p-4 relative backdrop-blur-sm">

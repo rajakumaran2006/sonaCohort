@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { ScheduledClassService } from './scheduledClassService'
+import { matchesDepartment } from '@/lib/utils/departmentFilter'
 
 export interface Attendance {
   id: string
@@ -51,6 +52,9 @@ export interface AttendanceHistoryRecord extends Attendance {
     scheduled_date: string
     class_id: string
     topics?: string | null
+    dept?: string | null
+    link?: string | null
+    image_link?: string | null
   } | null
   
   peer_students?: {
@@ -997,9 +1001,37 @@ export class AttendanceService {
   /**
    * Get attendance history for a specific student
    */
-  static async getStudentAttendanceHistory(studentId: string, peertutorsId?: string): Promise<AttendanceHistoryRecord[]> {
+  /**
+   * Get attendance history for a specific student, optionally filtered by peer tutor and department
+   */
+  static async getStudentAttendanceHistory(
+    studentId: string, 
+    peertutorsId?: string,
+    deptName?: string
+  ): Promise<AttendanceHistoryRecord[]> {
     try {
       const supabase = createClient()
+      
+      // Clean target department if provided
+      let targetDept = (deptName || '').trim().toLowerCase()
+      try {
+        targetDept = decodeURIComponent(targetDept).trim().toLowerCase()
+      } catch {
+        // ignore
+      }
+
+      // If targetDept is a UUID, lookup the department name
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetDept)
+      if (isUUID) {
+        const { data: deptRow } = await supabase
+          .from('departments')
+          .select('name')
+          .eq('id', targetDept)
+          .maybeSingle()
+        if (deptRow?.name) {
+          targetDept = deptRow.name.trim().toLowerCase()
+        }
+      }
       
       // 1. Fetch regular attendance records
       let regularQuery = supabase
@@ -1025,7 +1057,10 @@ export class AttendanceService {
             id,
             scheduled_date,
             class_id,
-            topics
+            topics,
+            dept,
+            link,
+            image_link
           )
         `)
         .eq('student_id', studentId)
@@ -1055,7 +1090,11 @@ export class AttendanceService {
             id,
             subject_name,
             topic,
-            class_date
+            class_date,
+            link,
+            peer_tutors (
+              dept
+            )
           )
         `)
         .eq('student_id', studentId)
@@ -1070,32 +1109,50 @@ export class AttendanceService {
         logger.error('Error getting student additional attendance history:', additionalError)
       }
 
-      // 3. Map and merge data
-      const mappedRegular = (regularData || []).map(record => ({
-        ...record,
-        classes: Array.isArray(record.classes) ? record.classes[0] : record.classes,
-        scheduled_classes: Array.isArray(record.scheduled_classes) ? record.scheduled_classes[0] : record.scheduled_classes
-      }))
+      // 3. Map and merge data, strictly filtering by targetDept if provided
+      const mappedRegular = (regularData || [])
+        .map(record => {
+          const cls = Array.isArray(record.classes) ? record.classes[0] : record.classes
+          const sc = Array.isArray(record.scheduled_classes) ? record.scheduled_classes[0] : record.scheduled_classes
+          return {
+            ...record,
+            classes: cls,
+            scheduled_classes: sc,
+            _dept: cls?.dept || sc?.dept || null
+          }
+        })
+        .filter(record => {
+          if (!targetDept) return true
+          const recordDept = (record._dept || '').trim().toLowerCase()
+          return recordDept === targetDept
+        })
 
-      const mappedAdditional = (additionalData || []).map(record => {
-        const additionalClass = Array.isArray(record.additional_classes) ? record.additional_classes[0] : record.additional_classes
-        return {
-          id: record.id,
-          student_id: record.student_id,
-          peer_tutor_id: record.peer_tutor_id,
-          status: record.status as 'present' | 'absent',
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-          classes: {
-            id: additionalClass?.id || '',
-            subject_name: additionalClass?.subject_name || 'Additional Class',
-            topics: additionalClass?.topic || '',
-            created_at: additionalClass?.class_date || record.created_at,
-          },
-          // Set scheduled_classes to null to trigger "Additional Session" badge in UI if it relies on its absence
-          scheduled_classes: null 
-        }
-      })
+      const mappedAdditional = (additionalData || [])
+        .map(record => {
+          const additionalClass = Array.isArray(record.additional_classes) ? record.additional_classes[0] : record.additional_classes
+          const tutor = Array.isArray(additionalClass?.peer_tutors) ? additionalClass?.peer_tutors[0] : additionalClass?.peer_tutors
+          return {
+            id: record.id,
+            student_id: record.student_id,
+            peer_tutor_id: record.peer_tutor_id,
+            status: record.status as 'present' | 'absent',
+            created_at: record.created_at,
+            updated_at: record.updated_at,
+            classes: {
+              id: additionalClass?.id || '',
+              subject_name: additionalClass?.subject_name || 'Additional Class',
+              topics: additionalClass?.topic || '',
+              created_at: additionalClass?.class_date || record.created_at,
+            },
+            scheduled_classes: null,
+            _dept: tutor?.dept || null
+          }
+        })
+        .filter(record => {
+          if (!targetDept) return true
+          const recordDept = (record._dept || '').trim().toLowerCase()
+          return recordDept === targetDept
+        })
 
       // Combine and sort by date
       const combined = [...mappedRegular, ...mappedAdditional]
@@ -1107,18 +1164,42 @@ export class AttendanceService {
   }
 
   /**
-   * Get class stats (total vs completed classes) for a specific student
+   * Get class stats (total vs completed classes) for a specific student, optionally filtered by department
    */
-  static async getStudentClassStats(studentId: string): Promise<{
+  static async getStudentClassStats(studentId: string, deptName?: string, facultyId?: string): Promise<{
     totalClasses: number
     completedClasses: number
   }> {
     try {
       const supabase = createClient()
       
+      let targetDept = (deptName || '').trim().toLowerCase()
+      try {
+        targetDept = decodeURIComponent(targetDept).trim().toLowerCase()
+      } catch {
+        // ignore
+      }
+
+      // If targetDept is a UUID, lookup the department name
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetDept)
+      if (isUUID) {
+        const { data: deptRow } = await supabase
+          .from('departments')
+          .select('name')
+          .eq('id', targetDept)
+          .maybeSingle()
+        if (deptRow?.name) {
+          targetDept = deptRow.name.trim().toLowerCase()
+        }
+      }
+      
       const { data, error } = await supabase
         .from('attendance')
-        .select('status')
+        .select(`
+          status,
+          classes ( dept, faculty_id ),
+          scheduled_classes ( dept, faculty_id )
+        `)
         .eq('student_id', studentId)
 
       if (error) {
@@ -1126,8 +1207,17 @@ export class AttendanceService {
         return { totalClasses: 0, completedClasses: 0 }
       }
 
-      const totalClasses = data?.length || 0
-      const completedClasses = (data || []).filter(r => r.status === 'present').length
+      const filtered = (data || []).filter(r => {
+        if (!targetDept && !facultyId) return true
+        const cls = Array.isArray(r.classes) ? r.classes[0] : r.classes
+        const sc = Array.isArray(r.scheduled_classes) ? r.scheduled_classes[0] : r.scheduled_classes
+        const recDept = cls?.dept || sc?.dept
+        const recFacultyId = cls?.faculty_id || sc?.faculty_id
+        return matchesDepartment(recDept, recFacultyId, targetDept, facultyId)
+      })
+
+      const totalClasses = filtered.length
+      const completedClasses = filtered.filter(r => r.status === 'present').length
 
       return { totalClasses, completedClasses }
     } catch (error) {

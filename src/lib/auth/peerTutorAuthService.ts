@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { peertutors } from '../services/peerTutorService'
+import { getEmailVariants } from '@/lib/utils/emailUtils'
 
 export class peertutorsAuthService {
   /**
@@ -13,21 +14,15 @@ export class peertutorsAuthService {
   static async ispeertutors(email: string, supabaseClient?: SupabaseClient): Promise<boolean> {
     try {
       const supabase = supabaseClient || createClient()
+      const variants = getEmailVariants(email)
       
       const { data, error } = await supabase
         .from('peer_tutors')
         .select('id')
-        .ilike('email', email)
+        .in('email', variants)
         .limit(1)
-        .maybeSingle()
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No rows found - user is not a peer tutor
-          return false
-        }
-        
-        // Log actual errors
         logger.error('Error checking if user is peer tutor:', {
           message: error.message,
           code: error.code,
@@ -39,7 +34,7 @@ export class peertutorsAuthService {
         return false
       }
 
-      return !!data
+      return !!(data && data.length > 0)
     } catch (error) {
       logger.error('Error in ispeertutors:', {
         error: error instanceof Error ? error.message : String(error),
@@ -59,22 +54,16 @@ export class peertutorsAuthService {
   static async getpeertutorsByEmail(email: string, supabaseClient?: SupabaseClient): Promise<peertutors | null> {
     try {
       const supabase = supabaseClient || createClient()
+      const variants = getEmailVariants(email)
       
       const { data, error } = await supabase
         .from('peer_tutors')
         .select('*')
-        .ilike('email', email)
+        .in('email', variants)
+        .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No rows found - this is expected when user is not a peer tutor
-          logger.debug(`No peer tutor found for email: ${email}`)
-          return null
-        }
-        
-        // Log the full error object with all properties
         logger.error('Error getting peer tutor:', {
           message: error.message,
           code: error.code,
@@ -86,7 +75,7 @@ export class peertutorsAuthService {
         return null
       }
 
-      return data
+      return (data && data.length > 0) ? data[0] : null
     } catch (error) {
       logger.error('Error in getpeertutorsByEmail:', {
         error: error instanceof Error ? error.message : String(error),
@@ -94,6 +83,49 @@ export class peertutorsAuthService {
         fullError: error
       })
       return null
+    }
+  }
+
+  /**
+   * Get all peer tutor allocations for a user by email
+   * @param email User's email
+   * @param supabaseClient Optional Supabase client instance
+   * @returns Array of peer tutor allocations
+   */
+  static async getAllpeertutorsByEmail(email: string, supabaseClient?: SupabaseClient): Promise<peertutors[]> {
+    try {
+      const supabase = supabaseClient || createClient()
+      const variants = getEmailVariants(email)
+      
+      const { data, error } = await supabase
+        .from('peer_tutors')
+        .select('*')
+        .in('email', variants)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        logger.error('Error getting all peer tutors for email:', {
+          message: error.message,
+          code: error.code,
+          email
+        })
+        return []
+      }
+
+      // Sort allocations by created_at DESC (most recently allocated department first)
+      const sorted = (data || []).sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+        return timeB - timeA
+      })
+
+      return sorted
+    } catch (error) {
+      logger.error('Error in getAllpeertutorsByEmail:', {
+        error: error instanceof Error ? error.message : String(error),
+        email
+      })
+      return []
     }
   }
 }

@@ -59,10 +59,11 @@ function PeerSubjectDetailsContent() {
 
       setLoading(true)
       try {
-         // Verify the current user is the same as the tutorId
-         const currentTutorInfo = await peertutorsAuthService.getpeertutorsByEmail(user.email)
+         // Verify the current user owns this tutorId allocation
+         const allAllocations = await peertutorsAuthService.getAllpeertutorsByEmail(user.email)
+         const hasAccess = allAllocations.some(a => a.id === tutorId)
 
-         if (!currentTutorInfo || currentTutorInfo.id !== tutorId) {
+         if (!hasAccess) {
             router.push('/peer/reports')
             return
          }
@@ -111,8 +112,9 @@ function PeerSubjectDetailsContent() {
    const { data: tutorInfoData } = useQuery({
       queryKey: ['peer-tutor-info-direct', tutorId],
       queryFn: async () => {
-         if (!tutorId) return null
-         return await peertutorsAuthService.getpeertutorsByEmail(user?.email || '')
+         if (!tutorId || !user?.email) return null
+         const allocations = await peertutorsAuthService.getAllpeertutorsByEmail(user.email)
+         return allocations.find(a => a.id === tutorId) || allocations[0] || null
       },
       enabled: !!tutorId && !!user?.email,
       staleTime: 10 * 60 * 1000,

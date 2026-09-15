@@ -14,6 +14,7 @@ import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 import FilterDropdown from '@/components/ui/FilterDropdown'
 import ExportButton from '@/components/ui/ExportButton'
 import { logger } from '@/lib/logger'
@@ -65,6 +66,7 @@ export default function FacultyAttendancePage() {
 
 function FacultyAttendanceContent() {
   const { user } = useAuth()
+  const { activeDepartment } = useFacultyDepartment()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -100,6 +102,13 @@ function FacultyAttendanceContent() {
     actualSection: string
   }>>([])
   const [loadingpeerTutor, setLoadingpeerTutor] = useState(false)
+
+  // Keep facultyDepartment synced with context's activeDepartment
+  useEffect(() => {
+    if (activeDepartment?.name) {
+      setFacultyDepartment(activeDepartment.name)
+    }
+  }, [activeDepartment])
 
   useEffect(() => {
     loadInitialData()
@@ -167,18 +176,9 @@ function FacultyAttendanceContent() {
     try {
       setLoading(true)
 
-      // Get faculty's department
-      if (user?.email) {
-        const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
-        logger.info('Faculty department data:', facultyDept)
-        if (facultyDept) {
-          logger.info('Setting faculty department to:', facultyDept.name)
-          setFacultyDepartment(facultyDept.name)
-        } else {
-          logger.error('No faculty department found for user:', user.email)
-        }
-      } else {
-        logger.error('No user email available')
+      // Sync active department from context
+      if (activeDepartment?.name) {
+        setFacultyDepartment(activeDepartment.name)
       }
 
       // Load years
@@ -216,7 +216,7 @@ function FacultyAttendanceContent() {
       // Load stats data without filters - get all classes for the department
       logger.info('Loading stats data for department:', facultyDepartment)
       try {
-        const status = await ScheduledClassService.getAllClassesForDepartment(facultyDepartment)
+        const status = await ScheduledClassService.getAllClassesForDepartment(facultyDepartment, activeDepartment?.id)
 
         // Convert to ClassWithAttendance format for stats display
         const statsCompleted = status.completed.map((cls: ScheduledClassWithDetails) => ({
@@ -284,7 +284,8 @@ function FacultyAttendanceContent() {
           facultyDepartment,
           filters.year,
           filters.section,
-          dateFilter
+          dateFilter,
+          activeDepartment?.id
         )
       } else if (filters.year && filters.section) {
         // Year + Section (all dates)
@@ -292,7 +293,9 @@ function FacultyAttendanceContent() {
         status = await ScheduledClassService.getpeertutorsClassStatus(
           facultyDepartment,
           filters.year,
-          filters.section
+          filters.section,
+          undefined,
+          activeDepartment?.id
         )
       } else if (filters.year && dateFilter && dateFilter !== '') {
         // Year + Date (all sections)
@@ -300,21 +303,23 @@ function FacultyAttendanceContent() {
         status = await ScheduledClassService.getpeertutorsClassStatusByYearAndDate(
           facultyDepartment,
           filters.year,
-          dateFilter
+          dateFilter,
+          activeDepartment?.id
         )
       } else if (filters.year) {
         // Year only (all sections, all dates)
         logger.info('Using: Year only filter (all sections, all dates)')
         status = await ScheduledClassService.getpeertutorsClassStatusByYear(
           facultyDepartment,
-          filters.year
+          filters.year,
+          activeDepartment?.id
         )
       } else {
         // No filters - get all classes for the department
         logger.info('Using: No filters - all department classes')
         logger.info('Calling getAllClassesForDepartment with:', facultyDepartment)
         try {
-          status = await ScheduledClassService.getAllClassesForDepartment(facultyDepartment)
+          status = await ScheduledClassService.getAllClassesForDepartment(facultyDepartment, activeDepartment?.id)
         } catch (error) {
           logger.error('Error calling getAllClassesForDepartment:', error)
           status = { completed: [], pending: [] }
@@ -593,8 +598,12 @@ function FacultyAttendanceContent() {
             }
           }
 
-          // Fetch additional classes
-          const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutors.id)
+          // Fetch additional classes scoped to this department
+          const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(
+            peertutors.id,
+            facultyDepartment,
+            activeDepartment?.id
+          )
           peertutors.additionalClasses = additionalClasses.length
           // Add additional classes to completed only (not to totalClasses)
           // Total classes should remain as allocated scheduled classes only

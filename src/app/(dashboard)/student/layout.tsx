@@ -3,6 +3,7 @@
 import StudentSidebar from '@/components/layout/StudentSidebar'
 import StudentMobileNav from '@/components/layout/StudentMobileNav'
 import { StudentSidebarProvider, useStudentSidebar } from '@/components/layout/StudentSidebarContext'
+import { StudentDepartmentProvider } from '@/lib/contexts/StudentDepartmentContext'
 
 function StudentLayoutContent({ children }: { children: React.ReactNode }) {
   const { isMobileOpen, closeMobileSidebar } = useStudentSidebar()
@@ -23,8 +24,10 @@ function StudentLayoutContent({ children }: { children: React.ReactNode }) {
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   return (
-    <StudentSidebarProvider>
-      <StudentLayoutContent>{children}</StudentLayoutContent>
-    </StudentSidebarProvider>
+    <StudentDepartmentProvider>
+      <StudentSidebarProvider>
+        <StudentLayoutContent>{children}</StudentLayoutContent>
+      </StudentSidebarProvider>
+    </StudentDepartmentProvider>
   )
 }

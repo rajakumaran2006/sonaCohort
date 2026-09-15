@@ -7,10 +7,14 @@ import { createClient } from '@/lib/supabase/client'
 import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { LayoutGrid, Users, GraduationCap, ClipboardList, FileText, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
+import { LayoutGrid, Users, GraduationCap, ClipboardList, FileText, BarChart3, User, LogOut, ChevronLeft, ChevronRight, Building2 } from 'lucide-react'
 import Image from 'next/image'
 import { logger } from '@/lib/logger'
 import FacultyCommandPalette from '@/components/features/search/FacultyCommandPalette'
+
+import RoleSwitcher from '@/components/layout/RoleSwitcher'
+import DepartmentSwitcher from '@/components/layout/DepartmentSwitcher'
 
 interface FacultySidebarProps {
   isOpen: boolean
@@ -25,6 +29,9 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
   const pathname = usePathname()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isCollapsed, setIsCollapsed] = useSidebarCollapsed()
+
+  // Access active faculty department state
+  const { activeDepartment, departments, selectDepartment } = useFacultyDepartment()
 
   // Fetch college name from superadmin
   const { data: collegeName } = useQuery({
@@ -126,7 +133,7 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
         data-sidebar-collapsed={isCollapsed}
       >
         {/* Logo Header */}
-        <div className={`flex items-center h-20 flex-shrink-0 ${showCollapsed ? 'lg:px-4 lg:justify-center px-6' : 'px-6'} pt-6 mb-6 transition-all duration-300`}>
+        <div className={`flex flex-col flex-shrink-0 ${showCollapsed ? 'lg:px-4 lg:justify-center px-6' : 'px-6'} pt-6 mb-4 transition-all duration-300`}>
           <div className={`flex items-center ${showCollapsed ? 'lg:justify-center gap-3' : 'gap-3'}`}>
             <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-2 ${showCollapsed ? 'lg:w-10 lg:h-10 w-12 h-12' : 'w-12 h-12'}`}>
               <Image
@@ -194,10 +201,14 @@ export default function FacultySidebar({ isOpen, onClose, onToggleCollapse }: Fa
 
         </nav>
 
+        {/* Department Switcher Section */}
+        <DepartmentSwitcher isCollapsed={showCollapsed} theme="dark-blue" type="faculty" />
 
+        {/* Role Switcher Section */}
+        <RoleSwitcher currentRole="faculty" isCollapsed={showCollapsed} theme="dark-blue" />
 
         {/* Profile Section with Sign Out - Always at bottom */}
-        <div className="border-t border-gray-800 flex-shrink-0 p-4 mt-auto">
+        <div className="border-t border-gray-800 flex-shrink-0 p-4">
           <div className={`flex items-center w-full rounded-lg p-2 ${showCollapsed ? 'lg:justify-center justify-between' : 'justify-between'}`}>
             {/* Profile Info */}
             <Link

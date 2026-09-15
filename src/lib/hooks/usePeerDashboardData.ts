@@ -136,12 +136,12 @@ export function useStudentAttendanceStats(students: Student[] | undefined, peert
 }
 
 // 6. Feedback Forms Hook
-export function useActiveFeedbackForms(peertutorsId: string | undefined) {
+export function useActiveFeedbackForms(peertutorsId: string | undefined, facultyId?: string) {
     return useQuery({
-        queryKey: ['activeFeedbackForms', peertutorsId],
+        queryKey: ['activeFeedbackForms', peertutorsId, facultyId],
         queryFn: async () => {
             if (!peertutorsId) return []
-            const feedbackForms = await FeedbackService.getActiveFeedbackForms()
+            const feedbackForms = await FeedbackService.getActiveFeedbackForms(facultyId)
             const formsWithStatus = await Promise.all(feedbackForms.map(async (form) => {
                 const hasSubmitted = await FeedbackService.hasStudentSubmittedFeedback(form.id, peertutorsId)
                 return { ...form, hasSubmitted }

@@ -9,6 +9,7 @@ import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
 
 import PeerRenumerationModal from '@/components/forms/modals/PeerRenumerationModal'
 import PeerLeaderboard from '@/components/dashboard/PeerLeaderboard'
@@ -75,7 +76,7 @@ function PeerDashboardContent() {
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
   // --- DATA FETCHING WITH HOOKS ---
-  const { data: peertutorsInfo, isLoading: isTutorLoading } = usePeerTutorInfo(user?.email)
+  const { activePeerTutor: peertutorsInfo, isLoading: isTutorLoading } = usePeerDepartment()
   
   const { data: assignedStudents = [], isLoading: isStudentsLoading } = useAssignedStudents(peertutorsInfo?.id)
   
@@ -92,7 +93,7 @@ function PeerDashboardContent() {
   const showPendingAlert = alertData?.showPendingAlert ?? false
   const consecutivePendingCount = alertData?.consecutivePendingCount ?? 0
 
-  const { data: _activeFeedbackForms = [] } = useActiveFeedbackForms(peertutorsInfo?.id)
+  const { data: _activeFeedbackForms = [] } = useActiveFeedbackForms(peertutorsInfo?.id, peertutorsInfo?.faculty_id)
   // Always use undefined to default to user's own year - peer tutors can only see their year's leaderboard
   const { data: leaderboardData, isLoading: isLeaderboardLoading } = usePeerLeaderboard(peertutorsInfo, undefined)
 

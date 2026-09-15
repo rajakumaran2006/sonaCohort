@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { AttendanceService } from '@/lib/services/attendanceService'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import { 
   ArrowLeft, 
@@ -54,6 +55,15 @@ interface StudentAttendanceRecord {
   } | null
 }
 
+interface StudentInfo {
+  id: string
+  name: string
+  email: string
+  dept: string
+  year: string
+  section: string
+}
+
 function StudentAttendanceContent() {
   const { user } = useAuth()
   const params = useParams()
@@ -62,15 +72,9 @@ function StudentAttendanceContent() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isSidebarCollapsed] = useSidebarCollapsed()
+  const { activePeerTutor: activeTutor } = usePeerDepartment()
   
-  const [studentInfo, setStudentInfo] = useState<{
-    id: string
-    name: string
-    email: string
-    dept: string
-    year: string
-    section: string
-  } | null>(null)
+  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)
   
   const [attendanceRecords, setAttendanceRecords] = useState<StudentAttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,7 +114,7 @@ function StudentAttendanceContent() {
 
     setLoading(true)
     try {
-      const tutorInfo = await peertutorsAuthService.getpeertutorsByEmail(user.email)
+      const tutorInfo = activeTutor || await peertutorsAuthService.getpeertutorsByEmail(user.email)
       if (tutorInfo) {
         const studentData = await getStudentInfo(studentId)
         if (studentData) {

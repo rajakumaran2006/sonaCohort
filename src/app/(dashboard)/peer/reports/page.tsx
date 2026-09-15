@@ -10,6 +10,7 @@ import { ReportService } from '@/lib/services/reportService'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import * as XLSX from 'xlsx'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import PeerTopicSheet from '@/components/reports/PeerTopicSheet'
 import PeerAttendanceSheet from '@/components/reports/PeerAttendanceSheet'
@@ -40,17 +41,8 @@ function PeerReportsContent() {
   // Use custom hook for sidebar collapsed state
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
-  // Fetch peer tutor info with caching
-  const { data: tutorInfoData, isLoading: tutorLoading, refresh: refreshTutor } = useCachedData({
-    queryKey: ['peer-tutor-info', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
-    },
-    enabled: !!user?.email,
-    initialData: null,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  })
+  // Access active peer tutor allocation from context
+  const { activePeerTutor: tutorInfoData, isLoading: tutorLoading } = usePeerDepartment()
 
   // Fetch report data with caching
   const { data: reportData, isLoading: reportLoading, refresh: refreshReport, isRefreshing: isReportRefreshing } = useCachedData({
@@ -131,7 +123,7 @@ function PeerReportsContent() {
   const peertutorsInfo = tutorInfoData
 
   const handleRefresh = async () => {
-    await Promise.all([refreshTutor(), refreshReport()])
+    await Promise.all([refreshReport()])
     setLastRefresh(new Date())
   }
 

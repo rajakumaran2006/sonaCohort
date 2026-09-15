@@ -4,6 +4,7 @@ import { AdminService } from './adminService'
 import { FacultyService } from './facultyService'
 import { peertutorservice} from './peerTutorService'
 import { StudentService } from './studentService'
+import { getEmailVariants } from '@/lib/utils/emailUtils'
 
 export type UserRole = 'admin' | 'faculty' | 'peer' | 'student'
 
@@ -72,21 +73,19 @@ export class RoleDetectionService {
       }
 
       // Check Peer Tutor (third priority)
-
       try {
         const client = supabaseClient
+        const variants = getEmailVariants(normalizedEmail)
         if (client) {
-          const { data: peerTutor, error } = await client
+          const { data: peerTutor } = await client
              .from('peer_tutors')
              .select('faculty_id')
-             .ilike('email', normalizedEmail)
+             .in('email', variants)
              .limit(1)
-             .maybeSingle()
           
-            if (peerTutor && !error) {
+            if (peerTutor && peerTutor.length > 0) {
               roles.push('peer')
               dashboardPaths.peer = '/peer/dashboard'
-              // console.log('User has peer tutor role')
             }
         } else {
           // Fallback if no client provided (unlikely in auth flow)
@@ -94,25 +93,24 @@ export class RoleDetectionService {
           if (ispeertutors) {
             roles.push('peer')
             dashboardPaths.peer = '/peer/dashboard'
-            // console.log('User has peer tutor role (form check skipped - no client)')
           }
         }
-      } catch {
-        // console.log('Peer tutor check failed:', error)
+      } catch (err) {
+        logger.error('Peer tutor check error:', err)
       }
 
       // Check Student (fourth priority)
       try {
         const client = supabaseClient
+        const variants = getEmailVariants(normalizedEmail)
         if (client) {
-          const { data: student, error } = await client
+          const { data: student } = await client
             .from('peer_students')
             .select('id, email, name, assigned_peer_tutor_id')
-            .ilike('email', normalizedEmail)
+            .in('email', variants)
             .limit(1)
-            .maybeSingle()
           
-          if (student && !error) {
+          if (student && student.length > 0) {
             roles.push('student')
             dashboardPaths.student = '/student/dashboard'
           }
@@ -124,8 +122,8 @@ export class RoleDetectionService {
             dashboardPaths.student = '/student/dashboard'
           }
         }
-      } catch {
-        // console.log('Student check failed:', error)
+      } catch (err) {
+        logger.error('Student check error:', err)
       }
 
       // console.log(`Role detection complete for ${normalizedEmail}:`, roles)

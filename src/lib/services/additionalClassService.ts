@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { AttendanceRecord } from './attendanceService'
+import { buildDepartmentFilter } from '@/lib/utils/departmentFilter'
 
 export interface AdditionalClass {
   id: string
@@ -148,15 +149,25 @@ export class AdditionalClassService {
   /**
    * Get all additional classes for a peer tutor
    */
-  static async getAdditionalClassesBypeertutors(peertutorsId: string): Promise<AdditionalClassWithAttendance[]> {
+  static async getAdditionalClassesBypeertutors(peertutorsId: string, deptName?: string, facultyId?: string): Promise<AdditionalClassWithAttendance[]> {
     try {
       const supabase = createClient()
       
       // Get additional classes
-      const { data: additionalClasses, error: classesError } = await supabase
+      let query = supabase
         .from('additional_classes')
-        .select('*')
+        .select(`
+          *,
+          peer_tutors!inner(dept, faculty_id)
+        `)
         .eq('peer_tutor_id', peertutorsId)
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        query = query.or(filter, { referencedTable: 'peer_tutors' })
+      }
+
+      const { data: additionalClasses, error: classesError } = await query
         .order('class_date', { ascending: false })
 
       if (classesError) {
@@ -319,19 +330,24 @@ export class AdditionalClassService {
   /**
    * Get all additional classes for a department
    */
-  static async getAllAdditionalClassesForDepartment(dept: string): Promise<AdditionalClass[]> {
+  static async getAllAdditionalClassesForDepartment(dept: string, facultyId?: string): Promise<AdditionalClass[]> {
     try {
       const supabase = createClient()
       
       // We need to join with peer_tutors to filter by department
-      const { data, error } = await supabase
+      let query = supabase
         .from('additional_classes')
         .select(`
           *,
-          peer_tutors!inner(dept, year, section)
+          peer_tutors!inner(dept, year, section, faculty_id)
         `)
-        .eq('peer_tutors.dept', dept)
-        .order('class_date', { ascending: false })
+
+      const filter = buildDepartmentFilter(dept, facultyId)
+      if (filter) {
+        query = query.or(filter, { referencedTable: 'peer_tutors' })
+      }
+
+      const { data, error } = await query.order('class_date', { ascending: false })
 
       if (error) {
         logger.error('Error getting all additional classes for department:', error)
@@ -396,15 +412,27 @@ export class AdditionalClassService {
   /**
    * Get count of additional classes attended by a specific student
    */
-  static async getStudentAdditionalClassesCount(studentId: string): Promise<number> {
+  static async getStudentAdditionalClassesCount(studentId: string, deptName?: string, facultyId?: string): Promise<number> {
     try {
       const supabase = createClient()
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('additional_class_attendance')
-        .select('id')
+        .select(`
+          id,
+          additional_classes!inner (
+            peer_tutors!inner ( dept, faculty_id )
+          )
+        `)
         .eq('student_id', studentId)
         .eq('status', 'present')
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        query = query.or(filter, { referencedTable: 'additional_classes.peer_tutors' })
+      }
+
+      const { data, error } = await query
 
       if (error) {
         logger.error('Error getting student additional classes count:', error)

@@ -7,6 +7,7 @@ import FacultyProtectedRoute from '@/components/auth/FacultyProtectedRoute'
 import FacultySidebar from '@/components/layout/FacultySidebar'
 import PageHeader from '@/components/layout/PageHeader'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { cn } from '@/lib/utils'
 import { FacultyService } from '@/lib/services/facultyService'
@@ -133,21 +134,14 @@ function FacultyDashboardContent() {
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // 1. Department Query
-  const { data: department, isLoading: isDepartmentLoading } = useQuery({
-    queryKey: ['department', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return FacultyService.verifyFacultyAccess(user.email)
-    },
-    enabled: !!user?.email
-  })
+  // 1. Active Department from Context
+  const { activeDepartment: department, isLoading: isDepartmentLoading } = useFacultyDepartment()
 
   // 2. Main Dashboard Data Query
   const { data: stats = initialStats, isLoading: isStatsLoading } = useQuery({
-    queryKey: ['dashboardStats', department?.name, user?.id],
+    queryKey: ['dashboardStats', department?.name, department?.id, user?.id],
     queryFn: async () => {
-      if (!department?.name || !user?.id) return initialStats
+      if ((!department?.name && !department?.id) || !user?.id) return initialStats
 
       // Fetch all data in parallel
       const [
@@ -158,13 +152,14 @@ function FacultyDashboardContent() {
         feedbackForms,
         renumerationSubmissions
       ] = await Promise.all([
-        ScheduledClassService.getAllClassesForDepartment(department.name),
-        AdditionalClassService.getAllAdditionalClassesForDepartment(department.name),
-        peertutorservice.getpeerTutorByDepartment(department.name),
-        StudentService.getStudentsByDepartment(department.name),
+        ScheduledClassService.getAllClassesForDepartment(department?.name || '', department?.id),
+        AdditionalClassService.getAllAdditionalClassesForDepartment(department?.name || '', department?.id),
+        peertutorservice.getpeerTutorByDepartment(department?.name || '', department?.id),
+        StudentService.getStudentsByDepartment(department?.name || '', department?.id),
         FeedbackService.getFeedbackFormsByFaculty(user.id),
         RenumerationService.getRenumerationSubmissions(user.id)
       ])
+
 
       const allClasses = [...completed, ...pending].sort((a, b) =>
         new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime()
@@ -620,7 +615,6 @@ function FacultyDashboardContent() {
                   <div className="bg-gradient-to-br from-[#1C2434] to-[#2D3748] text-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 relative overflow-hidden shadow-2xl border border-white/10 group">
                     <div className="relative z-10">
                       <div className="flex items-center gap-2 mb-4 sm:mb-6">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]"></span>
                         <span className="text-[10px] sm:text-xs font-bold tracking-widest text-gray-400 uppercase">Department Overview</span>
                       </div>
                       <p className="text-xs sm:text-sm text-gray-400 font-medium mb-1">
@@ -836,7 +830,7 @@ function FacultyDashboardContent() {
 
                   {/* Class Status Chart Card */}
                   <Card className="rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border-none bg-white p-5 sm:p-7 relative overflow-hidden group">
-                    <div className="flex flex-row items-center justify-between mb-8 border-b border-gray-50 pb-4">
+                    <div className="flex flex-row items-center justify-between mb-4 border-b border-gray-50 pb-4">
                       <h4 className="text-[10px] sm:text-sm font-black text-gray-400 uppercase tracking-widest">Performance</h4>
                       <div className="flex gap-1">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -845,43 +839,52 @@ function FacultyDashboardContent() {
                       </div>
                     </div>
 
-                    <div className="relative flex flex-col items-center justify-center py-2">
-                      <div className="relative w-full h-[160px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={[{ value: 100 }]}
-                              cx="50%" cy="70%" startAngle={180} endAngle={0}
-                              innerRadius="50%" outerRadius="90%" paddingAngle={0}
-                              dataKey="value" stroke="none" isAnimationActive={false}
-                            >
-                              <Cell fill="#e5e5e5" />
-                            </Pie>
-                            <Pie
-                              data={[{ value: stats.attendanceRate }, { value: 100 - stats.attendanceRate }]}
-                              cx="50%" cy="70%" startAngle={180} endAngle={0}
-                              innerRadius="50%" outerRadius="90%" paddingAngle={0}
-                              dataKey="value" stroke="none" cornerRadius={10}
-                              className="drop-shadow-xl"
-                            >
-                              <Cell fill="#10B981" />
-                              <Cell fill="transparent" />
-                            </Pie>
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <div className="absolute inset-x-0 bottom-2 flex flex-col items-center justify-center">
-                          <span className="text-4xl font-black text-gray-900 tracking-tighter leading-none">{stats.attendanceRate}%</span>
+                    <div className="relative flex flex-col items-center justify-center pt-2 pb-1">
+                      {/* SVG Semi-Circle Gauge */}
+                      <div className="relative w-full max-w-[220px] aspect-[2/1.15] flex items-center justify-center">
+                        <svg viewBox="0 0 200 115" className="w-full h-full overflow-visible">
+                          {/* Background Track Arc */}
+                          <path
+                            d="M 25 100 A 75 75 0 0 1 175 100"
+                            fill="none"
+                            stroke="#F1F5F9"
+                            strokeWidth="14"
+                            strokeLinecap="round"
+                          />
+                          {/* Progress Fill Arc */}
+                          <path
+                            d="M 25 100 A 75 75 0 0 1 175 100"
+                            fill="none"
+                            stroke="#10B981"
+                            strokeWidth="14"
+                            strokeLinecap="round"
+                            strokeDasharray="235.619"
+                            strokeDashoffset={235.619 * (1 - Math.min(100, Math.max(0, stats.attendanceRate)) / 100)}
+                            className="transition-all duration-1000 ease-out"
+                          />
+                        </svg>
+                        {/* Overlay Content */}
+                        <div className="absolute inset-x-0 bottom-1 flex flex-col items-center justify-center text-center">
+                          <span className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tighter leading-none">{stats.attendanceRate}%</span>
                           <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">Overall Progress</span>
                         </div>
                       </div>
-                      <div className="w-full mt-4 flex justify-center items-center gap-8">
+
+                      {/* Legend */}
+                      <div className="w-full mt-6 flex justify-center items-center gap-8">
                         <div className="flex flex-col items-center">
-                          <div className="flex items-center gap-1.5 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></span><span className="text-xs font-bold text-gray-800">DONE</span></div>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></span>
+                            <span className="text-xs font-bold text-gray-800">DONE</span>
+                          </div>
                           <span className="text-[10px] text-gray-400 font-bold uppercase">{stats.completedClasses} Classes</span>
                         </div>
                         <div className="flex flex-col items-center">
-                          <div className="flex items-center gap-1.5 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-200"></span><span className="text-xs font-bold text-gray-400">TODO</span></div>
-                          <span className="text-[10px] text-gray-400 font-bold uppercase">{stats.totalClasses - stats.completedClasses} Classes</span>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-gray-200"></span>
+                            <span className="text-xs font-bold text-gray-400">TODO</span>
+                          </div>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase">{Math.max(0, stats.totalClasses - stats.completedClasses)} Classes</span>
                         </div>
                       </div>
                     </div>

@@ -29,19 +29,35 @@ export async function middleware(request: NextRequest) {
   // This will refresh session if needed
   let user = null;
   try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      // If refresh token is expired or invalid, clear stale auth cookies to prevent header bloat and 431 errors
+      if (error.code === 'refresh_token_not_found' || error.message?.includes('Refresh Token Not Found')) {
+        const allCookies = request.cookies.getAll();
+        allCookies.forEach((cookie) => {
+          if (cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token')) {
+            response.cookies.delete(cookie.name);
+          }
+        });
+      }
+    } else {
+      user = data.user;
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('Middleware auth check failed:', err);
     // Continue as unauthenticated
   }
 
-  // Check if the request is for protected routes
+  // Check if the request is for protected routes (exact segment match to prevent matching /peers.ico etc)
+  const pathname = request.nextUrl.pathname;
   const isProtectedRoute =
-    request.nextUrl.pathname.startsWith("/admin") ||
-    request.nextUrl.pathname.startsWith("/faculty") ||
-    request.nextUrl.pathname.startsWith("/peer");
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname === "/faculty" ||
+    pathname.startsWith("/faculty/") ||
+    pathname === "/peer" ||
+    pathname.startsWith("/peer/");
 
   // If accessing protected route without authenticated user, redirect to login
   // Preserve the originally requested URL so we can redirect back after login
@@ -61,8 +77,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder
+     * - public folder static files
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

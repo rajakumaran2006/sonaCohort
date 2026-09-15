@@ -3,6 +3,8 @@
 import { useEffect, useState, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/AuthContext'
+import { FacultyService } from '@/lib/services/facultyService'
+import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import RoleSelectionModal from '@/components/auth/RoleSelectionModal'
 import { Loader2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
@@ -61,6 +63,26 @@ function SelectRoleContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role })
       })
+
+      // If user selected faculty, check if they have multiple departments
+      if (role === 'faculty' && user?.email) {
+        const departments = await FacultyService.getAllFacultyDepartments(user.email)
+        if (departments.length > 1) {
+          const nextQuery = redirectTo ? `?next=${encodeURIComponent(redirectTo)}` : ''
+          router.push(`/auth/select-department${nextQuery}`)
+          return
+        }
+      }
+
+      // If user selected peer, check if they have multiple allocations
+      if (role === 'peer' && user?.email) {
+        const allocations = await peertutorsAuthService.getAllpeertutorsByEmail(user.email)
+        if (allocations.length > 1) {
+          const nextQuery = redirectTo ? `&next=${encodeURIComponent(redirectTo)}` : ''
+          router.push(`/auth/select-department?role=peer${nextQuery}`)
+          return
+        }
+      }
 
       // Redirect to the appropriate dashboard
       // Use redirectTo (original page user was on) if available, then dynamic path, then default

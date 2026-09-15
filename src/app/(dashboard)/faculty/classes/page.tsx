@@ -9,6 +9,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { ClassService, Class } from '@/lib/services/classService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 import Table, { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import ClassesPageSkeleton from '@/components/skeletons/ClassesPageSkeleton'
 import ClassesExportModal from '@/components/forms/import-export/ClassesExportModal'
@@ -28,6 +29,8 @@ export default function FacultyClassesPage() {
 function FacultyClassesContent() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { activeDepartment } = useFacultyDepartment()
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [filterYear, setFilterYear] = useState('')
   const [filterSection, setFilterSection] = useState('')
@@ -38,27 +41,29 @@ function FacultyClassesContent() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   const { data: allClasses = [], isLoading: allClassesLoading, isRefetching: isAllClassesRefetching, error: allClassesError } = useQuery({
-    queryKey: ['all-classes'],
+    queryKey: ['all-classes', activeDepartment?.id],
     queryFn: async () => {
+      if (!activeDepartment?.id) return []
       try {
-        logger.info('Fetching all classes...')
-        const data = await ClassService.getAllClasses()
-        logger.info('Fetched all classes:', data)
+        logger.info('Fetching classes for active department:', activeDepartment.name)
+        const data = await ClassService.getClassesByFaculty(activeDepartment.id)
+        logger.info('Fetched classes for active department:', data)
         return data
       } catch (error) {
-        logger.error('Error fetching all classes:', error)
+        logger.error('Error fetching classes for active department:', error)
         throw error
       }
     },
+    enabled: !!activeDepartment?.id,
     staleTime: 5 * 60 * 1000
   })
 
   const { data: scheduledClassCounts = {}, isLoading: countsLoading } = useQuery({
-    queryKey: ['scheduled-class-counts', allClasses.length], // Depend on allClasses.length to refetch when classes change
+    queryKey: ['scheduled-class-counts', activeDepartment?.id, allClasses.length],
     queryFn: async () => {
       if (allClasses.length === 0) return {}
       logger.info('Fetching scheduled class counts...')
-      return await ScheduledClassService.getAllScheduledClassCounts()
+      return await ScheduledClassService.getAllScheduledClassCounts(activeDepartment?.id, activeDepartment?.name)
     },
     enabled: allClasses.length > 0
   })

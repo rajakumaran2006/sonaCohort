@@ -333,13 +333,13 @@ export class FeedbackService {
   /**
    * Get active feedback forms for students with versioning support
    */
-  static async getActiveFeedbackForms(): Promise<FeedbackForm[]> {
+  static async getActiveFeedbackForms(facultyId?: string): Promise<FeedbackForm[]> {
     try {
       const supabase = createClient()
       
       // First try the new versioning schema
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('feedback_forms')
           .select(`
             *,
@@ -352,7 +352,12 @@ export class FeedbackService {
           `)
           .eq('is_active', true)
           .eq('current_version.is_active', true)
-          .order('created_at', { ascending: false })
+
+        if (facultyId) {
+          query = query.eq('faculty_id', facultyId)
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false })
 
         if (!error && data) {
           return data.map(form => ({
@@ -369,7 +374,7 @@ export class FeedbackService {
       }
 
       // Fallback to legacy schema
-      const { data, error } = await supabase
+      let query = supabase
         .from('feedback_forms')
         .select(`
           *,
@@ -378,7 +383,12 @@ export class FeedbackService {
           )
         `)
         .eq('is_active', true)
-        .order('created_at', { ascending: false })
+
+      if (facultyId) {
+        query = query.eq('faculty_id', facultyId)
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false })
 
       if (error) {
         logger.error('Error getting active feedback forms:', error)

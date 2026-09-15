@@ -13,6 +13,7 @@ import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamMarksService } from '@/lib/services/examMarksService'
 import { ExamSubjectService } from '@/lib/services/examSubjectService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
 import type { Exam } from '@/lib/services/examService'
 
 import { 
@@ -52,16 +53,8 @@ function PeerExamsContent() {
 
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
-  // Fetch peer tutor info
-  const { data: peertutorsInfo, isLoading: isTutorLoading } = useQuery({
-    queryKey: ['peer-tutor-info', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
-    },
-    enabled: !!user?.email,
-    staleTime: 5 * 60 * 1000,
-  })
+  // Access active peer tutor allocation from context
+  const { activePeerTutor: peertutorsInfo, isLoading: isTutorLoading } = usePeerDepartment()
 
   // Derived year from peer tutor info to avoid useEffect waterfall
   const peertutorsYear = peertutorsInfo?.year || null

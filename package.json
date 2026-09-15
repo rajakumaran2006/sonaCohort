@@ -3,15 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "NODE_OPTIONS='--max-http-header-size=65536' next dev --turbopack",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_OPTIONS='--max-http-header-size=65536' next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@supabase/ssr": "^0.7.0",
-    "@supabase/supabase-js": "^2.56.1",
     "@tanstack/react-query": "^5.90.3",
     "@tanstack/react-query-devtools": "^5.90.2",
     "@types/nodemailer": "^7.0.4",
@@ -38,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

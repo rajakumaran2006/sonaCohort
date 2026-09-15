@@ -18,21 +18,13 @@ export default function StudentLeaderboardPage() {
   )
 }
 
+import { useStudentDepartment } from '@/lib/contexts/StudentDepartmentContext'
+
 function StudentLeaderboardContent() {
   const { user } = useAuth()
+  const { activeStudent: student, isLoading: studentLoading } = useStudentDepartment()
   const [isSidebarCollapsed] = useSidebarCollapsed()
   const [selectedYear, setSelectedYear] = useState<string>('all')
-  
-  // Fetch student profile
-  const { data: student, isLoading: studentLoading } = useQuery({
-    queryKey: ['studentProfile', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      // Use efficient fetching instead of getAll
-      return await StudentService.getStudentWithPeerTutorByEmail(user.email)
-    },
-    enabled: !!user?.email
-  })
 
   // Fetch full leaderboard
   const { data: leaderboardData, isLoading: leaderboardLoading, refetch } = useStudentLeaderboard(student, selectedYear)

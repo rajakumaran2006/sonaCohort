@@ -16,6 +16,8 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Button, EmptyState } from '@/components/ui'
 import { AlertCircle, CalendarDays, Clock, Video, BookOpen } from 'lucide-react'
 
+import { useStudentDepartment } from '@/lib/contexts/StudentDepartmentContext'
+
 interface FeedbackFormWithStatus extends FeedbackForm {
   isSubmitted: boolean
   isClosed: boolean
@@ -25,7 +27,7 @@ export default function StudentDashboard() {
   const { user } = useAuth()
   const router = useRouter()
   
-  const [student, setStudent] = useState<StudentWithpeertutors | null>(null)
+  const { activeStudent: student, isLoading: studentLoading } = useStudentDepartment()
   const [feedbackForms, setFeedbackForms] = useState<FeedbackFormWithStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
@@ -34,42 +36,40 @@ export default function StudentDashboard() {
   
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
-  // Load student data initially
-  const loadStudentData = useCallback(async () => {
-    if (!user?.email) return
+  // Load feedback forms when active student changes
+  const loadFeedbackForms = useCallback(async () => {
+    if (!student?.id) {
+      setFeedbackForms([])
+      setLoading(false)
+      return
+    }
 
     try {
-      // Use direct email lookup (covered by peer_students_self_read RLS policy)
-      const currentStudent = await StudentService.getStudentWithPeerTutorByEmail(user.email)
-      
-      if (currentStudent) {
-        setStudent(currentStudent)
-        const forms = await FeedbackService.getAllFeedbackForms()
-        const formsWithStatus = await Promise.all(
-          forms.map(async (form) => {
-            const isSubmitted = await FeedbackService.hasStudentSubmittedFeedback(
-              form.id,
-              currentStudent.id
-            )
-            return {
-              ...form,
-              isSubmitted,
-              isClosed: !form.is_active
-            }
-          })
-        )
-        setFeedbackForms(formsWithStatus)
-      }
+      const forms = await FeedbackService.getAllFeedbackForms()
+      const formsWithStatus = await Promise.all(
+        forms.map(async (form) => {
+          const isSubmitted = await FeedbackService.hasStudentSubmittedFeedback(
+            form.id,
+            student.id
+          )
+          return {
+            ...form,
+            isSubmitted,
+            isClosed: !form.is_active
+          }
+        })
+      )
+      setFeedbackForms(formsWithStatus)
     } catch (error) {
-      logger.error('Error loading student data:', error)
+      logger.error('Error loading feedback forms:', error)
     } finally {
       setLoading(false)
     }
-  }, [user?.email])
+  }, [student?.id])
 
   useEffect(() => {
-    loadStudentData()
-  }, [loadStudentData])
+    loadFeedbackForms()
+  }, [loadFeedbackForms])
 
   // Fetch Attendance and Upcoming Classes via custom hooks
   const { data: attendanceData, refetch: refetchAttendance } = useStudentAttendanceData(student?.id)
@@ -83,7 +83,7 @@ export default function StudentDashboard() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await Promise.all([loadStudentData(), refetchAttendance(), refetchUpcoming()])
+    await Promise.all([loadFeedbackForms(), refetchAttendance(), refetchUpcoming()])
     setTimeout(() => setIsRefreshing(false), 500)
   }
 

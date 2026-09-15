@@ -5,6 +5,7 @@ import { ScheduledClassWithDetails } from '@/lib/services/scheduledClassService'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
 import { Attendance } from '@/lib/services/attendanceService'
+import { buildDepartmentFilter } from '@/lib/utils/departmentFilter'
 
 interface ClassData {
   year: string
@@ -379,10 +380,10 @@ export class ReportService {
   /**
    * Get scheduled classes for a specific subject and peer tutor
    */
-  static async getSubjectScheduledClasses(peerTutorId: string, subjectName: string): Promise<ScheduledClassWithDetails[]> {
+  static async getSubjectScheduledClasses(peerTutorId: string, subjectName: string, deptName?: string, facultyId?: string): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
-      const { data, error } = await supabase
+      let query = supabase
         .from('scheduled_classes')
         .select(`
           *,
@@ -391,6 +392,13 @@ export class ReportService {
         `)
         .eq('peer_tutor_id', peerTutorId)
         .eq('class.subject_name', subjectName)
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      const { data, error } = await query
         .order('scheduled_date', { ascending: false })
 
       if (error) {
@@ -593,24 +601,20 @@ export class ReportService {
   /**
    * Get comprehensive reports for all peer tutors assigned to a faculty
    */
-  static async getAllpeertutorsReports(facultyId: string): Promise<peertutorsReportData[]> {
+  static async getAllpeertutorsReports(facultyId: string, deptName?: string): Promise<peertutorsReportData[]> {
     try {
       const supabase = createClient()
       
-      // Get all peer tutors assigned by this faculty
-      // Note: In a real app, you might want to filter by faculty_id if that column exists/is used
-      // For now, based on previous code, we might just get all or filter by dept
-      // But the call site passes user.id, so let's try to filter by assigned_by or faculty_id
-      
-      // Re-using getAllpeerTutor but we need to know if we should filter by facultyId
-      // The previous code in peertutor/page.tsx just passed user.id
-      
-      const { data: tutors, error: tutorError } = await supabase
+      let tutorQuery = supabase
         .from('peer_tutors')
         .select('*')
-        // We might need to filter by faculty_id if the schema supports it
-        // based on peertutorservice.getAllpeerTutor it does
-        .eq('faculty_id', facultyId) 
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        tutorQuery = tutorQuery.or(filter)
+      }
+
+      const { data: tutors, error: tutorError } = await tutorQuery
         .order('name')
 
       if (tutorError) {
@@ -625,10 +629,16 @@ export class ReportService {
       for (const tutor of tutors) {
 
         // Get additional classes
-        const { data: additionalClasses, error: additionalError } = await supabase
+        let addQuery = supabase
           .from('additional_classes')
-          .select('id, subject_name')
+          .select('id, subject_name, peer_tutors!inner(dept, faculty_id)')
           .eq('peer_tutor_id', tutor.id)
+
+        if (filter) {
+          addQuery = addQuery.or(filter, { referencedTable: 'peer_tutors' })
+        }
+
+        const { data: additionalClasses, error: additionalError } = await addQuery
 
         if (additionalError) {
           logger.error(`Error getting additional classes for tutor ${tutor.id}:`, additionalError)
@@ -636,7 +646,7 @@ export class ReportService {
         }
 
         // Get scheduled classes with subject info
-         const { data: classesWithSubject, error: classesSubjectError } = await supabase
+        let classQuery = supabase
           .from('scheduled_classes')
           .select(`
             id, 
@@ -646,6 +656,12 @@ export class ReportService {
             class:classes(id, subject_name)
           `)
           .eq('peer_tutor_id', tutor.id)
+
+        if (filter) {
+          classQuery = classQuery.or(filter)
+        }
+
+        const { data: classesWithSubject, error: classesSubjectError } = await classQuery
 
         if (classesSubjectError) {
              logger.error(`Error getting classes with subject for tutor ${tutor.id}:`, classesSubjectError)
@@ -750,7 +766,7 @@ export class ReportService {
   /**
    * Get comprehensive report for a single peer tutor
    */
-  static async getpeertutorsReportData(peerTutorId: string): Promise<peertutorsReportData | null> {
+  static async getpeertutorsReportData(peerTutorId: string, deptName?: string, facultyId?: string): Promise<peertutorsReportData | null> {
     try {
       const supabase = createClient()
       
@@ -765,19 +781,26 @@ export class ReportService {
         return null
       }
 
-      // Get additional classes
-      const { data: additionalClasses, error: additionalError } = await supabase
+      // Get additional classes scoped to department
+      let addQuery = supabase
         .from('additional_classes')
-        .select('id, subject_name')
+        .select('id, subject_name, peer_tutors!inner(dept, faculty_id)')
         .eq('peer_tutor_id', tutor.id)
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        addQuery = addQuery.or(filter, { referencedTable: 'peer_tutors' })
+      }
+
+      const { data: additionalClasses, error: additionalError } = await addQuery
 
       if (additionalError) {
         logger.error(`Error getting additional classes for tutor ${tutor.id}:`, additionalError)
         return null
       }
 
-      // Get scheduled classes with subject info
-      const { data: classesWithSubject, error: classesSubjectError } = await supabase
+      // Get scheduled classes with subject info scoped to department
+      let scheduledQuery = supabase
         .from('scheduled_classes')
         .select(`
           id, 
@@ -787,6 +810,12 @@ export class ReportService {
           class:classes(id, subject_name)
         `)
         .eq('peer_tutor_id', tutor.id)
+
+      if (filter) {
+        scheduledQuery = scheduledQuery.or(filter)
+      }
+
+      const { data: classesWithSubject, error: classesSubjectError } = await scheduledQuery
 
       if (classesSubjectError) {
             logger.error(`Error getting classes with subject for tutor ${tutor.id}:`, classesSubjectError)

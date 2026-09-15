@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FacultyService } from '@/lib/services/facultyService'
 import FacultySidebar from '@/components/layout/FacultySidebar'
+import { FacultyDepartmentProvider } from '@/lib/contexts/FacultyDepartmentContext'
 
 interface FacultyProtectedRouteProps {
   children: React.ReactNode
@@ -78,5 +79,5 @@ export default function FacultyProtectedRoute({ children }: FacultyProtectedRout
     )
   }
 
-  return <>{children}</>
+  return <FacultyDepartmentProvider>{children}</FacultyDepartmentProvider>
 }

@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import PeerSidebar from '@/components/layout/PeerSidebar'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { PeerDepartmentProvider } from '@/lib/contexts/PeerDepartmentContext'
 
 
 interface PeerProtectedRouteProps {
@@ -80,5 +81,5 @@ export default function PeerProtectedRoute({ children }: PeerProtectedRouteProps
     )
   }
 
-  return <>{children}</>
+  return <PeerDepartmentProvider>{children}</PeerDepartmentProvider>
 }

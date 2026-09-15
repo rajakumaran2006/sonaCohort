@@ -11,8 +11,12 @@ import { peertutorsAuthService } from '@/lib/auth/peerTutorAuthService'
 import { logger } from '@/lib/logger'
 import { ExamService } from '@/lib/services/examService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
-import { FileText, LogOut, User } from 'lucide-react'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
+import { FileText, LogOut, User, Building2 } from 'lucide-react'
 import { DashboardIcon, ClassesIcon, AttendanceIcon, ReportsIcon, LeftArrowIcon } from './PeerSidebarIcons'
+
+import RoleSwitcher from '@/components/layout/RoleSwitcher'
+import DepartmentSwitcher from '@/components/layout/DepartmentSwitcher'
 
 interface PeerSidebarProps {
   isOpen: boolean
@@ -25,6 +29,9 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
   const pathname = usePathname()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   
+  // Use PeerDepartment context for active allocation & department switching
+  const { activePeerTutor: peertutors, allocations, selectDepartment } = usePeerDepartment()
+
   // Use custom hook for sidebar collapsed state
   const [isCollapsed, setIsCollapsed] = useSidebarCollapsed()
   
@@ -37,18 +44,6 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
        window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: { isCollapsed: nextCollapsed } }))
     }
   }
-
-  // Fetch peer tutor info with caching
-  const { data: peertutors } = useQuery({
-    queryKey: ['peer-tutor-info', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
-    },
-    enabled: !!user?.email,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    refetchOnWindowFocus: false,
-  })
 
   // Check if peer tutor has access to exams (check once and cache)
   const { data: hasExamAccess } = useQuery({
@@ -139,9 +134,9 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
         max-w-[85vw] border-r border-[#1a3d2e]
       `}>
         {/* Logo */}
-        <div className={`flex items-center h-28 flex-shrink-0 ${showCollapsed ? 'lg:px-4 lg:justify-center pl-6 pr-6' : 'pl-6 pr-6'} pt-8 mb-10 transition-all`}>
+        <div className={`flex flex-col flex-shrink-0 ${showCollapsed ? 'lg:px-4 lg:justify-center pl-6 pr-6' : 'pl-6 pr-6'} pt-8 mb-6 transition-all`}>
           <div className={`flex items-center gap-4 ${showCollapsed ? 'lg:justify-center w-full' : 'w-full'}`}>
-            <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-2 ${showCollapsed ? 'lg:w-14 lg:h-14 w-16 h-16' : 'w-16 h-16'}`}>
+            <div className={`relative flex-shrink-0 rounded-xl overflow-hidden bg-white/5 p-2 ${showCollapsed ? 'lg:w-12 lg:h-12 w-14 h-14' : 'w-14 h-14'}`}>
               <Image
                 src="/peers.png"
                 alt="Peers Logo"
@@ -212,8 +207,14 @@ export default function PeerSidebar({ isOpen, onClose }: PeerSidebarProps) {
           </div>
         </nav>
 
+        {/* Department / Allocation Switcher Section */}
+        <DepartmentSwitcher isCollapsed={showCollapsed} theme="dark-green" type="peer" />
+
+        {/* Role Switcher Section */}
+        <RoleSwitcher currentRole="peer" isCollapsed={showCollapsed} theme="dark-green" />
+
         {/* Profile Section with Sign Out - Always at bottom */}
-        <div className="border-t border-[#1a3d2e] bg-[#0c2219]/50 flex-shrink-0 p-4 relative backdrop-blur-sm mt-auto">
+        <div className="border-t border-[#1a3d2e] bg-[#0c2219]/50 flex-shrink-0 p-4 relative backdrop-blur-sm">
           <div className={`flex items-center w-full rounded-xl ${showCollapsed ? 'lg:justify-center lg:flex-col lg:gap-4 justify-between' : 'justify-between'}`}>
             {/* Profile Info */}
             <Link 

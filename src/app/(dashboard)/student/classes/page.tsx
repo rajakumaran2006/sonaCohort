@@ -82,24 +82,18 @@ function ControlsBarSkeleton() {
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
+import { useStudentDepartment } from '@/lib/contexts/StudentDepartmentContext'
+
 type ClassTypeFilter = 'all' | 'regular' | 'additional'
 
 function StudentClassesContent() {
   const { user } = useAuth()
+  const { activeStudent: student, isLoading: studentLoading } = useStudentDepartment()
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
   const [searchTerm, setSearchTerm] = useState('')
   const [filterSubject, setFilterSubject] = useState('')
   const [filterType, setFilterType] = useState<ClassTypeFilter>('all')
-
-  const { data: student, isLoading: studentLoading } = useQuery({
-    queryKey: ['studentProfile', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await StudentService.getStudentWithPeerTutorByEmail(user.email)
-    },
-    enabled: !!user?.email,
-  })
 
   const { data: attendanceData, isLoading: attendanceLoading, refetch } =
     useStudentAttendanceData(student?.id)

@@ -34,6 +34,7 @@ import FeedbackFormsSkeleton from '@/components/skeletons/FeedbackFormsSkeleton'
 import RenumerationTemplatesSkeleton from '@/components/skeletons/RenumerationTemplatesSkeleton'
 import PeerTutorReportsSkeleton from '@/components/skeletons/PeerTutorReportsSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 import { Eye, X, Trash2 } from 'lucide-react'
 import { SearchIcon } from '@/components/icons/SearchIcon'
 import ExportButton from '@/components/ui/ExportButton'
@@ -115,16 +116,8 @@ function FacultypeertutorsContent() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
-  // Fetch department data
-  const { data: department } = useQuery({
-    queryKey: ['faculty-department', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await FacultyService.verifyFacultyAccess(user.email)
-    },
-    enabled: !!user?.email,
-    staleTime: 10 * 60 * 1000,
-  })
+  // Access active department from context
+  const { activeDepartment: department } = useFacultyDepartment()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   // Use custom hook for sidebar collapsed state (reads from localStorage synchronously)
@@ -309,11 +302,11 @@ function FacultypeertutorsContent() {
   const [selectedStudentForEmail, setSelectedStudentForEmail] = useState<StudentWithpeertutors | null>(null)
 
   const loadData = useCallback(async () => {
-    if (!user?.id || !department?.name) return
+    if (!user?.id || (!department?.name && !department?.id)) return
 
     try {
       // Load peer tutors
-      const tutors = await peertutorservice.getpeerTutorByDepartment(department.name)
+      const tutors = await peertutorservice.getpeerTutorByDepartment(department.name, department.id)
       setpeerTutor(tutors)
       setFilteredpeerTutor(tutors)
 
@@ -326,8 +319,7 @@ function FacultypeertutorsContent() {
       setAssignedCount(assignedTutors.length)
 
       // Load students with peer tutor information
-      // Load students with peer tutor information
-      const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department.name)
+      const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department.name, department.id)
       setStudents(allStudents)
       setFilteredStudents(allStudents)
 
@@ -348,14 +340,14 @@ function FacultypeertutorsContent() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, department?.name]) // Added department dependency
+  }, [user?.id, department?.name, department?.id]) // Added department ID dependency
 
   // Load peer tutors and students data with caching
   useEffect(() => {
-    if (department?.name) {
+    if (department?.name || department?.id) {
       loadData()
     }
-  }, [loadData, department?.name])
+  }, [loadData, department?.name, department?.id])
 
   // Handle refresh
   const handleRefresh = async () => {
@@ -364,11 +356,11 @@ function FacultypeertutorsContent() {
     setLoading(true)
     try {
       // Reload all data
-      const tutors = await peertutorservice.getpeerTutorByDepartment(department.name)
+      const tutors = await peertutorservice.getpeerTutorByDepartment(department.name, department.id)
       setpeerTutor(tutors)
       setFilteredpeerTutor(tutors)
 
-      const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department.name)
+      const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department.name, department.id)
       setStudents(allStudents)
       setFilteredStudents(allStudents)
 
@@ -495,8 +487,8 @@ function FacultypeertutorsContent() {
       try {
         const tutorsWithStats = await Promise.all(
           filteredpeerTutor.map(async (tutor) => {
-            const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id)
-            const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
+            const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id, department?.name, department?.id)
+            const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, department?.name, department?.id)
 
             // Debug logging
             logger.info(`Peer Tutor ${tutor.name} (${tutor.id}):`, {
@@ -544,8 +536,8 @@ function FacultypeertutorsContent() {
       try {
         const studentsWithStats = await Promise.all(
           filteredStudents.map(async (student) => {
-            const classStats = await AttendanceService.getStudentClassStats(student.id)
-            const additionalClassesCount = await AdditionalClassService.getStudentAdditionalClassesCount(student.id)
+            const classStats = await AttendanceService.getStudentClassStats(student.id, department?.name, department?.id)
+            const additionalClassesCount = await AdditionalClassService.getStudentAdditionalClassesCount(student.id, department?.name, department?.id)
 
             return {
               ...student,
@@ -716,7 +708,7 @@ function FacultypeertutorsContent() {
         queryClient.invalidateQueries({ queryKey: ['all-students'] })
         queryClient.invalidateQueries({ queryKey: ['faculty-department'] })
 
-        const tutors = await peertutorservice.getpeerTutorByDepartment(department?.name || '')
+        const tutors = await peertutorservice.getpeerTutorByDepartment(department?.name || '', department?.id)
         setpeerTutor(tutors)
         setFilteredpeerTutor(tutors)
 
@@ -727,7 +719,7 @@ function FacultypeertutorsContent() {
         setUnassignedStudentCount(tutors.length - assignedTutors.length)
 
         // Update student counts map
-        const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department?.name || '')
+        const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department?.name || '', department?.id)
         const studentCounts: { [key: string]: number } = {}
         tutors.forEach(tutor => {
           const count = allStudents.filter(student => student.assigned_peer_tutor_id === tutor.id).length
@@ -778,7 +770,7 @@ function FacultypeertutorsContent() {
         }
 
         // Refresh data
-        const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department?.name || '')
+        const allStudents = await StudentService.getStudentsWithpeerTutorByDepartment(department?.name || '', department?.id)
         setStudents(allStudents)
         setFilteredStudents(allStudents)
 
@@ -1097,7 +1089,7 @@ function FacultypeertutorsContent() {
         submissions.map(async (submission) => {
           let classesCompleted = 0
           try {
-            const classStats = await ScheduledClassService.getpeertutorsClassStats(submission.peer_tutor_id)
+            const classStats = await ScheduledClassService.getpeertutorsClassStats(submission.peer_tutor_id, department?.name, department?.id)
             classesCompleted = classStats.completedClasses
           } catch (error) {
             logger.warn('Could not fetch class stats for peer tutor:', submission.peer_tutor_id, error)
@@ -1447,7 +1439,7 @@ function FacultypeertutorsContent() {
 
     setReportsLoading(true)
     try {
-      const reports = await ReportService.getAllpeertutorsReports(user.id)
+      const reports = await ReportService.getAllpeertutorsReports(user.id, department?.name)
       setpeertutorsReports(reports)
       setFilteredpeertutorsReports(reports)
     } catch (error) {
@@ -1455,7 +1447,7 @@ function FacultypeertutorsContent() {
     } finally {
       setReportsLoading(false)
     }
-  }, [user?.id])
+  }, [user?.id, department?.name])
 
   // Load reports data when switching to reports tab
   useEffect(() => {
@@ -1723,7 +1715,7 @@ function FacultypeertutorsContent() {
     setSelectedReport({ tutorId, subjectId, tutorName, subjectName })
     setReportLoading(true)
     try {
-      const classes = await ReportService.getSubjectScheduledClasses(tutorId, subjectName)
+      const classes = await ReportService.getSubjectScheduledClasses(tutorId, subjectName, department?.name, department?.id)
       setReportScheduledClasses(classes)
     } catch (error) {
       logger.error('Error loading report data:', error)
@@ -4600,7 +4592,8 @@ function FacultypeertutorsContent() {
               setShowAddStudentModal(false)
             }}
             mode="student"
-            dept={user?.user_metadata?.dept || 'AIDS'}
+            dept={department?.name || user?.user_metadata?.dept || 'AIDS'}
+            facultyId={department?.id}
             year={selectedStudentYear !== 'all' ? selectedStudentYear : ''}
             section={selectedStudentSection !== 'all' ? selectedStudentSection : ''}
             availableYears={availableStudentYears}
@@ -4620,7 +4613,8 @@ function FacultypeertutorsContent() {
               setShowAddPeerTutorModal(false)
             }}
             mode="peer-tutor"
-            dept={user?.user_metadata?.dept || 'AIDS'}
+            dept={department?.name || user?.user_metadata?.dept || 'AIDS'}
+            facultyId={department?.id}
             year={selectedYear !== 'all' ? selectedYear : ''}
             section={selectedSection !== 'all' ? selectedSection : ''}
             availableYears={availableYears}

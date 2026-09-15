@@ -9,6 +9,8 @@ import { User, LogOut, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react'
 import Image from 'next/image'
 import { logger } from '@/lib/logger'
 
+import RoleSwitcher from '@/components/layout/RoleSwitcher'
+
 interface FacultyPortalSidebarProps {
   isOpen: boolean
   onClose: () => void
@@ -128,8 +130,11 @@ export default function FacultyPortalSidebar({ isOpen, onClose }: FacultyPortalS
           </div>
         </nav>
 
+        {/* Role Switcher Section */}
+        <RoleSwitcher currentRole="faculty" isCollapsed={showCollapsed} theme="dark-blue" />
+
         {/* Profile / Sign Out */}
-        <div className="border-t border-gray-800 flex-shrink-0 p-4 mt-auto">
+        <div className="border-t border-gray-800 flex-shrink-0 p-4">
           <div className={`flex items-center w-full rounded-lg p-2 ${showCollapsed ? 'lg:justify-center justify-between' : 'justify-between'}`}>
              <div className={`flex items-center ${showCollapsed ? 'hidden' : 'gap-3 flex-1 min-w-0'}`}>
                 <div className="h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center ring-2 ring-emerald-500">

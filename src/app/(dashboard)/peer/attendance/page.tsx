@@ -6,6 +6,7 @@ import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PageHeader from '@/components/layout/PageHeader'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
 import { useCachedData } from '@/lib/hooks/useCachedData'
 import { AttendanceService } from '@/lib/services/attendanceService'
 import { ScheduledClassService } from '@/lib/services/scheduledClassService'
@@ -39,17 +40,8 @@ function PeerAttendanceContent(): ReactNode {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [searchTerm, setSearchTerm] = useState<string>('')
 
-  // Fetch peer tutor info with caching
-  const { data: tutorInfoData, isLoading: tutorLoading, refresh: refreshTutor } = useCachedData({
-    queryKey: ['peer-tutor-info', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await peertutorsAuthService.getpeertutorsByEmail(user.email)
-    },
-    enabled: !!user?.email,
-    initialData: null,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  })
+  // Access active peer tutor allocation from context
+  const { activePeerTutor: tutorInfoData, isLoading: tutorLoading } = usePeerDepartment()
 
   // Fetch scheduled classes with caching
   const { data: scheduledClassesData, isLoading: scheduledLoading, refresh: refreshScheduled, isRefreshing: isScheduledRefreshing } = useCachedData({
@@ -162,7 +154,7 @@ function PeerAttendanceContent(): ReactNode {
   }
 
   const handleRefresh = async () => {
-    await Promise.all([refreshTutor(), refreshScheduled(), refreshSummary(), refreshHistory()])
+    await Promise.all([refreshScheduled(), refreshSummary(), refreshHistory()])
     setLastRefresh(new Date())
   }
 

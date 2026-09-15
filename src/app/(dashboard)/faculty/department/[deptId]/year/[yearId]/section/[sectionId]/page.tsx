@@ -52,6 +52,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AnimatedRefreshButton } from '@/components/ui/AnimatedRefreshButton'
 import { BackButton } from '@/components/ui/BackButton'
 import ExportButton from '@/components/ui/ExportButton'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 
 // Helper to build an XLSX worksheet with a common header block and ordered columns
 function createSheetWithHeader(
@@ -188,13 +189,9 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
       try {
         const tutorsWithStats = await Promise.all(
           peerTutor.map(async (tutor) => {
-            const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id)
-            // Get all additional classes for this peer tutor
-            // Note: Since additional_classes table doesn't store dept/year/section,
-            // we count all additional classes for the peer tutor
-            // This is correct because peer tutors are already filtered by section,
-            // so their additional classes should logically belong to this section
-            const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
+            const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id, dept)
+            // Get all additional classes for this peer tutor in this department
+            const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, dept)
 
 
             // Debug logging
@@ -1692,6 +1689,7 @@ interface PeertutorsDetailViewProps {
   peertutorsId: string
   peertutorsName: string
   onBack: () => void
+  dept?: string
 }
 
 interface SubjectAttendanceData {
@@ -1708,7 +1706,7 @@ interface SubjectAttendanceData {
   }[]
 }
 
-function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack }: PeertutorsDetailViewProps) {
+function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack, dept }: PeertutorsDetailViewProps) {
   const [loading, setLoading] = useState(true)
   const [subjectsData, setSubjectsData] = useState<SubjectAttendanceData[]>([])
 
@@ -1738,8 +1736,8 @@ function PeertutorsDetailView({ peertutorsId, peertutorsName, onBack }: Peertuto
         .eq('peer_tutor_id', peertutorsId)
         .order('scheduled_date', { ascending: true })
 
-      // Get all additional classes for this peer tutor
-      const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsId)
+      // Get all additional classes for this peer tutor in this department
+      const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(peertutorsId, dept)
 
       // Get all attendance records for scheduled classes
       const scheduledClassIds = (scheduledClasses || []).map(sc => sc.id)
@@ -2037,8 +2035,8 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
       // Get stats for each peer tutor
       const tutorsWithStats = await Promise.all(
         peerTutor.map(async (tutor) => {
-          const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id)
-          const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
+          const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id, dept)
+          const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, dept)
 
           // Calculate attendance percentage
           // Formula: (completed classes + additional classes) / total classes allocated * 100
@@ -2085,6 +2083,7 @@ function GeneralTab({ dept, year, section }: GeneralTabProps) {
       <PeertutorsDetailView
         peertutorsId={selectedpeertutors}
         peertutorsName={selectedpeertutorsName}
+        dept={dept}
         onBack={() => {
           setSelectedpeertutors(null)
           setSelectedpeertutorsName('')
@@ -2513,8 +2512,8 @@ function ImportExportTab({ dept, year, section }: ImportExportTabProps) {
         const pendingClasses = tutorClasses.filter(sc => sc.completion_status === 'pending' || sc.completion_status === 'not_started').length
         const totalClasses = tutorClasses.length
 
-        // Get additional classes count
-        const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
+        // Get additional classes count for this department
+        const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, dept)
         // Filter by current section (additional classes should have dept, year, section if they were created in the AttendanceTab)
         const sectionAdditionalClasses = additionalClasses.filter(() => {
           // Since additional classes might not have dept/year/section directly,
@@ -6118,17 +6117,64 @@ function SectionContent() {
 
 
   const queryClient = useQueryClient()
+  const { activeDepartment, departments } = useFacultyDepartment()
   const [activeTab, setActiveTab] = useState<'peer-tutors' | 'students' | 'assign' | 'classes' | 'attendance' | 'import-export'>('peer-tutors')
 
   // Faculty Department Query
   const { data: department, isLoading: isDepartmentLoading } = useQuery({
-    queryKey: ['department', user?.email],
+    queryKey: ['department', user?.email, deptIdStr, activeDepartment?.id],
     queryFn: async () => {
-      if (!user?.email) return null
-      const facultyDept = await FacultyService.verifyFacultyAccess(user.email)
+      let resolvedName = ''
+      let resolvedId = deptIdStr
+
+      if (deptIdStr) {
+        let decodedParam = deptIdStr
+        try {
+          decodedParam = decodeURIComponent(deptIdStr)
+        } catch {
+          // ignore
+        }
+        const matched = departments.find(
+          d => d.id === deptIdStr || d.name.toLowerCase() === decodedParam.toLowerCase()
+        )
+        if (matched) {
+          resolvedName = matched.name
+          resolvedId = matched.id
+        } else if (activeDepartment && (activeDepartment.id === deptIdStr || activeDepartment.name.toLowerCase() === decodedParam.toLowerCase())) {
+          resolvedName = activeDepartment.name
+          resolvedId = activeDepartment.id
+        } else {
+          // If not in context list, query departments table directly
+          const supabase = createClient()
+          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(deptIdStr)
+          let q = supabase.from('departments').select('*')
+          if (isUUID) {
+            q = q.eq('id', deptIdStr)
+          } else {
+            q = q.ilike('name', decodedParam)
+          }
+          const { data: deptData } = await q.maybeSingle()
+          if (deptData) {
+            resolvedName = deptData.name
+            resolvedId = deptData.id
+          }
+        }
+      }
+
+      if (!resolvedName && activeDepartment?.name) {
+        resolvedName = activeDepartment.name
+        resolvedId = activeDepartment.id
+      }
+
+      if (!resolvedName && user?.email) {
+        const facultyDept = await FacultyService.verifyFacultyAccess(user.email, undefined, activeDepartment?.id)
+        resolvedName = facultyDept?.name || 'Computer Science'
+        resolvedId = facultyDept?.id || deptIdStr
+      }
+
       return {
-        id: deptIdStr,
-        name: facultyDept?.name || 'Computer Science',
+        id: resolvedId,
+        name: resolvedName || 'Computer Science',
         faculty_name: user?.user_metadata?.full_name || user?.user_metadata?.name || 'Faculty Member'
       }
     },

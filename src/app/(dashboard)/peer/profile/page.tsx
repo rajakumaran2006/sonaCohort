@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { usePeerDepartment } from '@/lib/contexts/PeerDepartmentContext'
 import PeerProtectedRoute from '@/components/auth/PeerProtectedRoute'
 import PageHeader from '@/components/layout/PageHeader'
 import ProfileHeader from '@/components/profile/ProfileHeader'
@@ -32,22 +33,36 @@ export default function PeerProfilePage() {
 function PeerProfileContent() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
+  const { activePeerTutor } = usePeerDepartment()
   const [profile, setProfile] = useState<PeerTutorProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isSidebarCollapsed] = useSidebarCollapsed()
   const [collegeName, setCollegeName] = useState<string>('')
 
   useEffect(() => {
+    if (activePeerTutor) {
+      setProfile(activePeerTutor as PeerTutorProfile)
+    }
+  }, [activePeerTutor])
+
+  useEffect(() => {
     const fetchProfile = async () => {
       if (!user?.email) return
       try {
         const supabase = createClient()
-        const { data: tutor } = await supabase
-          .from('peer_tutors')
-          .select('*')
-          .ilike('email', user.email)
-          .single()
-        setProfile(tutor as PeerTutorProfile)
+        if (activePeerTutor) {
+          setProfile(activePeerTutor as PeerTutorProfile)
+        } else {
+          const { data: tutors } = await supabase
+            .from('peer_tutors')
+            .select('*')
+            .ilike('email', user.email)
+            .order('created_at', { ascending: false })
+            .limit(1)
+          if (tutors && tutors.length > 0) {
+            setProfile(tutors[0] as PeerTutorProfile)
+          }
+        }
 
         // Fetch college name from superadmin table
         const { data: admins } = await supabase

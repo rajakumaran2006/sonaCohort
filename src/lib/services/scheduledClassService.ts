@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { buildDepartmentFilter } from '@/lib/utils/departmentFilter'
 
 export interface ScheduledClass {
   id: string
@@ -942,7 +943,7 @@ export class ScheduledClassService {
   /**
    * Get peer tutor class status for faculty attendance monitoring
    */
-  static async getpeertutorsClassStatus(dept: string, year: string, section: string, subject?: string): Promise<{
+  static async getpeertutorsClassStatus(dept: string, year: string, section: string, subject?: string, facultyId?: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
     upcoming: ScheduledClassWithDetails[]
@@ -981,7 +982,13 @@ export class ScheduledClassService {
             email
           )
         `)
-        .ilike('dept', normalizedDept)
+
+      const filter = buildDepartmentFilter(normalizedDept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      query = query
         .eq('year', normalizedYear)
         .eq('section', normalizedSection)
         .order('scheduled_date', { ascending: true })
@@ -1096,7 +1103,7 @@ export class ScheduledClassService {
   /**
    * Get peer tutor class status with date filtering
    */
-  static async getpeertutorsClassStatusWithDate(dept: string, year: string, section: string, dateFilter: string): Promise<{
+  static async getpeertutorsClassStatusWithDate(dept: string, year: string, section: string, dateFilter: string, facultyId?: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
     upcoming: ScheduledClassWithDetails[]
@@ -1138,7 +1145,7 @@ export class ScheduledClassService {
       const normalizedSection = section.trim()
 
       // Get all scheduled classes for the specified filters
-      const query = supabase
+      let query = supabase
         .from('scheduled_classes')
         .select(`
           *,
@@ -1156,7 +1163,13 @@ export class ScheduledClassService {
             email
           )
         `)
-        .ilike('dept', normalizedDept)
+
+      const filter = buildDepartmentFilter(normalizedDept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      query = query
         .eq('year', normalizedYear)
         .eq('section', normalizedSection)
         .eq('scheduled_date', dateString)
@@ -1204,7 +1217,7 @@ export class ScheduledClassService {
   /**
    * Get peer tutor class status by year only (all sections, all dates)
    */
-  static async getpeertutorsClassStatusByYear(dept: string, year: string): Promise<{
+  static async getpeertutorsClassStatusByYear(dept: string, year: string, facultyId?: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
     upcoming: ScheduledClassWithDetails[]
@@ -1213,7 +1226,7 @@ export class ScheduledClassService {
       const supabase = createClient()
 
       // Get all scheduled classes for the specified year
-      const query = supabase
+      let query = supabase
         .from('scheduled_classes')
         .select(`
           *,
@@ -1231,7 +1244,13 @@ export class ScheduledClassService {
             email
           )
         `)
-        .eq('dept', dept)
+
+      const filter = buildDepartmentFilter(dept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      query = query
         .eq('year', year)
         .order('scheduled_date', { ascending: true })
 
@@ -1326,7 +1345,7 @@ export class ScheduledClassService {
   /**
    * Get peer tutor class status by year and date (all sections)
    */
-  static async getpeertutorsClassStatusByYearAndDate(dept: string, year: string, dateFilter: string): Promise<{
+  static async getpeertutorsClassStatusByYearAndDate(dept: string, year: string, dateFilter: string, facultyId?: string): Promise<{
     completed: ScheduledClassWithDetails[]
     pending: ScheduledClassWithDetails[]
     upcoming: ScheduledClassWithDetails[]
@@ -1356,7 +1375,7 @@ export class ScheduledClassService {
       })
 
       // Get all scheduled classes for the specified year and date
-      const query = supabase
+      let query = supabase
         .from('scheduled_classes')
         .select(`
           *,
@@ -1374,7 +1393,13 @@ export class ScheduledClassService {
             email
           )
         `)
-        .eq('dept', dept)
+
+      const filter = buildDepartmentFilter(dept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      query = query
         .eq('year', year)
         .eq('scheduled_date', dateString)
         .order('scheduled_date', { ascending: true })
@@ -1413,7 +1438,7 @@ export class ScheduledClassService {
   /**
    * Get all classes for a department (when no filters are selected)
    */
-  static async getAllClassesForDepartment(dept: string): Promise<{ 
+  static async getAllClassesForDepartment(dept: string, facultyId?: string): Promise<{ 
     completed: ScheduledClassWithDetails[], 
     pending: ScheduledClassWithDetails[],
     upcoming: ScheduledClassWithDetails[] 
@@ -1421,19 +1446,22 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
 
-      logger.info('Getting all classes for department:', dept)
+      logger.info('Getting all classes for department:', dept, 'facultyId:', facultyId)
 
       // Validate department parameter
-      if (!dept || typeof dept !== 'string' || dept.trim() === '') {
+      if ((!dept || typeof dept !== 'string' || dept.trim() === '') && !facultyId) {
         logger.error('Invalid department parameter:', dept)
         return { completed: [], pending: [], upcoming: [] }
       }
 
-      // First, get all scheduled classes for the department
-      const { data: scheduledClasses, error: scheduledError } = await supabase
-        .from('scheduled_classes')
-        .select('*')
-        .eq('dept', dept.trim())
+      // Query scheduled classes matching dept name or faculty department UUID
+      let query = supabase.from('scheduled_classes').select('*')
+      const filter = buildDepartmentFilter(dept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      const { data: scheduledClasses, error: scheduledError } = await query
         .order('scheduled_date', { ascending: false })
 
       if (scheduledError) {
@@ -1604,7 +1632,7 @@ export class ScheduledClassService {
    * Get class statistics for a specific peer tutor
    * Only counts classes from the day after the peer tutor was created
    */
-  static async getpeertutorsClassStats(peertutorsId: string): Promise<{
+  static async getpeertutorsClassStats(peertutorsId: string, deptName?: string, facultyId?: string): Promise<{
     totalClasses: number
     completedClasses: number
     pendingClasses: number
@@ -1614,11 +1642,18 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
 
-      // Get all scheduled classes for this peer tutor
-      const { data: scheduledClasses, error } = await supabase
+      // Get all scheduled classes for this peer tutor within the active department if provided
+      let query = supabase
         .from('scheduled_classes')
         .select('*')
         .eq('peer_tutor_id', peertutorsId)
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      const { data: scheduledClasses, error } = await query
 
       if (error) {
         logger.error('Error getting peer tutor class stats:', error)
@@ -1722,13 +1757,20 @@ export class ScheduledClassService {
    * Get scheduled class counts for all classes in a single query
    * Returns a map of class_id -> count
    */
-  static async getAllScheduledClassCounts(): Promise<Record<string, number>> {
+  static async getAllScheduledClassCounts(facultyId?: string, deptName?: string): Promise<Record<string, number>> {
     try {
       const supabase = createClient()
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('scheduled_classes')
         .select('class_id')
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         logger.error('Error getting all scheduled class counts:', error)

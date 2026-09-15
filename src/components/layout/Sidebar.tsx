@@ -11,6 +11,8 @@ import { LayoutGrid, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from '
 import Image from 'next/image'
 import { logger } from '@/lib/logger'
 
+import RoleSwitcher from '@/components/layout/RoleSwitcher'
+
 interface SidebarProps {
   isOpen: boolean
   onClose: () => void
@@ -155,6 +157,9 @@ export default function Sidebar({ isOpen, onClose, onToggleCollapse }: SidebarPr
             </div>
 
         </nav>
+
+        {/* Role Switcher Section */}
+        <RoleSwitcher currentRole="admin" isCollapsed={isCollapsed} />
 
         {/* Profile Section with Sign Out */}
         <div className="border-t border-gray-800 flex-shrink-0 p-4">

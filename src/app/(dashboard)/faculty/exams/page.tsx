@@ -16,6 +16,7 @@ import { AssignmentService } from '@/lib/services/assignmentService'
 import { ExamSummaryService, ExamPeerTutorSummary } from '@/lib/services/examSummaryService'
 import ExamPageSkeleton from '@/components/skeletons/ExamPageSkeleton'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 import { Button } from '@/components/ui'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui'
 import CreateExamModal from '@/components/forms/modals/CreateExamModal'
@@ -58,16 +59,8 @@ function FacultyExamsContent() {
 
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
-  // Fetch department data
-  const { data: department, isLoading: isDepartmentLoading } = useQuery({
-    queryKey: ['faculty-department', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null
-      return await FacultyService.verifyFacultyAccess(user.email)
-    },
-    enabled: !!user?.email,
-    staleTime: 10 * 60 * 1000,
-  })
+  // Access active department from context
+  const { activeDepartment: department, isLoading: isDepartmentLoading } = useFacultyDepartment()
 
   // Fetch exams
   const { data: exams, isLoading: isExamsLoading, refetch: refetchExams } = useQuery({
@@ -83,12 +76,12 @@ function FacultyExamsContent() {
   // Fetch all peer tutors (across all years)
   // Fetch all peer tutors (filtered by department)
   const { data: allpeerTutor, isLoading: ispeerTutorLoading } = useQuery({
-    queryKey: ['all-peer-tutors', department?.name],
+    queryKey: ['all-peer-tutors', department?.name, department?.id],
     queryFn: async () => {
-      if (!department?.name) return []
-      return await peertutorservice.getpeerTutorByDepartment(department.name)
+      if (!department?.name && !department?.id) return []
+      return await peertutorservice.getpeerTutorByDepartment(department?.name || '', department?.id)
     },
-    enabled: !!department?.name,
+    enabled: !!(department?.name || department?.id),
     staleTime: 5 * 60 * 1000,
   })
 
@@ -279,8 +272,8 @@ function FacultyExamsContent() {
           // Get exam subjects
           const examSubjects = await ExamSubjectService.getExamSubjects(exam.id)
 
-          // Get peer tutors for this exam's years
-          const peerTutor = await peertutorservice.getpeerTutorByYears(exam.years)
+          // Get peer tutors for this exam's years scoped to department
+          const peerTutor = await peertutorservice.getpeerTutorByYears(exam.years, department?.name, department?.id)
 
           // Get all unique years and sections from peer tutors
           const uniqueYears = Array.from(new Set(peerTutor.map(pt => pt.year)))

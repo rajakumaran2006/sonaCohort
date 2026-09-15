@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { buildDepartmentFilter } from '@/lib/utils/departmentFilter'
 
 import { AdditionalClass } from './additionalClassService'
 
@@ -55,16 +56,23 @@ export class AnalyticsService {
     dept: string,
     threshold: number = 1,
     excludeAdditionalClasses: boolean = false,
-    continuousPendingOnly: boolean = false
+    continuousPendingOnly: boolean = false,
+    facultyId?: string
   ): Promise<PendingClassAnalytics> {
     try {
       const supabase = createClient()
 
       // Get all peer tutors in the department
-      const { data: peerTutor, error: tutorError } = await supabase
+      let tutorQuery = supabase
         .from('peer_tutors')
-        .select('id, name, email, year, section, dept')
-        .eq('dept', dept)
+        .select('id, name, email, year, section, dept, faculty_id')
+
+      const filter = buildDepartmentFilter(dept, facultyId)
+      if (filter) {
+        tutorQuery = tutorQuery.or(filter)
+      }
+
+      const { data: peerTutor, error: tutorError } = await tutorQuery
 
       if (tutorError) {
         logger.error('Error fetching peer tutors:', tutorError)
@@ -95,7 +103,8 @@ export class AnalyticsService {
           tutor.year,
           tutor.section,
           tutor.dept,
-          excludeAdditionalClasses
+          excludeAdditionalClasses,
+          facultyId
         )
 
         if (pendingData) {
@@ -157,13 +166,14 @@ export class AnalyticsService {
     year: string,
     section: string,
     dept: string,
-    excludeAdditionalClasses: boolean
+    excludeAdditionalClasses: boolean,
+    facultyId?: string
   ): Promise<PendingClassStudent | null> {
     try {
       const supabase = createClient()
 
-      // Get all scheduled classes for this peer tutor
-      const { data: scheduledClasses, error: scheduledError } = await supabase
+      // Get all scheduled classes for this peer tutor in this department
+      let scheduledQuery = supabase
         .from('scheduled_classes')
         .select(`
           id,
@@ -176,6 +186,13 @@ export class AnalyticsService {
           )
         `)
         .eq('peer_tutor_id', peertutorsId)
+
+      const filter = buildDepartmentFilter(dept, facultyId)
+      if (filter) {
+        scheduledQuery = scheduledQuery.or(filter)
+      }
+
+      const { data: scheduledClasses, error: scheduledError } = await scheduledQuery
         .order('scheduled_date', { ascending: true })
 
       if (scheduledError) {
@@ -204,10 +221,20 @@ export class AnalyticsService {
       // Get additional classes if needed for continuous calculation
       let additionalClasses: Pick<AdditionalClass, 'id' | 'class_date' | 'subject_name'>[] = []
       if (excludeAdditionalClasses) {
-        const { data: addClasses, error: addError } = await supabase
+        let addQuery = supabase
           .from('additional_classes')
-          .select('id, class_date, subject_name')
+          .select('id, class_date, subject_name, peer_tutors!inner(dept, faculty_id)')
           .eq('peer_tutor_id', peertutorsId)
+
+        if (facultyId && dept && dept.trim()) {
+          addQuery = addQuery.or(`faculty_id.eq.${facultyId},dept.eq.${dept.trim()}`, { referencedTable: 'peer_tutors' })
+        } else if (facultyId) {
+          addQuery = addQuery.eq('peer_tutors.faculty_id', facultyId)
+        } else if (dept && dept.trim()) {
+          addQuery = addQuery.eq('peer_tutors.dept', dept.trim())
+        }
+
+        const { data: addClasses, error: addError } = await addQuery
           .order('class_date', { ascending: true })
 
         if (!addError && addClasses) {
