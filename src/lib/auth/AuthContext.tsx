@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         provider: 'azure',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: 'email openid profile User.Read User.ReadBasic.All Mail.Send offline_access',
+          scopes: 'email openid profile User.Read offline_access',
           queryParams: {
             prompt: 'select_account',
             access_type: 'offline'

@@ -11,6 +11,17 @@ export async function GET(request: Request) {
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/'
 
+  // Check if provider returned an error in query params (e.g. access_denied, consent_required)
+  const authError = searchParams.get('error_description') || searchParams.get('error')
+  if (authError) {
+    logger.error('Auth callback received error from provider:', {
+      error: searchParams.get('error'),
+      error_description: searchParams.get('error_description'),
+      error_code: searchParams.get('error_code')
+    })
+    return NextResponse.redirect(`${origin}/auth/auth-code-error?error=${encodeURIComponent(authError)}`)
+  }
+
   if (code) {
     const supabase = await createClient()
     const { error, data } = await supabase.auth.exchangeCodeForSession(code)
@@ -79,6 +90,24 @@ export async function GET(request: Request) {
                 sameSite: 'lax'
               })
               return response
+            } else if (allocations.length === 1) {
+              // Pre-set active peer tutor allocation cookie so user doesn't hit uninitialized department state
+              const dashboardPath = dashboardPaths[role] || '/peer/dashboard'
+              const response = NextResponse.redirect(`${origin}${dashboardPath}`)
+              response.cookies.set('user_role', 'peer', {
+                path: '/',
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax'
+              })
+              response.cookies.set('active_peer_tutor_id', allocations[0].id, {
+                path: '/',
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 2592000
+              })
+              return response
             }
           }
 
@@ -114,5 +143,6 @@ export async function GET(request: Request) {
   }
 
   // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
+  const fallbackError = searchParams.get('error') || 'Authentication flow failed or session code was missing. Please try logging in again.'
+  return NextResponse.redirect(`${origin}/auth/auth-code-error?error=${encodeURIComponent(fallbackError)}`)
 }

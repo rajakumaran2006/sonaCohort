@@ -120,10 +120,11 @@ interface PeerTutorTabProps {
   dept: string
   year: string
   section: string
+  facultyId?: string
   onRefresh: () => Promise<void>
 }
 
-function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertutors, onpeertutorsClick, dept, year, section, onRefresh }: PeerTutorTabProps) {
+function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertutors, onpeertutorsClick, dept, year, section, facultyId, onRefresh }: PeerTutorTabProps) {
   const [peerTutorWithStats, setpeerTutorWithStats] = useState<peertutorsWithStats[]>([])
 
 
@@ -189,9 +190,9 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
       try {
         const tutorsWithStats = await Promise.all(
           peerTutor.map(async (tutor) => {
-            const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id, dept)
+            const classStats = await ScheduledClassService.getpeertutorsClassStats(tutor.id, dept, facultyId)
             // Get all additional classes for this peer tutor in this department
-            const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, dept)
+            const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, dept, facultyId)
 
 
             // Debug logging
@@ -777,7 +778,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
 
                     <div className="bg-gray-100 rounded-lg p-3">
                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pending</p>
-                      <p className="text-xl font-bold text-black">{tutor.classStats.overdueClasses}</p>
+                      <p className="text-xl font-bold text-black">{tutor.classStats.pendingClasses}</p>
                     </div>
 
                     <div className="bg-gray-100 rounded-lg p-3">
@@ -901,7 +902,7 @@ function PeerTutorTab({ peerTutor, students, setIsModalOpen, handleRemovepeertut
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <div className="text-sm font-bold text-gray-900">
-                        {tutor.classStats.overdueClasses}
+                        {tutor.classStats.pendingClasses}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -2449,7 +2450,7 @@ interface ImportExportTabProps {
   onImportComplete: () => void
 }
 
-function ImportExportTab({ dept, year, section }: ImportExportTabProps) {
+function ImportExportTab({ dept, year, section, facultyId }: ImportExportTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'import' | 'export' | 'advanced'>('export')
   const [activeAdvancedTab, setActiveAdvancedTab] = useState<'general' | 'attendance' | 'nextTopicSheet' | 'mark'>('general')
 
@@ -2465,13 +2466,13 @@ function ImportExportTab({ dept, year, section }: ImportExportTabProps) {
     assignedStudents: 0,
     scheduledClasses: 0
   }, isLoading } = useQuery({
-    queryKey: ['importExportAnalytics', dept, dbYear, dbSection],
+    queryKey: ['importExportAnalytics', dept, dbYear, dbSection, facultyId],
     queryFn: async () => {
       const [tutors, sectionStudents, classes, scheduledClasses] = await Promise.all([
         peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection),
         StudentService.getStudentsBySection(dept, dbYear, dbSection),
-        ClassService.getClassesByYearSection(dept, dbYear, dbSection),
-        ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
+        ClassService.getClassesByYearSection(dept, dbYear, dbSection, facultyId),
+        ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection, undefined, facultyId)
       ])
 
       const assignedCount = sectionStudents.filter(s => s.assigned_peer_tutor_id).length
@@ -2489,9 +2490,9 @@ function ImportExportTab({ dept, year, section }: ImportExportTabProps) {
 
   const handleExportPeerDetails = async () => {
     try {
-      const tutors = await peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection)
+      const tutors = await peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection, facultyId)
       const students = await StudentService.getStudentsBySection(dept, dbYear, dbSection)
-      const scheduledClasses = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
+      const scheduledClasses = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection, undefined, facultyId)
 
       // Get class statistics for each tutor
       const tutorsWithStats = await Promise.all(tutors.map(async (tutor) => {
@@ -2508,12 +2509,14 @@ function ImportExportTab({ dept, year, section }: ImportExportTabProps) {
           classDate.setHours(0, 0, 0, 0)
           return classDate >= minimumClassDate
         })
-        const completedClasses = tutorClasses.filter(sc => sc.completion_status === 'completed').length
-        const pendingClasses = tutorClasses.filter(sc => sc.completion_status === 'pending' || sc.completion_status === 'not_started').length
+        const isCompleted = (sc: any) =>
+          sc.completion_status === 'completed' || (sc.attendance_completed && sc.topics_completed)
+        const completedClasses = tutorClasses.filter(isCompleted).length
+        const pendingClasses = tutorClasses.filter(sc => !isCompleted(sc)).length
         const totalClasses = tutorClasses.length
 
         // Get additional classes count for this department
-        const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, dept)
+        const additionalClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, dept, facultyId)
         // Filter by current section (additional classes should have dept, year, section if they were created in the AttendanceTab)
         const sectionAdditionalClasses = additionalClasses.filter(() => {
           // Since additional classes might not have dept/year/section directly,
@@ -2602,7 +2605,7 @@ function ImportExportTab({ dept, year, section }: ImportExportTabProps) {
 
   const handleExportAttendance = async () => {
     try {
-      const scheduledClasses = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
+      const scheduledClasses = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection, undefined, facultyId)
       const supabase = createClient()
 
       const allAttendance: any[] = []
@@ -3527,13 +3530,13 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   // --- Queries ---
 
   const { data: classes = [], isLoading: loadingClasses } = useQuery({
-    queryKey: ['classes', dept, dbYear, dbSection],
-    queryFn: () => ClassService.getClassesByYearSection(dept, dbYear, dbSection)
+    queryKey: ['classes', dept, dbYear, dbSection, departmentId],
+    queryFn: () => ClassService.getClassesByYearSection(dept, dbYear, dbSection, departmentId)
   })
 
   const { data: scheduledClasses = [], isLoading: loadingScheduled } = useQuery({
-    queryKey: ['scheduledClasses', dept, dbYear, dbSection],
-    queryFn: () => ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
+    queryKey: ['scheduledClasses', dept, dbYear, dbSection, departmentId],
+    queryFn: () => ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection, undefined, departmentId)
   })
 
   const { data: querySubjects = [], isLoading: loadingSubjectsList } = useQuery({
@@ -3552,8 +3555,8 @@ function ClassesTab({ dept, year, section, departmentId }: ClassesTabProps) {
   const isLoading = loadingClasses || loadingScheduled || loadingSubjectsList
 
   const invalidateQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ['classes', dept, dbYear, dbSection] })
-    queryClient.invalidateQueries({ queryKey: ['scheduledClasses', dept, dbYear, dbSection] })
+    queryClient.invalidateQueries({ queryKey: ['classes'] })
+    queryClient.invalidateQueries({ queryKey: ['scheduledClasses'] })
     // If needed, invalidate dashboard stats
     queryClient.invalidateQueries({ queryKey: ['dashboardStats', dept] })
   }
@@ -4672,9 +4675,10 @@ interface AttendanceTabProps {
   dept: string
   year: string
   section: string
+  facultyId?: string
 }
 
-function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
+function AttendanceTab({ dept, year, section, facultyId }: AttendanceTabProps) {
   const [loading, setLoading] = useState(false)
 
   // Use raw values directly for database operations
@@ -4693,25 +4697,25 @@ function AttendanceTab({ dept, year, section }: AttendanceTabProps) {
   const [presentScheduledClassIds, setPresentScheduledClassIds] = useState<Set<string>>(new Set())
   // React Query for Scheduled Classes
   const { data: scheduledClasses = [], isLoading: loadingScheduled } = useQuery({
-    queryKey: ['scheduledClasses', dept, dbYear, dbSection],
+    queryKey: ['scheduledClasses', dept, dbYear, dbSection, facultyId],
     queryFn: async () => {
-      logger.info('Loading scheduled classes for:', { dept, dbYear, dbSection })
-      const classes = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection)
+      logger.info('Loading scheduled classes for:', { dept, dbYear, dbSection, facultyId })
+      const classes = await ScheduledClassService.getScheduledClassesByYearSection(dept, dbYear, dbSection, undefined, facultyId)
       return classes.sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
     }
   })
 
   // React Query for Additional Classes
   const { data: additionalClasses = [], isLoading: loadingAdditional } = useQuery({
-    queryKey: ['additionalClasses', dept, dbYear, dbSection],
+    queryKey: ['additionalClasses', dept, dbYear, dbSection, facultyId],
     queryFn: async () => {
       // Get all peer tutors for this section
-      const peerTutor = await peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection)
+      const peerTutor = await peertutorservice.getpeerTutorBySection(dept, dbYear, dbSection, facultyId)
 
       // Get additional classes for all peer tutors
       const allAdditionalClasses = await Promise.all(
         peerTutor.map(async (tutor) => {
-          const classes = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id)
+          const classes = await AdditionalClassService.getAdditionalClassesBypeertutors(tutor.id, dept, facultyId)
           return classes.map(cls => ({
             ...cls,
             peer_tutor: {
@@ -6183,11 +6187,12 @@ function SectionContent() {
 
   // Peer Tutors Query
   const { data: peerTutor = [], isLoading: ispeerTutorLoading } = useQuery({
-    queryKey: ['peerTutor', department?.name, yearIdStr, sectionIdStr],
+    queryKey: ['peerTutor', department?.name, department?.id, yearIdStr, sectionIdStr],
     queryFn: () => peertutorservice.getpeerTutorBySection(
       department?.name || '',
       yearIdStr,
-      sectionIdStr
+      sectionIdStr,
+      department?.id
     ),
     enabled: !!department?.name
   })
@@ -6489,6 +6494,7 @@ function SectionContent() {
                       dept={department?.name || 'Computer Science'}
                       year={yearIdStr}
                       section={sectionIdStr}
+                      facultyId={department?.id || deptIdStr}
                       onRefresh={handleRefresh}
                     />
                   ) : activeTab === 'students' ? (
@@ -6520,6 +6526,7 @@ function SectionContent() {
                       dept={department?.name || 'Computer Science'}
                       year={yearIdStr}
                       section={sectionIdStr}
+                      facultyId={department?.id || deptIdStr}
                     />
                   ) : activeTab === 'import-export' ? (
                     <ImportExportTab

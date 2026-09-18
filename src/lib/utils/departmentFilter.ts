@@ -31,7 +31,12 @@ export function getDepartmentNames(dept?: string): DepartmentInfo {
     // Ignore decode error
   }
   // Strip parentheses and their contents, e.g. "(ODD SEM)", "(EVEN SEM)", etc.
-  const baseDept = cleanDept.replace(/\s*\(.*?\)\s*/g, '').trim()
+  // Also strip hyphen suffixes like "- FIRST YEAR", "- 1st Year", etc.
+  const baseDept = cleanDept
+    .replace(/\s*\(.*?\)\s*/g, '')
+    .replace(/\s*[-–—]\s*(FIRST|SECOND|THIRD|FOURTH|\d+(st|nd|rd|th)?)\s*YEAR.*$/i, '')
+    .replace(/\s*[-–—]\s*(ODD|EVEN)\s*SEM.*$/i, '')
+    .trim()
   const isSuffixDept = Boolean(baseDept && baseDept.toLowerCase() !== cleanDept.toLowerCase())
 
   return { cleanDept, baseDept, isSuffixDept }

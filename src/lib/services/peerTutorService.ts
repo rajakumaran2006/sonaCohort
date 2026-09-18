@@ -92,7 +92,7 @@ export class peertutorservice {
   /**
    * Get all peer tutors for a specific department, year, and section
    */
-  static async getpeerTutorBySection(dept: string, year: string, section: string): Promise<peertutors[]> {
+  static async getpeerTutorBySection(dept: string, year: string, section: string, facultyId?: string): Promise<peertutors[]> {
     try {
       const supabase = createClient()
 
@@ -125,7 +125,7 @@ export class peertutorservice {
         .from('peer_tutors')
         .select('*')
 
-      const deptFilter = buildDepartmentFilter(cleanDept, isUUID ? cleanDept : undefined)
+      const deptFilter = buildDepartmentFilter(cleanDept, facultyId || (isUUID ? cleanDept : undefined))
       if (deptFilter) {
         query = query.or(deptFilter)
       }

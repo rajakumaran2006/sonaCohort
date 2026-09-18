@@ -130,16 +130,6 @@ function YearContent() {
       const sectionData = await Promise.all(
         uniqueSections.map(async (section) => {
           const tutors = await peertutorservice.getpeerTutorBySection(facultyDeptName, yearId as string, section)
-          const { completed, pending } = await ScheduledClassService.getpeertutorsClassStatus(facultyDeptName, yearId as string, section, undefined, resolvedId)
-
-          // Filter pending to only show overdue classes (scheduled date exceeded)
-          const now = new Date()
-          const currentYear = now.getFullYear()
-          const currentMonth = String(now.getMonth() + 1).padStart(2, '0')
-          const currentDay = String(now.getDate()).padStart(2, '0')
-          const todayStr = `${currentYear}-${currentMonth}-${currentDay}`
-
-          const overduePending = pending.filter(cls => cls.scheduled_date < todayStr)
 
           const sectionAdditional = allAdditionalClasses.filter(c => {
             const tutor = (c as { peer_tutors?: { year?: string; section?: string } | { year?: string; section?: string }[] }).peer_tutors
@@ -148,12 +138,37 @@ function YearContent() {
             return y.toString() === yearId && tutorData?.section === section
           })
 
-          const totalCompleted = completed.length + sectionAdditional.length
+          let totalCompleted = 0
+          let totalPending = 0
+
+          if (tutors.length > 0) {
+            // Aggregate directly from the section's peer tutors to guarantee 100% consistency with the Peer Tutor Management table
+            const tutorStatsList = await Promise.all(
+              tutors.map(t => ScheduledClassService.getpeertutorsClassStats(t.id, facultyDeptName, resolvedId))
+            )
+            const scheduledCompleted = tutorStatsList.reduce((sum, s) => sum + s.completedClasses, 0)
+            const overduePendingCount = tutorStatsList.reduce((sum, s) => sum + s.overdueClasses, 0)
+
+            totalCompleted = scheduledCompleted + sectionAdditional.length
+            totalPending = overduePendingCount
+          } else {
+            // Fallback for sections without tutors (e.g. Section C)
+            const { completed, pending } = await ScheduledClassService.getpeertutorsClassStatus(facultyDeptName, yearId as string, section, undefined, resolvedId)
+            const now = new Date()
+            const currentYear = now.getFullYear()
+            const currentMonth = String(now.getMonth() + 1).padStart(2, '0')
+            const currentDay = String(now.getDate()).padStart(2, '0')
+            const todayStr = `${currentYear}-${currentMonth}-${currentDay}`
+
+            const overduePending = pending.filter(cls => cls.scheduled_date < todayStr)
+            totalCompleted = completed.length + sectionAdditional.length
+            totalPending = overduePending.length
+          }
 
           logger.info(`Year Page - Section ${section} data:`, {
             tutorsCount: tutors.length,
             completedCount: totalCompleted,
-            pendingCount: overduePending.length,
+            pendingCount: totalPending,
             additionalCount: sectionAdditional.length
           })
 
@@ -161,8 +176,8 @@ function YearContent() {
             section,
             tutors: tutors.length,
             completed: totalCompleted,
-            pending: overduePending.length,
-            description: `${tutors.length} tutors · ${totalCompleted} completed · ${overduePending.length} overdue`
+            pending: totalPending,
+            description: `${tutors.length} tutors · ${totalCompleted} completed · ${totalPending} overdue`
           }
         })
       )

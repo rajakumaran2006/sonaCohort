@@ -13,6 +13,7 @@ import { ScheduledClassService, ScheduledClassWithDetails } from '@/lib/services
 import { AdditionalClassService, AdditionalClassWithAttendance } from '@/lib/services/additionalClassService'
 import { RenumerationService, peertutorsRenumeration } from '@/lib/services/renumerationService'
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed'
+import { useFacultyDepartment } from '@/lib/contexts/FacultyDepartmentContext'
 import { Card } from '@/components/ui'
 import PeerTutorClassLogs from '@/components/features/classes/PeerTutorClassLogs'
 import {
@@ -58,11 +59,14 @@ function PeerTutorsProfileContent() {
   // Use custom hook for sidebar collapsed state
   const [isSidebarCollapsed] = useSidebarCollapsed()
 
+  const { activeDepartment } = useFacultyDepartment()
+
   const [peertutors, setpeertutors] = useState<peertutors | null>(null)
   const [assignedStudents, setAssignedStudents] = useState<Student[]>([])
   const [scheduledClasses, setScheduledClasses] = useState<ScheduledClassWithDetails[]>([])
   const [additionalClasses, setAdditionalClasses] = useState<AdditionalClassWithAttendance[]>([])
   const [renumerations, setRenumerations] = useState<peertutorsRenumeration[]>([])
+  const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<peerTutortats>({
     totalClasses: 0,
     completedClasses: 0,
@@ -71,14 +75,13 @@ function PeerTutorsProfileContent() {
     overdueClasses: 0,
     assignedStudents: 0
   })
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (user && tutorId) {
       loadpeertutorsData()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, tutorId])
+  }, [user, tutorId, activeDepartment?.id])
 
   const loadpeertutorsData = async () => {
     if (!user?.email || !tutorId) return
@@ -90,67 +93,46 @@ function PeerTutorsProfileContent() {
       if (tutorData) {
         setpeertutors(tutorData)
 
+        const deptName = activeDepartment?.name || tutorData.dept
+        const facultyId = activeDepartment?.id || tutorData.faculty_id
+
         // Get assigned students
         const students = await StudentService.getStudentsBypeertutors(tutorId)
         setAssignedStudents(students)
 
-        // Get scheduled classes for this peer tutor
-        const classes = await ScheduledClassService.getScheduledClassesByYearSection(
-          tutorData.dept,
-          tutorData.year,
-          tutorData.section
+        // Get scheduled classes specifically for this peer tutor
+        const classes = await ScheduledClassService.getScheduledClassesBypeertutors(
+          tutorId,
+          deptName,
+          facultyId
         )
         setScheduledClasses(classes)
 
         // Get additional classes for this peer tutor
-        const addClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(tutorData.id)
+        const addClasses = await AdditionalClassService.getAdditionalClassesBypeertutors(
+          tutorData.id,
+          deptName,
+          facultyId
+        )
         setAdditionalClasses(addClasses)
 
         // Get renumeration data for this peer tutor
         const renumerationData = await RenumerationService.getpeertutorsRenumeration(tutorId)
         setRenumerations(renumerationData)
 
-        // Calculate statistics
-        const totalClasses = classes.length
-        const completedClasses = classes.filter(c =>
-          c.completion_status === 'completed' ||
-          (c.attendance_completed && c.topics_completed)
-        ).length
-
-        const pendingClassesList = classes.filter(c =>
-          c.completion_status !== 'completed' &&
-          !(c.attendance_completed && c.topics_completed)
+        // Calculate statistics using getpeertutorsClassStats to guarantee 100% sync with global & section tables
+        const classStats = await ScheduledClassService.getpeertutorsClassStats(
+          tutorId,
+          deptName,
+          facultyId
         )
-        const pendingClasses = pendingClassesList.length
-
-        // Calculate Upcoming vs Overdue
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-
-        let upcomingClasses = 0
-        let overdueClasses = 0
-
-        pendingClassesList.forEach(c => {
-          if (!c.scheduled_date) {
-            overdueClasses++
-            return
-          }
-          const classDate = new Date(c.scheduled_date)
-          classDate.setHours(0, 0, 0, 0)
-
-          if (classDate.getTime() > today.getTime()) {
-            upcomingClasses++
-          } else {
-            overdueClasses++
-          }
-        })
 
         setStats({
-          totalClasses,
-          completedClasses,
-          pendingClasses,
-          upcomingClasses,
-          overdueClasses,
+          totalClasses: classStats.totalClasses,
+          completedClasses: classStats.completedClasses,
+          pendingClasses: classStats.pendingClasses,
+          upcomingClasses: classStats.upcomingClasses,
+          overdueClasses: classStats.overdueClasses,
           assignedStudents: students.length
         })
       }

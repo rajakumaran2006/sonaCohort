@@ -24,7 +24,29 @@ export default function AuthCodeError() {
 
 function AuthCodeErrorContent() {
   const searchParams = useSearchParams()
-  const error = searchParams.get('error')
+  const rawError = searchParams.get('error')
+
+  // Derive user-friendly message
+  let displayMessage = 'We encountered a problem while trying to verify your identity.'
+  let errorCode = 'AUTH_FLOW_FAILURE'
+
+  if (rawError) {
+    if (rawError.includes('AADSTS65004') || rawError.toLowerCase().includes('declined')) {
+      displayMessage = 'Permission consent was cancelled or declined. Please sign in again and accept permissions.'
+      errorCode = 'AADSTS65004_CONSENT_DECLINED'
+    } else if (rawError.includes('AADSTS650057') || rawError.includes('AADSTS90094') || rawError.toLowerCase().includes('admin consent') || rawError.toLowerCase().includes('administrator')) {
+      displayMessage = 'Your Microsoft account requires administrator approval for requested permissions. Please contact your college administrator.'
+      errorCode = 'ADMIN_CONSENT_REQUIRED'
+    } else if (rawError.includes('AADSTS50105')) {
+      displayMessage = 'Your account is not assigned to the Sona Cohort application in Microsoft Entra ID. Please contact your college admin.'
+      errorCode = 'AADSTS50105_USER_NOT_ASSIGNED'
+    } else if (rawError.toLowerCase().includes('database error')) {
+      displayMessage = 'A temporary identity sync error occurred. We have cleared this conflict. Please try signing in again.'
+      errorCode = 'AUTH_IDENTITY_SYNC_ERROR'
+    } else {
+      displayMessage = rawError
+    }
+  }
 
   // Animation variants
   const containerVariants: Variants = {
@@ -70,8 +92,8 @@ function AuthCodeErrorContent() {
               <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight font-roboto-condensed uppercase">
                 Authentication Error
               </h1>
-              <p className="text-gray-600 text-lg leading-relaxed max-w-sm mx-auto">
-                {error || 'We encountered a problem while trying to verify your identity.'}
+              <p className="text-gray-600 text-base sm:text-lg leading-relaxed max-w-sm mx-auto">
+                {displayMessage}
               </p>
             </motion.div>
 
@@ -83,7 +105,7 @@ function AuthCodeErrorContent() {
               <motion.div variants={itemVariants}>
                 <Link
                   href="/login"
-                  className="w-full flex items-center text-white uppercase justify-center gap-2 bg-black hover:bg-black-700 text-white px-8 py-4 rounded-xl"
+                  className="w-full flex items-center text-white uppercase justify-center gap-2 bg-black hover:bg-neutral-800 px-8 py-4 rounded-xl transition-colors font-bold text-sm tracking-wide"
                 >
                   <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
                   Try Again
@@ -106,7 +128,7 @@ function AuthCodeErrorContent() {
           {/* Footer Info */}
           <div className="bg-gray-50/50 p-4 text-center border-t border-gray-100">
              <p className="text-xs text-gray-400 font-medium">
-               Error Code: AUTH_FLOW_FAILURE
+               Error Code: {errorCode}
              </p>
           </div>
         </div>

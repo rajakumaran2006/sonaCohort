@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { buildDepartmentFilter } from '@/lib/utils/departmentFilter'
 
 export interface Class {
   id: string
@@ -185,7 +186,7 @@ export class ClassService {
   /**
    * Get classes for a specific year and section (for peer tutors)
    */
-  static async getClassesByYearSection(dept: string, year: string, section: string): Promise<Class[]> {
+  static async getClassesByYearSection(dept: string, year: string, section: string, facultyId?: string): Promise<Class[]> {
     try {
       const supabase = createClient()
       
@@ -195,13 +196,23 @@ export class ClassService {
       const normalizedSection = section.trim()
       
       // Fetch classes for the specific section only
-      const { data, error } = await supabase
+      let query = supabase
         .from('classes')
         .select('*')
-        .ilike('dept', normalizedDept)
+
+      const filter = buildDepartmentFilter(normalizedDept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      } else {
+        query = query.ilike('dept', normalizedDept)
+      }
+
+      query = query
         .eq('year', normalizedYear)
         .eq('section', normalizedSection)
         .order('created_at', { ascending: true })
+
+      const { data, error } = await query
 
       if (error) {
         logger.error('Error getting classes by year and section:', error)
@@ -413,11 +424,13 @@ export class ClassService {
   /**
    * Normalize year format from "2nd Year" to "2" or keep as is
    */
-  private static normalizeYear(year: string): string {
+  static normalizeYear(year: string): string {
     const yearMap: { [key: string]: string } = {
+      '1st Year': '1',
       '2nd Year': '2',
       '3rd Year': '3',
       '4th Year': '4',
+      '1': '1',
       '2': '2',
       '3': '3',
       '4': '4'

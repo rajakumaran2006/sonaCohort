@@ -187,8 +187,8 @@ export class StudentService {
       
       const normalizeYear = (y: string): string => {
         const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
+          '1st Year': '1', '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+          '1': '1', '2': '2', '3': '3', '4': '4'
         }
         return yearMap[y] || y
       }

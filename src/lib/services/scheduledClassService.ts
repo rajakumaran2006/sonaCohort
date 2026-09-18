@@ -55,6 +55,14 @@ export interface ScheduledClassWithDetails extends ScheduledClass {
 }
 
 export class ScheduledClassService {
+  static normalizeYear(year: string): string {
+    const yearMap: { [key: string]: string } = {
+      '1st Year': '1', '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
+      '1': '1', '2': '2', '3': '3', '4': '4'
+    }
+    return yearMap[year] || year
+  }
+
   /**
    * Create a new scheduled class
    * Creates a scheduled class for the specific section
@@ -118,15 +126,7 @@ export class ScheduledClassService {
         return false
       }
 
-      // Normalize year format
-      const normalizeYear = (year: string): string => {
-        const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
-        }
-        return yearMap[year] || year
-      }
-      const normalizedYear = normalizeYear(data.year)
+      const normalizedYear = this.normalizeYear(data.year)
       const normalizedDept = data.dept.trim()
       const normalizedSection = data.section.trim()
 
@@ -277,7 +277,7 @@ export class ScheduledClassService {
         dept: normalizedDept,
         year: normalizedYear,
         section: normalizedSection,
-        faculty_id: data.faculty_id,
+        faculty_id: finalFacultyId,
         peer_tutor_id: tutor.id,
         topics: data.topics,
         start_time: data.start_time,
@@ -310,20 +310,13 @@ export class ScheduledClassService {
     dept: string,
     year: string,
     section: string,
-    peertutorsId?: string
+    peertutorsId?: string,
+    facultyId?: string
   ): Promise<ScheduledClassWithDetails[]> {
     try {
       const supabase = createClient()
 
-      // Normalize year, department, and section
-      const normalizeYear = (year: string): string => {
-        const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
-        }
-        return yearMap[year] || year
-      }
-      const normalizedYear = normalizeYear(year)
+      const normalizedYear = this.normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
 
@@ -342,7 +335,15 @@ export class ScheduledClassService {
             email
           )
         `)
-        .ilike('dept', normalizedDept)
+
+      const filter = buildDepartmentFilter(normalizedDept, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      } else {
+        query = query.ilike('dept', normalizedDept)
+      }
+
+      query = query
         .eq('year', normalizedYear)
         .eq('section', normalizedSection)
         .order('scheduled_date', { ascending: true })
@@ -362,6 +363,54 @@ export class ScheduledClassService {
       return data || []
     } catch (error) {
       logger.error('Error in getScheduledClassesByYearSection:', error)
+      return []
+    }
+  }
+
+  /**
+   * Get all scheduled classes for a specific peer tutor
+   */
+  static async getScheduledClassesBypeertutors(
+    peertutorsId: string,
+    deptName?: string,
+    facultyId?: string
+  ): Promise<ScheduledClassWithDetails[]> {
+    try {
+      const supabase = createClient()
+
+      let query = supabase
+        .from('scheduled_classes')
+        .select(`
+          *,
+          class:classes!inner(
+            id,
+            subject_name,
+            created_at
+          ),
+          peer_tutor:peer_tutors(
+            id,
+            name,
+            email
+          )
+        `)
+        .eq('peer_tutor_id', peertutorsId)
+        .order('scheduled_date', { ascending: true })
+
+      const filter = buildDepartmentFilter(deptName, facultyId)
+      if (filter) {
+        query = query.or(filter)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        logger.error('Error getting scheduled classes for peer tutor:', error)
+        return []
+      }
+
+      return data || []
+    } catch (error) {
+      logger.error('Error in getScheduledClassesBypeertutors:', error)
       return []
     }
   }
@@ -462,15 +511,7 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
 
-      // Normalize year, department, and section
-      const normalizeYear = (year: string): string => {
-        const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
-        }
-        return yearMap[year] || year
-      }
-      const normalizedYear = normalizeYear(year)
+      const normalizedYear = this.normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
 
@@ -500,15 +541,7 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
 
-      // Normalize year, department, and section
-      const normalizeYear = (year: string): string => {
-        const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
-        }
-        return yearMap[year] || year
-      }
-      const normalizedYear = normalizeYear(year)
+      const normalizedYear = this.normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
 
@@ -545,15 +578,7 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
 
-      // Normalize year, department, and section
-      const normalizeYear = (year: string): string => {
-        const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
-        }
-        return yearMap[year] || year
-      }
-      const normalizedYear = normalizeYear(year)
+      const normalizedYear = this.normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
 
@@ -951,15 +976,7 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
 
-      // Normalize year, department, and section
-      const normalizeYear = (year: string): string => {
-        const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
-        }
-        return yearMap[year] || year
-      }
-      const normalizedYear = normalizeYear(year)
+      const normalizedYear = this.normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
 
@@ -1132,15 +1149,7 @@ export class ScheduledClassService {
         dateString: dateString
       })
 
-      // Normalize year, department, and section
-      const normalizeYear = (year: string): string => {
-        const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
-        }
-        return yearMap[year] || year
-      }
-      const normalizedYear = normalizeYear(year)
+      const normalizedYear = this.normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
 
@@ -1803,15 +1812,7 @@ export class ScheduledClassService {
     try {
       const supabase = createClient()
 
-      // Normalize year, department, and section
-      const normalizeYear = (year: string): string => {
-        const yearMap: { [key: string]: string } = {
-          '2nd Year': '2', '3rd Year': '3', '4th Year': '4',
-          '2': '2', '3': '3', '4': '4'
-        }
-        return yearMap[year] || year
-      }
-      const normalizedYear = normalizeYear(year)
+      const normalizedYear = this.normalizeYear(year)
       const normalizedDept = dept.trim()
       const normalizedSection = section.trim()
 
